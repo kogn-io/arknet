@@ -5314,6 +5314,68 @@ Welches Wort dieses eine ist, entscheidet die Sprache, in der die Fachgemeinscha
     <https://w3id.org/arknet/core#position> 3;
     <https://w3id.org/arknet/architecture#optionRationale> "Das ist der Zustand, aus dem der Anlass entstand: ohne Festlegung liest die nächste Erhebung die Antwort aus dem Bestand ab und findet dort beide."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/bdd08ced-66a4-4871-b53c-b316f76b4ba6> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
+    <http://purl.org/dc/terms/identifier> "ADR-45";
+    <https://w3id.org/arknet/core#name> "Der Domänentyp bleibt wertsemantisch, der Graph bleibt hinter dem Out-Port"@de;
+    <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Proposed>;
+    <https://w3id.org/arknet/architecture#adrContext> "Eine Ressource liegt im Store als Graph, in einem Kontext-Core als Domänentyp. Wo genau zwischen beiden übersetzt wird, ist damit noch nicht festgelegt: der Domänentyp könnte selbst der Zugang zum Graphen sein -- ein Objekt, das seine Felder beim Lesen aus dem Graphen holt und beim Ändern dorthin zurückschreibt. Das würde Felder verlustfrei durchreichen, die der Typ selbst gar nicht kennt, verlangt dafür aber einen Port, über den ein Kontext seine Domänentypen erzeugen lässt, statt sie selbst zu bauen."@de;
+    <https://w3id.org/arknet/architecture#adrDecision> """Die Grenze zwischen Domänentyp und Graph verläuft am Out-Port.
+
+Ein Domänentyp ist ein unveränderlicher, wertsemantischer Typ ohne jeden Zugang zum Graphen. Seine Invarianten werden bei der Konstruktion geprüft und sind danach unumgehbar; es gibt keinen Konstruktions-Out-Port, über den ein Kontext seine Domänentypen erzeugen ließe.
+
+Umgekehrt ist der Umgang mit dem Graphen vollständig Sache des Out-Adapters: er ist es, der beim Schreiben die Felder bewahrt, die der Domänentyp nicht führt."""@de;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/e8731051-5100-485f-a075-bc94d7bfc0ae>,
+      <https://w3id.org/arknet/id/5c3156fc-4466-4b3b-8c94-5731108c62c6>, <https://w3id.org/arknet/id/54054967-fc45-4326-a98c-094dbe78c890>,
+      <https://w3id.org/arknet/id/868b4f30-3eb7-40ba-97ad-bc5b881a456e>, <https://w3id.org/arknet/id/1196a32c-8b8c-4f3e-8b74-bda90175a687>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/58dc7ae2-64b5-41c6-915e-9f78d7c4384a>,
+      <https://w3id.org/arknet/id/81e16162-d371-47df-8087-31f986ba8ea2>, <https://w3id.org/arknet/id/035475bb-acb0-4c4d-8068-395592e86df6>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/9776fa77-c842-47ab-9e7a-6563c4f2792d>,
+      <https://w3id.org/arknet/id/5c3aebd2-9297-4d40-b05f-43b4bf2accc7>;
+    <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4> .
+  
+  <https://w3id.org/arknet/id/e8731051-5100-485f-a075-bc94d7bfc0ae> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Invarianten einer Ressource sind an genau einer Stelle unumgehbar -- ein Domänentyp kann nicht in einem ungültigen Zwischenzustand existieren."@de .
+  
+  <https://w3id.org/arknet/id/5c3156fc-4466-4b3b-8c94-5731108c62c6> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Kontext-Core bleibt frei von jedem Begriff des Speichersubstrats; er kennt Werte, keinen Graphen."@de .
+  
+  <https://w3id.org/arknet/id/54054967-fc45-4326-a98c-094dbe78c890> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Felder, die der Domänentyp nicht führt, kann nur der Out-Adapter bewahren -- unterlässt er es, gehen sie bei einem Schreibvorgang still verloren, und der Core kann das nicht bemerken."@de .
+  
+  <https://w3id.org/arknet/id/868b4f30-3eb7-40ba-97ad-bc5b881a456e> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Eine Teil-Änderung muss als Feld-Delta ausgedrückt werden statt als geänderter Objekt-Abzug; ein vollständiger Abzug würde genau die nicht geführten Felder überschreiben."@de .
+  
+  <https://w3id.org/arknet/id/1196a32c-8b8c-4f3e-8b74-bda90175a687> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Wie ein Out-Adapter intern liest, bleibt seine Sache -- die Grenze bindet ihn dort nicht."@de .
+  
+  <https://w3id.org/arknet/id/58dc7ae2-64b5-41c6-915e-9f78d7c4384a> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Graph-gestütztes Domänenobjekt"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Reicht nicht geführte Felder verlustfrei durch, trägt dafür aber den Graphen durch die gesamte Anwendung und macht den Domänentyp veränderlich -- die Invarianten wären dann nicht mehr an einer einzigen Stelle erzwingbar."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/81e16162-d371-47df-8087-31f986ba8ea2> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Konstruktions-Out-Port für Domänentypen"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Verlagert die Erzeugung samt Invariantenprüfung hinter einen Port und macht damit die Gültigkeit eines Domänentyps von der Adapter-Implementierung abhängig."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/035475bb-acb0-4c4d-8068-395592e86df6> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Wertsemantischer Domänentyp, Graph ausschließlich hinter dem Out-Port"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Hält die Invarianten an einer unumgehbaren Stelle und den Core frei vom Substrat; der Preis -- die Bewahrung nicht geführter Felder im Adapter -- ist lokal und benennbar."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
 }
 
 <https://w3id.org/arknet/model/provenance> {
@@ -5581,4 +5643,15 @@ Welches Wort dieses eine ist, entscheidet die Sprache, in der die Fachgemeinscha
     <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/67c64cd3-85c7-4006-91be-78eb1c565a4a>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/be9cc79f-866b-43fd-90af-d47578d79835>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-02T15:36:04.143404573Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/bdd08ced-66a4-4871-b53c-b316f76b4ba6> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/44872207-e52b-4864-8628-83da2a8aee33> .
+  
+  <https://w3id.org/arknet/activity/71f551a8-2c6c-4071-a4c1-1982e0cea814> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/44872207-e52b-4864-8628-83da2a8aee33> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/bdd08ced-66a4-4871-b53c-b316f76b4ba6>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/71f551a8-2c6c-4071-a4c1-1982e0cea814>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-04T13:22:55.821853907Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
 }
