@@ -77,7 +77,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 /**
  * Scaffold-level check that the adapter declares exactly the eight ADR tools and guards its in-port
  * dependencies, plus the reference-display-resolution contract ({@link ResolveRequirements},
- * {@link ResolveBoundedContexts}, ADR-008) and the structured consequence/considered-option input
+ * {@link ResolveBoundedContexts}) and the structured consequence/considered-option input
  * translation (kogn-io/arknet#357).
  */
 class AdrMcpToolsTest {

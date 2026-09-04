@@ -73,7 +73,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * in-transaction {@code contains} existence check, the label-uniqueness check (via
  * {@code dcterms:identifier}, since the label <em>is</em> {@code dcterms:identifier} - see the
  * ontology's "identity vs. label" note, no separate label property), the SHACL gate and the
- * commit-conflict translation - live in the shared {@link WriteFunnel} (ADR-013), not here.
+ * commit-conflict translation - live in the shared {@link WriteFunnel}, not here.
  * {@link #register} rejects an existing identity with {@link ResourceAlreadyExistsException} and
  * a label collision with {@link DuplicateProjectLabelException}; {@link #compareAndUpdate}
  * rejects a missing identity with {@link ProjectNotFoundException} and a stale
@@ -85,7 +85,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * most one project - is checked in {@link #checkAnchorUniqueness} using
  * {@code DatasetTx#contains(graph, anchorIri, null, null)} against the write's own
  * {@link DatasetTx}, the same pattern the shared {@link WriteFunnel} already uses for its own
- * existence checks (ADR-013 Nachtrag): an {@code ASK} query on a not-yet-known IRI is not
+ * existence checks: an {@code ASK} query on a not-yet-known IRI is not
  * conflict-protected under {@code SERIALIZABLE} the way {@code contains} is. This is exactly why
  * {@link ProjectGraphs}'s deterministic anchor IRI matters - the check needs a concrete subject to
  * ask {@code contains} about <em>before</em> the write commits, which a randomly minted anchor
@@ -118,7 +118,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance graph
  * against the project SHACL shapes before the write transaction opens, throw
  * {@link WriteConstraintViolationException} on a violation, persist nothing - live in the shared
- * {@link WriteFunnel} (ADR-013). No validation-only asserted context is needed: unlike the
+ * {@link WriteFunnel}. No validation-only asserted context is needed: unlike the
  * requirements adapter's {@code arkreq:usesTerm}, nothing in this candidate graph references a
  * subject outside of it.</p>
  */
@@ -140,7 +140,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * @param displayLocale the display-language preference selecting which {@code
      *                      dcterms:description} the read paths surface for a multilingual
      *                      project (must not be {@code null})
-     * @param funnel        the shared write funnel (ADR-013) running the SHACL gate, dataset
+     * @param funnel        the shared write funnel running the SHACL gate, dataset
      *                      acquisition and existence/head checks for every {@link #register}/
      *                      {@link #compareAndUpdate}/{@link #updateAttributes} (must not be
      *                      {@code null})
@@ -657,7 +657,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * {@link Project}, never a reason to drop the project itself.
      *
      * <p>Without this merge, every reader of this class ({@code project_list}, and - borrowed via
-     * {@link de.hauschel.arknet.prj.application.port.in.FindProject}, ADR-008 - the
+     * {@link de.hauschel.arknet.prj.application.port.in.FindProject} - the
      * {@code store_overview} digest/HTML headers) would show the description in the process-wide
      * {@link #displayLocale}, while the very same page's body already merges in the project's own
      * default language (issue #276) - a project whose default language differs from the daemon's

@@ -1621,7 +1621,7 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * The tombstone the shared funnel leaves (ADR-013): the head pointer goes, the last
+     * The tombstone the shared funnel leaves: the head pointer goes, the last
      * revision is marked {@code prov:invalidatedAtTime}, and the chain up to it stays as the audit
      * trail - "this existed, until here".
      */

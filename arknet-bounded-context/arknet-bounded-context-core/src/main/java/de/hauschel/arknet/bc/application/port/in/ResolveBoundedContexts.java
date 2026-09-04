@@ -20,8 +20,8 @@ import de.hauschel.arknet.kernel.ResourceId;
  * {@code ResolveTerms} (ubiquitous-language) and {@code ResolveRequirements} (requirements) already
  * establish: an In-Adapter is the gate into its own hexagon, not part of its core, so it may call
  * another hexagon's driving port without breaking the "no {@code *-core} depends on another bounded
- * context" invariant, which binds the {@code *-core} modules, not the adapters around them
- * (ADR-008). The ADR MCP adapter uses this to render an affected context's business code
+ * context" invariant, which binds the {@code *-core} modules, not the adapters around them.
+ * The ADR MCP adapter uses this to render an affected context's business code
  * ({@code BC-1}) instead of its bare subject IRI, without the ADR bounded context ever depending on
  * {@code arknet-bounded-context-core}.</p>
  *

@@ -68,7 +68,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  *
  * <p><strong>No read method (decision 5).</strong> This port and adapter expose no
  * {@code findAll}/{@code findByCode}: inspecting a created relationship goes through the generic
- * store-wide read path ({@code store_overview}/{@code resource_get}, ADR-006), not a dedicated
+ * store-wide read path ({@code store_overview}/{@code resource_get}), not a dedicated
  * {@code bc_get_context}/{@code bc_list_context} tool.</p>
  *
  * <p><strong>Validation-only asserted context, same reasoning as requirements'
@@ -116,7 +116,7 @@ public class KognioRdfContextRelationshipRepository implements ContextRelationsh
     /**
      * Creates the adapter.
      *
-     * @param funnel the shared write funnel (ADR-013) running the SHACL gate, dataset acquisition
+     * @param funnel the shared write funnel running the SHACL gate, dataset acquisition
      *               and the identity-existence check for every {@link #create} (must not be
      *               {@code null})
      */

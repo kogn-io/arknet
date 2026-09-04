@@ -39,8 +39,8 @@ import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
  * Scaffold-level check that the adapter declares exactly the five bounded-context tools and guards
- * its in-port dependencies, plus the term-display-resolution contract ({@link ResolveTerms},
- * ADR-008): renders the resolved business code, falls back to the bare IRI for an id it cannot
+ * its in-port dependencies, plus the term-display-resolution contract ({@link ResolveTerms}):
+ * renders the resolved business code, falls back to the bare IRI for an id it cannot
  * resolve, and never issues more than one batch call per rendering.
  */
 class BoundedContextMcpToolsTest {

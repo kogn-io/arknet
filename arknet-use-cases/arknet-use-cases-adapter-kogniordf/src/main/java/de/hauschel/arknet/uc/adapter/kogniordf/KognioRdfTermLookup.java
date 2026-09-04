@@ -31,8 +31,9 @@ import de.hauschel.arknet.uc.application.port.out.TermLookup;
  * once, from the application service, at the moment a term is linked -
  * {@code KognioRdfUseCaseRepository} no longer performs this lookup itself; it just persists the
  * {@link ResourceId} it is handed. Deliberately its own class rather than a shared import of the
- * sibling requirements bounded context's {@code KognioRdfTermLookup}: ADR-008 forbids cross-BC
- * adapter imports, only an In-Adapter may consume a neighbour's In-Port.</p>
+ * sibling requirements bounded context's {@code KognioRdfTermLookup}: the Borrowed In-Port
+ * pattern forbids cross-BC adapter imports, only an In-Adapter may consume a neighbour's
+ * In-Port.</p>
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} + {@code dataset}) -
  * it never imports RDF4J or any other backend-specific type. The backend

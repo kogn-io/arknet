@@ -100,8 +100,8 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * identity is opaque and minted once, "insert or replace by identity" is no longer one coherent
  * operation. The transactional mechanics - the in-transaction existence checks for identity and
  * business-code collision, the SHACL gate, the commit-conflict translation, and the
- * head comparison - live in the shared {@link de.hauschel.arknet.persistence.WriteFunnel}
- * (ADR-013), not here: {@link #create} and {@link #compareAndUpdate} only build the
+ * head comparison - live in the shared {@link de.hauschel.arknet.persistence.WriteFunnel},
+ * not here: {@link #create} and {@link #compareAndUpdate} only build the
  * candidate graph and, via {@code alreadyExists}/{@code duplicateCode}/{@code notFound}/
  * {@code headMismatch}, supply the exceptions the funnel throws - {@link
  * ResourceAlreadyExistsException} for an identity collision on create, {@link
@@ -116,7 +116,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance
  * graph against the requirements SHACL shapes before the write transaction opens,
  * {@link WriteConstraintViolationException} on a violation, nothing persisted - live in the
- * shared {@link de.hauschel.arknet.persistence.WriteFunnel} (ADR-013). The gate itself is
+ * shared {@link de.hauschel.arknet.persistence.WriteFunnel}. The gate itself is
  * technology-neutral - only {@link KognioRdfRequirementRepositoryFactory} names RDF4J.</p>
  *
  * <p><strong>Term references arrive pre-resolved, identity-carrying.</strong>
@@ -282,7 +282,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      *                          {@code arkreq:rationale}/each acceptance
      *                          criterion's {@code arkreq:criterionText} the read paths surface for
      *                          a multilingual requirement (must not be {@code null})
-     * @param funnel        the shared write funnel (ADR-013) every write runs through - both
+     * @param funnel        the shared write funnel every write runs through - both
      *                      {@link #create} and {@link #compareAndUpdate} (must not be
      *                      {@code null})
      */
@@ -1043,7 +1043,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * state is always the correct response, not merely a convenient one.
      *
      * <p><strong>Exhausted retries never leak the raw store exception.</strong> The shared {@link
-     * de.hauschel.arknet.persistence.WriteFunnel} (ADR-013) translates every write path's lost
+     * de.hauschel.arknet.persistence.WriteFunnel} translates every write path's lost
      * {@code ConcurrencyConflictException} into a bounded-context-owned signal before it reaches a
      * caller - this read path is the adapter's own, funnel-external retry loop, but the same
      * convention applies: a pathological, sustained storm of concurrent writers that outlasts

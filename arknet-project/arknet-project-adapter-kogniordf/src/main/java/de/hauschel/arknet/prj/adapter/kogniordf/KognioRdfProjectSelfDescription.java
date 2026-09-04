@@ -34,7 +34,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * that sentence are deliberate:</p>
  *
  * <ul>
- *   <li><strong>With the gate.</strong> ADR-007 wants every write validated, and this is a write -
+ *   <li><strong>With the gate.</strong> Every write must be validated, and this is a write -
  *       {@link #describe} runs {@link ShaclWriteGate#enforce(io.kogn.rdf.terms.ReadableGraph)} on
  *       the candidate graph before opening the transaction, exactly like every funnelled write
  *       does, and throws the identical {@link WriteConstraintViolationException} on a

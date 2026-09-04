@@ -86,8 +86,8 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
  * minted once, "insert or replace by identity" was never one coherent operation for
  * {@link #create}. The transactional mechanics of that check - the in-transaction {@code contains}
- * check, the SHACL gate, the commit-conflict translation - live in the shared {@link WriteFunnel}
- * (ADR-013), not here; {@link #create} only builds the candidate graph and rejects an existing
+ * check, the SHACL gate, the commit-conflict translation - live in the shared {@link WriteFunnel},
+ * not here; {@link #create} only builds the candidate graph and rejects an existing
  * subject with {@link ResourceAlreadyExistsException}.</p>
  *
  * <p><strong>Update is a targeted correction by code, not a replace by identity.</strong>
@@ -117,8 +117,8 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * 4).</strong> An earlier version ran its own transaction and translated a genuine {@code
  * SERIALIZABLE} write conflict (the "second interleaving" scenario) on the caller's own patched
  * predicate into {@link TermConcurrentlyModifiedException}. {@link #update} now retries {@link
- * #attemptUpdate} (bounded by {@link #MAX_RETRY_ATTEMPTS}) against the shared {@link WriteFunnel}
- * (ADR-013): each attempt reads the term's current state and {@code arkprov:head} together, then
+ * #attemptUpdate} (bounded by {@link #MAX_RETRY_ATTEMPTS}) against the shared {@link WriteFunnel}:
+ * each attempt reads the term's current state and {@code arkprov:head} together, then
  * asks the funnel to apply the patch only if that head still matches - a head conflict, whether
  * from a losing synchronous comparison or a losing commit under {@code SERIALIZABLE} isolation,
  * surfaces identically and is retried transparently, exactly the CAS guard {@code
@@ -126,7 +126,7 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  *
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate before the write transaction
  * opens, {@link WriteConstraintViolationException} on a violation, nothing persisted - live in the
- * shared {@link WriteFunnel} (ADR-013), for {@link #create} and {@link #update}
+ * shared {@link WriteFunnel}, for {@link #create} and {@link #update}
  * alike: {@link #attemptUpdate} builds the same validation-only {@code assertedContext} an earlier
  * version enforced itself (mirroring how the sibling requirements adapter asserts a referenced
  * term's type) - a predicate {@link #update} is not touching is asserted there for validation
@@ -223,7 +223,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * @param displayLocale the display-language preference selecting which {@code skos:prefLabel}
      *                      the read paths surface for a multilingual concept (must not
      *                      be {@code null})
-     * @param funnel        the shared write funnel (ADR-013) every write runs through - both
+     * @param funnel        the shared write funnel every write runs through - both
      *                      {@link #create} and {@link #update} (must not be {@code null})
      */
     KognioRdfTermRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {

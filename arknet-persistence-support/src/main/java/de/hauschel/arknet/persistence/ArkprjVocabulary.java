@@ -26,7 +26,7 @@ package de.hauschel.arknet.persistence;
  *       failure and a restored backup carries its identity with it.</li>
  * </ul>
  *
- * <p><strong>Why the identity graph must be excluded from the generic read path (ADR-006).</strong>
+ * <p><strong>Why the identity graph must be excluded from the generic read path.</strong>
  * Unlike the registry - which lives in a dataset no ordinary call ever addresses and is therefore
  * invisible by construction - the self-description sits inside the very dataset
  * {@code store_overview}/{@code resource_get} read. It is infrastructure, not model: without the

@@ -40,7 +40,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * {@link ResolveRequirements}, owned by requirements) to answer that purely for display - the
  * use-cases core itself still never depends on {@code arknet-actor-core}/
  * {@code arknet-requirements-core}, and {@code uc_add}'s own write path still resolves via the
- * decoupled {@code ActorLookup}/{@code RequirementLookup} out-ports (ADR-008). {@link
+ * decoupled {@code ActorLookup}/{@code RequirementLookup} out-ports. {@link
  * #formatFull} calls {@link ResolveActors#resolveExisting}/{@link
  * ResolveRequirements#resolveExisting} exactly once each per rendering, batched across every
  * {@link ActorRef}/{@link RequirementRef} involved; an id either port could not resolve simply

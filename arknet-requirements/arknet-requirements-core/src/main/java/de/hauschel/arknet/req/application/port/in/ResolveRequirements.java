@@ -20,7 +20,7 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  * context: an In-Adapter is the gate into its own hexagon, not part of its core, so it may call
  * another hexagon's driving port without breaking the "no {@code *-core} depends on another
  * bounded context" invariant, which binds the {@code *-core} modules, not the adapters around
- * them (ADR-008). A future use-cases MCP adapter uses this to render a linked requirement's
+ * them. A future use-cases MCP adapter uses this to render a linked requirement's
  * business code ({@code FR-1}/{@code NFR-1}) instead of its bare subject IRI, without the
  * use-cases bounded context ever depending on {@code arknet-requirements-core}.</p>
  *

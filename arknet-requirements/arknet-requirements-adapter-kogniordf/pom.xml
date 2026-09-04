@@ -81,7 +81,7 @@
              KognioRdfTermLookupUbiquitousLanguageSchemaTest write a term through the ul-BC's
              actual KognioRdfTermRepository and resolve it through this module's actual
              KognioRdfTermLookup against the same store - the substitute regression signal for a
-             future schema drift (ADR-007 keeps the shared write-gate module smaller than sharing
+             future schema drift (keeping the shared write-gate module smaller than sharing
              these constants would require; see the test's Javadoc). Transitively pulls in
              arknet-ubiquitous-language-core (compile scope there) as a test-scope dependency. -->
         <dependency>

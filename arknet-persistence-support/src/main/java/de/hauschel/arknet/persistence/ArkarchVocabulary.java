@@ -20,7 +20,7 @@ package de.hauschel.arknet.persistence;
  * The ADR bounded context's core deliberately never sees them - opaque identity keeps IRIs out of
  * the domain - so they are not domain vocabulary in the sense that keeps
  * {@code arknet-shared-kernel} free of such concerns. Being plain {@code String}s they leave this
- * module's RDF4J-freedom (ADR-007) untouched.</p>
+ * module's RDF4J-freedom untouched.</p>
  *
  * <p><strong>Scope: the whole active module, not just the cross-module subset.</strong> This
  * differs from {@link ArkreqVocabulary}/{@link ArkdddVocabulary}, which name only the handful of

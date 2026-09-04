@@ -45,7 +45,8 @@ import de.hauschel.arknet.prj.domain.Project;
  *
  * <p>This is an in-adapter of the composition root, not of a bounded context: the store report
  * has no domain of its own. Borrowing four contexts' read in-ports for display is the same
- * gateway role ADR-008 grants a driving adapter. The rendering, CURIE resolution and query
+ * gateway role the Borrowed In-Port pattern grants a driving adapter. The rendering, CURIE
+ * resolution and query
  * execution live in isolated, unit-testable collaborators ({@link StoreReader},
  * {@link DigestRenderer}, {@link ResourceRenderer}, {@link HistoryRenderer},
  * {@link HtmlReportRenderer}, {@link ModelViews}, {@link Prefixes}); this class only
@@ -206,7 +207,7 @@ public final class StoreReportTools {
 
     @McpTool(name = "resource_history",
             description = "Change history of ONE resource: every PROV-O revision the shared write funnel"
-                    + " has recorded for it (ADR-013), oldest first, with the current revision marked"
+                    + " has recorded for it, oldest first, with the current revision marked"
                     + " '(current)'. The id is a CURIE (e.g. req:FR-1) or a full IRI; as a convenience a bare"
                     + " business id (e.g. FR-1) is resolved via dcterms:identifier. A resource that was only"
                     + " ever written store-first, or predates the funnel, has no history - not an error.",

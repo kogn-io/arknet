@@ -44,7 +44,7 @@ import de.hauschel.arknet.kernel.ProjectResolver;
  * to the caller, not the underlying resource identity.</p>
  *
  * <p><strong>No borrowed neighbour port.</strong> Unlike {@code BoundedContextMcpTools} or
- * {@code AdrMcpTools}, this adapter borrows no other hexagon's in-port (ADR-008): an actor carries
+ * {@code AdrMcpTools}, this adapter borrows no other hexagon's in-port: an actor carries
  * no reference to a term, a requirement or a bounded context in this scope, so there is no opaque
  * identity to render as a business code.</p>
  *

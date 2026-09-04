@@ -90,7 +90,7 @@ import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
  * {@link KognioRdfBoundedContextRepository#create} issues), it blocks on a {@link CyclicBarrier}
  * with two parties. Both callers' guards must therefore have already passed before either proceeds
  * to write - the exact guard-defeat scenario, which under a SPARQL {@code ASK} guard on
- * store-unknown IRIs would not even be caught at commit time (ADR-013 Nachtrag) - while a {@link
+ * store-unknown IRIs would not even be caught at commit time - while a {@link
  * CountDownLatch} then forces the loser to wait until the winner's transaction has fully committed
  * before the loser's own commit is attempted, so which of the two conflicts is deterministic
  * instead of a flaky race. The decorator disarms itself after firing once per caller, so {@code

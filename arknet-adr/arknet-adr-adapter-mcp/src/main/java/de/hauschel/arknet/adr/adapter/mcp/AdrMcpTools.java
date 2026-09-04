@@ -84,7 +84,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * {@code adr_get}/{@code adr_list} take {@code displayLocale}, merged with the resolved project's
  * own default language exactly as {@code req_get}/{@code req_list} do.</p>
  *
- * <p><strong>Reference display resolution (ADR-008).</strong> {@link RequirementRef}/
+ * <p><strong>Reference display resolution (Borrowed In-Port).</strong> {@link RequirementRef}/
  * {@link BoundedContextRef}/{@link TermRef} carry a referenced resource's opaque subject identity,
  * not its business code - resolved for display via the borrowed {@link ResolveRequirements}/
  * {@link ResolveBoundedContexts}/{@link ResolveTerms} ports (kogn-io/arknet#393), batched across

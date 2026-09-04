@@ -37,8 +37,8 @@ import de.hauschel.arknet.uc.domain.UseCase;
  *
  * <p><strong>Actors are glossary terms.</strong> An actor reference is resolved against the
  * report's {@link Glossary}, so the chip reads {@code Customer} rather than {@code TERM-1}.
- * Requirement references keep the borrowed {@link ResolveRequirements} port (ADR-008, the same
- * borrowing {@code uc_get} does), because a requirement's business code {@code FR-1} <em>is</em>
+ * Requirement references keep the borrowed {@link ResolveRequirements} port (the same borrowing
+ * {@code uc_get} does), because a requirement's business code {@code FR-1} <em>is</em>
  * how a human names it. Both are called once per report, batched across every reference of
  * every use case, and an identity neither resolves falls back to its IRI rather than being
  * dropped.</p>

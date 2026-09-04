@@ -24,7 +24,7 @@
     </description>
 
     <dependencies>
-        <!-- Regel 1: das Modul, dessen RDF4J-Freiheit ADR-007 traegt. -->
+        <!-- Regel 1: das persistence-support-Modul, dessen RDF4J-Freiheit diese Regel prueft. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-persistence-support</artifactId>
@@ -122,7 +122,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Regel 4: die In-Adapter (MCP), die trotz ADR-008-Nachbar-In-Port-Erlaubnis
+        <!-- Regel 4: die In-Adapter (MCP), die trotz der Borrowed-In-Port-Erlaubnis
              keine RDF-Technologie sehen duerfen. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>

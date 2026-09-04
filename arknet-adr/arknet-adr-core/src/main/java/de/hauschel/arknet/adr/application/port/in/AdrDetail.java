@@ -19,7 +19,7 @@ import de.hauschel.arknet.adr.domain.AdrCode;
  * {@code ADR-1} expects to see {@code ADR-1} again rather than an IRI they cannot re-type. Unlike
  * the {@code addressesRequirement}/{@code affectsContext} references - whose targets live in
  * <em>neighbour</em> hexagons and are therefore resolved by the in-adapter through those hexagons'
- * own driving ports (ADR-008) - a superseding or superseded decision is this hexagon's own
+ * own driving ports (Borrowed In-Port) - a superseding or superseded decision is this hexagon's own
  * resource. Answering "which code names this identity" for it is this hexagon's own job, so the
  * application service does it and no caller needs a second mechanism.</p>
  *

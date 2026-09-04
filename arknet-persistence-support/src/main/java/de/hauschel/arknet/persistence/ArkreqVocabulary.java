@@ -24,7 +24,7 @@ package de.hauschel.arknet.persistence;
  * they are consumed by exactly the three modules that already depend on
  * {@code arknet-persistence-support}: the two out-adapters (for the SHACL write gate) and
  * {@code arknet-mcp} (for {@code SparqlTerms}). Being plain {@code String}s, they keep this
- * module RDF4J-free (ADR-007) untouched.</p>
+ * module RDF4J-free untouched.</p>
  *
  * <p>Before this class each of those places declared its own private copy of the same IRI
  * literals. That compiled and tested green even when they drifted: rename a predicate or type in

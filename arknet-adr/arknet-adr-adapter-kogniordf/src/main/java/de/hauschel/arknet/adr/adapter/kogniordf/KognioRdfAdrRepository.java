@@ -188,7 +188,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
      *                          resource (kogn-io/arknet#357; must not be {@code null})
      * @param displayLocale     the display-language preference selecting which candidate of a
      *                          multilingual field the read paths surface (must not be {@code null})
-     * @param funnel            the shared write funnel (ADR-013) running the SHACL gate, dataset
+     * @param funnel            the shared write funnel running the SHACL gate, dataset
      *                          acquisition and existence/head checks for every {@link #create}/
      *                          {@link #compareAndUpdate} (must not be {@code null})
      */

@@ -52,7 +52,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * detail that never needs to cross the MCP boundary; responses render the code back to the
  * caller, not the underlying resource identity.</p>
  *
- * <p><strong>Term display resolution (ADR-008).</strong> {@link TermRef} carries a linked term's
+ * <p><strong>Term display resolution (Borrowed In-Port).</strong> {@link TermRef} carries a linked term's
  * opaque subject identity, not its business code - but a human who typed {@code TERM-1} into
  * {@code bc_link_term} expects to see {@code TERM-1} again, not a raw IRI they cannot re-type.
  * This adapter is the gate into the bounded-context hexagon, not part of its core, so it may

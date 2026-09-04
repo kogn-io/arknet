@@ -132,8 +132,8 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@code uc_link_constraint} (issue #329) add two more such lookups, {@code
  *       KognioRdfTermLookup}/{@code KognioRdfConstraintLookup} - own implementations in the
  *       use-cases adapter module, not the sibling requirements/ubiquitous-language adapters'
- *       classes of the same simple name (ADR-008 forbids the cross-BC adapter import that would
- *       be). {@code uc_get}/{@code uc_list}'s reverse direction (identity back to a displayable
+ *       classes of the same simple name (the Borrowed In-Port pattern forbids the cross-BC adapter
+ *       import that would be). {@code uc_get}/{@code uc_list}'s reverse direction (identity back to a displayable
  *       business code/name) is not a second store adapter - it is the requirements hexagon's own
  *       {@link ResolveRequirements}/{@link ResolveConstraints} and the ubiquitous-language
  *       hexagon's own {@link ResolveTerms} in-ports, wired straight into
@@ -147,7 +147,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       shared dataset lifecycle; {@code bc_get}/{@code bc_list}'s reverse direction (identity
  *       back to a displayable term code) is the ubiquitous-language hexagon's own
  *       {@link ResolveTerms} in-port, wired straight into {@link BoundedContextMcpTools}
- *       (ADR-008). {@code bc_link_context} records an {@code arkddd:ContextRelationship} between
+ *       (Borrowed In-Port). {@code bc_link_context} records an {@code arkddd:ContextRelationship} between
  *       two existing bounded contexts, persisted through a second, separately assembled
  *       {@link ContextRelationshipRepository} bean
  *       ({@link KognioRdfContextRelationshipRepositoryFactory}) over the same shared dataset
@@ -163,7 +163,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@code adr_get}/{@code adr_list}'s reverse direction (identity back to a displayable code)
  *       is the requirements hexagon's own {@link ResolveRequirements} and the bounded-context
  *       hexagon's own {@link ResolveBoundedContexts} in-port, wired straight into
- *       {@link AdrMcpTools} (ADR-008). Its other two relations, {@code supersededBy} and
+ *       {@link AdrMcpTools} (Borrowed In-Port). Its other two relations, {@code supersededBy} and
  *       {@code relatedTo}, are self-referential and therefore resolved inside {@link AdrService} -
  *       no port is borrowed for either.</li>
  *   <li><strong>project</strong> ({@link ProjectMcpTools} over {@link ProjectService} over the
@@ -180,7 +180,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       RDF-persisted actor repository) - the four actor tools ({@code actor_add}/
  *       {@code actor_list}/{@code actor_get}/{@code actor_update}), assembled through
  *       {@link KognioRdfActorRepositoryFactory}. The plainest wiring of the seven: no cross-BC
- *       lookup bean on the write side and no borrowed neighbour in-port on the read side (ADR-008),
+ *       lookup bean on the write side and no borrowed neighbour in-port on the read side,
  *       because an {@code arkproc:Actor} carries no reference to a term, a requirement or a bounded
  *       context in this scope - it exists as a resource of its own, independent of the actor facet
  *       the ubiquitous-language hexagon still sets on a {@code skos:Concept}. Its repository also
@@ -484,7 +484,7 @@ public class ArknetMcpConfiguration {
     /**
      * Resolves a glossary term's human-typed business code (e.g. {@code TERM-1}) to its opaque
      * subject identity - the strict cross-BC lookup {@code uc_link_term} needs (issue #329).
-     * Own implementation in the use-cases adapter module (ADR-008), not the requirements
+     * Own implementation in the use-cases adapter module (Borrowed In-Port), not the requirements
      * hexagon's identically-named {@code KognioRdfTermLookup} bean ({@link #requirementTermLookup}).
      * Acquires datasets from the same shared {@link DatasetLifecycle} as {@link #termRepository},
      * so it reads the same project the ubiquitous-language hexagon writes into.
@@ -586,7 +586,7 @@ public class ArknetMcpConfiguration {
     /**
      * {@code resolveTerms} is the ubiquitous-language hexagon's {@link ResolveTerms} in-port
      * (implemented by its {@code TermService} bean) - borrowed here purely so {@code bc_get}/
-     * {@code bc_list} can render a linked term's business code instead of its bare IRI (ADR-008).
+     * {@code bc_list} can render a linked term's business code instead of its bare IRI.
      * This wires an In-Adapter to a <em>different</em> hexagon's In-Port, not to that hexagon's
      * core - see the "kein *-core* haengt an einem anderen BC" precision in CLAUDE.md.
      */
@@ -668,8 +668,8 @@ public class ArknetMcpConfiguration {
      * requirements, bounded-context and ubiquitous-language hexagons' own driving ports (implemented
      * by their {@code RequirementService}/{@code BoundedContextService}/{@code TermService} beans) -
      * borrowed here purely so {@code adr_get}/{@code adr_list} can render an addressed requirement's,
-     * an affected context's or a used term's business code instead of a bare IRI (ADR-008,
-     * kogn-io/arknet#393). This wires an In-Adapter to three <em>different</em> hexagons' In-Ports,
+     * an affected context's or a used term's business code instead of a bare IRI
+     * (kogn-io/arknet#393). This wires an In-Adapter to three <em>different</em> hexagons' In-Ports,
      * not to those hexagons' cores - see the "kein *-core* haengt an einem anderen BC" precision in
      * CLAUDE.md. The fourth relation, {@code supersededBy}, points back into the ADR hexagon itself
      * and is resolved by {@link AdrService}, so it needs no borrowed port at all.
@@ -715,7 +715,7 @@ public class ArknetMcpConfiguration {
      * No {@code ResolveTerms}/{@code ResolveRequirements}-style borrowed port here, unlike
      * {@link #boundedContextMcpTools} or {@link #adrMcpTools}: an {@link ActorService} result
      * carries no opaque identity of a neighbour hexagon's resource, so there is nothing to render
-     * as a business code and no ADR-008 borrow to justify.
+     * as a business code and no Borrowed In-Port to justify.
      */
     @Bean
     ActorMcpTools actorMcpTools(final ActorService service, final ProjectResolver projectResolver) {
@@ -810,7 +810,7 @@ public class ArknetMcpConfiguration {
 
     /**
      * Assembles the HTML report's per-bounded-context sections by borrowing all six hexagons'
-     * read In-Ports - the same In-Adapter-as-gateway role ADR-008 grants {@code uc_get} when it
+     * read In-Ports - the same In-Adapter-as-gateway role the Borrowed In-Port pattern grants {@code uc_get} when it
      * borrows {@link ResolveTerms}, here for the report rather than for a tool response. A use
      * case reconstructed from raw triples is not readable as a use case (its flow is a set of
      * opaque {@code arkreq:Step} subjects ordered by an {@code arkreq:position} literal), so the
@@ -865,8 +865,8 @@ public class ArknetMcpConfiguration {
      * <p>{@code projectService} is passed as {@link de.hauschel.arknet.prj.application.port.in.FindProject},
      * not {@link ProjectRegistry} directly: the digest and HTML headers name the resolved
      * project's registered label instead of its raw id by borrowing the project
-     * hexagon's driving port, the same gateway role ADR-008 grants any other in-adapter of a
-     * neighbour bounded context.</p>
+     * hexagon's driving port, the same gateway role the Borrowed In-Port pattern grants any other
+     * in-adapter of a neighbour bounded context.</p>
      */
     @Bean
     StoreReportTools storeReportTools(
@@ -929,8 +929,7 @@ public class ArknetMcpConfiguration {
      * {@code impact_analysis}, {@code actor_usecase_matrix}, {@code term_cooccurrence}). Reuses
      * the very same {@link #storeReader}/{@link #storeReportPrefixes} beans as
      * {@link #storeReportTools} instead of building a second {@link StoreReader} - one generic
-     * read path, two presentations over it (a full-snapshot digest vs. a graph traversal), per
-     * ADR-006.
+     * read path, two presentations over it (a full-snapshot digest vs. a graph traversal).
      */
     @Bean
     TraceabilityMcpTools traceabilityMcpTools(

@@ -20,7 +20,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * {@code bc_link_context} - recording that a relationship was asserted, not maintaining a single
  * canonical relationship per bounded-context pair. There is consequently no read method on this
  * port either: inspecting created relationships goes through the generic store-wide read path
- * ({@code store_overview}/{@code resource_get}, ADR-006), not a dedicated
+ * ({@code store_overview}/{@code resource_get}), not a dedicated
  * {@code bc_get_context}/{@code bc_list_context} tool.</p>
  *
  * <p>The {@link ProjectId} routing key identifies which architecture model a relationship belongs

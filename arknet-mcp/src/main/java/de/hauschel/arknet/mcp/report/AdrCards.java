@@ -44,8 +44,8 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  * <p><strong>Two borrowed ports, one relation resolved locally.</strong> {@code
  * addressesRequirement} and {@code affectsContext} point into neighbour hexagons, so their
  * business codes are rendered through the borrowed {@link ResolveRequirements}/
- * {@link ResolveBoundedContexts} ports (ADR-008, the same borrowing {@code uc_get}/{@code
- * adr_get} already do) - batched once per report across every ADR, never per card.
+ * {@link ResolveBoundedContexts} ports (the same borrowing {@code uc_get}/{@code adr_get}
+ * already do) - batched once per report across every ADR, never per card.
  * {@code supersedes}/{@code supersededBy}/{@code relatedTo} point back into this hexagon's own
  * resources, and {@link AdrDetail} already carries their codes; only the target's subject id, which a
  * {@link Ref} needs to link to that ADR's own card, is missing, so this class builds an

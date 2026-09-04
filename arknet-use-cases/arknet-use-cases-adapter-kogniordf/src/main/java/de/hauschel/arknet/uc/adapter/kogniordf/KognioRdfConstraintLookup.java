@@ -33,8 +33,8 @@ import de.hauschel.arknet.uc.application.port.out.ConstraintLookup;
  * moment a constraint is linked - {@code KognioRdfUseCaseRepository} no longer performs this
  * lookup itself; it just persists the {@link ResourceId} it is handed. Deliberately its own class
  * rather than a shared import of the sibling requirements bounded context's
- * {@code KognioRdfConstraintRepository}: ADR-008 forbids cross-BC adapter imports, only an
- * In-Adapter may consume a neighbour's In-Port.</p>
+ * {@code KognioRdfConstraintRepository}: the Borrowed In-Port pattern forbids cross-BC adapter
+ * imports, only an In-Adapter may consume a neighbour's In-Port.</p>
  *
  * <p><strong>Typed join.</strong> A constraint is typed one of
  * {@code arkreq:TechnicalConstraint}/{@code arkreq:BusinessConstraint}/
