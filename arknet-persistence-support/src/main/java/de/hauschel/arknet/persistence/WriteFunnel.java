@@ -57,7 +57,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * (kogn-io/rdf-core#18), both existence checks pass, and the loser's {@code commit()} itself is
  * rejected as a conflict. Which exception that surfaces as is a property of the store behind the
  * ports, not of this class, so {@code isWriteConflict} stays an injected, technology-neutral
- * {@link Predicate} (ADR-001: the store is swappable); {@link #DEFAULT_WRITE_CONFLICT} is the
+ * {@link Predicate} (the store is swappable); {@link #DEFAULT_WRITE_CONFLICT} is the
  * ready-made one for the kognio-rdf-backed store every adapter here uses. Which domain signal a
  * lost commit surfaces as is the caller's decision, not the funnel's: {@link #create}'s
  * {@code commitConflict} translator receives the store's own conflict exception and returns the
@@ -91,24 +91,25 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  *
  * <p><strong>Owning the transaction is the point.</strong> The funnel, not the adapter, opens
  * and commits the write transaction and hands the {@code body} only the live {@link DatasetTx}.
- * That makes it the single place where the per-write revision record (ADR-011) is appended
- * <em>atomically with the model write</em> - the attachment point ADR-013 kept open,
- * implemented per ADR-014: after the {@code body} ran, and still inside the same transaction,
+ * That makes it the single place where the per-write revision record is appended
+ * <em>atomically with the model write</em> - an attachment point deliberately left open for
+ * exactly this purpose, implemented as a revision that doubles as a concurrency token: after
+ * the {@code body} ran, and still inside the same transaction,
  * the funnel records exactly one immutable PROV-O revision (see {@link ArkprovVocabulary} for
  * the exact triple shape) and rewrites the resource's {@code arkprov:head} pointer to it,
  * chaining the superseded head via {@code prov:wasRevisionOf}. A rejected or failing write
  * therefore never leaves a revision behind - the transaction aborts as a whole. The write
- * activity carries no resolved agent yet - agent attribution is additive (ADR-014
- * decision 5).</p>
+ * activity carries no resolved agent yet - agent attribution is a deliberately deferred
+ * addition.</p>
  *
- * <p><strong>What the head promises now (ADR-014 decisions 3+4).</strong> Revision
+ * <p><strong>What the head promises now.</strong> Revision
  * and head follow every write this funnel runs - {@link #create}, {@link #update} and
  * {@link #compareAndUpdate} each call {@link #recordRevision} after their body, so the head
  * always points at the latest write regardless of which of the three a caller reached. The
  * requirements context's {@code compareAndUpdate} (behind {@code req_update}, {@code
  * req_set_status} and {@code req_link_term}) and the glossary's patch-{@code update} (behind
- * {@code term_update}), both kept outside on purpose for their own transaction semantics by
- * ADR-013 decision 5, are resolved into {@link #compareAndUpdate} rather than integrated
+ * {@code term_update}), both kept outside the funnel on purpose for their own transaction
+ * semantics, are resolved into {@link #compareAndUpdate} rather than integrated
  * unchanged - a full-snapshot comparison (requirements) or an in-adapter-transaction field merge
  * (glossary) each degenerate to a head comparison against this method's {@code expectedHead}. The
  * bounded context's {@code bc_link_term} joined them - its read-modify-write used to
@@ -137,7 +138,7 @@ public final class WriteFunnel {
      * therefore no longer has to live in the repository factories - the one place ArchUnit lets
      * an adapter name RDF4J. This is the predicate every adapter in this codebase wants; it is
      * offered as a default rather than hard-wired, because a different store behind
-     * {@link DatasetLifecycle} (ADR-001) may fail its writers differently, and the funnel would
+     * {@link DatasetLifecycle} may fail its writers differently, and the funnel would
      * then be the wrong place to encode that.
      */
     public static final Predicate<RuntimeException> DEFAULT_WRITE_CONFLICT =
@@ -376,10 +377,10 @@ public final class WriteFunnel {
     }
 
     /**
-     * Runs a guarded compare-and-set update (ADR-014 decision 3): the subject must already
+     * Runs a guarded compare-and-set update: the subject must already
      * exist and its current {@code arkprov:head} - read inside this same write transaction -
      * must equal {@code expectedHead}; only then does {@code body} run. This is the resolution
-     * of the two special paths ADR-013 kept outside the funnel: a stale caller (one
+     * of the two special paths deliberately kept outside the funnel: a stale caller (one
      * whose read is no longer current) is rejected via {@code headMismatch}, exactly like a
      * missing subject is rejected via {@code notFound} - the same supplier-signal shape, so a
      * head conflict is now the same pattern in every bounded context.

@@ -38,8 +38,9 @@ the skill's generic methodology.
 - `ArknetMcpConfiguration.java` (~660 lines, the central wiring) doesn't deserve a craftsmanship
   deduction in this skill — that's `/clean-code-review`'s job. For Full Review the only thing
   that matters: is every one of the six BC bean families actually wired per-call rather than as
-  a singleton with `ProjectId` (ADR-009), and is there no fallback path without an anchor
-  (ADR-016 point 3)? Both held up cleanly on the 2026-08-01 audit.
+  a singleton with `ProjectId`, and is there no fallback path without an anchor -- no default,
+  no silent fallback to the daemon's own working directory? Both held up cleanly on the
+  2026-08-01 audit.
 
 ## Review cadence
 
@@ -83,18 +84,18 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   vocabulary abgleich covers `arkprov`/`arkprj`/`arkarch`, not `arkddd`/`arkproc`). Always verify
   the "intentional" claim against `arknet-architecture-tests` before accepting it — don't take a
   comment's word for it.
-- **Anchor/Project routing (ADR-016) is the one recurring hot spot.** `ProjectId`,
+- **Anchor/Project routing is the one recurring hot spot.** `ProjectId`,
   `ProjectResolver`, `UnresolvedProjectAnchorException` (kernel) plus `RegisteredAnchorProjectResolver`
   (`arknet-mcp`) together implement "no default, no fallback, registry lookup only". Any future
-  change touching project routing should be re-checked against ADR-016 decisions 3 (no default)
-  and 5 (no migration of legacy opaque ids) specifically.
+  change touching project routing should be re-checked against that invariant specifically: no
+  default anchor, and no migration of legacy opaque ids onto it.
   **Extension found (2026-08-01, issue #149):** the "no call without an anchor" wording is
-  absolute in ADR-016/CLAUDE.md but does NOT hold for `project_list`, nor for `project_export` in
+  absolute in `CLAUDE.md` but does NOT hold for `project_list`, nor for `project_export` in
   its default scope, which enumerate across all registered projects. Correct as built, but
-  undocumented as an exception — check any future absolute-sounding ADR-016 claim against these
-  two tools specifically. `project_export`'s `projectOnly=true` scope (2026-09-02) does resolve an
-  anchor, through the same `AnchorContext` path as every other tool, and is bound by decision 3
-  again: the narrowed export has no fall-back to the full one. It also carries the one exception to
+  undocumented as an exception — check any future absolute-sounding no-fallback claim against
+  these two tools specifically. `project_export`'s `projectOnly=true` scope (2026-09-02) does resolve an
+  anchor, through the same `AnchorContext` path as every other tool, and is bound by the same
+  no-default invariant again: the narrowed export has no fall-back to the full one. It also carries the one exception to
   "every tool takes an optional `projectAnchor` parameter": `project_export` takes one, but rejects
   it outside that scope instead of ignoring it, because the default scope addresses no single
   project and an anchor silently dropped there would hand the caller the opposite of what it asked
@@ -263,19 +264,19 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   `@McpTool` descriptions enumerating edges/types (`impact_analysis` already under-promises
   `constrainedBy`).
 
-## Relevant ADRs to keep loaded
+## Recurring architectural invariants to keep in mind
 
-- ADR-016 (registered anchors, not derived) — governs `ProjectId`/`ProjectResolver`.
-- ADR-009 (shared daemon, per-call resolution) — the reason `ProjectResolver` resolves per call
+- Registered anchors, not derived — governs `ProjectId`/`ProjectResolver`.
+- Shared daemon, per-call resolution — the reason `ProjectResolver` resolves per call
   rather than injecting a singleton.
-- ADR-007 (shared SHACL write gate as its own module) — the reason
+- Shared SHACL write gate as its own module — the reason
   `arknet-persistence-support` exists separately from the kernel despite both being "shared
   technique".
-- ADR-013 / ADR-014 (write funnel, revision as concurrency token) — relevant whenever a review
+- Write funnel, revision as concurrency token — relevant whenever a review
   touches a write path's transaction/concurrency behavior (Phase 2).
-- ADR-006 (generic store read path) / ADR-008 (in-adapter as BC gateway, the "borrow" pattern) —
+- Generic store read path / Borrowed In-Port pattern —
   relevant whenever a review touches `arknet-mcp`'s `mcp/store`/`mcp/report`/`mcp/trace`, since
-  those packages exist entirely because of these two ADRs.
+  those packages exist entirely because of these two decisions.
 
 ## Calibration log
 
