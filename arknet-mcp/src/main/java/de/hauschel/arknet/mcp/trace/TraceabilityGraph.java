@@ -53,7 +53,7 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * <p>Built once per read from a {@link StoreSnapshot} - the same generic {@code SELECT ?s ?p
  * ?o} {@link de.hauschel.arknet.mcp.store.StoreReader} already reads for {@code
  * store_overview}/{@code resource_get} - instead of three bespoke SPARQL
- * property-path queries: at this project's single-user, local-store scale (ADR-001) an
+ * property-path queries: at this project's single-user, local-store scale an
  * in-memory traversal over the full triple set is simpler and just as fast, and it keeps this
  * class, like {@code StoreReader}, free of any RDF4J or further kognio-rdf dependency (it
  * consumes only the neutral {@link Triple}/{@link RdfNode} model).</p>

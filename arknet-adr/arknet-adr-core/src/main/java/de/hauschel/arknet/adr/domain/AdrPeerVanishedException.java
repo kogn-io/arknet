@@ -25,7 +25,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * code instead, since the peer is by then observably gone even outside any transaction.</p>
  *
  * <p>Not a programming error: an expected, if rare, outcome of two sessions racing a
- * {@code relatedTo}/{@code supersededBy} edge against a delete of its target (ADR-001: parallel
+ * {@code relatedTo}/{@code supersededBy} edge against a delete of its target (parallel
  * sessions of one user against one local store are the normal case).</p>
  */
 public class AdrPeerVanishedException extends RuntimeException {

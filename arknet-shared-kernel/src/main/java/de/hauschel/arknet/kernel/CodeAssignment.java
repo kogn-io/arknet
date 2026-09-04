@@ -20,7 +20,7 @@ import java.util.function.Supplier;
  * second writer with a duplicate-code signal - but without this helper that rejection surfaces to
  * one of two perfectly well-formed callers as a failure, even though nothing about its own request
  * was wrong. A single "single-user" model is not a "single-writer" model: parallel sessions of one
- * user against one local store are the normal case (ADR-001), so this guard is needed already
+ * user against one local store are the normal case, so this guard is needed already
  * there, not just with a multi-tenant remote store.</p>
  *
  * <p><strong>Why it lives in the shared kernel.</strong> All four bounded contexts share this

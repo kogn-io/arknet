@@ -14,7 +14,7 @@ import java.util.Objects;
  * set of links", "a numbered flow") rather than a per-field type: the card builders decide
  * which domain field is which shape, and the renderer decides how a shape looks. Adding a
  * field to a bounded context therefore never touches the renderer, and adding a second
- * renderer (the Vaadin review UI of ADR-010) never touches the card builders.</p>
+ * renderer (a future Vaadin review UI) never touches the card builders.</p>
  *
  * <p>Sealed, so a new shape is a compile error in every renderer instead of a silently
  * unrendered block.</p>

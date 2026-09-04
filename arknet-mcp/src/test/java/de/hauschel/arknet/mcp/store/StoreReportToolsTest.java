@@ -435,8 +435,8 @@ class StoreReportToolsTest {
 
     /**
      * Regression test for issue #305 part 3: two overlapping {@code store_overview} calls for the
-     * SAME project - the ADR-009 normal case, several sessions of one project against the shared
-     * daemon - used to both write straight onto {@code store-report.html} via {@code
+     * SAME project - an ordinary occurrence under the shared daemon, several sessions of one project
+     * against it - used to both write straight onto {@code store-report.html} via {@code
      * Files.writeString}, risking a reader observing a truncated or interleaved file mid-write.
      * Each call now writes through its own uniquely named temp file and only the final {@link
      * Files#move} touches the report's real name, so every writer that finishes leaves a whole,

@@ -158,7 +158,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * well-formed caller; only
  * sustained, pathological contention on the very same decision surfaces as
  * {@link AdrConcurrentlyModifiedException}. Parallel sessions of one user against one local store
- * are the normal case, not a remote/multi-writer concern (ADR-001).</p>
+ * are the normal case, not a remote/multi-writer concern.</p>
  *
  * <p><strong>Where each reference is resolved.</strong> Every reference code is resolved once,
  * here, before anything is written - an unresolvable one must abort the whole {@code adr_add} (or

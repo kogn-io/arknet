@@ -61,7 +61,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * between - see {@link #updateWithOptimisticRetry}. Neither race is visible to a well-formed
  * caller; only sustained, pathological contention on the very same bounded context surfaces as
  * {@link BoundedContextConcurrentlyModifiedException}. Parallel sessions of one user against one
- * local store are the normal case, not a remote/multi-writer concern (ADR-001).</p>
+ * local store are the normal case, not a remote/multi-writer concern.</p>
  */
 public class BoundedContextService implements AddBoundedContext, ListBoundedContexts,
         GetBoundedContext, LinkTerm, ResolveBoundedContexts, LinkContext {

@@ -41,7 +41,7 @@ import de.hauschel.arknet.kernel.ProjectResolver;
  *
  * <p>The bean otherwise reproduces the auto-configuration's provider verbatim (same JSON mapper,
  * endpoint, keep-alive and delete policy); it adds the extractor plus
- * {@link LoopbackHostSecurity}'s host-restricted security validator (ADR-009 decision 4). The
+ * {@link LoopbackHostSecurity}'s host-restricted security validator. The
  * header itself is still not authentication: on a loopback-only single-user server a local client
  * could claim any anchor - an accepted assumption at this trust boundary, and unchanged by
  * ADR-016, which routes on the anchor rather than vouching for it.</p>

@@ -125,8 +125,8 @@ class AnchorHttpTransportConfigurationTest {
      * {@code wiresTheAnchorExtractorIntoTheBuiltTransportProvider} test above already guards for the
      * context extractor, which the validator never got until now. Removing the
      * {@code .securityValidator(...)} call in {@link AnchorHttpTransportConfiguration} would leave
-     * every other test in this suite green while quietly reopening the DNS-rebinding gap ADR-009
-     * decision 4 closes - this is the test that would go red.
+     * every other test in this suite green while quietly reopening the DNS-rebinding gap the
+     * loopback host allowlist closes - this is the test that would go red.
      */
     @Test
     void wiresANonNoopSecurityValidatorIntoTheBuiltTransportProvider() throws ReflectiveOperationException {

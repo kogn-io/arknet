@@ -3,7 +3,7 @@
 MCP-Server (Streamable HTTP, Spring AI 2.0 `spring-ai-starter-mcp-server-webmvc`) + Composition Root -- Spring Boot, verdrahtet requirements-Hexagon + ubiquitous-language-Hexagon + use-cases-Hexagon + bounded-context-Hexagon + adr-Hexagon + actor-Hexagon + project-Hexagon als `@McpTool`-Beans.
 Das project-Hexagon faellt dabei aus dem Muster der uebrigen sechs: es verwaltet Identitaet statt Modell, seine Registry wohnt im reservierten System-Dataset (`ProjectId.RESERVED_SYSTEM_DATASET`) statt in einem Projekt-Dataset, und seine `@McpTool`-Beans bekommen darum weder eine `ProjectId` noch den `ProjectResolver` -- sie lesen den Anker des Aufrufs roh und schlagen ihn selbst nach.
 Das ist keine Auslassung, sondern zwingend: dieser BC beantwortet die Routing-Frage fuer alle anderen und kann darum nicht selbst hinter einer Antwort darauf liegen.
-Die BC-Hexagons teilen den `ProjectResolver`-Bean UND einen gemeinsamen `DatasetLifecycle`-Bean -- ein Dataset pro Projekt, aber die ProjectId wird pro Tool-Aufruf aufgeloest (nicht als Singleton injiziert), damit ein Prozess alle Projekte bedienen kann (ADR-009).
+Die BC-Hexagons teilen den `ProjectResolver`-Bean UND einen gemeinsamen `DatasetLifecycle`-Bean -- ein Dataset pro Projekt, aber die ProjectId wird pro Tool-Aufruf aufgeloest (nicht als Singleton injiziert), damit ein Prozess alle Projekte bedienen kann.
 Dieser `DatasetLifecycle`-Bean ist mit `mcp/dataset/LockConflictReportingDatasetLifecycle` dekoriert: ein injiziertes `Predicate<RuntimeException>` (Default `KognioRdfRequirementRepositoryFactory.DEFAULT_LOCK_CONFLICT`, der einzige Ort ausserhalb der Adapter-Factories, der RDF4Js `RepositoryLockedException` kennt) entscheidet, ob ein fehlgeschlagenes `acquire` tatsaechlich ein Sperrkonflikt eines zweiten Prozesses auf demselben Storage-Verzeichnis ist; nur dann uebersetzt der Dekorator die Store-Exception in eine erklaerende `DatasetLockConflictException`.
 Jeder andere `acquire`-Fehler -- Rechteproblem, voller Speicher, defekter Store -- laeuft unveraendert durch, damit er nicht faelschlich als Lock-Konflikt gemeldet wird.
 `arknet-mcp` bleibt dadurch frei von direkten RDF4J-Imports.
@@ -22,7 +22,7 @@ Der Abgleich ist absichtlich woertlich (case-insensitiv, Wortgrenze): deutsche B
 Die Chipliste unter dem Text schrumpft entsprechend auf die verlinkten Terms, die der Text *nicht* nennt.
 Bei einem UseCase zaehlt zusaetzlich eine Erwaehnung seines eigenen `primaryActor`/`supportingActor` als Link, nicht als Luecke -- diese Beziehung ist bereits ueber die Aktor-Kante festgehalten, nur unter einem anderen Praedikat als `usesTerm` (Issue #333; vor Issue #333 blieb Use-Case-Prosa komplett unausgezeichnet).
 `ModelViews` haelt die sieben Abschnitte und liest das Glossar als **eine** Quelle fuer alle (faellt dieser Lesevorgang aus, meldet er sich wie ein Abschnitt und der Rest steht weiter, nur ohne Labels und Auszeichnung).
-Ein Render-neutrales Praesentationsmodell (`ModelCard`/`Block`/`Ref`/`RichText`+`Span`) trennt "welches Feld ist welche Form" (Karten-Builder) von "wie sieht eine Form aus" (`HtmlReportRenderer`) -- derselbe Schnitt, den ADR-010 fuer die Vaadin-Review-UI als zweiten Renderer braucht; welche Erwaehnung Link und welche Luecke ist, entscheidet damit der Builder, nicht der Renderer.
+Ein Render-neutrales Praesentationsmodell (`ModelCard`/`Block`/`Ref`/`RichText`+`Span`) trennt "welches Feld ist welche Form" (Karten-Builder) von "wie sieht eine Form aus" (`HtmlReportRenderer`) -- derselbe Schnitt, den ein zweiter Renderer wie eine spaetere Vaadin-Review-UI braucht; welche Erwaehnung Link und welche Luecke ist, entscheidet damit der Builder, nicht der Renderer.
 Prosa-Felder tragen seit Issue #388 ein enges Markdown-Subset, das `ProseMarkdown` in der Kartenschicht liest -- neben `Glossary#markUp` und `CodeReferences`, nicht im Renderer.
 Zugelassen sind `**fett**`, `*kursiv*`, `` `code` ``, `- `-Listen und Absaetze an Leerzeilen; ein einzelner Zeilenumbruch kollabiert wie in Markdown ueblich, ein unpaariger Marker bleibt Text, und `\*` schreibt ein literales Sternchen.
 Nicht zugelassen sind Links, Ueberschriften, Tabellen, Bilder und eingebettetes HTML -- ein handgeschriebenes `[Actor](#term-3)` wuerde die modellvalidierte `usesTerm`-Kante und damit die `Span.TermGap`-Erkennung umgehen, also einen behaupteten Bezug an die Stelle eines geprueften setzen.
@@ -89,7 +89,7 @@ durchgesetzt, nicht nur behauptet: `AnchorHttpTransportConfiguration` setzt auf 
 `WebMvcStreamableServerTransportProvider`-Bean einen `DefaultServerTransportSecurityValidator`
 mit einer Host-Allowlist aus `127.0.0.1:*`/`localhost:*` -- Spring AI MCPs Default waere
 sonst `ServerTransportSecurityValidator.NOOP`, der den Origin-/Host-Check aufruft, aber nichts
-prueft, und liesse einen per DNS-Rebinding same-origin gemachten Request durch (ADR-009 Punkt 4).
+prueft, und liesse einen per DNS-Rebinding same-origin gemachten Request durch.
 Der Port bleibt in der Allowlist bewusst als Wildcard offen statt auf den `application.properties`-
 Default `47331` gepinnt: `server.port` ist ueber `arknet.mcp.port` selbst konfigurierbar, und eine
 auf den Default gepinnte Allowlist haette jeden Aufruf gegen einen ueberschriebenen Port mit einem
@@ -110,7 +110,7 @@ stammt und ein geratener, aber zufaellig existierender still das falsche Projekt
 `project_export` ist der Sonderfall dazu: es adressiert nur mit `projectOnly=true` ein einzelnes Projekt und nimmt den Parameter deshalb zwar an, lehnt ihn ausserhalb dieses Scopes aber ab, statt ihn stillschweigend fallenzulassen.
 Fehlender oder unbekannter Anker ist ein Fehler mit nach Aufrufstelle getrennter Meldung -- **kein**
 Default, **kein** Rueckfall auf das Daemon-Arbeitsverzeichnis (ADR-016 Punkt 3). Der Header ist
-Projekt-Routing, keine Authentifizierung (ADR-009). Weil das Projekt pro Aufruf aus dem Anker kommt,
+Projekt-Routing, keine Authentifizierung. Weil das Projekt pro Aufruf aus dem Anker kommt,
 genuegt ein Port fuer alle Projekte. Ein HTTP-Eintrag in `.mcp.json` ist bei Claude Code rein passiv
 (nur Verbindungsaufbau, kein Prozess-Spawn/-Management) -- Start und Betrieb des Daemons sind Sache
 des Menschen, siehe `README.md`.
@@ -132,7 +132,7 @@ gemeinsamen Report-Verzeichnis auseinanderhaelt.
 
 Seit issue #391 traegt derselbe Report zusaetzlich einen zweiten, browserfaehigen Zugang: `StoreReportController` (`mcp/store/`) registriert `GET /report?projectAnchor=<anchor>` als gewoehnlichen `@RestController` neben dem MCP-Streamable-Endpunkt und liefert genau dasselbe HTML als Response-Body statt eines Dateipfads -- additiv, `store_overview` schreibt weiterhin unveraendert die Datei.
 Der Anker kommt hier zwingend als Query-Parameter, nicht als Header: ein Browser, der eine URL aufruft, kann `X-Arknet-Project-Anchor` nicht setzen, darum loest `StoreReportTools#htmlReport` (package-privat, Gegenstueck zu `storeOverview` ohne Datei-Seiteneffekt) den Anker ausschliesslich ueber den expliziten Parameter auf, ohne den Transport-Context-Fallback.
-Ein `@RestController`, der neben dem `WebMvcStreamableServerTransportProvider`-Bean haengt, erbt dessen `DefaultServerTransportSecurityValidator` nicht automatisch -- `StoreReportController` prueft Host/Origin darum selbst, gegen dieselbe Allowlist wie der MCP-Transport, gehoben in die geteilte `LoopbackHostSecurity` (statt einer zweiten, unabhaengig gepflegten Kopie der `127.0.0.1:*`/`localhost:*`-Liste), damit ein per DNS-Rebinding auf den Daemon umgeleiteter Origin nicht das ganze Architekturmodell lesbar macht (ADR-009 Punkt 4).
+Ein `@RestController`, der neben dem `WebMvcStreamableServerTransportProvider`-Bean haengt, erbt dessen `DefaultServerTransportSecurityValidator` nicht automatisch -- `StoreReportController` prueft Host/Origin darum selbst, gegen dieselbe Allowlist wie der MCP-Transport, gehoben in die geteilte `LoopbackHostSecurity` (statt einer zweiten, unabhaengig gepflegten Kopie der `127.0.0.1:*`/`localhost:*`-Liste), damit ein per DNS-Rebinding auf den Daemon umgeleiteter Origin nicht das ganze Architekturmodell lesbar macht.
 
 Die kompakte Kartenansicht zeigte bis issue #270 (Teil 2 von #248) nur die zum Report-Zeitpunkt per `DisplayLocale` aufgeloeste Sprache eines mehrsprachigen Feldes, obwohl jede Sprachvariante schon in der Rohtripel-Ansicht der eigenen Karte lag.
 `HtmlReportRenderer#languageVariants` schliesst diese Luecke rein client-seitig, ohne neue Domain-/Port-Plumbing: sie matcht den gerade angezeigten Text eines Kartentitels oder `Block.Prose`-Feldes per Text-Gleichheit gegen die Literale der Karten-eigenen `raw`-`StoreResource` zurueck auf ein Praedikat -- traegt `subject` mehr als ein Praedikat mit demselben Text, gilt der Rueckmatch als mehrdeutig und bleibt ohne Switch, statt am falschen Feld zu raten.

@@ -44,7 +44,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * fresh read whenever a concurrent {@code term_add} claims the same {@code TERM-N} first, via
  * {@link CodeAssignment#createRetryingOnCodeCollision}; the race is invisible to a well-formed
  * caller. Parallel sessions of one user against one local store are the normal case, not a remote/
- * multi-writer concern (ADR-001).</p>
+ * multi-writer concern.</p>
  *
  * <p><strong>Correction.</strong> {@link #update} lets a caller correct a term's
  * preferred label and/or definition after the fact, keeping its identity (and thus

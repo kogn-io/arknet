@@ -39,7 +39,7 @@ import de.hauschel.arknet.mcp.LoopbackHostSecurity;
  * de.hauschel.arknet.kernel.ProjectResolver} every tool call uses. There is no transport-context
  * anchor to fall back to here, unlike the MCP tools' optional {@code projectAnchor} parameter.</p>
  *
- * <p><strong>Same loopback boundary as the MCP endpoint (ADR-009 decision 4).</strong> Spring AI
+ * <p><strong>Same loopback boundary as the MCP endpoint.</strong> Spring AI
  * MCP's DNS-rebinding defense lives on the {@code WebMvcStreamableServerTransportProvider} bean
  * alone; a plain {@code @RestController} added beside it would not inherit that protection and
  * would hand a rebound page a readable copy of the whole project model. This endpoint therefore
