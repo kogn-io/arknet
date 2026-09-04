@@ -1241,19 +1241,22 @@ class AdrServiceTest {
     /** {@code ConsideredOption}'s counterpart of the new-language-consequence-correction pair above. */
     @Test
     void updateAllowsANewLanguageConsideredOptionCorrectionOnAnAcceptedDecision() {
+        // CHOSEN, not REJECTED (kogn-io/arknet#427): a lone REJECTED option would refuse the
+        // accept() below outright, since ACCEPTED now requires exactly one CHOSEN whenever options
+        // exist.
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here", null,
-                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.REJECTED)),
+                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.CHOSEN)),
                 DEFAULT_LANGUAGE, null, null, null, null));
         service.accept(PROJECT, added.adr().code(), null);
 
         Adr updated = update(added.adr().code(), AdrCorrection.builder()
                 .consideredOptionCorrections(List.of(
                         new de.hauschel.arknet.adr.domain.ConsideredOptionCorrection(
-                                1, "Option A (de)", "Begruendung A", OptionOutcome.REJECTED)))
+                                1, "Option A (de)", "Begruendung A", OptionOutcome.CHOSEN)))
                 .language("de")
                 .build()).adr();
 
-        assertEquals(List.of(new ConsideredOption(1, "Option A (de)", "Begruendung A", OptionOutcome.REJECTED)),
+        assertEquals(List.of(new ConsideredOption(1, "Option A (de)", "Begruendung A", OptionOutcome.CHOSEN)),
                 updated.consideredOptions());
         assertEquals(AdrStatus.ACCEPTED, updated.status());
     }
@@ -1265,15 +1268,17 @@ class AdrServiceTest {
      */
     @Test
     void updateRejectsAnOptionOutcomeChangeOnAnAcceptedDecisionEvenWithANewLanguage() {
+        // CHOSEN, not REJECTED, for the same reason as the sibling test above - the correction below
+        // then flips it to REJECTED, still the outcome change this test is about.
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here", null,
-                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.REJECTED)),
+                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.CHOSEN)),
                 DEFAULT_LANGUAGE, null, null, null, null));
         service.accept(PROJECT, added.adr().code(), null);
 
         assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
                 .consideredOptionCorrections(List.of(
                         new de.hauschel.arknet.adr.domain.ConsideredOptionCorrection(
-                                1, "Option A (de)", "Begruendung A", OptionOutcome.CHOSEN)))
+                                1, "Option A (de)", "Begruendung A", OptionOutcome.REJECTED)))
                 .language("de")
                 .build()));
     }

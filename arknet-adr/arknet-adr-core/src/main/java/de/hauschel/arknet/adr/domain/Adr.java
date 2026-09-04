@@ -129,10 +129,25 @@ public record Adr(
      * decision keeps the date it was accepted on rather than restamping it - the decision was made
      * once.</p>
      *
+     * <p><strong>ACCEPTED implies exactly one CHOSEN option, whenever options exist
+     * (kogn-io/arknet#427).</strong> {@link AdrStatus#PROPOSED} legitimately carries
+     * {@link #consideredOptions()} with no {@link OptionOutcome#CHOSEN} entry - or none at all -
+     * because nothing has been decided yet; that is what the status means. Accepting is the act of
+     * deciding, so from that moment on a non-empty option list without exactly one {@code CHOSEN}
+     * entry is a structural contradiction, not a judgement call this domain can defer: a decision "in
+     * force" that never actually chose among the options it lists. This check runs only here, not in
+     * the compact constructor, precisely because {@link AdrStatus#PROPOSED} must stay exempt - the
+     * constructor validates every status alike and cannot tell "not yet decided" from "decided
+     * wrongly". A record with no considered options at all remains acceptable in every case: the
+     * empty option space is legitimate when the record's own text explains why, and
+     * kogn-io/arknet#425 flags it as a warning regardless of status.</p>
+     *
      * @param decidedOn the day the decision was made
      * @return the accepted decision, or {@code this} if it was already accepted
      * @throws IllegalStateException if this decision is {@link AdrStatus#REJECTED},
-     *                                {@link AdrStatus#DEPRECATED} or {@link AdrStatus#SUPERSEDED}
+     *                                {@link AdrStatus#DEPRECATED} or {@link AdrStatus#SUPERSEDED},
+     *                                or if {@link #consideredOptions()} is non-empty and does not
+     *                                carry exactly one {@link OptionOutcome#CHOSEN} entry
      */
     public Adr accept(LocalDate decidedOn) {
         Objects.requireNonNull(decidedOn, "decidedOn");
@@ -141,6 +156,17 @@ public record Adr(
         }
         if (status != AdrStatus.PROPOSED) {
             throw new IllegalStateException("an ADR can only be accepted while PROPOSED, was " + status);
+        }
+        if (!consideredOptions.isEmpty()) {
+            long chosenCount = consideredOptions.stream()
+                    .filter(option -> option.outcome() == OptionOutcome.CHOSEN)
+                    .count();
+            if (chosenCount != 1) {
+                throw new IllegalStateException(
+                        "an ADR with considered options can only be accepted once exactly one of them "
+                                + "is CHOSEN, was " + chosenCount + ": " + code.value() + " - correct it "
+                                + "with adr_update (consideredOptionCorrections) while still PROPOSED");
+            }
         }
         return new Adr(id, code, name, AdrStatus.ACCEPTED, context, decision, consequences, consideredOptions,
                 decidedOn, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
