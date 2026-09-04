@@ -888,6 +888,51 @@ class KognioRdfTermRepositoryTest {
                 .findByCode(PROJECT_A, new TermCode("TERM-1"), null).orElseThrow().prefLabel());
     }
 
+    /**
+     * Issue #404: {@code term_update}'s own reply used to render an <em>untouched</em>
+     * {@code prefLabel} through this repository's process-wide configured {@link DisplayLocale}
+     * (English by default), while {@code term_get} renders that very same field through the
+     * calling project's own default language. One and the same store state therefore answered
+     * {@code term_update} with the English label and a directly following {@code term_get} with
+     * the German one. The reply now resolves an untouched field exactly the way
+     * {@link TermRepository#findByCode} does for the same project.
+     */
+    @Test
+    void updateRendersAnUntouchedPrefLabelLikeFindByCodeDoes() {
+        TermCode code = new TermCode("TERM-1");
+        givenMultilingualConcept(PROJECT_A, freshId(), "TERM-1", "Person, die bestellt.",
+                "\"Kunde\"@de, \"Customer\"@en");
+        TermRepository englishConfigured = readerFor(Locale.ENGLISH, Locale.ENGLISH);
+
+        Term updated = englishConfigured.update(PROJECT_A, code, null,
+                "Person, die eine Bestellung aufgibt.", "de", "de", null);
+
+        assertEquals("Kunde", updated.prefLabel());
+        assertEquals(englishConfigured.findByCode(PROJECT_A, code, "de").orElseThrow().prefLabel(),
+                updated.prefLabel(),
+                "term_update's reply must show the label term_get shows for the same project");
+    }
+
+    /**
+     * The same promise on {@link #update}'s no-op branch (every field omitted), which returns
+     * without ever consulting the funnel and therefore renders <em>both</em> language-tagged
+     * fields from the current state alone - the branch where a wrong display locale is visible
+     * on the definition as well, not only on the label.
+     */
+    @Test
+    void updateWithoutAnyFieldRendersBothTextFieldsLikeFindByCodeDoes() {
+        TermCode code = new TermCode("TERM-1");
+        givenMultilingualConceptWithDefinition(PROJECT_A, freshId(), "TERM-1",
+                "\"Kunde\"@de, \"Customer\"@en",
+                "\"Person, die bestellt.\"@de, \"Person placing an order.\"@en");
+        TermRepository englishConfigured = readerFor(Locale.ENGLISH, Locale.ENGLISH);
+
+        Term unchanged = englishConfigured.update(PROJECT_A, code, null, null, null, "de", null);
+
+        assertEquals("Kunde", unchanged.prefLabel());
+        assertEquals("Person, die bestellt.", unchanged.definition());
+    }
+
     /** A term repository reading the shared store under an explicit display-language preference. */
     private TermRepository readerFor(Locale requested, Locale systemDefault) {
         return KognioRdfTermRepositoryFactory.over(lifecycle, new DisplayLocale(requested, systemDefault));
