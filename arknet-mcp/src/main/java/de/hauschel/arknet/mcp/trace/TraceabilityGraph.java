@@ -41,10 +41,10 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * {@code arkarch:supersededBy} (ADR -&gt; ADR, written on the
  * superseded decision, issue #69/kogn-io/arknet#357), and the
  * two-hop {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
- * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/use-case/bounded-context
+ * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/use-case/bounded-context/ADR
  * prose ({@code dcterms:description}/{@code arkreq:acceptanceCriterion}, {@link
- * #useCaseProseTexts(String)}, {@code arkddd:domainVision}) that {@code orphan_check}'s
- * unlinked-mention check scans for a glossary term nothing links to.
+ * #useCaseProseTexts(String)}, {@code arkddd:domainVision}, {@link #adrProseTexts(String)}, issue
+ * #406) that {@code orphan_check}'s unlinked-mention check scans for a glossary term nothing links to.
  * {@code actor_usecase_matrix} needs the {@code primaryActor}/{@code
  * supportingActor} edges in the <em>forward</em> direction too ({@link #actorsOf(String)}/{@link
  * #useCasesOf(String)}), and {@code term_cooccurrence} reuses the same prose-scanning idea for a
@@ -147,6 +147,43 @@ public final class TraceabilityGraph {
      * the same way it always was.
      */
     private static final String SUPERSEDES = ArkarchVocabulary.SUPERSEDES;
+
+    /** {@code arkarch:ArchitectureDecisionRecord} - the type of an architecture decision (issue #406). */
+    private static final String ADR_TYPE = ArkarchVocabulary.ADR_TYPE;
+
+    /**
+     * {@code arknet:name} - an ADR's own decision name, and (reused, kogn-io/arknet#357) a
+     * {@link #CONSIDERED_OPTION}'s short option name - see {@link ArkarchVocabulary#NAME}'s own
+     * javadoc for why one predicate serves both. {@link #adrProseTexts(String)} (issue #406) reads
+     * it from both places.
+     */
+    private static final String NAME = ArkarchVocabulary.NAME;
+
+    /** {@code arkarch:adrContext} - ADR -&gt; why the decision was necessary (issue #406). */
+    private static final String ADR_CONTEXT = ArkarchVocabulary.ADR_CONTEXT;
+
+    /** {@code arkarch:adrDecision} - ADR -&gt; what was decided (issue #406). */
+    private static final String ADR_DECISION = ArkarchVocabulary.ADR_DECISION;
+
+    /**
+     * {@code arkarch:consequence} - ADR -&gt; one of its {@code arkarch:Consequence} resources, the
+     * two-hop edge {@link #adrProseTexts(String)} follows to each consequence's
+     * {@link #CONSEQUENCE_STATEMENT} (issue #406) - mirrors {@link #ACCEPTANCE_CRITERION}'s hop.
+     */
+    private static final String CONSEQUENCE = ArkarchVocabulary.CONSEQUENCE;
+
+    /** {@code arkarch:consequenceStatement} - Consequence -&gt; its multilingual text (issue #406). */
+    private static final String CONSEQUENCE_STATEMENT = ArkarchVocabulary.CONSEQUENCE_STATEMENT;
+
+    /**
+     * {@code arkarch:consideredOption} - ADR -&gt; one of its {@code arkarch:ConsideredOption}
+     * resources, the two-hop edge {@link #adrProseTexts(String)} follows to each option's
+     * {@link #NAME}/{@link #OPTION_RATIONALE} (issue #406).
+     */
+    private static final String CONSIDERED_OPTION = ArkarchVocabulary.CONSIDERED_OPTION;
+
+    /** {@code arkarch:optionRationale} - ConsideredOption -&gt; its multilingual reasoning text (issue #406). */
+    private static final String OPTION_RATIONALE = ArkarchVocabulary.OPTION_RATIONALE;
 
     // arkddd:BoundedContext below is, unlike arkreq:acceptanceCriterion/arkddd:domainVision above,
     // used only within this class - ArkdddVocabulary's scope is deliberately limited to
@@ -462,6 +499,29 @@ public final class TraceabilityGraph {
         return subjectsOfType(BOUNDED_CONTEXT_TYPE);
     }
 
+    /** @return the IRIs of every {@code arkarch:ArchitectureDecisionRecord}, sorted (issue #406). */
+    public List<String> adrIris() {
+        return subjectsOfType(ADR_TYPE);
+    }
+
+    /**
+     * @return the term IRIs an architecture decision uses via {@code arkarch:usesTerm}
+     *         (kogn-io/arknet#393), sorted - the ADR-owned counterpart of {@link #usedTerms(String)},
+     *         which only traverses the shared {@code arkreq:usesTerm} property an ADR never carries
+     *         (issue #406).
+     */
+    public List<String> adrUsedTerms(String adrIri) {
+        Objects.requireNonNull(adrIri, "adrIri");
+        return outgoingBySubject.getOrDefault(adrIri, List.of()).stream()
+                .filter(t -> ADR_USES_TERM.equals(t.predicate()))
+                .map(Triple::object)
+                .filter(RdfNode.Resource.class::isInstance)
+                .map(o -> ((RdfNode.Resource) o).iri())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
     /** @return the term IRIs a bounded context links via {@code arkddd:ubiquitousLanguageTerm}, sorted. */
     public List<String> linkedTerms(String boundedContextIri) {
         Objects.requireNonNull(boundedContextIri, "boundedContextIri");
@@ -535,6 +595,33 @@ public final class TraceabilityGraph {
         return literals(Objects.requireNonNull(termIri, "termIri"), DEFINITION);
     }
 
+    /**
+     * @return every prose text field of an architecture decision that can carry ubiquitous-language
+     *         mentions: its own {@link #NAME}/{@link #ADR_CONTEXT}/{@link #ADR_DECISION} literals,
+     *         plus each {@code arkarch:Consequence}'s {@link #CONSEQUENCE_STATEMENT} and each
+     *         {@code arkarch:ConsideredOption}'s {@link #NAME}/{@link #OPTION_RATIONALE} - reached via
+     *         the two-hop {@link #CONSEQUENCE}/{@link #CONSIDERED_OPTION} edges, the same pattern
+     *         {@link #requirementProseTexts(String)} already uses for an acceptance criterion's text.
+     *         Used by {@link #unlinkedMentions()}'s fourth sweep (issue #406): a decision's own text
+     *         naming a glossary term without the matching {@code arkarch:usesTerm} edge was invisible
+     *         to {@code orphan_check} before this, unlike the same gap for a requirement, use case or
+     *         bounded context.
+     */
+    public List<String> adrProseTexts(String adrIri) {
+        Objects.requireNonNull(adrIri, "adrIri");
+        List<String> texts = new ArrayList<>(literals(adrIri, NAME));
+        texts.addAll(literals(adrIri, ADR_CONTEXT));
+        texts.addAll(literals(adrIri, ADR_DECISION));
+        for (String consequenceIri : resourceObjects(adrIri, CONSEQUENCE)) {
+            texts.addAll(literals(consequenceIri, CONSEQUENCE_STATEMENT));
+        }
+        for (String optionIri : resourceObjects(adrIri, CONSIDERED_OPTION)) {
+            texts.addAll(literals(optionIri, NAME));
+            texts.addAll(literals(optionIri, OPTION_RATIONALE));
+        }
+        return texts;
+    }
+
     /** @return the {@code prefLabel}/{@code title} label of every term IRI that carries one. */
     public Map<String, String> termLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
@@ -571,7 +658,15 @@ public final class TraceabilityGraph {
      * definition is never reported (a term cannot be its own broader term anyway, see
      * {@link de.hauschel.arknet.ul.domain.TermCycleException}).</p>
      *
-     * @return the unlinked mentions found across every requirement, bounded context and term
+     * <p>A fourth sweep (issue #406) checks an architecture decision's {@link
+     * #adrProseTexts(String)} against its own {@link #adrUsedTerms(String)} - the {@code
+     * arkarch:usesTerm} counterpart to the requirement/use-case sweep above, which only ever
+     * traverses the shared {@code arkreq:usesTerm} property an ADR never carries. Reported with the
+     * same {@code "usesTerm"} edge-local-name as that sweep: both name the term the source text
+     * mentions without the matching link, only the concrete predicate namespace differs.</p>
+     *
+     * @return the unlinked mentions found across every requirement, use case, bounded context,
+     *         term and architecture decision
      */
     public List<UnlinkedMention> unlinkedMentions() {
         Map<String, String> termLabels = termLabels();
@@ -619,6 +714,14 @@ public final class TraceabilityGraph {
                 if (!mentionedTermIri.equals(broader)) {
                     found.add(new UnlinkedMention(
                             termIri, mentionedTermIri, termLabels.get(mentionedTermIri), "broader"));
+                }
+            }
+        }
+        for (String adrIri : adrIris()) {
+            Set<String> linked = new HashSet<>(adrUsedTerms(adrIri));
+            for (String termIri : matcher.mentionedIn(adrProseTexts(adrIri))) {
+                if (!linked.contains(termIri)) {
+                    found.add(new UnlinkedMention(adrIri, termIri, termLabels.get(termIri), "usesTerm"));
                 }
             }
         }

@@ -75,10 +75,11 @@ public final class TraceabilityRenderer {
     /**
      * Renders {@code orphan_check}: requirements no use case realises, glossary terms never
      * used (neither via {@code arkreq:usesTerm}/actor role - a requirement's or a use case's,
-     * issue #329 - as a bounded context's ubiquitous language, nor as another term's
-     * {@code skos:broader}, issue #252), terms a requirement's or bounded context's prose names
-     * without the edge to back it up, and constraints no requirement or use case is bound by
-     * (issue #223/#329).
+     * issue #329 - as a bounded context's ubiquitous language, nor via an architecture decision's
+     * {@code arkarch:usesTerm}, kogn-io/arknet#393, nor as another term's {@code skos:broader},
+     * issue #252), terms a requirement's, use case's, bounded context's or architecture decision's
+     * prose names without the edge to back it up (issue #406), and constraints no requirement or
+     * use case is bound by (issue #223/#329).
      *
      * @param projectId the project the graph was read from
      * @param graph       the traceability graph to report on
