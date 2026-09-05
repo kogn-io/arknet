@@ -34,6 +34,7 @@ import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
@@ -180,7 +181,6 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
-    private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
     private static final String OSLC_RM_NAMESPACE = "http://open-services.net/ns/rm#";
 
     private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
@@ -188,7 +188,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String USE_CASE_TYPE = ArkreqVocabulary.USE_CASE_TYPE;
     private static final String STEP_TYPE = ArkreqVocabulary.STEP_TYPE;
     private static final String REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "Requirement";
-    private static final String ACTOR_TYPE = ARKPROC_NAMESPACE + "Actor";
+    // Shared via ArkprocVocabulary (kogn-io/arknet#148): this class used to declare its own private
+    // copy of this IRI literal, duplicated with an architecture test's own private copy.
+    private static final String ACTOR_TYPE = ArkprocVocabulary.ACTOR_TYPE;
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String CONSTRAINT_TYPE = ARKREQ_NAMESPACE + "Constraint";
     private static final String USE_CASE_GOAL_PROPERTY = ArkreqVocabulary.USE_CASE_GOAL;

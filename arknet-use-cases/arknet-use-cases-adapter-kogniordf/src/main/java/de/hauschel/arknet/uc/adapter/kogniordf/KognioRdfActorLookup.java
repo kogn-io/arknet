@@ -14,6 +14,7 @@ import io.kogn.rdf.terms.IRI;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.uc.application.port.out.ActorLookup;
@@ -51,13 +52,15 @@ import de.hauschel.arknet.uc.application.port.out.ActorLookup;
  */
 public final class KognioRdfActorLookup implements ActorLookup {
 
-    private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
     private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
     private static final String NAME_PROPERTY = ARKNET_NAMESPACE + "name";
-    private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
-    private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
-    private static final String LEGAL_ACTOR_TYPE = ARKPROC_NAMESPACE + "LegalActor";
-    private static final String GROUP_ACTOR_TYPE = ARKPROC_NAMESPACE + "GroupActor";
+    // Shared via ArkprocVocabulary (kogn-io/arknet#148): this class used to declare its own private
+    // copy of these four IRI literals, duplicated with TraceabilityGraph's and
+    // KognioRdfActorRepository's own private copies.
+    private static final String HUMAN_ACTOR_TYPE = ArkprocVocabulary.HUMAN_ACTOR_TYPE;
+    private static final String SYSTEM_ACTOR_TYPE = ArkprocVocabulary.SYSTEM_ACTOR_TYPE;
+    private static final String LEGAL_ACTOR_TYPE = ArkprocVocabulary.LEGAL_ACTOR_TYPE;
+    private static final String GROUP_ACTOR_TYPE = ArkprocVocabulary.GROUP_ACTOR_TYPE;
     // Mirrors the graph IRI the actor out-adapter writes into (KognioRdfActorRepository's
     // ACTOR_GRAPH). The bounded contexts share one project dataset; resolving an actor means
     // reading across into that sibling graph.

@@ -28,6 +28,7 @@ import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteFunnel;
 
@@ -65,7 +66,7 @@ public final class KognioRdfContextRelationshipRepositoryFactory {
     private static final String SHAPES_RESOURCE = "/arknet-shapes.ttl";
 
     private static final IRI CONTEXT_RELATIONSHIP_CLASS =
-            SimpleValueFactory.getInstance().createIRI("https://w3id.org/arknet/ddd#ContextRelationship");
+            SimpleValueFactory.getInstance().createIRI(ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE);
 
     private KognioRdfContextRelationshipRepositoryFactory() {
     }

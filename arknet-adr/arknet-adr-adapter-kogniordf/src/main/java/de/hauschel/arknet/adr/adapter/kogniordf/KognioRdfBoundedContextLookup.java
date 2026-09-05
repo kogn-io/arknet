@@ -16,6 +16,7 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 
@@ -40,7 +41,10 @@ import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 public final class KognioRdfBoundedContextLookup implements BoundedContextLookup {
 
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
-    private static final String BOUNDED_CONTEXT_TYPE = "https://w3id.org/arknet/ddd#BoundedContext";
+    // Shared via ArkdddVocabulary (kogn-io/arknet#148): this class used to declare its own private
+    // copy of the exact same IRI literal KognioRdfAdrRepository and KognioRdfBoundedContextRepository
+    // each carried too.
+    private static final String BOUNDED_CONTEXT_TYPE = ArkdddVocabulary.BOUNDED_CONTEXT_TYPE;
     // Mirrors the graph IRI the bounded-context out-adapter writes into.
     private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
 

@@ -23,10 +23,12 @@ package de.hauschel.arknet.persistence;
  * module's RDF4J-freedom untouched.</p>
  *
  * <p><strong>Scope: the whole active module, not just the cross-module subset.</strong> This
- * differs from {@link ArkreqVocabulary}/{@link ArkdddVocabulary}, which name only the handful of
- * predicates duplicated across two modules, and follows {@link ArkprovVocabulary}/
- * {@link ArkprjVocabulary} instead: those mirror their whole ontology module and are held against
- * it by a bidirectional architecture test ({@code arknet-architecture-tests}). The active
+ * differs from {@link ArkreqVocabulary}, which still names only the handful of predicates
+ * duplicated across two modules, and follows {@link ArkprovVocabulary}/{@link ArkprjVocabulary}
+ * instead: those mirror their whole ontology module and are held against it by a bidirectional
+ * architecture test ({@code arknet-architecture-tests}). {@link ArkdddVocabulary} joined this
+ * "whole module" camp with kogn-io/arknet#148, once its own narrow-scope javadoc turned out to be
+ * wrong about which of its predicates were actually safe to leave duplicated. The active
  * {@code arknet-architecture.ttl} is ADR-only (the remaining ISO-42010 concepts stay parked), so
  * "the whole module" and "what the ADR context writes" coincide here - and the mirror is what makes
  * the drift test possible in the first place.</p>

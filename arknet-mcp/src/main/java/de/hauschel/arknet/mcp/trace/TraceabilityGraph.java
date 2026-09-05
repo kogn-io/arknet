@@ -26,6 +26,7 @@ import de.hauschel.arknet.mcp.store.StoreSnapshot;
 import de.hauschel.arknet.mcp.store.Triple;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 
 /**
@@ -67,8 +68,6 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  */
 public final class TraceabilityGraph {
 
-    private static final String ARKDDD_NAMESPACE = "https://w3id.org/arknet/ddd#";
-    private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private static final String DCTERMS_DESCRIPTION = "http://purl.org/dc/terms/description";
 
@@ -123,10 +122,10 @@ public final class TraceabilityGraph {
     private static final String CONSTRAINED_BY = ArkreqVocabulary.CONSTRAINED_BY;
 
     // The four arkarch: edges an architecture decision owns (issue #69, kogn-io/arknet#393). Unlike
-    // ArkreqVocabulary/ArkdddVocabulary, whose scope is deliberately the cross-module subset only,
-    // ArkarchVocabulary mirrors its whole (ADR-only) ontology module - so these come from the same
-    // shared source the ADR out-adapter serializes them with, and a rename cannot silently desync
-    // the two sides.
+    // ArkreqVocabulary, whose scope is deliberately the cross-module subset only, ArkarchVocabulary
+    // mirrors its whole (ADR-only) ontology module (the same "whole module" pattern ArkdddVocabulary
+    // joined with kogn-io/arknet#148) - so these come from the same shared source the ADR
+    // out-adapter serializes them with, and a rename cannot silently desync the two sides.
     private static final String ADDRESSES_REQUIREMENT = ArkarchVocabulary.ADDRESSES_REQUIREMENT;
     private static final String AFFECTS_CONTEXT = ArkarchVocabulary.AFFECTS_CONTEXT;
 
@@ -192,12 +191,12 @@ public final class TraceabilityGraph {
     /** {@code arkarch:optionRationale} - ConsideredOption -&gt; its multilingual reasoning text (issue #406). */
     private static final String OPTION_RATIONALE = ArkarchVocabulary.OPTION_RATIONALE;
 
-    // arkddd:BoundedContext below is, unlike arkreq:acceptanceCriterion/arkddd:domainVision above,
-    // used only within this class - ArkdddVocabulary's scope is deliberately limited to
-    // predicates duplicated across modules (see its javadoc), so this one stays local rather than
-    // growing that shared class further. arkddd:ubiquitousLanguageTerm moved to
-    // ArkdddVocabulary#UBIQUITOUS_LANGUAGE_TERM with issue #335, once KognioRdfTermRepository's
-    // reference check became a third reader.
+    // arkddd:ubiquitousLanguageTerm moved to ArkdddVocabulary#UBIQUITOUS_LANGUAGE_TERM with issue
+    // #335, once KognioRdfTermRepository's reference check became a third reader. Since
+    // kogn-io/arknet#148, ArkdddVocabulary mirrors the whole arknet-ddd.ttl module - the class
+    // javadoc's earlier claim that arkddd:BoundedContext "stays local" turned out to be false, once
+    // KognioRdfAdrRepository/KognioRdfBoundedContextLookup/KognioRdfContextRelationshipRepository
+    // each turned out to already carry their own private copy of the exact same type IRI.
     private static final String UBIQUITOUS_LANGUAGE_TERM = ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM;
 
     private static final String FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.FUNCTIONAL_REQUIREMENT_TYPE;
@@ -205,7 +204,7 @@ public final class TraceabilityGraph {
     private static final String USE_CASE_TYPE = ArkreqVocabulary.USE_CASE_TYPE;
     private static final String STEP_TYPE = ArkreqVocabulary.STEP_TYPE;
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
-    private static final String BOUNDED_CONTEXT_TYPE = ARKDDD_NAMESPACE + "BoundedContext";
+    private static final String BOUNDED_CONTEXT_TYPE = ArkdddVocabulary.BOUNDED_CONTEXT_TYPE;
 
     // The three arkreq: Constraint subtypes (issue #223) - unlike arkreq:Requirement's two
     // subtypes, there is no abstract arkreq:Constraint type triple to check against: this
@@ -215,14 +214,16 @@ public final class TraceabilityGraph {
     private static final String BUSINESS_CONSTRAINT_TYPE = ArkreqVocabulary.BUSINESS_CONSTRAINT_TYPE;
     private static final String REGULATORY_CONSTRAINT_TYPE = ArkreqVocabulary.REGULATORY_CONSTRAINT_TYPE;
 
-    // arkproc:HumanActor/SystemActor/LegalActor/GroupActor below are, like UBIQUITOUS_LANGUAGE_TERM
-    // above, used only within this class and duplicated rather than shared - the same four type
-    // IRIs are already duplicated as adapter-private constants in arknet-actor's kogniordf
-    // out-adapter, and this class stays free of any dependency on it (see the class javadoc).
-    private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
-    private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
-    private static final String LEGAL_ACTOR_TYPE = ARKPROC_NAMESPACE + "LegalActor";
-    private static final String GROUP_ACTOR_TYPE = ARKPROC_NAMESPACE + "GroupActor";
+    // arkproc:HumanActor/SystemActor/LegalActor/GroupActor come from ArkprocVocabulary
+    // (kogn-io/arknet#148): before that class existed, these four type IRIs were each an
+    // adapter-private copy duplicated across this class, arknet-actor's KognioRdfActorRepository
+    // (the writer) and arknet-use-cases' KognioRdfActorLookup. This class still stays free of any
+    // dependency on either out-adapter (see the class javadoc) - only the shared, technology-neutral
+    // IRI constants are pulled in.
+    private static final String HUMAN_ACTOR_TYPE = ArkprocVocabulary.HUMAN_ACTOR_TYPE;
+    private static final String SYSTEM_ACTOR_TYPE = ArkprocVocabulary.SYSTEM_ACTOR_TYPE;
+    private static final String LEGAL_ACTOR_TYPE = ArkprocVocabulary.LEGAL_ACTOR_TYPE;
+    private static final String GROUP_ACTOR_TYPE = ArkprocVocabulary.GROUP_ACTOR_TYPE;
 
     /**
      * The predicates {@link #dependents(String)} follows backwards ("who references this").

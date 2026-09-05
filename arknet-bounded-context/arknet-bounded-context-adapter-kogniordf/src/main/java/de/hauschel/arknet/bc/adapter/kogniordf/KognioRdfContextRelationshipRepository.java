@@ -55,16 +55,18 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * {@code Subdomain} - same idiom, same reasoning: a compiler-checked, exhaustive mapping with no
  * risk of an enum constant silently mapping to nothing.</p>
  *
- * <p><strong>{@code upstream}/{@code downstream} are shared (issue #293), the rest stays
- * local.</strong> {@code arkddd:upstream}/{@code downstream} now come from {@link ArkdddVocabulary},
- * the same shared source {@code arknet-mcp}'s {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph}
- * traverses them from for {@code impact_analysis} - before issue #293 that traversal simply did not
- * know about {@code ContextRelationship} at all, so the two sides never risked disagreeing on the
- * IRI, but a future rename now cannot silently desync them either. {@code arkddd:ContextRelationship}/
- * {@code relationshipType} and the eight {@code arkddd:RelationshipType} individual IRIs remain
- * private local constants here, exactly like {@code KognioRdfBoundedContextRepository} already
- * keeps {@code PART_OF_PROPERTY}/{@code SUBDOMAIN_TYPE_PROPERTY}: nothing outside this adapter
- * reads them.</p>
+ * <p><strong>Every {@code arkddd:} IRI here comes from {@link ArkdddVocabulary}
+ * (kogn-io/arknet#148).</strong> {@code arkddd:upstream}/{@code downstream} were the first to move
+ * there (issue #293), the same shared source {@code arknet-mcp}'s
+ * {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph} traverses them from for
+ * {@code impact_analysis}. {@code arkddd:ContextRelationship}, {@code arkddd:BoundedContext}
+ * (this class's own validation-only assertion target, below), {@code relationshipType} and the
+ * eight {@code arkddd:RelationshipType} individual IRIs followed with #148, once
+ * {@code arkddd:ContextRelationship} turned out to already be a private duplicate of this class's
+ * own copy in {@code KognioRdfContextRelationshipRepositoryFactory}, and
+ * {@code arkddd:BoundedContext} a private duplicate of the very type
+ * {@code KognioRdfBoundedContextRepository} writes and {@code KognioRdfAdrRepository}/
+ * {@code KognioRdfBoundedContextLookup} separately re-declared.</p>
  *
  * <p><strong>No read method (decision 5).</strong> This port and adapter expose no
  * {@code findAll}/{@code findByCode}: inspecting a created relationship goes through the generic
@@ -89,26 +91,24 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  */
 public class KognioRdfContextRelationshipRepository implements ContextRelationshipRepository {
 
-    private static final String ARKDDD_NAMESPACE = "https://w3id.org/arknet/ddd#";
-
     /** Shares {@code KognioRdfBoundedContextRepository}'s named graph, not a private one of its own. */
     private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
 
-    private static final String CONTEXT_RELATIONSHIP_TYPE = ARKDDD_NAMESPACE + "ContextRelationship";
+    private static final String CONTEXT_RELATIONSHIP_TYPE = ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE;
     /** {@code shapes:ContextRelationship-upstream}/{@code -downstream}'s {@code sh:class} target. */
-    private static final String BOUNDED_CONTEXT_TYPE = ARKDDD_NAMESPACE + "BoundedContext";
+    private static final String BOUNDED_CONTEXT_TYPE = ArkdddVocabulary.BOUNDED_CONTEXT_TYPE;
     private static final String UPSTREAM_PROPERTY = ArkdddVocabulary.UPSTREAM;
     private static final String DOWNSTREAM_PROPERTY = ArkdddVocabulary.DOWNSTREAM;
-    private static final String RELATIONSHIP_TYPE_PROPERTY = ARKDDD_NAMESPACE + "relationshipType";
+    private static final String RELATIONSHIP_TYPE_PROPERTY = ArkdddVocabulary.RELATIONSHIP_TYPE_PROPERTY;
 
-    private static final String PARTNERSHIP = ARKDDD_NAMESPACE + "Partnership";
-    private static final String SHARED_KERNEL = ARKDDD_NAMESPACE + "SharedKernel";
-    private static final String CUSTOMER_SUPPLIER = ARKDDD_NAMESPACE + "CustomerSupplier";
-    private static final String CONFORMIST = ARKDDD_NAMESPACE + "Conformist";
-    private static final String ANTICORRUPTION_LAYER = ARKDDD_NAMESPACE + "AnticorruptionLayer";
-    private static final String OPEN_HOST_SERVICE = ARKDDD_NAMESPACE + "OpenHostService";
-    private static final String PUBLISHED_LANGUAGE = ARKDDD_NAMESPACE + "PublishedLanguage";
-    private static final String SEPARATE_WAYS = ARKDDD_NAMESPACE + "SeparateWays";
+    private static final String PARTNERSHIP = ArkdddVocabulary.PARTNERSHIP;
+    private static final String SHARED_KERNEL = ArkdddVocabulary.SHARED_KERNEL;
+    private static final String CUSTOMER_SUPPLIER = ArkdddVocabulary.CUSTOMER_SUPPLIER;
+    private static final String CONFORMIST = ArkdddVocabulary.CONFORMIST;
+    private static final String ANTICORRUPTION_LAYER = ArkdddVocabulary.ANTICORRUPTION_LAYER;
+    private static final String OPEN_HOST_SERVICE = ArkdddVocabulary.OPEN_HOST_SERVICE;
+    private static final String PUBLISHED_LANGUAGE = ArkdddVocabulary.PUBLISHED_LANGUAGE;
+    private static final String SEPARATE_WAYS = ArkdddVocabulary.SEPARATE_WAYS;
 
     private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();

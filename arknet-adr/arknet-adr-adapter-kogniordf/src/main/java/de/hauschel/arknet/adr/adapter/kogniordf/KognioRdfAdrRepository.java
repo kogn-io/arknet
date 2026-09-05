@@ -66,6 +66,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
@@ -153,16 +154,19 @@ public class KognioRdfAdrRepository implements AdrRepository {
     /**
      * {@code arkreq:Requirement} (kogn-io/arknet#351) - the abstract base type
      * {@code ashapes:ADR-addressesRequirement}'s {@code sh:class} targets. Adapter-private: nothing
-     * outside {@link #crossReferenceAssertedContext} needs it, mirroring
-     * {@code KognioRdfContextRelationshipRepository}'s own local {@code BOUNDED_CONTEXT_TYPE}.
+     * outside {@link #crossReferenceAssertedContext} needs it - unlike {@link #BOUNDED_CONTEXT_TYPE}
+     * below, no other module ever declared its own copy of this one.
      */
     private static final String REQUIREMENT_TYPE = "https://w3id.org/arknet/requirements#Requirement";
 
     /**
      * {@code arkddd:BoundedContext} (kogn-io/arknet#351) - {@code ashapes:ADR-affectsContext}'s
-     * {@code sh:class} target. Adapter-private, same reasoning as {@link #REQUIREMENT_TYPE}.
+     * {@code sh:class} target, and {@link KognioRdfBoundedContextLookup}'s type filter for
+     * resolving an ADR's {@code BC-N} reference. Shared via {@link ArkdddVocabulary}
+     * (kogn-io/arknet#148): this adapter and {@code KognioRdfBoundedContextLookup} each used to
+     * declare their own private copy of the exact same IRI literal, unnoticed by any test.
      */
-    private static final String BOUNDED_CONTEXT_TYPE = "https://w3id.org/arknet/ddd#BoundedContext";
+    private static final String BOUNDED_CONTEXT_TYPE = ArkdddVocabulary.BOUNDED_CONTEXT_TYPE;
 
     /**
      * {@code skos:Concept} (kogn-io/arknet#351) - {@code ashapes:ADR-usesTerm}'s {@code sh:class}
