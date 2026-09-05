@@ -104,6 +104,7 @@ Details: `arknet-actor/CLAUDE.md`
 - `https://w3id.org/arknet/privacy#` (Prefix: `arkpriv:`) — DataCategory, LegalBasis, ProcessingPurpose
 - `https://w3id.org/arknet/provenance#` (Prefix: `arkprov:`) — Revision (PROV-O-basiert), head (Head-Pointer = Concurrency-Token je Ressource)
 - `https://w3id.org/arknet/project#` (Prefix: `arkprj:`) — Project (registrierte Store-Identitaet), Anchor + AnchorType (`PathAnchor`/`UrlAnchor`/`UuidAnchor`), defaultLanguage (einwertiger Rueckfall) und maintainedLanguage (mehrwertige Zusage); Praefix bewusst `arkprj` statt `arkproj`, um die Verwechslung mit `arkproc:` in SPARQL-Queries auszuschliessen
+- Namensgebungskonvention (ein Namespace-Name behauptet nicht mehr, als der Namespace traegt): `arknet-ontology/CLAUDE.md`
 
 ## Ubiquitous Language
 
