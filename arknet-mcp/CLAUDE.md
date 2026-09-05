@@ -108,8 +108,15 @@ aus dem `.mcp.json`-Header `X-Arknet-Project-Anchor: ${PWD}` --
 bleibt Primaerweg, weil ein per Parameter uebergebener Anker vom Sprachmodell
 stammt und ein geratener, aber zufaellig existierender still das falsche Projekt traefe.
 `project_export` ist der Sonderfall dazu: es adressiert nur mit `projectOnly=true` ein einzelnes Projekt und nimmt den Parameter deshalb zwar an, lehnt ihn ausserhalb dieses Scopes aber ab, statt ihn stillschweigend fallenzulassen.
-Fehlender oder unbekannter Anker ist ein Fehler mit nach Aufrufstelle getrennter Meldung -- **kein**
-Default, **kein** Rueckfall auf das Daemon-Arbeitsverzeichnis. Der Header ist
+Fuer jedes Modell-adressierende Tool gilt: fehlender oder unbekannter Anker ist ein Fehler mit
+nach Aufrufstelle getrennter Meldung -- **kein** Default, **kein** Rueckfall auf das
+Daemon-Arbeitsverzeichnis (ADR-016 Punkt 3). Die benannte Ausnahme sind die beiden Tools des
+`arknet-project`-BC, die auf der Registry selbst arbeiten statt ein Projekt zu adressieren:
+`project_list` (listet ausnahmslos alle registrierten Projekte) und `project_export` in seinem
+Default-Scope ohne `projectOnly=true` (exportiert ausnahmslos alle registrierten Projekte).
+Beide nehmen deshalb ueberhaupt keinen Anker entgegen -- ein Backup oder eine Projektuebersicht
+ist naturgemaess projektuebergreifend, und die Registry kann sich nicht hinter einer Anker-
+Aufloesung verstecken, die sie selbst beantwortet (issue #149; Details in ADR-016). Der Header ist
 Projekt-Routing, keine Authentifizierung. Weil das Projekt pro Aufruf aus dem Anker kommt,
 genuegt ein Port fuer alle Projekte. Ein HTTP-Eintrag in `.mcp.json` ist bei Claude Code rein passiv
 (nur Verbindungsaufbau, kein Prozess-Spawn/-Management) -- Start und Betrieb des Daemons sind Sache
