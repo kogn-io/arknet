@@ -315,7 +315,7 @@ Bounded Context BC (`arknet-bounded-context`) -- BoundedContext lifecycle (assig
 | `bc_link_term` | Link a bounded context to a glossary term (`arkddd:ubiquitousLanguageTerm`; the term must exist) |
 | `bc_link_context` | Record a directed DDD context-mapping relationship between two existing bounded contexts (`arkddd:ContextRelationship`; both must exist), classified by one of eight `arkddd:RelationshipType` values. Pure CRUD, not idempotent -- every call creates a new relationship |
 
-ADR BC (`arknet-adr`) -- architecture decision records, store-backed and numbered independently of the hand-written markdown records under `docs/adr/`. A generated, read-only snapshot of the whole store -- a full `.trig` dump and the same HTML report `store_overview` renders -- lives under [`docs/adr-export/`](docs/adr-export/) so a repository visitor without a running store can still see the current decisions; regenerate it with `scripts/export-store-docs.sh` after writing to arknet's own store data:
+ADR BC (`arknet-adr`) -- architecture decision records, store-backed; arknet's own decisions are records in that store. A generated, read-only snapshot of the whole store -- a full `.trig` dump and the same HTML report `store_overview` renders -- lives under [`docs/adr-export/`](docs/adr-export/) so a repository visitor without a running store can still see the current decisions; regenerate it with `scripts/export-store-docs.sh` after writing to arknet's own store data:
 
 | Tool | Description |
 |------|-------------|

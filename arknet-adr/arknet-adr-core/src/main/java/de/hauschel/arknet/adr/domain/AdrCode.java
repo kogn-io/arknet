@@ -14,11 +14,10 @@ import java.util.Objects;
  * and what {@code dcterms:identifier} carries in the store; it may in principle be relabelled
  * without touching the decision's underlying identity.</p>
  *
- * <p><strong>A different numbering space than the markdown ADRs.</strong> The store's codes run
- * unpadded from {@code ADR-1} upwards, per project, assigned by this bounded context. arknet's own
- * repository additionally keeps hand-written decision records as files (zero-padded
- * {@code adr-NNN-*.md}); the two numbering spaces are unrelated and neither derives from the
- * other.</p>
+ * <p><strong>Its own numbering space.</strong> The store's codes run unpadded from {@code ADR-1}
+ * upwards, per project, assigned by this bounded context. They are unrelated to the numbering of
+ * any file-based decision records a repository may keep alongside (typically zero-padded
+ * {@code adr-NNN-*.md}); neither derives from the other.</p>
  *
  * @param value the non-blank code string
  */

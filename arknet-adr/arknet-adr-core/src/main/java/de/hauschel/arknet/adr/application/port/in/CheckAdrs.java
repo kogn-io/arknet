@@ -119,7 +119,7 @@ public interface CheckAdrs {
 
         /**
          * The prose names an {@code ADR-n} the project does not hold - a reference to a deleted
-         * record, to another numbering space (the zero-padded file records) or a typo (skill rule
+         * record, to another numbering space (such as zero-padded file records) or a typo (skill rule
          * R6).
          */
         UNRESOLVED_DECISION_REFERENCE(Severity.FACT, "names a decision this project does not hold"),
