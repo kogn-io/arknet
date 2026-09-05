@@ -27,17 +27,18 @@ import org.junit.jupiter.api.Test;
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepository;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
+import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepository;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepository;
 
 /**
  * Nails down that a resource cannot be deleted out from under an edge nobody remembered to list.
  *
- * <p>Two out-adapters refuse a delete while something still points at the resource:
- * {@code KognioRdfTermRepository} for glossary terms (issue #335) and
- * {@code KognioRdfActorRepository} for actors (issue #336). Each carries a hand-written
- * {@code REFERENCING_PREDICATES} map of the predicates it looks for - and each of those maps is
- * written in one bounded context while the edges it must know about are written in others. Nothing
- * ties the two together.</p>
+ * <p>Three out-adapters refuse a delete while something still points at the resource:
+ * {@code KognioRdfTermRepository} for glossary terms (issue #335), {@code KognioRdfActorRepository}
+ * for actors (issue #336) and {@code KognioRdfConstraintRepository} for constraints
+ * (kogn-io/arknet#481). Each carries a hand-written {@code REFERENCING_PREDICATES} map of the
+ * predicates it looks for - and each of those maps is written in one bounded context while the
+ * edges it must know about are written in others. Nothing ties them together.</p>
  *
  * <p><strong>Why this cannot be caught elsewhere.</strong> That is not a hypothetical:
  * {@code arkarch:usesTerm} shipped in kogn-io/arknet#393 and the term guard was never told about
@@ -63,6 +64,12 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
 
     /** The actor class every actor-referencing property declares as its range (kogn-io/arknet#148). */
     private static final String ACTOR_CLASS = ArkprocVocabulary.ACTOR_TYPE;
+
+    /**
+     * The constraint class every constraint-referencing property declares as its range
+     * (kogn-io/arknet#481).
+     */
+    private static final String CONSTRAINT_CLASS = ArkreqVocabulary.CONSTRAINT_TYPE;
 
     private final Model ontologies = parseShippedOntologies();
 
@@ -98,6 +105,20 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
                         + " - add them to KognioRdfActorRepository.REFERENCING_PREDICATES");
     }
 
+    /** The constraint-side counterpart, guarding {@code constraint_delete} the same way (kogn-io/arknet#481). */
+    @Test
+    void everyPropertyRangingOverAConstraintBlocksTheConstraintsDeletion() {
+        Set<String> pointingAtConstraints = propertiesRangingOver(CONSTRAINT_CLASS);
+
+        assertFalse(pointingAtConstraints.isEmpty(),
+                "no property with rdfs:range arkreq:Constraint found - the ontologies were not loaded");
+        assertTrue(referencingPredicatesOf(KognioRdfConstraintRepository.class).keySet()
+                        .containsAll(pointingAtConstraints),
+                () -> "constraint_delete would not notice these edges: "
+                        + new TreeSet<>(missing(pointingAtConstraints, KognioRdfConstraintRepository.class))
+                        + " - add them to KognioRdfConstraintRepository.REFERENCING_PREDICATES");
+    }
+
     /**
      * The rejection message names each blocking edge by a shorthand, and the caller picks the tool
      * that drops it from that name - so two predicates must never answer to the same one.
@@ -107,7 +128,8 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
      */
     @Test
     void noTwoBlockingPredicatesAnswerToTheSameShorthand() {
-        for (Class<?> repository : Set.of(KognioRdfTermRepository.class, KognioRdfActorRepository.class)) {
+        for (Class<?> repository : Set.of(
+                KognioRdfTermRepository.class, KognioRdfActorRepository.class, KognioRdfConstraintRepository.class)) {
             Collection<String> shorthands = referencingPredicatesOf(repository).values();
             assertEquals(shorthands.size(), Set.copyOf(shorthands).size(),
                     repository.getSimpleName() + ": two predicates share one shorthand, so the "

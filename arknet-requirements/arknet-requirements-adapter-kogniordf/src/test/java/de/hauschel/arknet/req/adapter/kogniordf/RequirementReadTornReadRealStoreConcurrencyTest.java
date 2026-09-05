@@ -172,6 +172,16 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
         public List<ResolveConstraints.ResolvedConstraint> findByIds(ProjectId projectId, List<ResourceId> ids) {
             throw new UnsupportedOperationException("not exercised by this test");
         }
+
+        @Override
+        public void delete(ProjectId projectId, ConstraintCode code) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public List<ConstraintCode> findRetainedCodes(ProjectId projectId) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
     };
 
     /**

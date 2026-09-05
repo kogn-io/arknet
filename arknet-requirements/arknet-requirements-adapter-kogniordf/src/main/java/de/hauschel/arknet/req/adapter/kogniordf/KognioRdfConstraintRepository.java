@@ -45,6 +45,7 @@ import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.ConstraintId;
 import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
+import de.hauschel.arknet.req.domain.ConstraintReferencedException;
 import de.hauschel.arknet.req.domain.ConstraintType;
 import de.hauschel.arknet.req.domain.DuplicateConstraintCodeException;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
@@ -317,6 +318,98 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
             return LanguageTag.canonicalize(tag);
         } catch (InvalidLanguageTagException e) {
             return null;
+        }
+    }
+
+    /**
+     * Deletes the constraint identified by {@code code}, and every triple it carries in
+     * {@link #CONSTRAINTS_GRAPH}, from the project (kogn-io/arknet#481). Resolves the subject by
+     * code outside any transaction (mirroring {@link #findByCode}'s own read), then hands the
+     * whole check-and-delete to {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs
+     * first, inside the funnel's own write transaction, and only once it finds nothing pointing at
+     * the constraint does the body remove the subject's triples wholesale. Mirrors
+     * {@code KognioRdfActorRepository#delete} exactly.
+     */
+    @Override
+    public void delete(ProjectId projectId, ConstraintCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+
+        DatasetId dataset = new DatasetId(projectId.value());
+        String subjectIriString;
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            String query = "SELECT ?s WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
+                    + constraintWhereClause(
+                            "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . ")
+                    + "FILTER(isIRI(?s)) } }";
+            subjectIriString = handle.sparqlQuery().select(query).findFirst()
+                    .map(row -> iriOf(row, "s").getIRIString())
+                    .orElseThrow(() -> new ConstraintNotFoundException(projectId, code));
+        }
+        String subject = SparqlTerms.iriRef(subjectIriString);
+
+        funnel.delete(dataset, CONSTRAINTS_GRAPH, subjectIriString, code.value(),
+                () -> new ConstraintNotFoundException(projectId, code),
+                tx -> {
+                    rejectIfReferenced(tx, subjectIriString, projectId, code);
+                    tx.update("DELETE WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { " + subject + " ?p ?o } }");
+                });
+    }
+
+    /**
+     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained
+     * (kogn-io/arknet#481): the shared funnel keeps the number out of circulation, this hexagon
+     * only maps its raw strings to {@link ConstraintCode}. Queried once per subtype prefix - the
+     * funnel's {@code findRetainedCodes} takes a single prefix, and a constraint's three counters
+     * are told apart on exactly that prefix - and merged into one unordered list, matching
+     * {@link #findAllCodes}'s own "every type in one list" shape.
+     */
+    @Override
+    public List<ConstraintCode> findRetainedCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        DatasetId dataset = new DatasetId(projectId.value());
+        List<ConstraintCode> retained = new ArrayList<>();
+        for (ConstraintType type : ConstraintType.values()) {
+            funnel.findRetainedCodes(dataset, type.idPrefix() + "-").stream()
+                    .map(ConstraintCode::new)
+                    .forEach(retained::add);
+        }
+        return List.copyOf(retained);
+    }
+
+    /**
+     * The predicate that, if found pointing at a constraint, blocks its deletion
+     * (kogn-io/arknet#481): {@code oslc_rm:constrainedBy}, written by both {@code
+     * req_link_constraint} (requirements graph) and {@code uc_link_constraint} (use-cases graph).
+     * Mirrors {@code KognioRdfActorRepository#REFERENCING_PREDICATES}; the field must stay named
+     * and typed exactly this way and remain {@code static} - an architecture test
+     * ({@code ReferenceGuardsCoverEveryOntologyEdgeTest}) reads it via reflection.
+     */
+    private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
+            ArkreqVocabulary.CONSTRAINED_BY, "constrainedBy");
+
+    /**
+     * Rejects the delete, without touching a single triple, if anything in the project still
+     * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
+     * every named graph ({@code GRAPH ?g}), since a referencing edge may live in either the
+     * requirements graph ({@code req_link_constraint}) or the use-cases BC's own model graph
+     * ({@code uc_link_constraint}), never in {@link #CONSTRAINTS_GRAPH} itself. Runs inside the
+     * live write transaction {@link WriteFunnel#delete} hands its {@code body}, so the check and
+     * the eventual delete share one atomic snapshot. Mirrors
+     * {@code KognioRdfActorRepository#rejectIfReferenced}.
+     */
+    private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, ConstraintCode code) {
+        IRI target = rdf.createIRI(subjectIri);
+        List<String> referencing = new ArrayList<>();
+        REFERENCING_PREDICATES.forEach((predicateIri, shorthand) -> {
+            String query = "ASK { GRAPH ?g { ?s <" + predicateIri + "> ?target } }";
+            if (tx.ask(query, Map.of("target", target))) {
+                referencing.add(shorthand);
+            }
+        });
+        if (!referencing.isEmpty()) {
+            throw new ConstraintReferencedException(projectId, code, referencing);
         }
     }
 

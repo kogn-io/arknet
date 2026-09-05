@@ -14,6 +14,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.AddConstraint;
+import de.hauschel.arknet.req.application.port.in.DeleteConstraint;
 import de.hauschel.arknet.req.application.port.in.GetConstraint;
 import de.hauschel.arknet.req.application.port.in.ListConstraints;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
@@ -58,7 +59,8 @@ import de.hauschel.arknet.req.domain.DuplicateConstraintCodeException;
  * acceptance-criteria-placeholder guard (a constraint has no derived sub-resources to synthesize).</p>
  */
 public class ConstraintService
-        implements AddConstraint, GetConstraint, ListConstraints, ResolveConstraints, UpdateConstraint {
+        implements AddConstraint, GetConstraint, ListConstraints, ResolveConstraints, UpdateConstraint,
+        DeleteConstraint {
 
     /**
      * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops - see
@@ -203,6 +205,16 @@ public class ConstraintService
     }
 
     @Override
+    public void delete(ProjectId projectId, ConstraintCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        // The reference check (does a requirement or use case still point at this constraint via
+        // oslc_rm:constrainedBy?) is the out-adapter's business - it is the only side that can
+        // traverse the store's other named graphs. Mirrors ActorService#delete.
+        repository.delete(projectId, code);
+    }
+
+    @Override
     public List<ResolvedConstraint> resolveExisting(ProjectId projectId, ResourceId... ids) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(ids, "ids");
@@ -225,6 +237,13 @@ public class ConstraintService
      * method hands out for the second time - into a
      * {@link DuplicateConstraintCodeException} that recomputing only reproduces.</p>
      *
+     * <p><strong>Ever used, not currently in use (kogn-io/arknet#481).</strong> The maximum runs
+     * over the living constraints of {@code type} <em>and</em> the codes
+     * {@link ConstraintRepository#findRetainedCodes} kept from deleted ones - mirrors
+     * {@code ActorService#nextCode} exactly. Over the living ones alone, deleting the
+     * highest-numbered constraint of a subtype would let the maximum fall back and the next
+     * {@code constraint_add} hand out that same number again.</p>
+     *
      * <p>The three counters are kept apart by the {@code TCON-}/{@code BCON-}/{@code RCON-} prefix
      * that {@link CodeCounter} anchors on, no longer by filtering on
      * {@link de.hauschel.arknet.req.domain.Constraint#type()}: a constraint's type is fixed at
@@ -233,8 +252,10 @@ public class ConstraintService
      */
     private ConstraintCode nextCode(ProjectId projectId, ConstraintType type) {
         String prefix = type.idPrefix() + "-";
-        int highest = CodeCounter.highestRunningNumber(prefix, repository.findAllCodes(projectId),
+        int highestLiving = CodeCounter.highestRunningNumber(prefix, repository.findAllCodes(projectId),
                 ConstraintCode::value);
-        return new ConstraintCode(prefix + (highest + 1));
+        int highestRetained = CodeCounter.highestRunningNumber(prefix, repository.findRetainedCodes(projectId),
+                ConstraintCode::value);
+        return new ConstraintCode(prefix + (Math.max(highestLiving, highestRetained) + 1));
     }
 }

@@ -20,6 +20,7 @@ import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.req.application.port.in.AddConstraint;
 import de.hauschel.arknet.req.application.port.in.AddConstraint.NewConstraint;
+import de.hauschel.arknet.req.application.port.in.DeleteConstraint;
 import de.hauschel.arknet.req.application.port.in.GetConstraint;
 import de.hauschel.arknet.req.application.port.in.ListConstraints;
 import de.hauschel.arknet.req.application.port.in.UpdateConstraint;
@@ -30,7 +31,8 @@ import de.hauschel.arknet.req.domain.ConstraintType;
 /**
  * Driving (in) adapter of the requirements component's constraint side: exposes the constraint
  * use-cases as MCP tools ({@code constraint_add}, {@code constraint_list}, {@code constraint_get},
- * {@code constraint_update}) and delegates each tool call to the corresponding in-port. A separate
+ * {@code constraint_update}, {@code constraint_delete}) and delegates each tool call to the
+ * corresponding in-port. A separate
  * class from {@link RequirementMcpTools} - not merged into it - because a {@link Constraint} is a
  * distinct resource type of this same hexagon (issue #223), not a facet of {@link
  * de.hauschel.arknet.req.domain.Requirement}; {@code req_link_constraint} itself stays on
@@ -42,7 +44,9 @@ import de.hauschel.arknet.req.domain.ConstraintType;
  * {@link ProjectResolver}, and a separate {@link ConstraintPresenter} for rendering. There is
  * still no {@code constraint_set_status} tool - the ontology gives a constraint no status field -
  * and {@code constraint_update} corrects a constraint's text only, never its type or code (see
- * {@link UpdateConstraint}).</p>
+ * {@link UpdateConstraint}). {@code constraint_delete} (kogn-io/arknet#481) is the closing
+ * counterpart of {@code constraint_add} this resource type lacked until now, mirroring
+ * {@code ActorMcpTools#delete} exactly.</p>
  */
 public final class ConstraintMcpTools {
 
@@ -65,17 +69,19 @@ public final class ConstraintMcpTools {
     private final ListConstraints listConstraints;
     private final GetConstraint getConstraint;
     private final UpdateConstraint updateConstraint;
+    private final DeleteConstraint deleteConstraint;
     private final ProjectResolver projects;
     private final ConstraintPresenter presenter = new ConstraintPresenter();
 
     /**
-     * Creates the adapter with its four driving in-ports and the resolver that maps each call's
+     * Creates the adapter with its five driving in-ports and the resolver that maps each call's
      * origin directory to a project.
      *
      * @param addConstraint    in-port backing {@code constraint_add}
      * @param listConstraints  in-port backing {@code constraint_list}
      * @param getConstraint    in-port backing {@code constraint_get}
      * @param updateConstraint in-port backing {@code constraint_update}
+     * @param deleteConstraint in-port backing {@code constraint_delete}
      * @param projects         resolves each call's target project from its origin directory
      */
     public ConstraintMcpTools(
@@ -83,11 +89,13 @@ public final class ConstraintMcpTools {
             final ListConstraints listConstraints,
             final GetConstraint getConstraint,
             final UpdateConstraint updateConstraint,
+            final DeleteConstraint deleteConstraint,
             final ProjectResolver projects) {
         this.addConstraint = Objects.requireNonNull(addConstraint, "addConstraint");
         this.listConstraints = Objects.requireNonNull(listConstraints, "listConstraints");
         this.getConstraint = Objects.requireNonNull(getConstraint, "getConstraint");
         this.updateConstraint = Objects.requireNonNull(updateConstraint, "updateConstraint");
+        this.deleteConstraint = Objects.requireNonNull(deleteConstraint, "deleteConstraint");
         this.projects = Objects.requireNonNull(projects, "projects");
     }
 
@@ -110,12 +118,19 @@ public final class ConstraintMcpTools {
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
 
     @McpTool(name = "constraint_add", description = "Register a new constraint (technical, business or "
-            + "regulatory) - a non-negotiable, externally-imposed boundary on the solution space (ISO 29148)." + PROSE_MARKUP)
+            + "regulatory): a boundary on the solution space that is imposed on the project from outside - by "
+            + "law, contract, a customer, a platform, a budget, the organisation - and that the project cannot "
+            + "change by itself (ISO 29148, IREB). Test before recording: could this project decide otherwise? "
+            + "If yes, it is not a constraint but a decision - record it with adr_add when it shapes the "
+            + "system, or with req_add when it states what the system must do; a self-chosen scope, "
+            + "convention or modelling rule is never a constraint. Name in the statement who or what imposes "
+            + "it." + PROSE_MARKUP)
     public String add(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Short human-readable summary of the constraint") final String title,
-            @McpToolParam(description = "The constraint in one sentence, e.g. 'Must run on the JVM' or "
-                    + "'Personal data must stay in the EU'") final String statement,
+            @McpToolParam(description = "The constraint in one sentence, naming who or what imposes it, e.g. "
+                    + "'Must run on the JVM (customer platform standard)' or 'Personal data must stay in the "
+                    + "EU (GDPR)'") final String statement,
             @McpToolParam(description = "Classification: TECHNICAL, BUSINESS or REGULATORY") final String type,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the title and statement "
                     + "are written in. Falls back to the project's configured default language "
@@ -194,7 +209,10 @@ public final class ConstraintMcpTools {
                     + "of them in a further language. Every text argument is optional - an omitted one leaves "
                     + "that field unchanged. Cannot change the constraint's type or code (TCON-/BCON-/RCON-): "
                     + "those are fixed at creation, and a retyped constraint would need a new code that "
-                    + "everything already referencing it would not follow." + PROSE_MARKUP)
+                    + "everything already referencing it would not follow. Correcting the text cannot turn a "
+                    + "decision into a constraint: if the record turns out to be something the project chose "
+                    + "itself, it is a decision (adr_add) and this record is a candidate for "
+                    + "constraint_delete." + PROSE_MARKUP)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Constraint identity, e.g. TCON-1, BCON-1 or RCON-1") final String id,
@@ -227,5 +245,28 @@ public final class ConstraintMcpTools {
         final Constraint updated = updateConstraint.update(project.id(), code, blankToNull(title),
                 blankToNull(statement), blankToNull(language), project.defaultLanguage());
         return presenter.format(updated);
+    }
+
+    @McpTool(name = "constraint_delete",
+            description = "Delete an already-created constraint and every triple it carries - not just a "
+                    + "correction, the whole resource goes away. The typical case is a record that turned out "
+                    + "not to be a constraint at all: something the project decided itself belongs in adr_add "
+                    + "(or req_add), not here. Rejected if a requirement or use case still references it via "
+                    + "constrainedBy (req_link_constraint/uc_link_constraint). The code (TCON-/BCON-/RCON-N) "
+                    + "stays taken so it never names two different constraints.")
+    public String delete(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Constraint identity, e.g. TCON-1, BCON-1 or RCON-1") final String id,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ConstraintCode code = new ConstraintCode(id);
+        deleteConstraint.delete(project.id(), code);
+        return "Deleted: " + code.value();
     }
 }

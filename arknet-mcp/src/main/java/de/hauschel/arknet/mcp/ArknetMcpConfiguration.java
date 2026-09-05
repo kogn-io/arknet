@@ -123,7 +123,8 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       project store, so it needs no {@link DatasetLifecycle}. This hexagon also carries a
  *       second resource type, {@code Constraint} (issue #223, not a bounded context of its own):
  *       {@link ConstraintMcpTools} exposes {@code constraint_add}/{@code constraint_list}/
- *       {@code constraint_get}/{@code constraint_update} over {@link ConstraintService} over
+ *       {@code constraint_get}/{@code constraint_update}/{@code constraint_delete} over
+ *       {@link ConstraintService} over
  *       {@link KognioRdfConstraintRepositoryFactory}, sharing the requirement repository's own
  *       {@link WriteFunnel} bean ({@link #requirementsWriteFunnel}) rather than building a
  *       second, functionally identical one; {@code req_link_constraint} stays on
@@ -404,14 +405,15 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The four constraint tools ({@code constraint_add}, {@code constraint_list},
-     * {@code constraint_get}, {@code constraint_update}). {@code req_link_constraint} itself stays
-     * on {@link #requirementMcpTools} - it mutates the requirement, not the constraint.
+     * The five constraint tools ({@code constraint_add}, {@code constraint_list},
+     * {@code constraint_get}, {@code constraint_update}, {@code constraint_delete}).
+     * {@code req_link_constraint} itself stays on {@link #requirementMcpTools} - it mutates the
+     * requirement, not the constraint.
      */
     @Bean
     ConstraintMcpTools constraintMcpTools(
             final ConstraintService service, final ProjectResolver projectResolver) {
-        return new ConstraintMcpTools(service, service, service, service, projectResolver);
+        return new ConstraintMcpTools(service, service, service, service, service, projectResolver);
     }
 
     // --- Ubiquitous-language hexagon -------------------------------------------

@@ -210,6 +210,16 @@ class ConstraintServiceConcurrencyTest {
         public List<ResolveConstraints.ResolvedConstraint> findByIds(ProjectId projectId, List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
         }
+
+        @Override
+        public void delete(ProjectId projectId, ConstraintCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<ConstraintCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
+        }
     }
 
     /**
@@ -272,6 +282,16 @@ class ConstraintServiceConcurrencyTest {
         public List<ResolveConstraints.ResolvedConstraint> findByIds(ProjectId projectId, List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
         }
+
+        @Override
+        public void delete(ProjectId projectId, ConstraintCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<ConstraintCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
+        }
     }
 
     /** A repository whose {@code compareAndUpdate} always reports a conflict, never applying. */
@@ -327,6 +347,16 @@ class ConstraintServiceConcurrencyTest {
         @Override
         public List<ResolveConstraints.ResolvedConstraint> findByIds(ProjectId projectId, List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
+        }
+
+        @Override
+        public void delete(ProjectId projectId, ConstraintCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<ConstraintCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
         }
     }
 }
