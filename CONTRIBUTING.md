@@ -20,6 +20,24 @@ time.
 - **Open-ended questions** go to
   [GitHub Discussions](https://github.com/kogn-io/arknet/discussions).
 
+## arknet's own architecture decisions
+
+arknet's own decisions about its own build -- Bounded Context cuts, storage
+choices, persistence mechanics and so on -- are recorded exclusively in
+arknet's own store, via the `adr_*` MCP tools, not as Markdown files under
+`docs/adr/`.
+
+- **`docs/adr-export/`** is a generated snapshot of that store, not a second
+  source of truth -- see its own [README](docs/adr-export/README.md) for what
+  it contains and how it is regenerated. Never hand-edit it, and never use it
+  as a merge base.
+- **Regenerate it after every change to arknet's own store decisions** and
+  commit the result together with the change that caused it, so the
+  repository's commit history and its releases carry the model state, not
+  just the code. This is a transition measure until commit-provenance linking
+  makes the export current by other means; once that lands, this rule can be
+  relaxed.
+
 ## Before you open a pull request
 
 For anything beyond a trivial fix (typo, obvious one-line bug), **open an

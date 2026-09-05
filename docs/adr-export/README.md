@@ -4,12 +4,12 @@ Everything in this directory (`arknet.trig`, `report.html`) is **generated**,
 not hand-written. It lets a repository visitor, a contributor before their
 first store setup, and the build environment see arknet's own architecture
 decisions (and the rest of its own store data) without a running arknet MCP
-daemon (ADR-2, [issue #415](https://github.com/kogn-io/arknet/issues/415)).
+daemon ([issue #415](https://github.com/kogn-io/arknet/issues/415)).
 
 - **Never a source of truth.** The store is the only place arknet's own
-  decisions are written (ADR-1/ADR-5). Never hand-edit these files, and never
-  use them as a merge base -- a text merge on a `.trig` file can be
-  syntactically valid and semantically wrong.
+  decisions are written -- see [CONTRIBUTING.md](../../CONTRIBUTING.md). Never
+  hand-edit these files, and never use them as a merge base -- a text merge on
+  a `.trig` file can be syntactically valid and semantically wrong.
 - **`arknet.trig`** -- a full backup dump of this project's store (all six
   bounded contexts, plus the provenance trail), produced by the `arknet` MCP
   tool `project_export` (`projectOnly=true`). Its `project-identity` graph is
