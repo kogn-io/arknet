@@ -4,7 +4,7 @@
   <https://w3id.org/arknet/id/0a6971c4-4c22-43a2-9e91-a8a56f3bf379> a <http://www.w3.org/2004/02/skos/core#Concept>;
     <http://purl.org/dc/terms/identifier> "TERM-1";
     <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Metamodell"@de, "Metamodel"@en;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Metamodel"@en, "Metamodel"@de;
     <http://www.w3.org/2004/02/skos/core#definition> "Ein Metamodell ist die formale Struktur (Klassen, Beziehungen, Regeln), die festlegt, was in einem mit arknet erstellten Modell ausgedrückt werden kann."@de,
       "A Metamodel is the formal structure (classes, relationships, rules) that determines what can be expressed in a model created with arknet."@en .
   
@@ -36,7 +36,7 @@
   <https://w3id.org/arknet/id/f244f238-5f56-4e7c-b20e-8c7473bc0637> a <http://www.w3.org/2004/02/skos/core#Concept>;
     <http://purl.org/dc/terms/identifier> "TERM-5";
     <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Juristische Person"@de, "Legal Person"@en;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Legal Person"@en, "Legal Person"@de;
     <http://www.w3.org/2004/02/skos/core#definition> "Eine Juristische Person ist ein Actor, der eine Organisation (z. B. ein Unternehmen) ist, die selbst Trägerin von Rechten und Pflichten ist — im Unterschied zu einer natürlichen Person (Human Actor) oder einem externen System (System Actor)."@de,
       "A Legal Person is an Actor that is an organisation (e.g. a company) which is itself a bearer of rights and obligations — as distinct from a natural person (Human Actor) or an external system (System Actor)."@en;
     <http://www.w3.org/2004/02/skos/core#broader> <https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551> .
@@ -90,7 +90,7 @@
   <https://w3id.org/arknet/id/db788965-188e-47cc-854d-d03ad8e62eee> a <http://www.w3.org/2004/02/skos/core#Concept>;
     <http://purl.org/dc/terms/identifier> "TERM-12";
     <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Architekturmodell"@de, "Architecture Model"@en;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Architecture Model"@en, "Architecture Model"@de;
     <http://www.w3.org/2004/02/skos/core#definition> "Ein Architekturmodell ist die Gesamtheit der mit arknet erfassten Ressourcen eines Projekts, die einem Metamodell entsprechen."@de,
       "An Architecture Model is the totality of the resources captured with arknet for a project, conforming to a metamodel."@en .
   
@@ -104,21 +104,21 @@
   <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4> a <http://www.w3.org/2004/02/skos/core#Concept>;
     <http://purl.org/dc/terms/identifier> "TERM-14";
     <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Ressource"@de, "Resource"@en;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Resource"@en, "Resource"@de;
     <http://www.w3.org/2004/02/skos/core#definition> "Eine Ressource ist ein einzeln benennbares und einzeln ansprechbares Element eines Architekturmodells, unabhängig davon, um welche Art von Element es sich handelt."@de,
       "A resource is an individually nameable and individually addressable element of an architecture model, regardless of what kind of element it is."@en .
   
   <https://w3id.org/arknet/id/e4942ed2-d1f7-4a1e-9322-9c5f323d767d> a <http://www.w3.org/2004/02/skos/core#Concept>;
     <http://purl.org/dc/terms/identifier> "TERM-15";
     <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Business-Code"@de, "Business Code"@en;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Business Code"@en, "Business Code"@de;
     <http://www.w3.org/2004/02/skos/core#definition> "Ein Business-Code ist die kurze, von Menschen les- und tippbare Kennung, unter der eine Ressource in einem Architekturmodell angesprochen und aus anderen Ressourcen heraus zitiert wird."@de,
       "A business code is the short, human-readable and human-typable identifier under which a resource is addressed within an architecture model and cited from other resources."@en .
 }
 
 <https://w3id.org/arknet/model/provenance> {
   <https://w3id.org/arknet/id/0a6971c4-4c22-43a2-9e91-a8a56f3bf379> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/8de03171-0874-45d0-b58a-fcf00eae1e00> .
+      <https://w3id.org/arknet/revision/64875c7f-abc8-4ff5-b553-66e5d2bb8661> .
   
   <https://w3id.org/arknet/activity/86ece74a-4552-40db-9ea2-21b0036d4d2d> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -171,7 +171,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-08-04T15:34:06.265100457Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/f244f238-5f56-4e7c-b20e-8c7473bc0637> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/bbd68454-7645-455b-81ad-063f98651cc2> .
+      <https://w3id.org/arknet/revision/51d414ff-7a5a-4c0e-a946-d0d4cedd0117> .
   
   <https://w3id.org/arknet/activity/4a280b9c-4a50-41ca-ba97-b6f4d9309c34> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -376,7 +376,7 @@
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/26c43b8b-3016-4b83-b0b7-74a1cf55c72f> .
   
   <https://w3id.org/arknet/id/db788965-188e-47cc-854d-d03ad8e62eee> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/e8e4e60f-8ccb-4073-8578-53e8be331679> .
+      <https://w3id.org/arknet/revision/fc2bd869-b356-4e26-ac4d-9b796b614f91> .
   
   <https://w3id.org/arknet/activity/a5968442-fe20-4411-99b0-f7debe7d2df4> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -485,7 +485,7 @@
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/ac2f4612-4cc5-4917-a357-292b2a816c6d> .
   
   <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/5ae38aba-2d64-4ef6-bfde-e23a96ac6d54> .
+      <https://w3id.org/arknet/revision/b9da2cca-b1a5-44d0-a680-0556d24bac48> .
   
   <https://w3id.org/arknet/activity/7f6f2b29-0ee4-4e3b-b304-12b9b0d98302> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -505,7 +505,7 @@
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/ce06c7d0-4ad1-4ab4-bc91-b8240c172802> .
   
   <https://w3id.org/arknet/id/e4942ed2-d1f7-4a1e-9322-9c5f323d767d> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/a6a6c05d-a2c6-4c35-b915-995465b64360> .
+      <https://w3id.org/arknet/revision/a2e30a6b-173d-4b76-b593-dac0cfce3c53> .
   
   <https://w3id.org/arknet/activity/74c189ae-3ebc-45ea-86d3-0e23b33467b5> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -2846,7 +2846,7 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/8325c9b1-9406-4d97-8268-d61248645eab> .
   
   <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/1c6cf3af-2856-437e-82b8-5a6b8b16de0d> .
+      <https://w3id.org/arknet/revision/fbad85d9-80f1-48f0-811d-5b664a1fb61a> .
   
   <https://w3id.org/arknet/activity/031cbc9a-6fa9-4684-94ca-7226065ad198> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -2857,7 +2857,7 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-02T11:56:30.507552816Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/8fc7d040-da89-4b17-9aff-5d557709088a> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/7c6a5660-1963-4d81-b0ad-de1f9a87cb16> .
+      <https://w3id.org/arknet/revision/72739886-72a2-4306-aff3-65f0544bf6ee> .
   
   <https://w3id.org/arknet/activity/9b3e61a9-63a5-403e-98ae-a4753dbb176e> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -3083,7 +3083,7 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/f3c58b07-43c5-479f-8a3d-4055e4864a41> .
   
   <https://w3id.org/arknet/id/b585160f-4f80-4baa-aa6b-8178666bb635> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/058040ab-033d-49dd-b9cc-865760ba0ea5> .
+      <https://w3id.org/arknet/revision/cbb52b0d-3f08-4b1f-a4f7-359cf616c9e5> .
   
   <https://w3id.org/arknet/activity/cc0f43d5-d479-4341-a42c-b3054551b15f> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -3553,14 +3553,14 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
   <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c> a <http://www.w3.org/2004/02/skos/core#Concept>;
     <http://purl.org/dc/terms/identifier> "TERM-17";
     <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Projekt"@de, "Project"@en;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Project"@en, "Project"@de;
     <http://www.w3.org/2004/02/skos/core#definition> "Ein Projekt ist der benannte Gegenstand, dessen Architektur mit arknet beschrieben wird — ein Produkt, eine Library, ein System. Es ist die Grenze, innerhalb derer die Ressourcen eines Architekturmodells zusammengehören und ihre Business-Codes eindeutig sind. Nicht gemeint ist ein zeitlich begrenztes Vorhaben im Sinne des Projektmanagements: ein Projekt kann so lange bestehen wie der Gegenstand, den es beschreibt. In der Lifecycle-Normensprache entspricht es dem System-of-Interest."@de,
       "A Project is the named subject whose architecture is described with arknet — a product, a library, a system. It is the boundary within which the resources of an architecture model belong together and their business codes are unique. What is not meant is a time-boxed undertaking in the project-management sense: a project may last as long as the subject it describes. In lifecycle-standard language it corresponds to the system-of-interest."@en .
   
   <https://w3id.org/arknet/id/8fc7d040-da89-4b17-9aff-5d557709088a> a <http://www.w3.org/2004/02/skos/core#Concept>;
     <http://purl.org/dc/terms/identifier> "TERM-18";
     <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Anker"@de, "Anchor"@en;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Anchor"@en, "Anchor"@de;
     <http://www.w3.org/2004/02/skos/core#definition> "Ein Anker ist ein für ein Projekt hinterlegtes Erkennungsmerkmal, an dem sich ein Arbeitsort festmacht, um dieses Projekt zu erreichen — etwa ein Verzeichnis, eine Repository-Adresse oder eine eigens vergebene Kennung. Ein Projekt kann mehrere Anker tragen, ein Anker gehört zu genau einem Projekt."@de,
       "An Anchor is a recognition mark registered for a project, by which a place of work attaches itself in order to reach that project — a directory, a repository address or a purpose-issued identifier, for instance. A project may carry several anchors; an anchor belongs to exactly one project."@en .
   
@@ -3581,7 +3581,7 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
   <https://w3id.org/arknet/id/b585160f-4f80-4baa-aa6b-8178666bb635> a <http://www.w3.org/2004/02/skos/core#Concept>;
     <http://purl.org/dc/terms/identifier> "TERM-21";
     <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Rolle"@de, "Role"@en;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Role"@en, "Role"@de;
     <http://www.w3.org/2004/02/skos/core#definition> "Eine Rolle ist eine benannte Funktion, in der gehandelt oder ein Interesse vertreten wird — etwa als Handelnder in einem Use Case oder als Interessenträger hinter einer Anforderung. Sie wird unabhängig davon benannt, wer sie ausfüllt: eine Rolle darf unbesetzt bleiben oder mehrere Actors nennen, und wer sie ausfüllt, kann wechseln, ohne dass die Rolle eine andere wird."@de,
       "A Role is a named function in which someone acts or represents an interest — as an acting party in a use case, say, or as the stakeholder behind a requirement. It is named independently of who fills it: a role may stay unfilled or name several Actors, and whoever fills it may change without the role becoming a different one."@en .
   
@@ -6035,6 +6035,78 @@ The core of this decision is the distinction between \"unbuilt\" and \"outside\"
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/210df172-130a-4086-8fe8-eb6fa08912ff>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:58:00.811672092Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/b28cb8f1-8419-4a1d-89ac-4494c07a615e> .
+  
+  <https://w3id.org/arknet/activity/1eb34cf4-1966-4f9f-9f3a-165d2c6fa2d1> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/64875c7f-abc8-4ff5-b553-66e5d2bb8661> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/0a6971c4-4c22-43a2-9e91-a8a56f3bf379>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1eb34cf4-1966-4f9f-9f3a-165d2c6fa2d1>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T21:32:33.545134475Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/8de03171-0874-45d0-b58a-fcf00eae1e00> .
+  
+  <https://w3id.org/arknet/activity/f16253af-1a56-4928-bf7b-6676add7be23> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/51d414ff-7a5a-4c0e-a946-d0d4cedd0117> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/f244f238-5f56-4e7c-b20e-8c7473bc0637>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/f16253af-1a56-4928-bf7b-6676add7be23>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T21:32:35.176126538Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/bbd68454-7645-455b-81ad-063f98651cc2> .
+  
+  <https://w3id.org/arknet/activity/10f4e455-cdfa-4284-8b14-938496f559fd> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/fc2bd869-b356-4e26-ac4d-9b796b614f91> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/db788965-188e-47cc-854d-d03ad8e62eee>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/10f4e455-cdfa-4284-8b14-938496f559fd>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T21:32:36.680534519Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/e8e4e60f-8ccb-4073-8578-53e8be331679> .
+  
+  <https://w3id.org/arknet/activity/888a3a80-9508-4cdc-aefa-c3ccb9574167> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/b9da2cca-b1a5-44d0-a680-0556d24bac48> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/888a3a80-9508-4cdc-aefa-c3ccb9574167>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T21:32:38.440950485Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/5ae38aba-2d64-4ef6-bfde-e23a96ac6d54> .
+  
+  <https://w3id.org/arknet/activity/41d90c18-7a55-4503-8ef1-3f8b01aa179d> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/a2e30a6b-173d-4b76-b593-dac0cfce3c53> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/e4942ed2-d1f7-4a1e-9322-9c5f323d767d>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/41d90c18-7a55-4503-8ef1-3f8b01aa179d>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T21:32:39.910991781Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/a6a6c05d-a2c6-4c35-b915-995465b64360> .
+  
+  <https://w3id.org/arknet/activity/bd76ea84-3fc0-4c13-b847-de050efb3baa> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/fbad85d9-80f1-48f0-811d-5b664a1fb61a> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/bd76ea84-3fc0-4c13-b847-de050efb3baa>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T21:32:41.302155065Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/1c6cf3af-2856-437e-82b8-5a6b8b16de0d> .
+  
+  <https://w3id.org/arknet/activity/3fe02abd-f801-4cca-820d-4f5eed88b3fd> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/72739886-72a2-4306-aff3-65f0544bf6ee> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/8fc7d040-da89-4b17-9aff-5d557709088a>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/3fe02abd-f801-4cca-820d-4f5eed88b3fd>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T21:32:42.822203798Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/7c6a5660-1963-4d81-b0ad-de1f9a87cb16> .
+  
+  <https://w3id.org/arknet/activity/b0f04fc4-29ea-4158-8d4d-7603d99cd2ea> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/cbb52b0d-3f08-4b1f-a4f7-359cf616c9e5> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/b585160f-4f80-4baa-aa6b-8178666bb635>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b0f04fc4-29ea-4158-8d4d-7603d99cd2ea>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T21:32:44.497374882Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/058040ab-033d-49dd-b9cc-865760ba0ea5> .
 }
 
 <https://w3id.org/arknet/model/requirements> {
@@ -6108,9 +6180,9 @@ The rule is a modelling rule this tool chose for itself, not a boundary conditio
 }
 
 <https://w3id.org/arknet/model/export-metadata> {
-    <https://w3id.org/arknet/export/2f81a008-647e-455d-95f7-92f17bbf9f70>
+    <https://w3id.org/arknet/export/4e4478ff-3b08-4ede-9d29-4d24bd24dafe>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#Activity> ;
-        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-05T20:58:22Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
+        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-05T21:33:16Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
         <http://www.w3.org/ns/prov#wasAssociatedWith> <https://w3id.org/arknet/agent/arknet> ;
         <http://www.w3.org/ns/prov#used> <https://w3id.org/arknet/core> , <https://w3id.org/arknet/ddd> , <https://w3id.org/arknet/process> , <https://w3id.org/arknet/requirements> , <https://w3id.org/arknet/architecture> , <https://w3id.org/arknet/provenance> , <https://w3id.org/arknet/project> .
 
