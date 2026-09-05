@@ -26,8 +26,8 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  * graph {@link ExportMetadataVocabulary#EXPORT_METADATA_GRAPH}, appended after the dataset's own
  * graphs. Keeping them in a graph of their own is what makes the dump honest in both directions: a
  * reader wanting the store alone drops one graph, and no model or provenance graph is handed a
- * statement the store never held. ADR-26 in arknet's own store keeps the dump a backup rather
- * than a diffable export, so the timestamp changing on every run is expected, not churn to be
+ * statement the store never held. The dump is a product of the store, never a merge basis (see
+ * {@code CONTRIBUTING.md}), so the timestamp changing on every run is expected, not churn to be
  * avoided.</p>
  *
  * <p><strong>Why the ontology versions belong here.</strong> The shipped {@code arknet-*.ttl}

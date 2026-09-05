@@ -39,7 +39,7 @@ data loaded (see the root `README.md`).
 Empirically the store's own graphs are byte-identical across repeated exports
 of an unchanged store (RDF4J's TriG writer orders deterministically), so a
 diff there reflects an actual store change, not serialization noise -- useful
-for review, though ADR-2 does not rely on that: the dump is deliberately
-treated as non-diffable, never a merge basis. The trailing `export-metadata`
+for review, though nothing relies on that: the dump is a product of the store,
+never a merge basis (see `CONTRIBUTING.md`). The trailing `export-metadata`
 graph is the one exception and always differs: it states when this export ran,
 which is the point of it.
