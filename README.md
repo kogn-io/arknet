@@ -283,6 +283,7 @@ The same hexagon also carries `arkreq:Constraint` -- a non-negotiable, externall
 | `constraint_update` | Correct a constraint's title and/or statement, or state either of them in a further language, keeping its identity, code and type unchanged (each text argument optional, unchanged if omitted). `language` scopes the write to that one language's literal (falling back to the project's default language if omitted, rejecting the call if neither is set), leaving other language variants untouched -- except a stale untagged one, swept away once the resolved tag equals the project's default |
 | `constraint_list` | List all managed constraints |
 | `constraint_get` | Fetch a single constraint by identity (e.g. TCON-1, BCON-1, RCON-1). An optional `displayLocale` argument picks which language variant of a multilingual title/statement to return, falling back to the calling project's `defaultLanguage`, then to an untagged value |
+| `constraint_delete` | Delete a constraint and every triple it carries -- the whole resource, not a field correction. The typical case is a record that turned out not to be a constraint at all: something the project decided itself, which belongs in `adr_add` (or `req_add`), not here. Rejected if a requirement or use case still references it via `constrainedBy`. The code (TCON-/BCON-/RCON-N) stays taken so it never names two different constraints |
 
 Ubiquitous Language BC -- glossary terms (SKOS Concepts):
 

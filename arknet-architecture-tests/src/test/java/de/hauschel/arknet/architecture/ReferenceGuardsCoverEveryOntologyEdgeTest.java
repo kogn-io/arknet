@@ -21,23 +21,26 @@ import java.util.stream.Collectors;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.Resource;
 import org.eclipse.rdf4j.model.Statement;
+import org.eclipse.rdf4j.model.Value;
 import org.eclipse.rdf4j.model.vocabulary.RDFS;
+import org.eclipse.rdf4j.model.vocabulary.SHACL;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepository;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
+import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepository;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepository;
 
 /**
  * Nails down that a resource cannot be deleted out from under an edge nobody remembered to list.
  *
- * <p>Two out-adapters refuse a delete while something still points at the resource:
- * {@code KognioRdfTermRepository} for glossary terms (issue #335) and
- * {@code KognioRdfActorRepository} for actors (issue #336). Each carries a hand-written
- * {@code REFERENCING_PREDICATES} map of the predicates it looks for - and each of those maps is
- * written in one bounded context while the edges it must know about are written in others. Nothing
- * ties the two together.</p>
+ * <p>Three out-adapters refuse a delete while something still points at the resource:
+ * {@code KognioRdfTermRepository} for glossary terms (issue #335), {@code KognioRdfActorRepository}
+ * for actors (issue #336) and {@code KognioRdfConstraintRepository} for constraints
+ * (kogn-io/arknet#481). Each carries a hand-written {@code REFERENCING_PREDICATES} map of the
+ * predicates it looks for - and each of those maps is written in one bounded context while the
+ * edges it must know about are written in others. Nothing ties them together.</p>
  *
  * <p><strong>Why this cannot be caught elsewhere.</strong> That is not a hypothetical:
  * {@code arkarch:usesTerm} shipped in kogn-io/arknet#393 and the term guard was never told about
@@ -49,7 +52,11 @@ import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepository;
  * This test closes the loop the module cut cannot: the shipped ontologies already say which
  * properties point at a term ({@code rdfs:range skos:Concept}) and which point at an actor
  * ({@code rdfs:range arkproc:Actor}), so the maps can be held against them rather than against
- * reviewer attention.</p>
+ * reviewer attention. The constraint edge is derived from the shipped shapes instead
+ * ({@code sh:path oslc_rm:constrainedBy} with {@code sh:class arkreq:Constraint}): the property
+ * is borrowed from OSLC RM, and an {@code rdfs:range} axiom on it would be a global claim about
+ * the foreign vocabulary, not a statement about arknet's use of it - the shapes are where
+ * arknet's local rule lives.</p>
  *
  * <p><strong>Why reflection.</strong> Both maps are private implementation detail of their
  * adapter, and widening them to public just so a test can read them would turn an internal into
@@ -63,6 +70,12 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
 
     /** The actor class every actor-referencing property declares as its range (kogn-io/arknet#148). */
     private static final String ACTOR_CLASS = ArkprocVocabulary.ACTOR_TYPE;
+
+    /**
+     * The constraint class every constraint-referencing property shape constrains its target to
+     * via {@code sh:class} (kogn-io/arknet#481).
+     */
+    private static final String CONSTRAINT_CLASS = ArkreqVocabulary.CONSTRAINT_TYPE;
 
     private final Model ontologies = parseShippedOntologies();
 
@@ -99,6 +112,24 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
     }
 
     /**
+     * The constraint-side counterpart, guarding {@code constraint_delete} the same way
+     * (kogn-io/arknet#481) - read off the shapes rather than an {@code rdfs:range} axiom, see the
+     * class comment.
+     */
+    @Test
+    void everyPropertyShapedToAConstraintBlocksTheConstraintsDeletion() {
+        Set<String> pointingAtConstraints = propertiesShapedTo(CONSTRAINT_CLASS);
+
+        assertFalse(pointingAtConstraints.isEmpty(),
+                "no property shape with sh:class arkreq:Constraint found - the shapes were not loaded");
+        assertTrue(referencingPredicatesOf(KognioRdfConstraintRepository.class).keySet()
+                        .containsAll(pointingAtConstraints),
+                () -> "constraint_delete would not notice these edges: "
+                        + new TreeSet<>(missing(pointingAtConstraints, KognioRdfConstraintRepository.class))
+                        + " - add them to KognioRdfConstraintRepository.REFERENCING_PREDICATES");
+    }
+
+    /**
      * The rejection message names each blocking edge by a shorthand, and the caller picks the tool
      * that drops it from that name - so two predicates must never answer to the same one.
      * {@code arkreq:usesTerm} and {@code arkarch:usesTerm} share a local name and are dropped
@@ -107,7 +138,8 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
      */
     @Test
     void noTwoBlockingPredicatesAnswerToTheSameShorthand() {
-        for (Class<?> repository : Set.of(KognioRdfTermRepository.class, KognioRdfActorRepository.class)) {
+        for (Class<?> repository : Set.of(
+                KognioRdfTermRepository.class, KognioRdfActorRepository.class, KognioRdfConstraintRepository.class)) {
             Collection<String> shorthands = referencingPredicatesOf(repository).values();
             assertEquals(shorthands.size(), Set.copyOf(shorthands).size(),
                     repository.getSimpleName() + ": two predicates share one shorthand, so the "
@@ -126,6 +158,18 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
         return ontologies.filter(null, RDFS.RANGE, iri(rangeClass)).stream()
                 .map(Statement::getSubject)
                 .map(Resource::stringValue)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * The {@code sh:path} of every property shape in the shipped shapes that constrains its
+     * target to {@code sh:class <targetClass>} - the derivation for edges over a borrowed
+     * property, where no arknet-owned {@code rdfs:range} axiom exists to read.
+     */
+    private Set<String> propertiesShapedTo(String targetClass) {
+        return ontologies.filter(null, SHACL.CLASS, iri(targetClass)).subjects().stream()
+                .flatMap(shape -> ontologies.filter(shape, SHACL.PATH, null).objects().stream())
+                .map(Value::stringValue)
                 .collect(Collectors.toSet());
     }
 

@@ -34,8 +34,8 @@ package de.hauschel.arknet.persistence;
  * constant (plus the {@code .ttl}).</p>
  *
  * <p>Scope is deliberately narrow: only the predicates and type IRIs an {@code arknet-mcp} read
- * path traverses, reads or tests - whether traversed as an edge or merely read as a literal -
- * live here. Single-adapter predicates ({@code arkreq:status}, {@code arkreq:priority}, ...) are not
+ * path or an {@code arknet-architecture-tests} check traverses, reads or tests - whether
+ * traversed as an edge or merely read as a literal - live here. Single-adapter predicates ({@code arkreq:status}, {@code arkreq:priority}, ...) are not
  * cross-module-duplicated in the same way and stay with their one owner.</p>
  */
 public final class ArkreqVocabulary {
@@ -168,6 +168,15 @@ public final class ArkreqVocabulary {
      * term-mention sweep of {@code orphan_check}'s unlinked-mention check (issue #252).
      */
     public static final String DEFINITION = SKOS_NAMESPACE + "definition";
+
+    /**
+     * {@code arkreq:Constraint} - the abstract superclass every constraint subtype specializes;
+     * the {@code sh:class} the {@code oslc_rm:constrainedBy} property shapes constrain their
+     * target to (kogn-io/arknet#481), read by the delete-guard architecture test the same way it
+     * already reads {@link #CONCEPT_TYPE}/{@link ArkprocVocabulary#ACTOR_TYPE} - only
+     * {@code arknet-architecture-tests} reads it, no {@code arknet-mcp} path does.
+     */
+    public static final String CONSTRAINT_TYPE = NAMESPACE + "Constraint";
 
     /** {@code arkreq:TechnicalConstraint} - the type of a technical constraint. */
     public static final String TECHNICAL_CONSTRAINT_TYPE = NAMESPACE + "TechnicalConstraint";
