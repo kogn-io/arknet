@@ -13,6 +13,7 @@ import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
+import de.hauschel.arknet.req.domain.ConstraintReferencedException;
 import de.hauschel.arknet.req.domain.DuplicateConstraintCodeException;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 
@@ -248,4 +249,35 @@ public interface ConstraintRepository {
      * @return the resolved constraints found, in no particular order, never {@code null}
      */
     List<ResolveConstraints.ResolvedConstraint> findByIds(ProjectId projectId, List<ResourceId> ids);
+
+    /**
+     * Deletes the constraint identified by {@code code}, and every triple it carries in this
+     * hexagon's own named graph, from the project (kogn-io/arknet#481, mirroring
+     * {@code ActorRepository#delete}). Rejects outright, without deleting anything, if a
+     * requirement or use case still references the constraint via {@code oslc_rm:constrainedBy} -
+     * see {@link ConstraintReferencedException}.
+     *
+     * @param projectId the project (architecture model) the constraint lives in
+     * @param code      the constraint code, e.g. {@code TCON-1}
+     * @throws ConstraintNotFoundException   if no constraint with this identity exists
+     * @throws ConstraintReferencedException if a requirement or use case still references the
+     *                                        constraint
+     */
+    void delete(ProjectId projectId, ConstraintCode code);
+
+    /**
+     * Returns the business codes of constraints that were deleted from the project and are kept
+     * out of circulation - what {@link #delete} retains so a code can never name two different
+     * constraints over a project's lifetime (mirrors {@code ActorRepository#findRetainedCodes},
+     * kogn-io/arknet#481). Read together with {@link #findAllCodes} whenever the next free code
+     * for a subtype is derived; the two sets are disjoint, since a retained code belongs to a
+     * constraint that no longer exists.
+     *
+     * <p>Every type in one list, exactly like {@link #findAllCodes}: the caller tells the three
+     * counters ({@code TCON-}/{@code BCON-}/{@code RCON-}) apart by the code's own prefix.</p>
+     *
+     * @param projectId the project (architecture model) to read the retained codes of
+     * @return the retained codes, of any of the three types, never {@code null}
+     */
+    List<ConstraintCode> findRetainedCodes(ProjectId projectId);
 }

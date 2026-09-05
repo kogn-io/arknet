@@ -96,6 +96,25 @@ class ConstraintServiceTest {
         assertEquals(new ConstraintCode("TCON-3"), third.code());
     }
 
+    /**
+     * Mutation test for {@code nextCode} counting over {@link ConstraintRepository#findRetainedCodes}
+     * in addition to {@link ConstraintRepository#findAllCodes} (kogn-io/arknet#481, mirroring
+     * {@code ActorServiceTest}'s equivalent for {@code actor_add}): drop the
+     * {@code findRetainedCodes} term from {@code nextCode}'s maximum and this goes red - deleting
+     * the highest-numbered technical constraint would let the count fall back to the survivor and
+     * hand the deleted constraint's code out a second time.
+     */
+    @Test
+    void addDoesNotReissueACodeAfterItsHighestConstraintWasDeleted() {
+        add(WS, "a", "s a", ConstraintType.TECHNICAL);
+        ConstraintCode second = add(WS, "b", "s b", ConstraintType.TECHNICAL).code();
+        service.delete(WS, second);
+
+        Constraint third = add(WS, "c", "s c", ConstraintType.TECHNICAL);
+
+        assertEquals(new ConstraintCode("TCON-3"), third.code());
+    }
+
     @Test
     void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
@@ -313,6 +332,23 @@ class ConstraintServiceTest {
 
         assertEquals(added, result);
         assertEquals(before.head(), currentOf(added.code()).head());
+    }
+
+    // --- constraint_delete (kogn-io/arknet#481) ---------------------------------------
+
+    @Test
+    void deleteDelegatesToTheRepository() {
+        ConstraintCode code = add(WS, "a", "s a", ConstraintType.TECHNICAL).code();
+
+        service.delete(WS, code);
+
+        assertFalse(service.get(WS, code, null).isPresent());
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(ConstraintNotFoundException.class,
+                () -> service.delete(WS, new ConstraintCode("TCON-99")));
     }
 
     private ConstraintRepository.CurrentConstraint currentOf(ConstraintCode code) {

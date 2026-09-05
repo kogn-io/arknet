@@ -21,6 +21,7 @@ import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.req.application.port.in.AddConstraint;
 import de.hauschel.arknet.req.application.port.in.AddConstraint.NewConstraint;
+import de.hauschel.arknet.req.application.port.in.DeleteConstraint;
 import de.hauschel.arknet.req.application.port.in.GetConstraint;
 import de.hauschel.arknet.req.application.port.in.ListConstraints;
 import de.hauschel.arknet.req.application.port.in.UpdateConstraint;
@@ -30,7 +31,7 @@ import de.hauschel.arknet.req.domain.ConstraintId;
 import de.hauschel.arknet.req.domain.ConstraintType;
 
 /**
- * Scaffold-level check that the adapter declares exactly the four constraint tools and guards
+ * Scaffold-level check that the adapter declares exactly the five constraint tools and guards
  * its in-port dependencies, plus each tool's delegation to its in-port and rendering of the
  * result - mirrors {@code RequirementMcpToolsTest} in shape.
  */
@@ -49,36 +50,38 @@ class ConstraintMcpToolsTest {
             anchor -> new ResolvedProject(PROJECT, "de");
 
     private final Stub stub = new Stub();
-    private final ConstraintMcpTools adapter = new ConstraintMcpTools(stub, stub, stub, stub, PROJECTS);
+    private final ConstraintMcpTools adapter = new ConstraintMcpTools(stub, stub, stub, stub, stub, PROJECTS);
 
     @Test
-    void declaresTheFourConstraintTools() {
+    void declaresTheFiveConstraintTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(4, names.size());
-        assertTrue(names.containsAll(
-                List.of("constraint_add", "constraint_list", "constraint_get", "constraint_update")));
+        assertEquals(5, names.size());
+        assertTrue(names.containsAll(List.of(
+                "constraint_add", "constraint_list", "constraint_get", "constraint_update", "constraint_delete")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(null, stub, stub, stub, PROJECTS));
+                () -> new ConstraintMcpTools(null, stub, stub, stub, stub, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, null, stub, stub, PROJECTS));
+                () -> new ConstraintMcpTools(stub, null, stub, stub, stub, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, stub, null, stub, PROJECTS));
+                () -> new ConstraintMcpTools(stub, stub, null, stub, stub, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, stub, stub, null, PROJECTS));
+                () -> new ConstraintMcpTools(stub, stub, stub, null, stub, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new ConstraintMcpTools(stub, stub, stub, stub, null, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
-        assertThrows(NullPointerException.class, () -> new ConstraintMcpTools(stub, stub, stub, stub, null));
+        assertThrows(NullPointerException.class, () -> new ConstraintMcpTools(stub, stub, stub, stub, stub, null));
     }
 
     /** {@code constraint_add} passes title/statement/type through and renders the created constraint. */
@@ -102,7 +105,7 @@ class ConstraintMcpToolsTest {
      */
     @Test
     void addPassesABlankLanguageAsNullAndForwardsTheProjectDefault() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
 
         withDefault.add(null, "t", "s", "TECHNICAL", "  ", null);
 
@@ -137,7 +140,7 @@ class ConstraintMcpToolsTest {
      */
     @Test
     void listReadsUnderTheProjectsDefaultLanguage() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
 
         withDefault.list(null, null);
 
@@ -168,7 +171,7 @@ class ConstraintMcpToolsTest {
     /** An explicit {@code displayLocale} wins over the project's configured default. */
     @Test
     void getPrefersAnExplicitDisplayLocaleOverTheProjectDefault() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
         stub.nextGetResult = Optional.of(constraint("TCON-1", ConstraintType.TECHNICAL, "a", "statement a"));
 
         withDefault.get(null, "TCON-1", "en", null);
@@ -179,7 +182,7 @@ class ConstraintMcpToolsTest {
     /** ... and an omitted one falls back to it. */
     @Test
     void getFallsBackToTheProjectDefaultDisplayLocale() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
         stub.nextGetResult = Optional.of(constraint("TCON-1", ConstraintType.TECHNICAL, "a", "statement a"));
 
         withDefault.get(null, "TCON-1", null, null);
@@ -219,12 +222,22 @@ class ConstraintMcpToolsTest {
         assertNull(stub.lastUpdateLanguage);
     }
 
+    /** {@code constraint_delete} passes the parsed code straight through to the in-port. */
+    @Test
+    void deletePassesTheCodeThrough() {
+        String rendered = adapter.delete(null, "TCON-1", null);
+
+        assertEquals(new ConstraintCode("TCON-1"), stub.lastDeleteCode);
+        assertEquals("Deleted: TCON-1", rendered);
+    }
+
     private static Constraint constraint(String code, ConstraintType type, String title, String statement) {
         return new Constraint(ID, new ConstraintCode(code), title, statement, type);
     }
 
-    /** Structural stub implementing the four driving in-ports. */
-    private static final class Stub implements AddConstraint, ListConstraints, GetConstraint, UpdateConstraint {
+    /** Structural stub implementing the five driving in-ports. */
+    private static final class Stub
+            implements AddConstraint, ListConstraints, GetConstraint, UpdateConstraint, DeleteConstraint {
 
         private NewConstraint lastAddCommand;
         private String lastAddDefaultLanguage;
@@ -237,6 +250,7 @@ class ConstraintMcpToolsTest {
         private String lastUpdateTitle;
         private String lastUpdateStatement;
         private String lastUpdateLanguage;
+        private ConstraintCode lastDeleteCode;
 
         @Override
         public Constraint add(ProjectId projectId, NewConstraint command, String defaultLanguage) {
@@ -268,6 +282,11 @@ class ConstraintMcpToolsTest {
             lastUpdateLanguage = language;
             return new Constraint(ID, code, title == null ? "unchanged" : title,
                     statement == null ? "unchanged" : statement, ConstraintType.TECHNICAL);
+        }
+
+        @Override
+        public void delete(ProjectId projectId, ConstraintCode code) {
+            lastDeleteCode = code;
         }
     }
 }

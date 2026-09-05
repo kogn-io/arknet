@@ -169,6 +169,14 @@ public final class ArkreqVocabulary {
      */
     public static final String DEFINITION = SKOS_NAMESPACE + "definition";
 
+    /**
+     * {@code arkreq:Constraint} - the abstract superclass every constraint subtype specializes;
+     * the class {@code oslc_rm:constrainedBy} declares as its {@code rdfs:range}
+     * (kogn-io/arknet#481), read by the delete-guard architecture test the same way it already
+     * reads {@link #CONCEPT_TYPE}/{@link ArkprocVocabulary#ACTOR_TYPE}.
+     */
+    public static final String CONSTRAINT_TYPE = NAMESPACE + "Constraint";
+
     /** {@code arkreq:TechnicalConstraint} - the type of a technical constraint. */
     public static final String TECHNICAL_CONSTRAINT_TYPE = NAMESPACE + "TechnicalConstraint";
 

@@ -4,6 +4,7 @@
 package de.hauschel.arknet.req.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -24,6 +25,7 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
@@ -32,6 +34,8 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
@@ -39,6 +43,8 @@ import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintId;
+import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
+import de.hauschel.arknet.req.domain.ConstraintReferencedException;
 import de.hauschel.arknet.req.domain.ConstraintType;
 import de.hauschel.arknet.req.domain.DuplicateConstraintCodeException;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
@@ -54,6 +60,7 @@ class KognioRdfConstraintRepositoryTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
     private static final ProjectId PROJECT_B = new ProjectId("b");
+    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
 
     @TempDir
     Path storageRoot;
@@ -368,5 +375,159 @@ class KognioRdfConstraintRepositoryTest {
                 () -> KognioRdfRequirementRepositoryFactory.buildGate(DisplayLocale.DEFAULT).enforce(candidate));
 
         assertTrue(ex.getMessage().contains("constraintStatement"), ex.getMessage());
+    }
+
+    // ---- delete (kogn-io/arknet#481) ----------------------------------------------------------
+
+    @Test
+    void deleteRemovesTheConstraintAndItsTriples() {
+        Constraint stored = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
+                "Must run on the JVM.", ConstraintType.TECHNICAL);
+        create(PROJECT_A, stored);
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isEmpty());
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertFalse(handle.sparqlQuery().ask("ASK { GRAPH <" + CONSTRAINTS_GRAPH + "> { <"
+                    + stored.id().value().value() + "> ?p ?o } }"),
+                    "no triple of the deleted constraint may remain");
+        }
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(ConstraintNotFoundException.class,
+                () -> repository.delete(PROJECT_A, new ConstraintCode("TCON-99")));
+    }
+
+    /**
+     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
+     * the {@code arkprov:head} pointer is removed and the last revision is marked
+     * {@code prov:invalidatedAtTime} rather than erased.
+     */
+    @Test
+    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+        Constraint stored = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
+                "Must run on the JVM.", ConstraintType.TECHNICAL);
+        create(PROJECT_A, stored);
+        String subject = stored.id().value().value();
+        String lastRevision = headsOf(subject).get(0);
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(headsOf(subject).isEmpty(), "the head pointer must be removed");
+        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
+                    "the last revision must be tombstoned, not erased");
+        }
+    }
+
+    /**
+     * The one thing the funnel's tombstone cannot carry: the business code lives on the model
+     * triple the delete removes, so the adapter hangs it on the tombstoned revision itself - the
+     * only place it can outlive its resource, and what keeps {@code TCON-1} from naming a second
+     * constraint later.
+     */
+    @Test
+    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+        Constraint stored = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
+                "Must run on the JVM.", ConstraintType.TECHNICAL);
+        create(PROJECT_A, stored);
+        String lastRevision = headsOf(stored.id().value().value()).get(0);
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertEquals(List.of("TCON-1"), identifiersOf(lastRevision));
+        assertEquals(List.of(new ConstraintCode("TCON-1")), repository.findRetainedCodes(PROJECT_A));
+    }
+
+    @Test
+    void projectsAreIsolatedForDelete() {
+        Constraint stored = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
+                "Must run on the JVM.", ConstraintType.TECHNICAL);
+        create(PROJECT_A, stored);
+
+        assertThrows(ConstraintNotFoundException.class, () -> repository.delete(PROJECT_B, stored.code()));
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isPresent(),
+                "a delete in another project must not touch this project's constraint");
+    }
+
+    /**
+     * {@link ConstraintReferencedException} blocks the delete while a requirement still points at
+     * the constraint via {@code oslc_rm:constrainedBy} - written into the requirements graph
+     * ({@code req_link_constraint}'s own named graph), not {@link #CONSTRAINTS_GRAPH}, to prove
+     * {@link KognioRdfConstraintRepository#rejectIfReferenced} really searches across every named
+     * graph rather than just its own.
+     */
+    @Test
+    void deleteRejectsAConstraintStillReferencedByARequirement() {
+        Constraint stored = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
+                "Must run on the JVM.", ConstraintType.TECHNICAL);
+        create(PROJECT_A, stored);
+        String reference = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<https://w3id.org/arknet/id/requirement-1> <" + ArkreqVocabulary.CONSTRAINED_BY + "> <"
+                + stored.id().value().value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(reference);
+                return null;
+            });
+        }
+
+        assertThrows(ConstraintReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isPresent(),
+                "a rejected delete must leave the constraint untouched");
+    }
+
+    /**
+     * The use-case-side counterpart of the previous test, in an arbitrary third named graph - proof
+     * that {@link KognioRdfConstraintRepository#rejectIfReferenced}'s {@code GRAPH ?g} search is not
+     * scoped to the requirements graph either, which is exactly what lets it also catch
+     * {@code uc_link_constraint}'s edge.
+     */
+    @Test
+    void deleteRejectsAConstraintStillReferencedFromAnotherGraph() {
+        Constraint stored = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
+                "Must run on the JVM.", ConstraintType.TECHNICAL);
+        create(PROJECT_A, stored);
+        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
+                + ArkreqVocabulary.CONSTRAINED_BY + "> <" + stored.id().value().value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(reference);
+                return null;
+            });
+        }
+
+        assertThrows(ConstraintReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
+    }
+
+    // ---- helpers (delete) ----------------------------------------------------------------------
+
+    private List<String> headsOf(String subjectIri) {
+        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + subjectIri + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
+    }
+
+    private List<String> selectIris(String query) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
+                    .toList();
+        }
+    }
+
+    /** The {@code dcterms:identifier} literals a revision carries in the provenance graph. */
+    private List<String> identifiersOf(String revisionIri) {
+        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
+                    .toList();
+        }
     }
 }

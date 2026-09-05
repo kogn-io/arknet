@@ -56,6 +56,7 @@ public final class InMemoryConstraintRepository implements ConstraintRepository 
     private final Map<ConstraintId, RevisionToken> headByIdentity = new LinkedHashMap<>();
     private final Map<ConstraintId, String> titleLanguageByIdentity = new LinkedHashMap<>();
     private final Map<ConstraintId, String> statementLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<ProjectId, List<ConstraintCode>> retainedByProject = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, Constraint constraint, String language) {
@@ -149,5 +150,31 @@ public final class InMemoryConstraintRepository implements ConstraintRepository 
                 .filter(c -> wanted.contains(c.id().value()))
                 .map(c -> new ResolveConstraints.ResolvedConstraint(c.id().value(), c.code()))
                 .toList();
+    }
+
+    @Override
+    public void delete(ProjectId projectId, ConstraintCode code) {
+        // The cross-BC reference check (kogn-io/arknet#481) is the real out-adapter's concern -
+        // this fake only exercises ConstraintService's own pass-through and the not-found case.
+        Map<ConstraintId, Constraint> constraints = byProject.getOrDefault(projectId, Map.of());
+        ConstraintId id = constraints.values().stream()
+                .filter(c -> c.code().equals(code))
+                .findFirst()
+                .map(Constraint::id)
+                .orElseThrow(() -> new ConstraintNotFoundException(projectId, code));
+        constraints.remove(id);
+        headByIdentity.remove(id);
+        titleLanguageByIdentity.remove(id);
+        statementLanguageByIdentity.remove(id);
+        retainedByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
+    }
+
+    /**
+     * Mirrors the real out-adapter's code retention so {@link ConstraintService#add} cannot hand
+     * the deleted constraint's number out again (kogn-io/arknet#481).
+     */
+    @Override
+    public List<ConstraintCode> findRetainedCodes(ProjectId projectId) {
+        return List.copyOf(retainedByProject.getOrDefault(projectId, List.of()));
     }
 }
