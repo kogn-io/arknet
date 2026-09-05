@@ -38,7 +38,7 @@ package de.hauschel.arknet.persistence;
  * with its instant and its predecessor, not what the resource looked like afterwards - the
  * model graph itself is still replaced in place, so no earlier state currently survives and two
  * revisions cannot be compared against each other. Recovering earlier states, and the
- * compaction strategy the resulting growth would need, are deferred (ADR-014). Nothing here is
+ * compaction strategy the resulting growth would need, are deferred. Nothing here is
  * SHACL-validated either: the gate runs on the candidate model graph before the transaction
  * opens, while the revision is written inside it into {@link #PROVENANCE_GRAPH}, for which
  * arknet ships no shapes.</p>

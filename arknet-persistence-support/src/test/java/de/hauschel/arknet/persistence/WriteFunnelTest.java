@@ -749,7 +749,8 @@ class WriteFunnelTest {
      * The generation instant comes from the injected clock. It is the only value a revision
      * carries that is not derived from the write's inputs, so an ambient {@code Instant.now()}
      * would leave {@code prov:generatedAtTime} permanently unassertable - both here and for the
-     * "revisions between T1 and T2" read path ADR-011 still owes.
+     * "revisions between T1 and T2" read path the provenance model still owes (ADR-26 in arknet's
+     * own store rules out a file diff, so change tracking has to come from revisions).
      */
     @Test
     void theRevisionCarriesTheGenerationInstantOfTheInjectedClock() {

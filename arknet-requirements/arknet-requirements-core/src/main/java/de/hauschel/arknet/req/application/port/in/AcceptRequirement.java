@@ -14,10 +14,10 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  * {@code PROPOSED -> ACCEPTED}, so this port takes no target status of its own; a generic
  * {@code RequirementStatus status} parameter would only ever legally resolve to {@code ACCEPTED}
  * here, since {@link ProposeRequirement} covers this lifecycle's other transition as its own,
- * equally narrow port (issue #291, ADR-019 point 4 - the requirements context's original,
- * one-way-only cut of this port was itself the misleading surface, formerly {@code
- * SetRequirementStatus}). The transition rule itself lives on {@link Requirement#accept()}, not
- * here or in the implementing application service.</p>
+ * equally narrow port (issue #291; FR-5 in arknet's own store - the requirements context's
+ * original, one-way-only cut of this port was itself the misleading surface, formerly
+ * {@code SetRequirementStatus}). The transition rule itself lives on {@link Requirement#accept()},
+ * not here or in the implementing application service.</p>
  */
 public interface AcceptRequirement {
 

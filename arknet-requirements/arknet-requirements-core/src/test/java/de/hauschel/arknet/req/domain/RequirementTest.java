@@ -280,8 +280,9 @@ class RequirementTest {
     }
 
     /**
-     * The reverse transition (issue #291 / ADR-019 point 4): an accepted requirement can be reset
-     * to {@code PROPOSED} - the status is an unbinding maturity signal, not a one-way freeze.
+     * The reverse transition (issue #291; an acceptance criterion of FR-5 in arknet's own store):
+     * an accepted requirement can be reset to {@code PROPOSED} - the status is an unbinding
+     * maturity signal, not a one-way freeze.
      */
     @Test
     void proposeTransitionsAcceptedToProposed() {
