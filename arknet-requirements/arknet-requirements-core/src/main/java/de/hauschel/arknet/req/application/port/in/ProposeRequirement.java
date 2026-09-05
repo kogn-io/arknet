@@ -10,13 +10,14 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 /**
  * Driving port: reset an accepted requirement back to proposed.
  *
- * <p>Backs the tool {@code req_set_status}'s {@code PROPOSED} target (issue #291, ADR-019 point
- * 4). The legal transition is {@code ACCEPTED -> PROPOSED} - the same narrow shape
- * {@link AcceptRequirement} takes for its own single transition, mirroring how the adr context
- * later split {@code adr_set_status} across {@code AcceptAdr}/{@code RejectAdr}/
- * {@code DeprecateAdr}, one port per transition, none taking a target status of its own; the
- * caller-visible dispatch happens only in the driving adapter. The transition rule itself lives
- * on {@link Requirement#propose()}, not here and not in the implementing application service.</p>
+ * <p>Backs the tool {@code req_set_status}'s {@code PROPOSED} target (issue #291; the reverse
+ * transition is an acceptance criterion of FR-5 in arknet's own store). The legal transition is
+ * {@code ACCEPTED -> PROPOSED} - the same narrow shape {@link AcceptRequirement} takes for its own
+ * single transition, mirroring how the adr context later split {@code adr_set_status} across
+ * {@code AcceptAdr}/{@code RejectAdr}/ {@code DeprecateAdr}, one port per transition, none taking
+ * a target status of its own; the caller-visible dispatch happens only in the driving adapter. The
+ * transition rule itself lives on {@link Requirement#propose()}, not here and not in the
+ * implementing application service.</p>
  */
 public interface ProposeRequirement {
 

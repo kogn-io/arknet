@@ -69,8 +69,8 @@ import de.hauschel.arknet.req.domain.TermRef;
  * {@code PROPOSED -> ACCEPTED} via {@link #accept} and {@code ACCEPTED -> PROPOSED} via
  * {@link #propose} - see {@link Requirement#accept()}/{@link Requirement#propose()}, which own
  * those rules; this service only threads each through the read-modify-write round trip (issue
- * #291, ADR-019 point 4). Linking a
- * glossary term is idempotent and independent of the status lifecycle - terms may be linked to a
+ * #291; FR-5 in arknet's own store makes the reverse transition an acceptance criterion). Linking
+ * a glossary term is idempotent and independent of the status lifecycle - terms may be linked to a
  * requirement in any status. {@link #linkConstraint} mirrors {@link #linkTerm} exactly for
  * {@code oslc_rm:constrainedBy}, resolving the human-typed {@link ConstraintCode} via the
  * constructor-injected {@link ConstraintRepository} instead of a cross-BC lookup port, since

@@ -332,9 +332,9 @@ class RequirementMcpToolsTest {
     }
 
     /**
-     * The other legal transition (issue #291 / ADR-019 point 4): {@code PROPOSED} reaches
-     * {@link ProposeRequirement}, resetting an accepted requirement rather than being rejected as
-     * a dead-end target - the defect this fix closes.
+     * The other legal transition (issue #291; an acceptance criterion of FR-5 in arknet's own
+     * store): {@code PROPOSED} reaches {@link ProposeRequirement}, resetting an accepted
+     * requirement rather than being rejected as a dead-end target - the defect this fix closes.
      */
     @Test
     void setStatusProposesARequirementWhenTargetStatusIsProposed() {

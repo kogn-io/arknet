@@ -46,7 +46,7 @@
 #         model graph is still replaced in place, so an earlier state cannot
 #         currently be recovered and two revisions cannot be compared against
 #         each other. Recovering earlier states, and the compaction strategy
-#         the resulting growth would need, are deferred (ADR-014).
+#         the resulting growth would need, are deferred.
 #
 #  NOT VALIDATED BY SHACL: the write gate validates the candidate model graph
 #         before the write transaction opens, whereas the revision is written
@@ -78,7 +78,7 @@
     a owl:Ontology ;
     owl:imports      <http://www.w3.org/ns/prov-o#> ;
     dcterms:title    "arknet Provenance Ontology"@en ;
-    dcterms:description "arknet's PROV-O-based revision vocabulary: every model write through the shared write funnel produces one immutable revision and moves the resource's head pointer. The head doubles as the optimistic-concurrency token of a conditional write. A revision is the resource's state at that point in time; that state itself is not currently retained (ADR-014)."@en ;
+    dcterms:description "arknet's PROV-O-based revision vocabulary: every model write through the shared write funnel produces one immutable revision and moves the resource's head pointer. The head doubles as the optimistic-concurrency token of a conditional write. A revision is the resource's state at that point in time; that state itself is not currently retained."@en ;
     dcterms:version  "0.1.0" ;
     dcterms:created  "2026-07-26"^^xsd:date ;
     dcterms:rights   "CC-BY-4.0" ;

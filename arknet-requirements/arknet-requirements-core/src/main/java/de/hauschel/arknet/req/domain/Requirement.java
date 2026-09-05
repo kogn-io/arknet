@@ -141,9 +141,10 @@ public record Requirement(
      * rule itself, not a generic setter: a richer lifecycle (rejected, deprecated, ...) would
      * extend this method, not reintroduce a caller-supplied target status.
      *
-     * <p>Per ADR-019, the status is a non-binding maturity signal without enforcement, and is
-     * settable in both directions - {@link #propose} is this method's mirror image, resetting an
-     * accepted requirement back to {@link RequirementStatus#PROPOSED} (issue #291: an
+     * <p>The status is a non-binding maturity signal without enforcement (FR-5 in arknet's own
+     * store; the comment block above {@code arkreq:status} in the requirements ontology says why),
+     * and is settable in both directions - {@link #propose} is this method's mirror image,
+     * resetting an accepted requirement back to {@link RequirementStatus#PROPOSED} (issue #291: an
      * unconditional one-way transition made setting this signal irreversible, which is exactly
      * what a non-binding signal must not be).</p>
      *
@@ -167,12 +168,12 @@ public record Requirement(
 
     /**
      * Resets this requirement to {@link RequirementStatus#PROPOSED} - the mirror image of
-     * {@link #accept()}, closing the gap ADR-019 identifies as a defect (issue #291): an
-     * {@link RequirementStatus#ACCEPTED} requirement could be set but never unset, which made the
-     * status a one-way freeze rather than the unbinding maturity signal it is meant to be.
-     * Calling this on a requirement that is already {@link RequirementStatus#PROPOSED} is a
-     * no-op, returning {@code this} unchanged, exactly mirroring {@link #accept()}'s own
-     * idempotency.
+     * {@link #accept()}, closing the gap issue #291 identified as a defect (FR-5's
+     * reverse-transition criterion): an {@link RequirementStatus#ACCEPTED} requirement could be
+     * set but never unset, which made the status a one-way freeze rather than the unbinding
+     * maturity signal it is meant to be. Calling this on a requirement that is already
+     * {@link RequirementStatus#PROPOSED} is a no-op, returning {@code this} unchanged, exactly
+     * mirroring {@link #accept()}'s own idempotency.
      *
      * @return a new {@link Requirement} with status {@link RequirementStatus#PROPOSED}, or
      *         {@code this} if already proposed

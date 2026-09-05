@@ -5,7 +5,7 @@
 # This encodes the two non-obvious flags so you don't have to remember them:
 #
 #   * The published port binds to HOST LOOPBACK ONLY (127.0.0.1:47331). The
-#     daemon has no authentication (loopback-only trust boundary, ADR-009); the
+#     daemon has no authentication (loopback-only trust boundary); the
 #     image binds 0.0.0.0 *inside* the container (see arknet-mcp/Dockerfile), so
 #     the host-side bind is what keeps it off the LAN. Do NOT change this to a
 #     bare "47331:47331" -- that would expose it to every host on your network.

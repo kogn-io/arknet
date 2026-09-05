@@ -324,10 +324,11 @@ public final class RequirementMcpTools {
             final String projectAnchor) {
         final ProjectId projectId = resolveProject(context, projectAnchor).id();
         final RequirementCode code = new RequirementCode(id);
-        // Two narrow transition ports (AcceptRequirement/ProposeRequirement, issue #291, ADR-019
-        // point 4) back this tool, neither taking a target status of its own - the caller-visible
-        // dispatch happens only here, mirroring AdrMcpTools#setStatus's own three-way dispatch
-        // across AcceptAdr/RejectAdr/DeprecateAdr. RequirementStatus.valueOf is parsed defensively
+        // Two narrow transition ports (AcceptRequirement/ProposeRequirement, issue #291; FR-5 in
+        // arknet's own store) back this tool, neither taking a target status of its own - the
+        // caller-visible dispatch happens only here, mirroring AdrMcpTools#setStatus's own
+        // three-way dispatch across AcceptAdr/RejectAdr/DeprecateAdr. RequirementStatus.valueOf is
+        // parsed defensively
         // rather than let directly: anything unparseable must reject with this method's own
         // message, not the JDK's raw "No enum constant ...".
         RequirementStatus requirementStatus;

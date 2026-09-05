@@ -416,9 +416,9 @@ class RequirementServiceTest {
     }
 
     /**
-     * Issue #291 / ADR-019 point 4: the reverse transition. Before this fix, an accepted
-     * requirement could never be reset - the status was a one-way freeze rather than the
-     * unbinding maturity signal ADR-019 requires.
+     * Issue #291, an acceptance criterion of FR-5 in arknet's own store: the reverse transition.
+     * Before this fix, an accepted requirement could never be reset - the status was a one-way
+     * freeze rather than the unbinding maturity signal FR-5 requires.
      */
     @Test
     void proposeTransitionsAcceptedToProposed() {
