@@ -5,23 +5,17 @@ package de.hauschel.arknet.architecture;
 
 import static de.hauschel.arknet.architecture.support.OntologyFixtures.iri;
 import static de.hauschel.arknet.architecture.support.OntologyFixtures.parse;
+import static de.hauschel.arknet.architecture.support.OntologyFixtures.shippedOntologyResources;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.Field;
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.util.Collection;
-import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 
 import org.eclipse.rdf4j.model.Model;
@@ -63,13 +57,6 @@ import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepository;
  * test loudly rather than silently skipping the check.</p>
  */
 class ReferenceGuardsCoverEveryOntologyEdgeTest {
-
-    /**
-     * One shipped ontology that is certainly on the classpath - the anchor from which the rest of
-     * {@code arknet-ontology}'s root resources are enumerated, so a newly added ontology module is
-     * covered without anyone editing this test.
-     */
-    private static final String ANCHOR_RESOURCE = "/arknet-core.ttl";
 
     /** The glossary term class every term-referencing property declares as its range. */
     private static final String TERM_CLASS = ArkreqVocabulary.CONCEPT_TYPE;
@@ -172,51 +159,8 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
             }
         }
         if (merged == null) {
-            throw new IllegalStateException("no ontology resource found next to " + ANCHOR_RESOURCE);
+            throw new IllegalStateException("no ontology resource found on the classpath");
         }
         return merged;
-    }
-
-    /**
-     * Enumerates those resources off the classpath rather than listing them here: a hand-kept list
-     * would be the very kind of forgotten line this test exists to catch. {@code arknet-ontology}
-     * resolves to a jar in an installed build and to a {@code target/classes} directory inside the
-     * reactor, so both layouts are handled.
-     */
-    private static Set<String> shippedOntologyResources() {
-        URL anchor = ReferenceGuardsCoverEveryOntologyEdgeTest.class.getResource(ANCHOR_RESOURCE);
-        if (anchor == null) {
-            throw new IllegalStateException("missing classpath resource " + ANCHOR_RESOURCE);
-        }
-        try {
-            return "jar".equals(anchor.getProtocol()) ? jarEntries(anchor) : directoryEntries(anchor);
-        } catch (IOException | URISyntaxException e) {
-            throw new IllegalStateException("failed to enumerate the shipped ontologies", e);
-        }
-    }
-
-    private static Set<String> jarEntries(URL anchor) throws IOException {
-        String jarPath = anchor.getPath().substring("file:".length(), anchor.getPath().indexOf('!'));
-        Set<String> resources = new HashSet<>();
-        try (JarFile jar = new JarFile(java.net.URLDecoder.decode(jarPath, java.nio.charset.StandardCharsets.UTF_8))) {
-            for (Enumeration<JarEntry> entries = jar.entries(); entries.hasMoreElements();) {
-                String name = entries.nextElement().getName();
-                if (name.endsWith(".ttl") && name.indexOf('/') < 0) {
-                    resources.add("/" + name);
-                }
-            }
-        }
-        return resources;
-    }
-
-    private static Set<String> directoryEntries(URL anchor) throws URISyntaxException {
-        File[] files = new File(anchor.toURI()).getParentFile().listFiles();
-        Set<String> resources = new HashSet<>();
-        for (File file : files == null ? new File[0] : files) {
-            if (file.isFile() && file.getName().endsWith(".ttl")) {
-                resources.add("/" + file.getName());
-            }
-        }
-        return resources;
     }
 }

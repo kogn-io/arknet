@@ -119,9 +119,12 @@ public final class StoreExportTools {
     @McpTool(name = "project_export",
             description = "Backup: export a complete RDF store as a .trig file (including provenance and"
                     + " project self-description) into a timestamped subdirectory of the server's export"
-                    + " directory. By default this is NOT project-scoped - it exports ALL registered"
-                    + " projects in one call; pass projectOnly=true to export only the project this call"
-                    + " addresses. There is no matching import/restore tool yet.",
+                    + " directory. Each dump ends with an export-metadata graph of its own naming the"
+                    + " server version, its build time, the export time and the version of every shipped"
+                    + " ontology module - output only, never stored, so dropping that one graph leaves"
+                    + " exactly the dataset. By default this is NOT project-scoped - it exports ALL"
+                    + " registered projects in one call; pass projectOnly=true to export only the project"
+                    + " this call addresses. There is no matching import/restore tool yet.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String export(
             final McpSyncRequestContext context,
