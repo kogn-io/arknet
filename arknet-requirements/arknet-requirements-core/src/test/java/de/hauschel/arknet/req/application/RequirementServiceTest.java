@@ -376,7 +376,7 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS,
                 new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
-        Requirement accepted = service.accept(WS, code);
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals("desc a", accepted.description());
@@ -388,7 +388,7 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.NON_FUNCTIONAL,
                 Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security", List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
-        Requirement accepted = service.accept(WS, code);
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(Priority.COULD_HAVE, accepted.priority());
         assertEquals("https://w3id.org/arknet/model/goal/g", accepted.motivatedBy());
@@ -399,9 +399,9 @@ class RequirementServiceTest {
     void acceptIsIdempotentWhenAlreadyAccepted() {
         RequirementCode code = service.add(WS,
                 new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
-        service.accept(WS, code);
+        service.accept(WS, code, DEFAULT_LANGUAGE);
 
-        Requirement result = service.accept(WS, code);
+        Requirement result = service.accept(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(RequirementStatus.ACCEPTED, result.status());
     }
@@ -409,10 +409,70 @@ class RequirementServiceTest {
     @Test
     void acceptThrowsWhenRequirementUnknown() {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.accept(WS, new RequirementCode("FR-42")));
+                () -> service.accept(WS, new RequirementCode("FR-42"), DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
+    }
+
+    /**
+     * Issue #468: {@link RequirementService#accept}/{@link RequirementService#propose}/
+     * {@link RequirementService#linkTerm}/{@link RequirementService#linkConstraint} share
+     * {@link RequirementService#update}'s read-modify-write round trip, but - unlike
+     * {@code update} since issue #456 - used to always pass a hardcoded {@code null}
+     * {@code defaultLanguage} to {@link RequirementRepository#findCurrentByCode} regardless of
+     * what their own {@code defaultLanguage} argument carried. The real out-adapter would then read
+     * every untouched field under the process-wide configured language instead of the calling
+     * project's own, so a project with {@code defaultLanguage: de} could get the English title back
+     * from {@code req_set_status}/{@code req_link_term}/{@code req_link_constraint} and the German
+     * one from a directly following {@code req_get}. This in-memory fake cannot select a different
+     * literal per language (see its own javadoc), so these tests instead pin the argument itself:
+     * the project's default language must reach {@code findCurrentByCode}, not {@code null}.
+     */
+    @Test
+    void acceptPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null,
+                        List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        service.accept(WS, code, "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
+    }
+
+    @Test
+    void proposePassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null,
+                        List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+        service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        service.propose(WS, code, "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
+    }
+
+    @Test
+    void linkTermPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null,
+                        List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        service.linkTerm(WS, code, "TERM-1", "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
+    }
+
+    @Test
+    void linkConstraintPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null,
+                        List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+        Constraint constraint = givenConstraint("Titel", "Statement", ConstraintType.TECHNICAL);
+
+        service.linkConstraint(WS, code, constraint.code().value(), "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
     }
 
     /**
@@ -424,9 +484,9 @@ class RequirementServiceTest {
     void proposeTransitionsAcceptedToProposed() {
         RequirementCode code = service.add(WS,
                 new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
-        service.accept(WS, code);
+        service.accept(WS, code, DEFAULT_LANGUAGE);
 
-        Requirement proposed = service.propose(WS, code);
+        Requirement proposed = service.propose(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(RequirementStatus.PROPOSED, proposed.status());
         assertEquals("desc a", proposed.description());
@@ -438,7 +498,7 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS,
                 new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
-        Requirement result = service.propose(WS, code);
+        Requirement result = service.propose(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(RequirementStatus.PROPOSED, result.status());
     }
@@ -446,7 +506,7 @@ class RequirementServiceTest {
     @Test
     void proposeThrowsWhenRequirementUnknown() {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.propose(WS, new RequirementCode("FR-42")));
+                () -> service.propose(WS, new RequirementCode("FR-42"), DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
@@ -462,11 +522,11 @@ class RequirementServiceTest {
         Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
                 ConstraintType.REGULATORY);
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
-        service.linkConstraint(WS, code, constraint.code().value());
-        service.linkTerm(WS, code, "TERM-1");
-        service.accept(WS, code);
+        service.linkConstraint(WS, code, constraint.code().value(), DEFAULT_LANGUAGE);
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+        service.accept(WS, code, DEFAULT_LANGUAGE);
 
-        Requirement proposed = service.propose(WS, code);
+        Requirement proposed = service.propose(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(RequirementStatus.PROPOSED, proposed.status());
         assertEquals(List.of(new ConstraintRef(constraint.id().value())), proposed.constrainedBy());
@@ -544,8 +604,8 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.NON_FUNCTIONAL,
                 Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security",
                 List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
-        service.accept(WS, code);
-        service.linkTerm(WS, code, "TERM-1");
+        service.accept(WS, code, DEFAULT_LANGUAGE);
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
         Requirement updated =
                 service.update(WS, code, "New title", null, null, null, null, null, null, DEFAULT_LANGUAGE);
@@ -633,7 +693,7 @@ class RequirementServiceTest {
     void linkTermAddsTheTermToTheRequirement() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
 
-        Requirement linked = service.linkTerm(WS, code, "TERM-1");
+        Requirement linked = service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new TermRef(TERM_1)), linked.usesTerms());
         assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().usesTerms());
@@ -642,9 +702,9 @@ class RequirementServiceTest {
     @Test
     void linkTermAppendsToAlreadyLinkedTerms() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
-        service.linkTerm(WS, code, "TERM-1");
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
-        Requirement linked = service.linkTerm(WS, code, "TERM-2");
+        Requirement linked = service.linkTerm(WS, code, "TERM-2", DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new TermRef(TERM_1), new TermRef(TERM_2)), linked.usesTerms());
     }
@@ -652,9 +712,9 @@ class RequirementServiceTest {
     @Test
     void linkingTheSameTermTwiceIsANoOp() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
-        service.linkTerm(WS, code, "TERM-1");
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
-        Requirement linked = service.linkTerm(WS, code, "TERM-1");
+        Requirement linked = service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new TermRef(TERM_1)), linked.usesTerms());
     }
@@ -662,7 +722,7 @@ class RequirementServiceTest {
     @Test
     void linkTermThrowsWhenRequirementUnknown() {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.linkTerm(WS, new RequirementCode("FR-42"), "TERM-1"));
+                () -> service.linkTerm(WS, new RequirementCode("FR-42"), "TERM-1", DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
@@ -677,7 +737,7 @@ class RequirementServiceTest {
     void linkTermPropagatesTheLookupFailureForAnUnknownTermCodeAndLinksNothing() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
 
-        assertThrows(NoSuchElementException.class, () -> service.linkTerm(WS, code, "TERM-99"));
+        assertThrows(NoSuchElementException.class, () -> service.linkTerm(WS, code, "TERM-99", DEFAULT_LANGUAGE));
 
         assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
     }
@@ -695,7 +755,7 @@ class RequirementServiceTest {
                 ConstraintType.REGULATORY);
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
 
-        Requirement linked = service.linkConstraint(WS, code, constraint.code().value());
+        Requirement linked = service.linkConstraint(WS, code, constraint.code().value(), DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new ConstraintRef(constraint.id().value())), linked.constrainedBy());
         assertEquals(List.of(new ConstraintRef(constraint.id().value())),
@@ -707,9 +767,9 @@ class RequirementServiceTest {
         Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
                 ConstraintType.REGULATORY);
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
-        service.linkConstraint(WS, code, constraint.code().value());
+        service.linkConstraint(WS, code, constraint.code().value(), DEFAULT_LANGUAGE);
 
-        Requirement linked = service.linkConstraint(WS, code, constraint.code().value());
+        Requirement linked = service.linkConstraint(WS, code, constraint.code().value(), DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new ConstraintRef(constraint.id().value())), linked.constrainedBy());
     }
@@ -720,7 +780,7 @@ class RequirementServiceTest {
                 ConstraintType.REGULATORY);
 
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.linkConstraint(WS, new RequirementCode("FR-42"), constraint.code().value()));
+                () -> service.linkConstraint(WS, new RequirementCode("FR-42"), constraint.code().value(), DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
@@ -735,7 +795,7 @@ class RequirementServiceTest {
     void linkConstraintThrowsWhenConstraintCodeUnknownAndLinksNothing() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
 
-        assertThrows(ConstraintNotFoundException.class, () -> service.linkConstraint(WS, code, "TCON-99"));
+        assertThrows(ConstraintNotFoundException.class, () -> service.linkConstraint(WS, code, "TCON-99", DEFAULT_LANGUAGE));
 
         assertEquals(List.of(), service.get(WS, code, null).orElseThrow().constrainedBy());
     }
@@ -750,9 +810,9 @@ class RequirementServiceTest {
         Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
                 ConstraintType.REGULATORY);
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
-        service.linkConstraint(WS, code, constraint.code().value());
+        service.linkConstraint(WS, code, constraint.code().value(), DEFAULT_LANGUAGE);
 
-        Requirement accepted = service.accept(WS, code);
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new ConstraintRef(constraint.id().value())), accepted.constrainedBy());
     }
@@ -765,9 +825,9 @@ class RequirementServiceTest {
     @Test
     void acceptPreservesLinkedTerms() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
-        service.linkTerm(WS, code, "TERM-1");
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
-        Requirement accepted = service.accept(WS, code);
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals(List.of(new TermRef(TERM_1)), accepted.usesTerms());
@@ -782,7 +842,7 @@ class RequirementServiceTest {
     void acceptPreservesAcceptanceCriteria() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
 
-        Requirement accepted = service.accept(WS, code);
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), accepted.acceptanceCriteria());
         assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")),
@@ -796,7 +856,7 @@ class RequirementServiceTest {
     void linkTermPreservesAcceptanceCriteria() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
 
-        Requirement linked = service.linkTerm(WS, code, "TERM-1");
+        Requirement linked = service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), linked.acceptanceCriteria());
     }
@@ -815,7 +875,7 @@ class RequirementServiceTest {
         RequirementCode code = givenLegacyRequirement();
 
         MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
-                () -> service.accept(WS, code));
+                () -> service.accept(WS, code, DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(code, ex.requirementCode());
@@ -840,7 +900,7 @@ class RequirementServiceTest {
         repository.createLegacy(WS, legacyAccepted);
 
         MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
-                () -> service.propose(WS, code));
+                () -> service.propose(WS, code, DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(code, ex.requirementCode());
@@ -853,7 +913,7 @@ class RequirementServiceTest {
         RequirementCode code = givenLegacyRequirement();
 
         MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
-                () -> service.linkTerm(WS, code, "TERM-1"));
+                () -> service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(code, ex.requirementCode());
@@ -943,7 +1003,7 @@ class RequirementServiceTest {
                 List.of(new AcceptanceCriterionTextPatch(1, "Real done-when criterion")), null, null,
                 DEFAULT_LANGUAGE);
 
-        Requirement accepted = service.accept(WS, code);
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")), accepted.acceptanceCriteria());
@@ -1082,8 +1142,8 @@ class RequirementServiceTest {
     void acceptAndLinkTermKeepTheRationale() {
         RequirementCode code = service.add(WS, newFunctionalRequirementWithRationale(), DEFAULT_LANGUAGE).code();
 
-        assertEquals(RATIONALE, service.accept(WS, code).rationale());
-        assertEquals(RATIONALE, service.linkTerm(WS, code, "TERM-1").rationale());
+        assertEquals(RATIONALE, service.accept(WS, code, DEFAULT_LANGUAGE).rationale());
+        assertEquals(RATIONALE, service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE).rationale());
     }
 
     /**

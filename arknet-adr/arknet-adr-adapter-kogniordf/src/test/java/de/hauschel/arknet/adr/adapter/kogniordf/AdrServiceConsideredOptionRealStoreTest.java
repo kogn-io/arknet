@@ -138,7 +138,7 @@ class AdrServiceConsideredOptionRealStoreTest {
                                 new NewConsideredOption("Chosen one", "Only here to count.", OptionOutcome.CHOSEN)),
                         "en", List.of(), List.of(), List.of(), List.of()),
                 "en");
-        service.accept(PROJECT, created.adr().code(), null);
+        service.accept(PROJECT, created.adr().code(), null, "en");
 
         AdrCorrection correction = AdrCorrection.builder()
                 .relatedToCodes(List.of(peer.adr().code().value()))
@@ -184,6 +184,6 @@ class AdrServiceConsideredOptionRealStoreTest {
                         "en", List.of(), List.of(), List.of(), List.of()),
                 "en");
 
-        assertDoesNotThrow(() -> service.accept(PROJECT, created.adr().code(), null));
+        assertDoesNotThrow(() -> service.accept(PROJECT, created.adr().code(), null, "en"));
     }
 }

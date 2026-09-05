@@ -623,6 +623,51 @@ class AdrMcpToolsTest {
         assertTrue(rendered.contains("ADR-1"), rendered);
     }
 
+    /**
+     * Issue #468: {@code adr_set_status}, {@code adr_supersede} and {@code adr_unsupersede} share
+     * {@code adr_update}'s read-modify-write round trip, but - unlike {@code adr_update} since issue
+     * #456 - used to always pass a {@code null} {@code defaultLanguage} to their in-ports regardless
+     * of the resolved project's own configured default (here {@code "en"}, see {@link #PROJECTS}). A
+     * project with a configured default language could therefore get the wrong-language
+     * name/context/decision back from these five tools and the right one from a directly following
+     * {@code adr_get}. This pins that the adapter now passes {@link ResolvedProject#defaultLanguage()}
+     * through at every one of these call sites, exactly as it already does for {@code adr_update}.
+     */
+    @Test
+    void setStatusAcceptedPassesTheProjectsDefaultLanguageThrough() {
+        adapter.setStatus(null, "ADR-1", "ACCEPTED", null, ANCHOR);
+
+        assertEquals("en", stub.lastAcceptDefaultLanguage);
+    }
+
+    @Test
+    void setStatusRejectedPassesTheProjectsDefaultLanguageThrough() {
+        adapter.setStatus(null, "ADR-1", "REJECTED", null, ANCHOR);
+
+        assertEquals("en", stub.lastRejectDefaultLanguage);
+    }
+
+    @Test
+    void setStatusDeprecatedPassesTheProjectsDefaultLanguageThrough() {
+        adapter.setStatus(null, "ADR-1", "DEPRECATED", null, ANCHOR);
+
+        assertEquals("en", stub.lastDeprecateDefaultLanguage);
+    }
+
+    @Test
+    void supersedePassesTheProjectsDefaultLanguageThrough() {
+        adapter.supersede(null, "ADR-2", "ADR-1", ANCHOR);
+
+        assertEquals("en", stub.lastSupersedeDefaultLanguage);
+    }
+
+    @Test
+    void unsupersedePassesTheProjectsDefaultLanguageThrough() {
+        adapter.unsupersede(null, "ADR-1", ANCHOR);
+
+        assertEquals("en", stub.lastUnsupersedeDefaultLanguage);
+    }
+
     @Test
     void deletePassesTheParsedCodeThroughAndConfirmsIt() {
         String rendered = adapter.delete(null, "ADR-1", ANCHOR);
@@ -813,6 +858,11 @@ class AdrMcpToolsTest {
         private AdrCode lastSupersedingCode;
         private AdrCode lastSupersededCode;
         private AdrCode lastUnsupersededCode;
+        private String lastAcceptDefaultLanguage;
+        private String lastRejectDefaultLanguage;
+        private String lastDeprecateDefaultLanguage;
+        private String lastSupersedeDefaultLanguage;
+        private String lastUnsupersedeDefaultLanguage;
         private AdrCode lastDeletedCode;
         private RuntimeException deleteFailure;
         private AdrDetail nextDetail;
@@ -879,36 +929,42 @@ class AdrMcpToolsTest {
         }
 
         @Override
-        public AdrDetail accept(ProjectId projectId, AdrCode code, LocalDate decidedOn) {
+        public AdrDetail accept(ProjectId projectId, AdrCode code, LocalDate decidedOn, String defaultLanguage) {
             lastAcceptedCode = code;
             lastDecidedOn = decidedOn;
+            lastAcceptDefaultLanguage = defaultLanguage;
             return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
         }
 
         @Override
-        public AdrDetail reject(ProjectId projectId, AdrCode code, LocalDate decidedOn) {
+        public AdrDetail reject(ProjectId projectId, AdrCode code, LocalDate decidedOn, String defaultLanguage) {
             lastRejectedCode = code;
             lastDecidedOn = decidedOn;
+            lastRejectDefaultLanguage = defaultLanguage;
             return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
         }
 
         @Override
-        public AdrDetail deprecate(ProjectId projectId, AdrCode code) {
+        public AdrDetail deprecate(ProjectId projectId, AdrCode code, String defaultLanguage) {
             lastDeprecatedCode = code;
+            lastDeprecateDefaultLanguage = defaultLanguage;
             return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
         }
 
         @Override
-        public AdrDetail supersede(ProjectId projectId, AdrCode code, AdrCode supersededCode) {
+        public AdrDetail supersede(
+                ProjectId projectId, AdrCode code, AdrCode supersededCode, String defaultLanguage) {
             lastSupersedingCode = code;
             lastSupersededCode = supersededCode;
+            lastSupersedeDefaultLanguage = defaultLanguage;
             return detail(adrWith(List.of(), List.of(), null), List.of(supersededCode), List.of());
         }
 
         @Override
-        public AdrDetail unsupersede(ProjectId projectId, AdrCode code) {
+        public AdrDetail unsupersede(ProjectId projectId, AdrCode code, String defaultLanguage) {
             lastUnsupersededCode = code;
             lastProjectId = projectId;
+            lastUnsupersedeDefaultLanguage = defaultLanguage;
             return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
         }
 

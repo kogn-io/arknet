@@ -187,7 +187,7 @@ class CrossBoundedContextStoreWiringTest {
                             List.of("An order is placed and confirmed"), null), "en");
                     Term order = terms.add(PROJECT, new NewTerm("Order", "A customer's request to buy.", null, null), "en");
 
-                    requirements.linkTerm(PROJECT, fr.code(), order.code().value());
+                    requirements.linkTerm(PROJECT, fr.code(), order.code().value(), "en");
 
                     assertThat(requirements.get(PROJECT, fr.code(), null).orElseThrow().usesTerms())
                             .containsExactly(new TermRef(order.id().value()));
@@ -212,7 +212,7 @@ class CrossBoundedContextStoreWiringTest {
                             RequirementType.FUNCTIONAL, null, null, null,
                             List.of("An order is placed and confirmed"), null), "en");
 
-                    assertThatThrownBy(() -> requirements.linkTerm(PROJECT, fr.code(), "TERM-99"))
+                    assertThatThrownBy(() -> requirements.linkTerm(PROJECT, fr.code(), "TERM-99", "en"))
                             .isInstanceOf(UnresolvedReferenceException.class)
                             .hasMessageContaining("TERM-99")
                             .hasMessageContaining("term_add");

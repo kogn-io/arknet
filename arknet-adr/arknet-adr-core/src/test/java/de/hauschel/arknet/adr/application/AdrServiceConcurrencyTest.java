@@ -63,6 +63,12 @@ class AdrServiceConcurrencyTest {
     /** These tests race writes, not dates - the clock only has to be a clock. */
     private static final Clock CLOCK = Clock.systemUTC();
     private static final ResourceId BC_1 = ResourceId.of("https://w3id.org/arknet/id/bc-1");
+    /**
+     * A project default language for the lifecycle calls under test (issue #468) - passed as their
+     * read-side {@code defaultLanguage}; these tests do not themselves exercise which language
+     * variant gets selected, only the races, so any non-{@code null} value works.
+     */
+    private static final String DEFAULT_LANGUAGE = "en";
 
     private InMemoryAdrRepository store;
     /**
@@ -119,17 +125,17 @@ class AdrServiceConcurrencyTest {
     @Test
     void aSecondConcurrentSupersedeOnTheSameDecisionFailsCleanlyAfterTheFirstWins() {
         AdrCode older = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, older, null);
+        otherCaller.accept(PROJECT, older, null, DEFAULT_LANGUAGE);
         AdrCode winner = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, winner, null);
+        otherCaller.accept(PROJECT, winner, null, DEFAULT_LANGUAGE);
         AdrCode loserSuccessor = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, loserSuccessor, null);
+        otherCaller.accept(PROJECT, loserSuccessor, null, DEFAULT_LANGUAGE);
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
-                () -> otherCaller.supersede(PROJECT, winner, older));
+                () -> otherCaller.supersede(PROJECT, winner, older, DEFAULT_LANGUAGE));
         AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts, terms, CLOCK);
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
-                () -> underTest.supersede(PROJECT, loserSuccessor, older));
+                () -> underTest.supersede(PROJECT, loserSuccessor, older, DEFAULT_LANGUAGE));
 
         assertTrue(thrown.getMessage().contains("ACCEPTED"), thrown.getMessage());
         assertTrue(thrown.getMessage().contains(older.value()), thrown.getMessage());
@@ -150,7 +156,7 @@ class AdrServiceConcurrencyTest {
                 new AdrService(new AlwaysConflictingRepository(store), resourceIdFactory, requirements, contexts,
                         terms, CLOCK);
 
-        assertThrows(AdrConcurrentlyModifiedException.class, () -> underTest.accept(PROJECT, code, null));
+        assertThrows(AdrConcurrentlyModifiedException.class, () -> underTest.accept(PROJECT, code, null, DEFAULT_LANGUAGE));
     }
 
     /**
@@ -160,12 +166,12 @@ class AdrServiceConcurrencyTest {
     @Test
     void acceptingAnAlreadyAcceptedAdrWritesNothingEvenUnderPermanentContention() {
         AdrCode code = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, code, null);
+        otherCaller.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
         AdrService underTest =
                 new AdrService(new AlwaysConflictingRepository(store), resourceIdFactory, requirements, contexts,
                         terms, CLOCK);
 
-        assertEquals(AdrStatus.ACCEPTED, underTest.accept(PROJECT, code, null).adr().status());
+        assertEquals(AdrStatus.ACCEPTED, underTest.accept(PROJECT, code, null, DEFAULT_LANGUAGE).adr().status());
     }
 
     /**
@@ -180,7 +186,7 @@ class AdrServiceConcurrencyTest {
     void concurrentUpdateRetriesAgainstTheOtherWritersCommitInsteadOfOverwritingIt() {
         AdrCode code = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
         RaceOnFirstReadRepository racing =
-                new RaceOnFirstReadRepository(store, () -> otherCaller.accept(PROJECT, code, null));
+                new RaceOnFirstReadRepository(store, () -> otherCaller.accept(PROJECT, code, null, DEFAULT_LANGUAGE));
         AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts, terms, CLOCK);
 
         // A reference-only correction, because the text of an accepted decision is immutable - and
@@ -205,15 +211,15 @@ class AdrServiceConcurrencyTest {
     @Test
     void supersedeRefusesWhenTheSupersedingDecisionIsDeprecatedInTheWindowBeforeItsOwnWrite() {
         AdrCode superseding = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, superseding, null);
+        otherCaller.accept(PROJECT, superseding, null, DEFAULT_LANGUAGE);
         AdrCode superseded = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, superseded, null);
+        otherCaller.accept(PROJECT, superseded, null, DEFAULT_LANGUAGE);
         RaceOnFirstFindByCodeRepository racing = new RaceOnFirstFindByCodeRepository(store,
-                () -> otherCaller.deprecate(PROJECT, superseding));
+                () -> otherCaller.deprecate(PROJECT, superseding, DEFAULT_LANGUAGE));
         AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts, terms, CLOCK);
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
-                () -> underTest.supersede(PROJECT, superseding, superseded));
+                () -> underTest.supersede(PROJECT, superseding, superseded, DEFAULT_LANGUAGE));
 
         assertTrue(thrown.getMessage().contains("DEPRECATED"), thrown.getMessage());
         assertTrue(thrown.getMessage().contains(superseding.value()), thrown.getMessage());

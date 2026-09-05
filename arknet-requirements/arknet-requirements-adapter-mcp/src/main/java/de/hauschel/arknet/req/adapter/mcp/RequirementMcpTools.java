@@ -322,7 +322,8 @@ public final class RequirementMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor).id();
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
         final RequirementCode code = new RequirementCode(id);
         // Two narrow transition ports (AcceptRequirement/ProposeRequirement, issue #291; FR-5 in
         // arknet's own store) back this tool, neither taking a target status of its own - the
@@ -337,9 +338,14 @@ public final class RequirementMcpTools {
         } catch (IllegalArgumentException e) {
             requirementStatus = null;
         }
+        // project.defaultLanguage() is passed through even though neither transition touches a
+        // language-tagged field itself - the read-modify-write round trip behind each still needs
+        // it to echo an untouched title/description/rationale back under the project's own
+        // language instead of the process default (issue #468, extending #456's fix for
+        // req_update to the lifecycle tools).
         final Requirement updated = switch (requirementStatus) {
-            case ACCEPTED -> acceptRequirement.accept(projectId, code);
-            case PROPOSED -> proposeRequirement.propose(projectId, code);
+            case ACCEPTED -> acceptRequirement.accept(projectId, code, project.defaultLanguage());
+            case PROPOSED -> proposeRequirement.propose(projectId, code, project.defaultLanguage());
             case null, default -> throw new IllegalArgumentException(
                     "req_set_status only supports transitioning a requirement to PROPOSED or ACCEPTED, not "
                             + status);
@@ -364,9 +370,13 @@ public final class RequirementMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor).id();
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
+        // Touches no language-tagged field itself, but the read-modify-write round trip behind it
+        // still needs the project's own default language to echo an untouched field back under it
+        // rather than the process default (issue #468).
         final Requirement updated =
-                linkTerm.linkTerm(projectId, new RequirementCode(reqId), termId);
+                linkTerm.linkTerm(projectId, new RequirementCode(reqId), termId, project.defaultLanguage());
         return presenter.format(projectId, updated);
     }
 
@@ -387,9 +397,13 @@ public final class RequirementMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor).id();
-        final Requirement updated =
-                linkConstraint.linkConstraint(projectId, new RequirementCode(reqId), constraintId);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
+        // Touches no language-tagged field itself, but the read-modify-write round trip behind it
+        // still needs the project's own default language to echo an untouched field back under it
+        // rather than the process default (issue #468).
+        final Requirement updated = linkConstraint.linkConstraint(
+                projectId, new RequirementCode(reqId), constraintId, project.defaultLanguage());
         return presenter.format(projectId, updated);
     }
 

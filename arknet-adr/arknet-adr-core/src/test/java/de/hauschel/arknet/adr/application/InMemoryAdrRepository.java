@@ -241,11 +241,21 @@ class InMemoryAdrRepository implements AdrRepository {
                 .findFirst();
     }
 
+    /**
+     * The {@code defaultLanguage} argument the most recent {@link #findCurrentByCode} call actually
+     * received - a test-only backdoor for issue #468, mirroring
+     * {@code InMemoryRequirementRepository}'s identically-purposed field: this fake cannot select a
+     * different literal per language, so a service-level test asserts on the argument itself
+     * instead.
+     */
+    String lastFindCurrentByCodeDefaultLanguage;
+
     @Override
     public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code, String defaultLanguage) {
+        lastFindCurrentByCodeDefaultLanguage = defaultLanguage;
         // This fake holds one value per field, not one per language tag, so it has no language
         // variant to select between - defaultLanguage is accepted to honour the port contract and
-        // deliberately ignored (the real adapter's selection is pinned in
+        // deliberately ignored for selection purposes (the real adapter's selection is pinned in
         // KognioRdfAdrRepositoryMultilingualTest instead).
         return findByCode(projectId, code, null)
                 .map(adr -> new CurrentAdr(adr, headByIdentity.get(adr.id()),

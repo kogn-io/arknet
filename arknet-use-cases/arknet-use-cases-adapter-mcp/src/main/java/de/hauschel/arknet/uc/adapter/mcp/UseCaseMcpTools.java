@@ -479,8 +479,13 @@ public final class UseCaseMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor).id();
-        final UseCase updated = linkTerm.linkTerm(projectId, new UseCaseCode(id), termId);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
+        // Touches no language-tagged field itself, but the read-modify-write round trip behind it
+        // still needs the project's own default language to echo an untouched field back under it
+        // rather than the process default (issue #468).
+        final UseCase updated =
+                linkTerm.linkTerm(projectId, new UseCaseCode(id), termId, project.defaultLanguage());
         return presenter.formatFull(projectId, updated);
     }
 
@@ -500,8 +505,13 @@ public final class UseCaseMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor).id();
-        final UseCase updated = linkConstraint.linkConstraint(projectId, new UseCaseCode(id), constraintId);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
+        // Touches no language-tagged field itself, but the read-modify-write round trip behind it
+        // still needs the project's own default language to echo an untouched field back under it
+        // rather than the process default (issue #468).
+        final UseCase updated = linkConstraint.linkConstraint(
+                projectId, new UseCaseCode(id), constraintId, project.defaultLanguage());
         return presenter.formatFull(projectId, updated);
     }
 

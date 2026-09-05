@@ -304,6 +304,38 @@ class UseCaseMcpToolsTest {
     }
 
     /**
+     * Issue #468: {@code uc_link_term}/{@code uc_link_constraint} share {@code uc_update}'s
+     * read-modify-write round trip, but - unlike {@code uc_update} since issue #456 - used to
+     * always pass a {@code null} {@code defaultLanguage} to their in-ports regardless of the
+     * resolved project's own configured default. A project with {@code defaultLanguage: de} could
+     * therefore get the English title back from {@code uc_link_term}/{@code uc_link_constraint} and
+     * the German one from a directly following {@code uc_get}. This pins that the adapter now
+     * passes {@link ResolvedProject#defaultLanguage()} through at both call sites, exactly as it
+     * already does for {@code uc_update}.
+     */
+    @Test
+    void ucLinkTermPassesTheProjectsDefaultLanguageThrough() {
+        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub,
+                resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
+                anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithGermanDefault.linkTerm(null, "UC1", "TERM-1", null);
+
+        assertEquals("de", stub.lastLinkTermDefaultLanguage);
+    }
+
+    @Test
+    void ucLinkConstraintPassesTheProjectsDefaultLanguageThrough() {
+        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub,
+                resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
+                anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithGermanDefault.linkConstraint(null, "UC1", "TCON-1", null);
+
+        assertEquals("de", stub.lastLinkConstraintDefaultLanguage);
+    }
+
+    /**
      * Hard invariant (mirrors {@code RequirementMcpToolsTest}): an id neither
      * {@link ResolveActors} nor {@link ResolveRequirements} can resolve must never make
      * rendering throw - it falls back to the bare IRI.
@@ -522,8 +554,10 @@ class UseCaseMcpToolsTest {
         private UseCaseCode lastUpdatedUseCase;
         private UseCaseCode lastLinkTermUseCase;
         private String lastLinkedTermCode;
+        private String lastLinkTermDefaultLanguage;
         private UseCaseCode lastLinkConstraintUseCase;
         private String lastLinkedConstraintCode;
+        private String lastLinkConstraintDefaultLanguage;
         private String lastUpdateTitle;
         private String lastUpdateGoal;
         private String lastUpdateScope;
@@ -606,9 +640,10 @@ class UseCaseMcpToolsTest {
         }
 
         @Override
-        public UseCase linkTerm(ProjectId projectId, UseCaseCode code, String termCode) {
+        public UseCase linkTerm(ProjectId projectId, UseCaseCode code, String termCode, String defaultLanguage) {
             lastLinkTermUseCase = code;
             lastLinkedTermCode = termCode;
+            lastLinkTermDefaultLanguage = defaultLanguage;
             ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
             TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-" + termCode));
             return new UseCase(opaqueId("uc-1"), code, "t", "goal", null, null, primaryActor, List.of(), null, null,
@@ -616,9 +651,11 @@ class UseCaseMcpToolsTest {
         }
 
         @Override
-        public UseCase linkConstraint(ProjectId projectId, UseCaseCode code, String constraintCode) {
+        public UseCase linkConstraint(
+                ProjectId projectId, UseCaseCode code, String constraintCode, String defaultLanguage) {
             lastLinkConstraintUseCase = code;
             lastLinkedConstraintCode = constraintCode;
+            lastLinkConstraintDefaultLanguage = defaultLanguage;
             ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
             ConstraintRef constraint =
                     new ConstraintRef(ResourceId.of("https://w3id.org/arknet/id/constraint-" + constraintCode));

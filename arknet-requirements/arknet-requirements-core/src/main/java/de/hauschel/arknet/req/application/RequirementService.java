@@ -124,9 +124,11 @@ import de.hauschel.arknet.req.domain.TermRef;
  * {@link RequirementRepository.CurrentRequirement#rationaleLanguage()} already carried - a
  * scoped no-op at the store, not a retag. This is what keeps {@link #accept}/{@link #linkTerm}
  * (which never touch either field and always call the helper with a {@code null} language and a
- * {@code null} defaultLanguage) from collapsing a multilingual title/description down to one
- * variant just because they do not know or care about language - the out-adapter preserves every
- * other language variant regardless, but only if it is told the correct tag to leave alone.</p>
+ * {@code null} WRITE-side defaultLanguage - issue #468 still passes their caller's project
+ * defaultLanguage as the READ-side language, see {@link #updateWithOptimisticRetry}) from
+ * collapsing a multilingual title/description down to one variant just because they do not know
+ * or care about language - the out-adapter preserves every other language variant regardless, but
+ * only if it is told the correct tag to leave alone.</p>
  *
  * <p><strong>Rationale is optional, which the language machinery handles without a special case
  * (issue #321).</strong> A requirement carrying no {@code arkreq:rationale} at all reads back as
@@ -246,29 +248,31 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
-    public Requirement accept(ProjectId projectId, RequirementCode code) {
+    public Requirement accept(ProjectId projectId, RequirementCode code, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        // accept() never touches title/description/rationale, so no call-scoped language applies -
-        // the ternaries in updateWithOptimisticRetry always fall back to the language each field
-        // was already read under, and never reach LanguageTag#resolveWriteLanguage - passing a null
-        // defaultLanguage here is therefore safe even though this project may well have one
-        // configured.
-        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, Set.of(),
-                Requirement::accept);
+        // accept() never touches title/description/rationale, so no call-scoped write language
+        // applies - the ternaries in updateWithOptimisticRetry always fall back to the language
+        // each field was already read under, and never reach LanguageTag#resolveWriteLanguage -
+        // passing a null write-side defaultLanguage here is therefore safe even though this
+        // project may well have one configured (issue #468: the project's defaultLanguage is
+        // still passed as the READ-side language below, so an untouched field is echoed back
+        // under the project's own language rather than the process default).
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false,
+                Set.of(), Requirement::accept);
     }
 
     @Override
-    public Requirement propose(ProjectId projectId, RequirementCode code) {
+    public Requirement propose(ProjectId projectId, RequirementCode code, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        // propose() never touches any text field either - same null/null reasoning as accept().
-        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, Set.of(),
-                Requirement::propose);
+        // propose() never touches any text field either - same reasoning as accept().
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false,
+                Set.of(), Requirement::propose);
     }
 
     @Override
-    public Requirement linkTerm(ProjectId projectId, RequirementCode code, String termCode) {
+    public Requirement linkTerm(ProjectId projectId, RequirementCode code, String termCode, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(termCode, "termCode");
@@ -276,8 +280,9 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         // outside the retry loop below - a lookup failure must propagate immediately and leave
         // the requirement untouched, exactly as before.
         TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
-        // linkTerm() never touches any text field either - same null/null reasoning as accept().
-        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, Set.of(), current -> {
+        // linkTerm() never touches any text field either - same reasoning as accept().
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false,
+                Set.of(), current -> {
             if (current.usesTerms().contains(term)) {
                 return current;
             }
@@ -291,7 +296,8 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
-    public Requirement linkConstraint(ProjectId projectId, RequirementCode code, String constraintCode) {
+    public Requirement linkConstraint(
+            ProjectId projectId, RequirementCode code, String constraintCode, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(constraintCode, "constraintCode");
@@ -306,9 +312,9 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         Constraint constraint = constraintRepository.findByCode(projectId, parsedCode, null)
                 .orElseThrow(() -> new ConstraintNotFoundException(projectId, parsedCode));
         ConstraintRef ref = new ConstraintRef(constraint.id().value());
-        // linkConstraint() never touches any text field either - same null/null reasoning as
-        // accept().
-        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, Set.of(), current -> {
+        // linkConstraint() never touches any text field either - same reasoning as accept().
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false,
+                Set.of(), current -> {
             if (current.constrainedBy().contains(ref)) {
                 return current;
             }
@@ -338,8 +344,9 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
                 : acceptanceCriteriaTextPatches.stream()
                         .map(AcceptanceCriterionTextPatch::position)
                         .collect(Collectors.toUnmodifiableSet());
-        return updateWithOptimisticRetry(projectId, code, language, defaultLanguage, title != null,
-                description != null, rationale != null, touchedAcceptanceCriteriaPositions, current -> {
+        return updateWithOptimisticRetry(projectId, code, language, defaultLanguage, defaultLanguage,
+                title != null, description != null, rationale != null, touchedAcceptanceCriteriaPositions,
+                current -> {
             Requirement base = new Requirement(current.id(), current.code(),
                     title != null ? title : current.title(),
                     description != null ? description : current.description(),
@@ -405,18 +412,23 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      *                                                   {@code defaultLanguage} is given
      */
     private Requirement updateWithOptimisticRetry(ProjectId projectId, RequirementCode code, String language,
-            String defaultLanguage, boolean titleTouched, boolean descriptionTouched, boolean rationaleTouched,
-            Set<Integer> touchedAcceptanceCriteriaPositions, UnaryOperator<Requirement> mutation) {
+            String defaultLanguage, String readDefaultLanguage, boolean titleTouched, boolean descriptionTouched,
+            boolean rationaleTouched, Set<Integer> touchedAcceptanceCriteriaPositions,
+            UnaryOperator<Requirement> mutation) {
         RequirementConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             // The project's own default language, not the reading process's, decides which
-            // language variant this read-modify-write round trip sees (issue #456): its values are
-            // what an untouched field is echoed back as and compared against, its tags what such a
-            // field is written back under. A lifecycle call (accept/propose/linkTerm/
-            // linkConstraint) passes null here for the same reason it passes null below - it never
-            // resolves a fresh write language - and so keeps reading under the process default.
+            // language variant this read-modify-write round trip sees (issue #456, extended to
+            // every lifecycle/link call by issue #468): its values are what an untouched field is
+            // echoed back as and compared against, its tags what such a field is written back
+            // under. `readDefaultLanguage` is what the caller's resolved project actually
+            // configured, whether or not this call touches a language-tagged field itself - a
+            // lifecycle call (accept/propose/linkTerm/linkConstraint) still passes it here even
+            // though it always passes a null WRITE-side `defaultLanguage` below (it never resolves
+            // a fresh write language and must not sweep an untagged sibling literal on a call that
+            // changes no text, issue #258's sweep stays scoped to update()).
             RequirementRepository.CurrentRequirement current =
-                    repository.findCurrentByCode(projectId, code, defaultLanguage)
+                    repository.findCurrentByCode(projectId, code, readDefaultLanguage)
                             .orElseThrow(() -> new RequirementNotFoundException(projectId, code));
             Requirement updated = mutation.apply(current.value());
             // A byte-for-byte-unchanged requirement might still not be a no-op (a touched field

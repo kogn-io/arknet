@@ -817,7 +817,7 @@ class UseCaseServiceTest {
     void linkTermAddsTheTermToTheUseCase() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
 
-        UseCase linked = service.linkTerm(WS, code, "TERM-1");
+        UseCase linked = service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new TermRef(TERM_1_ID)), linked.usesTerms());
         assertEquals(List.of(new TermRef(TERM_1_ID)), service.get(WS, code, null).orElseThrow().usesTerms());
@@ -826,9 +826,9 @@ class UseCaseServiceTest {
     @Test
     void linkTermAppendsToAlreadyLinkedTerms() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
-        service.linkTerm(WS, code, "TERM-1");
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
-        UseCase linked = service.linkTerm(WS, code, "TERM-2");
+        UseCase linked = service.linkTerm(WS, code, "TERM-2", DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new TermRef(TERM_1_ID), new TermRef(TERM_2_ID)), linked.usesTerms());
     }
@@ -836,9 +836,9 @@ class UseCaseServiceTest {
     @Test
     void linkingTheSameTermTwiceIsANoOp() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
-        service.linkTerm(WS, code, "TERM-1");
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
-        UseCase linked = service.linkTerm(WS, code, "TERM-1");
+        UseCase linked = service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new TermRef(TERM_1_ID)), linked.usesTerms());
     }
@@ -846,10 +846,28 @@ class UseCaseServiceTest {
     @Test
     void linkTermThrowsWhenUseCaseUnknown() {
         UseCaseNotFoundException ex = assertThrows(UseCaseNotFoundException.class,
-                () -> service.linkTerm(WS, new UseCaseCode("UC99"), "TERM-1"));
+                () -> service.linkTerm(WS, new UseCaseCode("UC99"), "TERM-1", DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(new UseCaseCode("UC99"), ex.useCaseCode());
+    }
+
+    /**
+     * Issue #468: {@link UseCaseService#linkTerm}/{@link UseCaseService#linkConstraint} share
+     * {@link UseCaseService#update}'s read-modify-write round trip, but - unlike {@code update}
+     * since issue #456 - used to always pass a hardcoded {@code null} {@code defaultLanguage} to
+     * {@link UseCaseRepository#findCurrentByCode} regardless of what their own
+     * {@code defaultLanguage} argument carried. This in-memory fake cannot select a different
+     * literal per language (see its own javadoc), so this test instead pins the argument itself:
+     * the project's default language must reach {@code findCurrentByCode}, not {@code null}.
+     */
+    @Test
+    void linkTermPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        service.linkTerm(WS, code, "TERM-1", "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
     }
 
     /**
@@ -860,7 +878,7 @@ class UseCaseServiceTest {
     void linkTermPropagatesTheLookupFailureForAnUnknownTermCodeAndLinksNothing() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
 
-        assertThrows(NoSuchElementException.class, () -> service.linkTerm(WS, code, "TERM-99"));
+        assertThrows(NoSuchElementException.class, () -> service.linkTerm(WS, code, "TERM-99", DEFAULT_LANGUAGE));
 
         assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
     }
@@ -869,7 +887,7 @@ class UseCaseServiceTest {
     void linkConstraintAddsTheConstraintToTheUseCase() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
 
-        UseCase linked = service.linkConstraint(WS, code, "TCON-1");
+        UseCase linked = service.linkConstraint(WS, code, "TCON-1", DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new ConstraintRef(TCON_1_ID)), linked.constrainedBy());
         assertEquals(List.of(new ConstraintRef(TCON_1_ID)), service.get(WS, code, null).orElseThrow().constrainedBy());
@@ -878,9 +896,9 @@ class UseCaseServiceTest {
     @Test
     void linkingTheSameConstraintTwiceIsANoOp() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
-        service.linkConstraint(WS, code, "TCON-1");
+        service.linkConstraint(WS, code, "TCON-1", DEFAULT_LANGUAGE);
 
-        UseCase linked = service.linkConstraint(WS, code, "TCON-1");
+        UseCase linked = service.linkConstraint(WS, code, "TCON-1", DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new ConstraintRef(TCON_1_ID)), linked.constrainedBy());
     }
@@ -888,10 +906,20 @@ class UseCaseServiceTest {
     @Test
     void linkConstraintThrowsWhenUseCaseUnknown() {
         UseCaseNotFoundException ex = assertThrows(UseCaseNotFoundException.class,
-                () -> service.linkConstraint(WS, new UseCaseCode("UC99"), "TCON-1"));
+                () -> service.linkConstraint(WS, new UseCaseCode("UC99"), "TCON-1", DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(new UseCaseCode("UC99"), ex.useCaseCode());
+    }
+
+    /** {@link #linkTermPassesTheProjectsDefaultLanguageToFindCurrentByCode}'s counterpart. */
+    @Test
+    void linkConstraintPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        service.linkConstraint(WS, code, "TCON-1", "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
     }
 
     /**
@@ -903,7 +931,7 @@ class UseCaseServiceTest {
     void linkConstraintPropagatesTheLookupFailureForAnUnknownConstraintCodeAndLinksNothing() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
 
-        assertThrows(NoSuchElementException.class, () -> service.linkConstraint(WS, code, "TCON-99"));
+        assertThrows(NoSuchElementException.class, () -> service.linkConstraint(WS, code, "TCON-99", DEFAULT_LANGUAGE));
 
         assertEquals(List.of(), service.get(WS, code, null).orElseThrow().constrainedBy());
     }

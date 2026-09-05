@@ -87,11 +87,11 @@ class RequirementServiceConcurrencyTest {
     void concurrentLinkTermCallsForDifferentTermsBothSurvive() {
         RequirementCode code = otherCaller.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
-                () -> otherCaller.linkTerm(WS, code, "TERM-2"));
+                () -> otherCaller.linkTerm(WS, code, "TERM-2", DEFAULT_LANGUAGE));
         RequirementService underTest =
                 new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
-        Requirement result = underTest.linkTerm(WS, code, "TERM-1");
+        Requirement result = underTest.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
 
         assertEquals(2, result.usesTerms().size());
         assertTrue(result.usesTerms().containsAll(List.of(new TermRef(TERM_1), new TermRef(TERM_2))));
@@ -107,11 +107,11 @@ class RequirementServiceConcurrencyTest {
     void acceptSurvivesAConcurrentLinkTermBetweenReadAndWrite() {
         RequirementCode code = otherCaller.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
-                () -> otherCaller.linkTerm(WS, code, "TERM-1"));
+                () -> otherCaller.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE));
         RequirementService underTest =
                 new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
-        Requirement result = underTest.accept(WS, code);
+        Requirement result = underTest.accept(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(RequirementStatus.ACCEPTED, result.status());
         assertEquals(List.of(new TermRef(TERM_1)), result.usesTerms());
@@ -129,7 +129,7 @@ class RequirementServiceConcurrencyTest {
     void updateSurvivesAConcurrentLinkTermBetweenReadAndWrite() {
         RequirementCode code = otherCaller.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
-                () -> otherCaller.linkTerm(WS, code, "TERM-1"));
+                () -> otherCaller.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE));
         RequirementService underTest =
                 new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
@@ -158,7 +158,7 @@ class RequirementServiceConcurrencyTest {
                 new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
         assertThrows(RequirementConcurrentlyModifiedException.class,
-                () -> underTest.linkTerm(WS, code, "TERM-1"));
+                () -> underTest.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE));
 
         assertEquals(RequirementService.MAX_RETRY_ATTEMPTS, racing.compareAndUpdateAttempts());
     }

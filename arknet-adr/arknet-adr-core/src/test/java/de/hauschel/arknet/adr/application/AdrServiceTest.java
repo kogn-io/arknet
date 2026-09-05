@@ -311,7 +311,7 @@ class AdrServiceTest {
         AdrCode code = add(new NewAdr("Title", "Some context here", "Some decision here",
                 null, null, DEFAULT_LANGUAGE, null, null, null, null)).adr().code();
 
-        assertEquals(TODAY, service.accept(PROJECT, code, null).adr().decisionDate());
+        assertEquals(TODAY, service.accept(PROJECT, code, null, DEFAULT_LANGUAGE).adr().decisionDate());
     }
 
     /**
@@ -324,7 +324,7 @@ class AdrServiceTest {
                 null, null, DEFAULT_LANGUAGE, null, null, null, null)).adr().code();
 
         assertEquals(LocalDate.of(2024, 3, 11),
-                service.accept(PROJECT, code, LocalDate.of(2024, 3, 11)).adr().decisionDate());
+                service.accept(PROJECT, code, LocalDate.of(2024, 3, 11), DEFAULT_LANGUAGE).adr().decisionDate());
     }
 
     @Test
@@ -332,7 +332,7 @@ class AdrServiceTest {
         AdrCode code = add(new NewAdr("Title", "Some context here", "Some decision here",
                 null, null, DEFAULT_LANGUAGE, null, null, null, null)).adr().code();
 
-        assertEquals(TODAY, service.reject(PROJECT, code, null).adr().decisionDate());
+        assertEquals(TODAY, service.reject(PROJECT, code, null, DEFAULT_LANGUAGE).adr().decisionDate());
     }
 
     /**
@@ -345,7 +345,7 @@ class AdrServiceTest {
     void updateLeavesTheStampedDecisionDateAlone() {
         AdrCode code = add(new NewAdr("Title", "Some context here", "Some decision here",
                 null, null, DEFAULT_LANGUAGE, null, null, null, null)).adr().code();
-        service.accept(PROJECT, code, LocalDate.of(2024, 3, 11));
+        service.accept(PROJECT, code, LocalDate.of(2024, 3, 11), DEFAULT_LANGUAGE);
 
         Adr corrected = update(code,
                 AdrCorrection.builder().addressesRequirementCodes(List.of("FR-1")).build()).adr();
@@ -357,7 +357,7 @@ class AdrServiceTest {
     void acceptTransitionsFromProposedToAccepted() {
         AdrCode code = add(newAdr()).adr().code();
 
-        AdrDetail accepted = service.accept(PROJECT, code, null);
+        AdrDetail accepted = service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         assertEquals(AdrStatus.ACCEPTED, accepted.adr().status());
         assertEquals(AdrStatus.ACCEPTED, get(PROJECT, code).orElseThrow().adr().status());
@@ -366,9 +366,9 @@ class AdrServiceTest {
     @Test
     void acceptingAnAlreadyAcceptedAdrIsANoOp() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
-        AdrDetail again = service.accept(PROJECT, code, null);
+        AdrDetail again = service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         assertEquals(AdrStatus.ACCEPTED, again.adr().status());
     }
@@ -376,7 +376,7 @@ class AdrServiceTest {
     @Test
     void acceptThrowsWhenAdrUnknown() {
         AdrNotFoundException ex = assertThrows(AdrNotFoundException.class,
-                () -> service.accept(PROJECT, new AdrCode("ADR-42"), null));
+                () -> service.accept(PROJECT, new AdrCode("ADR-42"), null, DEFAULT_LANGUAGE));
 
         assertSame(PROJECT, ex.projectId());
         assertEquals(new AdrCode("ADR-42"), ex.adrCode());
@@ -386,7 +386,7 @@ class AdrServiceTest {
     void rejectTransitionsFromProposedToRejected() {
         AdrCode code = add(newAdr()).adr().code();
 
-        AdrDetail rejected = service.reject(PROJECT, code, null);
+        AdrDetail rejected = service.reject(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         assertEquals(AdrStatus.REJECTED, rejected.adr().status());
         assertEquals(AdrStatus.REJECTED, get(PROJECT, code).orElseThrow().adr().status());
@@ -395,9 +395,9 @@ class AdrServiceTest {
     @Test
     void rejectingAnAlreadyRejectedAdrIsANoOp() {
         AdrCode code = add(newAdr()).adr().code();
-        service.reject(PROJECT, code, null);
+        service.reject(PROJECT, code, null, DEFAULT_LANGUAGE);
 
-        AdrDetail again = service.reject(PROJECT, code, null);
+        AdrDetail again = service.reject(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         assertEquals(AdrStatus.REJECTED, again.adr().status());
     }
@@ -405,7 +405,7 @@ class AdrServiceTest {
     @Test
     void rejectThrowsWhenAdrUnknown() {
         AdrNotFoundException ex = assertThrows(AdrNotFoundException.class,
-                () -> service.reject(PROJECT, new AdrCode("ADR-42"), null));
+                () -> service.reject(PROJECT, new AdrCode("ADR-42"), null, DEFAULT_LANGUAGE));
 
         assertSame(PROJECT, ex.projectId());
         assertEquals(new AdrCode("ADR-42"), ex.adrCode());
@@ -414,9 +414,9 @@ class AdrServiceTest {
     @Test
     void deprecateTransitionsFromAcceptedToDeprecated() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
-        AdrDetail deprecated = service.deprecate(PROJECT, code);
+        AdrDetail deprecated = service.deprecate(PROJECT, code, DEFAULT_LANGUAGE);
 
         assertEquals(AdrStatus.DEPRECATED, deprecated.adr().status());
         assertEquals(AdrStatus.DEPRECATED, get(PROJECT, code).orElseThrow().adr().status());
@@ -425,10 +425,10 @@ class AdrServiceTest {
     @Test
     void deprecatingAnAlreadyDeprecatedAdrIsANoOp() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
-        service.deprecate(PROJECT, code);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
+        service.deprecate(PROJECT, code, DEFAULT_LANGUAGE);
 
-        AdrDetail again = service.deprecate(PROJECT, code);
+        AdrDetail again = service.deprecate(PROJECT, code, DEFAULT_LANGUAGE);
 
         assertEquals(AdrStatus.DEPRECATED, again.adr().status());
     }
@@ -436,10 +436,48 @@ class AdrServiceTest {
     @Test
     void deprecateThrowsWhenAdrUnknown() {
         AdrNotFoundException ex = assertThrows(AdrNotFoundException.class,
-                () -> service.deprecate(PROJECT, new AdrCode("ADR-42")));
+                () -> service.deprecate(PROJECT, new AdrCode("ADR-42"), DEFAULT_LANGUAGE));
 
         assertSame(PROJECT, ex.projectId());
         assertEquals(new AdrCode("ADR-42"), ex.adrCode());
+    }
+
+    /**
+     * Issue #468: {@link AdrService#accept}/{@link AdrService#reject}/{@link AdrService#deprecate}/
+     * {@link AdrService#supersede}/{@link AdrService#unsupersede} share
+     * {@link AdrService#update}'s read-modify-write round trip, but - unlike {@code update} since
+     * issue #456 - used to always pass a hardcoded {@code null} {@code defaultLanguage} to
+     * {@link AdrRepository#findCurrentByCode} regardless of what their own {@code defaultLanguage}
+     * argument carried. This in-memory fake cannot select a different literal per language (see its
+     * own javadoc), so these tests instead pin the argument itself: the project's default language
+     * must reach {@code findCurrentByCode}, not {@code null}.
+     */
+    @Test
+    void acceptPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        AdrCode code = add(newAdr()).adr().code();
+
+        service.accept(PROJECT, code, null, "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
+    }
+
+    @Test
+    void rejectPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        AdrCode code = add(newAdr()).adr().code();
+
+        service.reject(PROJECT, code, null, "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
+    }
+
+    @Test
+    void deprecatePassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        AdrCode code = add(newAdr()).adr().code();
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
+
+        service.deprecate(PROJECT, code, "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
     }
 
     /**
@@ -452,7 +490,7 @@ class AdrServiceTest {
         AdrCode older = acceptedAdr();
         AdrCode newer = acceptedAdr();
 
-        AdrDetail superseded = service.supersede(PROJECT, newer, older);
+        AdrDetail superseded = service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
 
         assertEquals(older, superseded.adr().code());
         assertEquals(AdrStatus.SUPERSEDED, superseded.adr().status());
@@ -474,7 +512,7 @@ class AdrServiceTest {
         AdrCode newer = acceptedAdr();
         Adr before = repository.findByCode(PROJECT, newer, null).orElseThrow();
 
-        service.supersede(PROJECT, newer, older);
+        service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
 
         assertEquals(before, repository.findByCode(PROJECT, newer, null).orElseThrow());
     }
@@ -483,9 +521,9 @@ class AdrServiceTest {
     void supersedeIsIdempotent() {
         AdrCode older = acceptedAdr();
         AdrCode newer = acceptedAdr();
-        service.supersede(PROJECT, newer, older);
+        service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
 
-        AdrDetail again = service.supersede(PROJECT, newer, older);
+        AdrDetail again = service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
 
         assertEquals(AdrStatus.SUPERSEDED, again.adr().status());
         assertEquals(List.of(newer), again.supersededBy());
@@ -504,10 +542,10 @@ class AdrServiceTest {
     void supersedeStaysIdempotentAfterTheSupersedingDecisionIsLaterDeprecated() {
         AdrCode older = acceptedAdr();
         AdrCode newer = acceptedAdr();
-        service.supersede(PROJECT, newer, older);
-        service.deprecate(PROJECT, newer);
+        service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
+        service.deprecate(PROJECT, newer, DEFAULT_LANGUAGE);
 
-        AdrDetail again = service.supersede(PROJECT, newer, older);
+        AdrDetail again = service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
 
         assertEquals(AdrStatus.SUPERSEDED, again.adr().status());
         assertEquals(List.of(newer), again.supersededBy());
@@ -521,8 +559,8 @@ class AdrServiceTest {
         AdrCode second = acceptedAdr();
         AdrCode newest = acceptedAdr();
 
-        service.supersede(PROJECT, newest, first);
-        service.supersede(PROJECT, newest, second);
+        service.supersede(PROJECT, newest, first, DEFAULT_LANGUAGE);
+        service.supersede(PROJECT, newest, second, DEFAULT_LANGUAGE);
 
         assertEquals(List.of(first, second), get(PROJECT, newest).orElseThrow().supersedes());
     }
@@ -532,7 +570,7 @@ class AdrServiceTest {
         AdrCode newer = acceptedAdr();
 
         assertThrows(AdrNotFoundException.class,
-                () -> service.supersede(PROJECT, newer, new AdrCode("ADR-99")));
+                () -> service.supersede(PROJECT, newer, new AdrCode("ADR-99"), DEFAULT_LANGUAGE));
 
         assertEquals(List.of(), get(PROJECT, newer).orElseThrow().supersedes());
     }
@@ -542,7 +580,7 @@ class AdrServiceTest {
         AdrCode older = acceptedAdr();
 
         assertThrows(AdrNotFoundException.class,
-                () -> service.supersede(PROJECT, new AdrCode("ADR-99"), older));
+                () -> service.supersede(PROJECT, new AdrCode("ADR-99"), older, DEFAULT_LANGUAGE));
 
         assertEquals(AdrStatus.ACCEPTED, get(PROJECT, older).orElseThrow().adr().status());
     }
@@ -558,7 +596,7 @@ class AdrServiceTest {
         AdrCode proposedNewer = add(newAdr()).adr().code();
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
-                () -> service.supersede(PROJECT, proposedNewer, older));
+                () -> service.supersede(PROJECT, proposedNewer, older, DEFAULT_LANGUAGE));
 
         assertTrue(thrown.getMessage().contains(proposedNewer.value()), thrown.getMessage());
         assertEquals(AdrStatus.ACCEPTED, get(PROJECT, older).orElseThrow().adr().status());
@@ -575,7 +613,7 @@ class AdrServiceTest {
         AdrCode proposedOlder = add(newAdr()).adr().code();
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
-                () -> service.supersede(PROJECT, newer, proposedOlder));
+                () -> service.supersede(PROJECT, newer, proposedOlder, DEFAULT_LANGUAGE));
 
         assertTrue(thrown.getMessage().contains(proposedOlder.value()), thrown.getMessage());
         assertEquals(AdrStatus.PROPOSED, get(PROJECT, proposedOlder).orElseThrow().adr().status());
@@ -587,9 +625,9 @@ class AdrServiceTest {
         AdrCode older = acceptedAdr();
         AdrCode firstSuccessor = acceptedAdr();
         AdrCode secondSuccessor = acceptedAdr();
-        service.supersede(PROJECT, firstSuccessor, older);
+        service.supersede(PROJECT, firstSuccessor, older, DEFAULT_LANGUAGE);
 
-        assertThrows(IllegalStateException.class, () -> service.supersede(PROJECT, secondSuccessor, older));
+        assertThrows(IllegalStateException.class, () -> service.supersede(PROJECT, secondSuccessor, older, DEFAULT_LANGUAGE));
 
         assertEquals(List.of(firstSuccessor), get(PROJECT, older).orElseThrow().supersededBy());
     }
@@ -597,7 +635,7 @@ class AdrServiceTest {
     /** Adds a decision and accepts it in one step - the precondition every supersede test needs. */
     private AdrCode acceptedAdr() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
         return code;
     }
 
@@ -605,7 +643,7 @@ class AdrServiceTest {
     void supersedeRejectsSelfReference() {
         AdrCode code = add(newAdr()).adr().code();
 
-        assertThrows(IllegalArgumentException.class, () -> service.supersede(PROJECT, code, code));
+        assertThrows(IllegalArgumentException.class, () -> service.supersede(PROJECT, code, code, DEFAULT_LANGUAGE));
     }
 
     /**
@@ -616,10 +654,10 @@ class AdrServiceTest {
     void unsupersedeRestoresAcceptedAndClearsTheEdge() {
         AdrCode older = acceptedAdr();
         AdrCode newer = acceptedAdr();
-        service.supersede(PROJECT, newer, older);
+        service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
         Adr successorBefore = repository.findByCode(PROJECT, newer, null).orElseThrow();
 
-        AdrDetail restored = service.unsupersede(PROJECT, older);
+        AdrDetail restored = service.unsupersede(PROJECT, older, DEFAULT_LANGUAGE);
 
         assertEquals(AdrStatus.ACCEPTED, restored.adr().status());
         assertNull(restored.adr().supersededBy());
@@ -632,10 +670,10 @@ class AdrServiceTest {
     void unsupersededDecisionCanBeSupersededAgain() {
         AdrCode older = acceptedAdr();
         AdrCode newer = acceptedAdr();
-        service.supersede(PROJECT, newer, older);
-        service.unsupersede(PROJECT, older);
+        service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
+        service.unsupersede(PROJECT, older, DEFAULT_LANGUAGE);
 
-        AdrDetail supersededAgain = service.supersede(PROJECT, newer, older);
+        AdrDetail supersededAgain = service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
 
         assertEquals(AdrStatus.SUPERSEDED, supersededAgain.adr().status());
         assertEquals(List.of(newer), supersededAgain.supersededBy());
@@ -646,13 +684,36 @@ class AdrServiceTest {
         AdrCode accepted = acceptedAdr();
         AdrCode proposed = add(newAdr()).adr().code();
 
-        assertThrows(IllegalStateException.class, () -> service.unsupersede(PROJECT, accepted));
-        assertThrows(IllegalStateException.class, () -> service.unsupersede(PROJECT, proposed));
+        assertThrows(IllegalStateException.class, () -> service.unsupersede(PROJECT, accepted, DEFAULT_LANGUAGE));
+        assertThrows(IllegalStateException.class, () -> service.unsupersede(PROJECT, proposed, DEFAULT_LANGUAGE));
     }
 
     @Test
     void unsupersedeRejectsAnUnknownCode() {
-        assertThrows(AdrNotFoundException.class, () -> service.unsupersede(PROJECT, new AdrCode("ADR-99")));
+        assertThrows(AdrNotFoundException.class, () -> service.unsupersede(PROJECT, new AdrCode("ADR-99"), DEFAULT_LANGUAGE));
+    }
+
+    /** {@link #acceptPassesTheProjectsDefaultLanguageToFindCurrentByCode}'s counterpart. */
+    @Test
+    void supersedePassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        AdrCode older = acceptedAdr();
+        AdrCode newer = acceptedAdr();
+
+        service.supersede(PROJECT, newer, older, "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
+    }
+
+    /** {@link #acceptPassesTheProjectsDefaultLanguageToFindCurrentByCode}'s counterpart. */
+    @Test
+    void unsupersedePassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        AdrCode older = acceptedAdr();
+        AdrCode newer = acceptedAdr();
+        service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
+
+        service.unsupersede(PROJECT, older, "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
     }
 
     /**
@@ -665,7 +726,7 @@ class AdrServiceTest {
     void updatePreservesTheSupersededByEdgeAndStatusOfASupersededDecision() {
         AdrCode older = acceptedAdr();
         AdrCode newer = acceptedAdr();
-        service.supersede(PROJECT, newer, older);
+        service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
 
         Adr updated = update(older,
                 AdrCorrection.builder().addressesRequirementCodes(List.of("FR-1")).build()).adr();
@@ -679,7 +740,7 @@ class AdrServiceTest {
     void listReportsBothSupersedesDirectionsWithoutAnyExtraRead() {
         AdrCode older = acceptedAdr();
         AdrCode newer = acceptedAdr();
-        service.supersede(PROJECT, newer, older);
+        service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
 
         List<AdrDetail> all = list(PROJECT);
 
@@ -1000,7 +1061,7 @@ class AdrServiceTest {
     @Test
     void updateCorrectsTheReferencesOfAnAcceptedDecision() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         Adr updated = update(code,
                 AdrCorrection.builder().addressesRequirementCodes(List.of("FR-1")).build()).adr();
@@ -1018,7 +1079,7 @@ class AdrServiceTest {
     @Test
     void updateRejectsASameLanguageTextChangeOnAnAcceptedDecisionAndWritesNothing() {
         AdrCode code = add(newAdr()).adr().code();
-        Adr accepted = service.accept(PROJECT, code, null).adr();
+        Adr accepted = service.accept(PROJECT, code, null, DEFAULT_LANGUAGE).adr();
 
         AdrTextImmutableException thrown = assertThrows(AdrTextImmutableException.class,
                 () -> update(code, AdrCorrection.builder().name("A rewritten title").build()));
@@ -1038,7 +1099,7 @@ class AdrServiceTest {
     @Test
     void updateAllowsANewLanguageVariantOfTheTitleOnAnAcceptedDecision() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         AdrDetail updated = service.update(PROJECT, code,
                 AdrCorrection.builder().name("Einen eingebetteten Triple Store verwenden")
@@ -1058,7 +1119,7 @@ class AdrServiceTest {
     @Test
     void updateRejectsExplicitlyReassertingTheSameLanguageOnAnAcceptedDecision() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         AdrTextImmutableException thrown = assertThrows(AdrTextImmutableException.class,
                 () -> service.update(PROJECT, code, AdrCorrection.builder()
@@ -1074,7 +1135,7 @@ class AdrServiceTest {
     @Test
     void updateAcceptsACorrectionThatRestatesTheTextOfAnAcceptedDecisionUnchanged() {
         AdrCode code = add(newAdr()).adr().code();
-        Adr accepted = service.accept(PROJECT, code, null).adr();
+        Adr accepted = service.accept(PROJECT, code, null, DEFAULT_LANGUAGE).adr();
 
         Adr updated = update(code, AdrCorrection.builder()
                 .name(accepted.name())
@@ -1125,7 +1186,7 @@ class AdrServiceTest {
     @Test
     void updateCorrectsUsesTermOnAnAcceptedDecision() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         Adr updated = update(code,
                 AdrCorrection.builder().usesTermCodes(List.of("TERM-1")).build()).adr();
@@ -1139,7 +1200,7 @@ class AdrServiceTest {
     @Test
     void updateAppendsConsequencesInAnyStatusIncludingAccepted() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         Adr updated = update(code, AdrCorrection.builder()
                 .newConsequences(List.of(new NewConsequence("Discovered later", ConsequenceType.NEGATIVE)))
@@ -1153,7 +1214,7 @@ class AdrServiceTest {
     @Test
     void updateAppendsConsideredOptionsInAnyStatusIncludingAccepted() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         Adr updated = update(code, AdrCorrection.builder()
                 .newConsideredOptions(List.of(
@@ -1190,7 +1251,7 @@ class AdrServiceTest {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
                 List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null,
                 DEFAULT_LANGUAGE, null, null, null, null));
-        service.accept(PROJECT, added.adr().code(), null);
+        service.accept(PROJECT, added.adr().code(), null, DEFAULT_LANGUAGE);
 
         assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
                 .consequenceCorrections(List.of(new ConsequenceCorrection(1, "Rewritten", ConsequenceType.POSITIVE)))
@@ -1209,7 +1270,7 @@ class AdrServiceTest {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
                 List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null,
                 DEFAULT_LANGUAGE, null, null, null, null));
-        service.accept(PROJECT, added.adr().code(), null);
+        service.accept(PROJECT, added.adr().code(), null, DEFAULT_LANGUAGE);
 
         Adr updated = update(added.adr().code(), AdrCorrection.builder()
                 .consequenceCorrections(
@@ -1232,7 +1293,7 @@ class AdrServiceTest {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
                 List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null,
                 DEFAULT_LANGUAGE, null, null, null, null));
-        service.accept(PROJECT, added.adr().code(), null);
+        service.accept(PROJECT, added.adr().code(), null, DEFAULT_LANGUAGE);
 
         assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
                 .consequenceCorrections(
@@ -1250,7 +1311,7 @@ class AdrServiceTest {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here", null,
                 List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.CHOSEN)),
                 DEFAULT_LANGUAGE, null, null, null, null));
-        service.accept(PROJECT, added.adr().code(), null);
+        service.accept(PROJECT, added.adr().code(), null, DEFAULT_LANGUAGE);
 
         Adr updated = update(added.adr().code(), AdrCorrection.builder()
                 .consideredOptionCorrections(List.of(
@@ -1276,7 +1337,7 @@ class AdrServiceTest {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here", null,
                 List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.CHOSEN)),
                 DEFAULT_LANGUAGE, null, null, null, null));
-        service.accept(PROJECT, added.adr().code(), null);
+        service.accept(PROJECT, added.adr().code(), null, DEFAULT_LANGUAGE);
 
         assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
                 .consideredOptionCorrections(List.of(
@@ -1343,7 +1404,7 @@ class AdrServiceTest {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
                 List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null,
                 DEFAULT_LANGUAGE, null, null, null, null));
-        service.accept(PROJECT, added.adr().code(), null);
+        service.accept(PROJECT, added.adr().code(), null, DEFAULT_LANGUAGE);
 
         assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
                 .removedConsequencePositions(new RemovedPositions(Set.of(1)))
@@ -1425,7 +1486,7 @@ class AdrServiceTest {
     @Test
     void deleteRefusesAnAcceptedDecisionAndPointsAtSupersede() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         AdrNotDeletableException thrown =
                 assertThrows(AdrNotDeletableException.class, () -> service.delete(PROJECT, code));
@@ -1438,7 +1499,7 @@ class AdrServiceTest {
     @Test
     void deleteRefusesARejectedDecisionBecauseTurningAnOptionDownIsItselfADecision() {
         AdrCode code = add(newAdr()).adr().code();
-        service.reject(PROJECT, code, null);
+        service.reject(PROJECT, code, null, DEFAULT_LANGUAGE);
 
         AdrNotDeletableException thrown =
                 assertThrows(AdrNotDeletableException.class, () -> service.delete(PROJECT, code));
@@ -1451,8 +1512,8 @@ class AdrServiceTest {
     @Test
     void deleteRefusesADeprecatedDecision() {
         AdrCode code = add(newAdr()).adr().code();
-        service.accept(PROJECT, code, null);
-        service.deprecate(PROJECT, code);
+        service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
+        service.deprecate(PROJECT, code, DEFAULT_LANGUAGE);
 
         AdrNotDeletableException thrown =
                 assertThrows(AdrNotDeletableException.class, () -> service.delete(PROJECT, code));
