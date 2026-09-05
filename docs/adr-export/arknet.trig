@@ -1478,7 +1478,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:05:02.051723158Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/3e56fb08-dbd5-467c-b46c-d3eaca1c52ef> .
+      <https://w3id.org/arknet/revision/e5903a5d-4546-43c2-8f21-cfed965893df> .
   
   <https://w3id.org/arknet/activity/2d8a83d6-acf1-495b-b5a4-03163c5169ab> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -2287,13 +2287,15 @@ Der Zielschnitt legt anders:
 - Domänenmodellierung trägt Glossarbegriff, Bounded Context und Kontextbeziehung.
 - Architektur & Entscheidungen trägt den Architecture Decision Record.
 
+Die Liste benennt, wohin die bestehenden Kontexte umgeschnitten werden; sie ist kein geschlossener Katalog aller Modell-Kontexte. Ein Ressourcentyp, der erst später eigenständig wird, bekommt seinen Kontext in einer eigenen Entscheidung.
+
 Eine Kontextgrenze ist nicht dasselbe wie eine Modulgrenze -- ein Kontext darf mehrere Module halten; diese Entscheidung legt fest, wo Sprachgrenzen verlaufen, nicht wie viele Module es gibt."""@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/2f704502-d171-4114-bd8d-bc0e27369b99>,
-      <https://w3id.org/arknet/id/9e2cd323-bcef-4bba-885d-a145b91e4812>, <https://w3id.org/arknet/id/9b7e5d5a-295c-4aab-a7cc-fe28a36f1056>,
-      <https://w3id.org/arknet/id/4e16961d-6aae-4375-a99e-ecfa43c7b409>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/779a4cac-4c46-4c2e-b8ba-fdf59d0c3918>,
-      <https://w3id.org/arknet/id/1bc10c03-bc98-4499-9989-870a2f5c8349>, <https://w3id.org/arknet/id/80c97742-79d4-492b-9327-2040e011c698>,
-      <https://w3id.org/arknet/id/e1caccb9-3bdd-42b9-b31c-c8db079d93cd>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/1ed36f2f-a285-46aa-ab09-fee937540d36>,
+      <https://w3id.org/arknet/id/5e709a7d-3b69-484e-8e0c-3918c2d375a6>, <https://w3id.org/arknet/id/be220818-e298-4d8e-8a7a-29f5ba4bdef1>,
+      <https://w3id.org/arknet/id/6e9401b6-27c7-4f79-9d0b-26fc11f37f6b>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/455edfdd-3582-4849-9062-66400acbae24>,
+      <https://w3id.org/arknet/id/1fcebb3c-2548-4caa-b923-9dad41a9b99d>, <https://w3id.org/arknet/id/8d2ba435-cf9a-4c06-9283-1442440a8d98>,
+      <https://w3id.org/arknet/id/dd8b93a0-aea0-4134-8a87-37c698462653>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/1b5ba6e9-4c93-4afd-b35a-86affc89d44c>,
       <https://w3id.org/arknet/id/53c40f6c-0af0-43f0-89d2-a88e32947331>, <https://w3id.org/arknet/id/acf820e0-d3a5-4e84-95e5-948538994549>,
       <https://w3id.org/arknet/id/e2fd7f3a-3c3f-44c4-8d02-8c13567151fd>, <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>;
@@ -4575,7 +4577,22 @@ Reason: a glossary exists so that there is one word per concept. A translated la
   
   <https://w3id.org/arknet/activity/84ba55d9-9629-4a09-bae1-169d0aef2e86> a <http://www.w3.org/ns/prov#Activity> .
   
-  <https://w3id.org/arknet/revision/33908ca6-e559-4d50-be22-754a783be94c> a <http://www.w3.org/ns/prov#Entity> .
+  <https://w3id.org/arknet/revision/33908ca6-e559-4d50-be22-754a783be94c> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/3ece1754-b46d-4627-ba1e-194b0563bc2f>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/84ba55d9-9629-4a09-bae1-169d0aef2e86>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:11.551339068Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/bd879d64-3ffd-490c-b489-2bd59f3e6791> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/a626a4c5-e21d-4d64-98f8-59502f087dfb> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://purl.org/dc/terms/identifier> "ADR-18";
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/11b0dc47-77a5-4bcc-b812-90ed2871bc5e>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/bd879d64-3ffd-490c-b489-2bd59f3e6791>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:13.404451762Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/9a45e161-5d75-4faa-99d0-5c817ade0516>;
+    <http://www.w3.org/ns/prov#invalidatedAtTime> "2026-09-05T14:18:08.836025439Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
 }
 
 <https://w3id.org/arknet/model/adr> {
@@ -4675,50 +4692,6 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/core#name> "Generischer Lesepfad im Composition Root, typunabhängig"@de;
     <https://w3id.org/arknet/core#position> 3;
     <https://w3id.org/arknet/architecture#optionRationale> "Deckt jeden Ressourcentyp gleich ab, ohne einen Kontext ohne Domäne zu erzeugen."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/2f704502-d171-4114-bd8d-bc0e27369b99> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die dichtesten Cross-Kontext-Kanten werden zu kontextinternen Kanten und brauchen keine Gateway-Konstruktion mehr."@de .
-  
-  <https://w3id.org/arknet/id/9e2cd323-bcef-4bba-885d-a145b91e4812> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Schnitt läuft auf das Zielbild zu, statt quer dazu zu liegen -- künftige Kontexte werden angebaut, nicht eingepasst."@de .
-  
-  <https://w3id.org/arknet/id/9b7e5d5a-295c-4aab-a7cc-fe28a36f1056> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Umbau an Modulgrenzen und Verdrahtung, ohne dass ein Nutzer davon etwas sieht."@de .
-  
-  <https://w3id.org/arknet/id/4e16961d-6aae-4375-a99e-ecfa43c7b409> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Entlastung ist nur teilweise: mehrere Kanten bleiben über eine Kontextgrenze hinweg bestehen, das Gateway-Muster wird seltener gebraucht, aber nicht überflüssig."@de .
-  
-  <https://w3id.org/arknet/id/779a4cac-4c46-4c2e-b8ba-fdf59d0c3918> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Schnitt lassen wie er ist"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Er ist nicht klein, sondern fein, und läuft nicht auf das Zielbild zu."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/1bc10c03-bc98-4499-9989-870a2f5c8349> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Ein einziger Kontext für alles"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Zwischen der Sprache der Requirements, der Sprache des Glossars und der Sprache der Entscheidungen verlaufen echte Sprachbrüche."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/80c97742-79d4-492b-9327-2040e011c698> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Erst die Module umschneiden, Kontextgrenzen später"@de;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Dann entscheidet wieder der Bauzustand über die Grenze statt umgekehrt."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/e1caccb9-3bdd-42b9-b31c-c8db079d93cd> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Modell-Kontexte entlang des Zielschnitts schneiden"@de;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#optionRationale> "Reduziert die dichtesten Cross-Kontext-Kanten auf kontextinterne Kanten und läuft auf das Zielbild zu."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
   
   <https://w3id.org/arknet/id/3198688c-d64a-422c-b443-9717636fffa5> a <https://w3id.org/arknet/architecture#Consequence>;
@@ -4991,6 +4964,35 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/core#position> 4;
     <https://w3id.org/arknet/architecture#optionRationale> "Liefert ein Kriterium für Reihenfolge und Zugehörigkeit, ohne sich einer einzelnen Norm unterzuordnen."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/59d9b5f0-00ec-4e74-a2db-3aeb4062d2a3> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Zieltyp der Pflichtkanten stimmt wieder mit dem überein, was die Spezifikation meint; das Actor-Register nimmt nur noch Träger auf."@de .
+  
+  <https://w3id.org/arknet/id/f48c5e8d-dadb-4a6d-8133-7e98f3a3ee2a> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Eine Rolle lässt sich benennen, ohne eine Person zu erfinden, die sie besetzt."@de .
+  
+  <https://w3id.org/arknet/id/61480c7f-4736-41ca-a8ce-2e887226eb25> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Besetzungskante bleibt kontextintern und braucht kein Gateway zu einem Nachbar-Kontext."@de .
+  
+  <https://w3id.org/arknet/id/8f333e4b-5c24-4338-83ba-41525b63b817> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Zieltypwechsel trifft eine Pflichtkante -- das ist keine Umbenennung, sondern eine andere Zusage an jeden, der Use Cases schreibt."@de .
+  
+  <https://w3id.org/arknet/id/578ea4e5-7067-4d8b-9d76-8117ad38f4a7> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein bestehendes Modell muss jeden vorhandenen Actor einzeln einordnen: Träger oder Rolle. Ein Modell kann danach vollständig sein, ohne einen einzigen Träger zu kennen."@de .
+  
+  <https://w3id.org/arknet/id/ef2ff599-3127-4a69-bd1f-e9d18446676d> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 6;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative> .
 }
 
 <https://w3id.org/arknet/model/requirements> {
@@ -5064,144 +5066,9 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <http://www.w3.org/2004/02/skos/core#related> <https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f> .
 }
 
-<https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/revision/33908ca6-e559-4d50-be22-754a783be94c> a <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/3ece1754-b46d-4627-ba1e-194b0563bc2f>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/84ba55d9-9629-4a09-bae1-169d0aef2e86>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:11.551339068Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
-  
-  <https://w3id.org/arknet/activity/bd879d64-3ffd-490c-b489-2bd59f3e6791> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/a626a4c5-e21d-4d64-98f8-59502f087dfb> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://purl.org/dc/terms/identifier> "ADR-18";
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/11b0dc47-77a5-4bcc-b812-90ed2871bc5e>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/bd879d64-3ffd-490c-b489-2bd59f3e6791>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:13.404451762Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/9a45e161-5d75-4faa-99d0-5c817ade0516>;
-    <http://www.w3.org/ns/prov#invalidatedAtTime> "2026-09-05T14:18:08.836025439Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
-  
-  <https://w3id.org/arknet/activity/dbffd059-e8bd-4b47-af19-edec6f0131df> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/b60b1537-f227-47a8-9508-5ac772876aa5> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/7777a2c0-87ff-48fa-ba58-6d6e3e4c2834>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/dbffd059-e8bd-4b47-af19-edec6f0131df>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:15.903133260Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/45b4e75e-f589-465d-8f8b-fb5ca67dc92c> .
-  
-  <https://w3id.org/arknet/activity/b53eecda-6dd4-4d5b-a69d-6db1902d4345> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/98cbc37a-dc7e-4a67-8c1f-7edaa54f5dcc> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b53eecda-6dd4-4d5b-a69d-6db1902d4345>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:18.273462999Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/41fa0ea4-52b4-41b0-9076-36050f55f976> .
-  
-  <https://w3id.org/arknet/activity/c5297efa-3e77-4af6-894b-017674ce9a18> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/55026267-612b-465e-b855-a0bbc24f0f93> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/82d3744a-408a-4f07-96ca-90748c10fc98>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/c5297efa-3e77-4af6-894b-017674ce9a18>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:20.072952891Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/ff482498-73c8-4d4c-9090-740775a914fd> .
-  
-  <https://w3id.org/arknet/activity/1426e1ae-e5eb-4126-836d-969295d5d665> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/178a7a54-7ef1-45dd-b354-99745fc8a6f6> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/00b2a409-8b29-405e-895c-d593702817f2>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1426e1ae-e5eb-4126-836d-969295d5d665>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:21.958822242Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/c91d1378-3cc1-4981-a414-f0dcc93a830a> .
-  
-  <https://w3id.org/arknet/activity/53960873-ccea-412f-8da5-23e33a4bb340> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/2ade688d-5490-493b-94d1-f57b22477806> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/fafb3370-a9a5-46a7-bca5-824c1b2023e0>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/53960873-ccea-412f-8da5-23e33a4bb340>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:23.567867435Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/128cae73-0906-40eb-a853-11db1f200788> .
-  
-  <https://w3id.org/arknet/activity/e969286f-682c-468c-aa5c-908cb2739330> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/f95a2663-bcc0-4267-a504-ea10d7461f7e> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/bdd08ced-66a4-4871-b53c-b316f76b4ba6>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/e969286f-682c-468c-aa5c-908cb2739330>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:25.586893245Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/51f56875-b1b5-44c8-9fc6-c33b66e9e2c8> .
-  
-  <https://w3id.org/arknet/activity/6738a059-0b50-4dbf-8617-268401749e53> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/31e417b9-d918-4e25-b4cf-13f3490ab4ff> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/6738a059-0b50-4dbf-8617-268401749e53>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:51.378822304Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/d3a23c31-0097-4dd0-8897-96cbd5c1482e> .
-  
-  <https://w3id.org/arknet/activity/e2a2c50f-d727-432d-b53e-8ebbd3e7bdf1> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/858ca7dc-2534-41a8-8355-306ed068f2db> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/3ece1754-b46d-4627-ba1e-194b0563bc2f>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/e2a2c50f-d727-432d-b53e-8ebbd3e7bdf1>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:53.375396229Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/33908ca6-e559-4d50-be22-754a783be94c> .
-  
-  <https://w3id.org/arknet/activity/b4e71340-2ed2-4ea2-b5c6-c97e821fe47f> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/f247af64-a548-491d-9840-018509d7fcd5> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b4e71340-2ed2-4ea2-b5c6-c97e821fe47f>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:55.254634585Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/98cbc37a-dc7e-4a67-8c1f-7edaa54f5dcc> .
-  
-  <https://w3id.org/arknet/activity/1796ce9c-1dc3-45f8-b69d-4e96bfdc6e80> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/85718182-6a75-481f-a2f8-031fda580727> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/58dd5050-2c33-4723-a789-479f7c4c47a8>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1796ce9c-1dc3-45f8-b69d-4e96bfdc6e80>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:20:08.610154560Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/15ee5984-f73b-48e9-b8b5-8d19159c535d> .
-}
-
 <https://w3id.org/arknet/model/adr> {
-  <https://w3id.org/arknet/id/59d9b5f0-00ec-4e74-a2db-3aeb4062d2a3> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Zieltyp der Pflichtkanten stimmt wieder mit dem überein, was die Spezifikation meint; das Actor-Register nimmt nur noch Träger auf."@de .
-  
-  <https://w3id.org/arknet/id/f48c5e8d-dadb-4a6d-8133-7e98f3a3ee2a> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Eine Rolle lässt sich benennen, ohne eine Person zu erfinden, die sie besetzt."@de .
-  
-  <https://w3id.org/arknet/id/61480c7f-4736-41ca-a8ce-2e887226eb25> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Besetzungskante bleibt kontextintern und braucht kein Gateway zu einem Nachbar-Kontext."@de .
-  
-  <https://w3id.org/arknet/id/8f333e4b-5c24-4338-83ba-41525b63b817> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Zieltypwechsel trifft eine Pflichtkante -- das ist keine Umbenennung, sondern eine andere Zusage an jeden, der Use Cases schreibt."@de .
-  
-  <https://w3id.org/arknet/id/578ea4e5-7067-4d8b-9d76-8117ad38f4a7> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 5;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein bestehendes Modell muss jeden vorhandenen Actor einzeln einordnen: Träger oder Rolle. Ein Modell kann danach vollständig sein, ohne einen einzigen Träger zu kennen."@de .
-  
-  <https://w3id.org/arknet/id/ef2ff599-3127-4a69-bd1f-e9d18446676d> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 6;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Das bisherige freitextliche Rollenfeld am Actor wird durch die Ressource ersetzt."@de .
+  <https://w3id.org/arknet/id/ef2ff599-3127-4a69-bd1f-e9d18446676d> <https://w3id.org/arknet/architecture#consequenceStatement>
+      "Das bisherige freitextliche Rollenfeld am Actor wird durch die Ressource ersetzt."@de .
   
   <https://w3id.org/arknet/id/26b54567-b0aa-4d70-8cac-afe2295e4c7b> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 7;
@@ -5477,6 +5344,151 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/core#position> 2;
     <https://w3id.org/arknet/architecture#optionRationale> "Schließt die Lücke vollständig statt teilweise."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/1ed36f2f-a285-46aa-ab09-fee937540d36> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die dichtesten Cross-Kontext-Kanten werden zu kontextinternen Kanten und brauchen keine Gateway-Konstruktion mehr."@de .
+  
+  <https://w3id.org/arknet/id/5e709a7d-3b69-484e-8e0c-3918c2d375a6> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Schnitt läuft auf das Zielbild zu, statt quer dazu zu liegen -- künftige Kontexte werden angebaut, nicht eingepasst."@de .
+  
+  <https://w3id.org/arknet/id/be220818-e298-4d8e-8a7a-29f5ba4bdef1> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Umbau an Modulgrenzen und Verdrahtung, ohne dass ein Nutzer davon etwas sieht."@de .
+  
+  <https://w3id.org/arknet/id/6e9401b6-27c7-4f79-9d0b-26fc11f37f6b> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Entlastung ist nur teilweise: mehrere Kanten bleiben über eine Kontextgrenze hinweg bestehen, das Gateway-Muster wird seltener gebraucht, aber nicht überflüssig."@de .
+  
+  <https://w3id.org/arknet/id/455edfdd-3582-4849-9062-66400acbae24> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Schnitt lassen wie er ist"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Er ist nicht klein, sondern fein, und läuft nicht auf das Zielbild zu."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/1fcebb3c-2548-4caa-b923-9dad41a9b99d> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein einziger Kontext für alles"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Zwischen der Sprache der Requirements, der Sprache des Glossars und der Sprache der Entscheidungen verlaufen echte Sprachbrüche."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/8d2ba435-cf9a-4c06-9283-1442440a8d98> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Erst die Module umschneiden, Kontextgrenzen später"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Dann entscheidet wieder der Bauzustand über die Grenze statt umgekehrt."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/dd8b93a0-aea0-4134-8a87-37c698462653> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Modell-Kontexte entlang des Zielschnitts schneiden"@de;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Reduziert die dichtesten Cross-Kontext-Kanten auf kontextinterne Kanten und läuft auf das Zielbild zu."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+}
+
+<https://w3id.org/arknet/model/provenance> {
+  <https://w3id.org/arknet/activity/dbffd059-e8bd-4b47-af19-edec6f0131df> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/b60b1537-f227-47a8-9508-5ac772876aa5> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/7777a2c0-87ff-48fa-ba58-6d6e3e4c2834>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/dbffd059-e8bd-4b47-af19-edec6f0131df>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:15.903133260Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/45b4e75e-f589-465d-8f8b-fb5ca67dc92c> .
+  
+  <https://w3id.org/arknet/activity/b53eecda-6dd4-4d5b-a69d-6db1902d4345> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/98cbc37a-dc7e-4a67-8c1f-7edaa54f5dcc> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b53eecda-6dd4-4d5b-a69d-6db1902d4345>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:18.273462999Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/41fa0ea4-52b4-41b0-9076-36050f55f976> .
+  
+  <https://w3id.org/arknet/activity/c5297efa-3e77-4af6-894b-017674ce9a18> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/55026267-612b-465e-b855-a0bbc24f0f93> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/82d3744a-408a-4f07-96ca-90748c10fc98>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/c5297efa-3e77-4af6-894b-017674ce9a18>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:20.072952891Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/ff482498-73c8-4d4c-9090-740775a914fd> .
+  
+  <https://w3id.org/arknet/activity/1426e1ae-e5eb-4126-836d-969295d5d665> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/178a7a54-7ef1-45dd-b354-99745fc8a6f6> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/00b2a409-8b29-405e-895c-d593702817f2>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1426e1ae-e5eb-4126-836d-969295d5d665>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:21.958822242Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/c91d1378-3cc1-4981-a414-f0dcc93a830a> .
+  
+  <https://w3id.org/arknet/activity/53960873-ccea-412f-8da5-23e33a4bb340> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/2ade688d-5490-493b-94d1-f57b22477806> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/fafb3370-a9a5-46a7-bca5-824c1b2023e0>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/53960873-ccea-412f-8da5-23e33a4bb340>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:23.567867435Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/128cae73-0906-40eb-a853-11db1f200788> .
+  
+  <https://w3id.org/arknet/activity/e969286f-682c-468c-aa5c-908cb2739330> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/f95a2663-bcc0-4267-a504-ea10d7461f7e> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/bdd08ced-66a4-4871-b53c-b316f76b4ba6>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/e969286f-682c-468c-aa5c-908cb2739330>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:25.586893245Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/51f56875-b1b5-44c8-9fc6-c33b66e9e2c8> .
+  
+  <https://w3id.org/arknet/activity/6738a059-0b50-4dbf-8617-268401749e53> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/31e417b9-d918-4e25-b4cf-13f3490ab4ff> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/6738a059-0b50-4dbf-8617-268401749e53>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:51.378822304Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/d3a23c31-0097-4dd0-8897-96cbd5c1482e> .
+  
+  <https://w3id.org/arknet/activity/e2a2c50f-d727-432d-b53e-8ebbd3e7bdf1> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/858ca7dc-2534-41a8-8355-306ed068f2db> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/3ece1754-b46d-4627-ba1e-194b0563bc2f>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/e2a2c50f-d727-432d-b53e-8ebbd3e7bdf1>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:53.375396229Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/33908ca6-e559-4d50-be22-754a783be94c> .
+  
+  <https://w3id.org/arknet/activity/b4e71340-2ed2-4ea2-b5c6-c97e821fe47f> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/f247af64-a548-491d-9840-018509d7fcd5> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b4e71340-2ed2-4ea2-b5c6-c97e821fe47f>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:55.254634585Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/98cbc37a-dc7e-4a67-8c1f-7edaa54f5dcc> .
+  
+  <https://w3id.org/arknet/activity/1796ce9c-1dc3-45f8-b69d-4e96bfdc6e80> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/85718182-6a75-481f-a2f8-031fda580727> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/58dd5050-2c33-4723-a789-479f7c4c47a8>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1796ce9c-1dc3-45f8-b69d-4e96bfdc6e80>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:20:08.610154560Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/15ee5984-f73b-48e9-b8b5-8d19159c535d> .
+  
+  <https://w3id.org/arknet/activity/ff275462-e20a-4d1a-887c-daee66f94a24> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/e5903a5d-4546-43c2-8f21-cfed965893df> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/ff275462-e20a-4d1a-887c-daee66f94a24>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:33:13.006926833Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/3e56fb08-dbd5-467c-b46c-d3eaca1c52ef> .
 }
 
 <https://w3id.org/arknet/model/requirements> {
@@ -5502,9 +5514,9 @@ Reason: a glossary exists so that there is one word per concept. A translated la
 }
 
 <https://w3id.org/arknet/model/export-metadata> {
-    <https://w3id.org/arknet/export/fd13e495-2477-4ee3-b851-16134b9745c6>
+    <https://w3id.org/arknet/export/785c73f0-a865-4228-b790-fd05a22db5e3>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#Activity> ;
-        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-05T14:23:47Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
+        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-05T14:35:56Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
         <http://www.w3.org/ns/prov#wasAssociatedWith> <https://w3id.org/arknet/agent/arknet> ;
         <http://www.w3.org/ns/prov#used> <https://w3id.org/arknet/core> , <https://w3id.org/arknet/ddd> , <https://w3id.org/arknet/process> , <https://w3id.org/arknet/requirements> , <https://w3id.org/arknet/architecture> , <https://w3id.org/arknet/provenance> , <https://w3id.org/arknet/project> .
 
