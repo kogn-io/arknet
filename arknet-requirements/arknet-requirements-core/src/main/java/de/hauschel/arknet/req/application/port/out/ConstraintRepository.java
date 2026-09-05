@@ -154,12 +154,25 @@ public interface ConstraintRepository {
      * is therefore conservative (state is never older than its paired token), not a guarantee that
      * the whole constraint comes from a single read.</p>
      *
+     * <p><strong>Which language variant this read sees (issue #456).</strong> {@code title} and
+     * {@code statement} are projected through {@code defaultLanguage}, the very tag
+     * {@link #findByCode} is handed for a {@code constraint_get} without an explicit
+     * {@code displayLocale} argument - not through the reading process's own configured display
+     * preference. The values this read returns are what {@code constraint_update} echoes back for
+     * a field the call left alone and compares a correction against, and the tags it returns are
+     * what such an untouched field is written back under.</p>
+     *
      * @param projectId the project (architecture model) to look up the constraint in
      * @param code      the constraint code (e.g. {@code TCON-1})
+     * @param defaultLanguage the project's configured default language, or {@code null} if it has
+     *                        none - the BCP-47 tag {@code title}/{@code constraintStatement} is
+     *                        selected under, degrading along the usual fallback chain when the
+     *                        constraint carries no literal in it
      * @return the constraint and its current head, or {@link Optional#empty()} if no constraint
      *         with this code exists
      */
-    Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code);
+    Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code,
+            String defaultLanguage);
 
     /**
      * A constraint's state paired with its current concurrency token (the {@link RevisionToken},

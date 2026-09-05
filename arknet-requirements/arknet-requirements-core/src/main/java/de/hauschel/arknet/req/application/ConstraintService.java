@@ -146,8 +146,13 @@ public class ConstraintService
             String statement, String language, String defaultLanguage) {
         ConstraintConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-            ConstraintRepository.CurrentConstraint current = repository.findCurrentByCode(projectId, code)
-                    .orElseThrow(() -> new ConstraintNotFoundException(projectId, code));
+            // The project's own default language, not the reading process's, decides which
+            // language variant this read-modify-write round trip sees (issue #456): its values are
+            // what an untouched field is echoed back as and compared against, its tags what such a
+            // field is written back under.
+            ConstraintRepository.CurrentConstraint current =
+                    repository.findCurrentByCode(projectId, code, defaultLanguage)
+                            .orElseThrow(() -> new ConstraintNotFoundException(projectId, code));
             Constraint updated = new Constraint(current.value().id(), current.value().code(),
                     title != null ? title : current.value().title(),
                     statement != null ? statement : current.value().statement(),

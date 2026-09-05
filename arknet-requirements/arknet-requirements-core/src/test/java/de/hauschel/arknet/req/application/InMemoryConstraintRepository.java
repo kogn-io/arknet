@@ -102,7 +102,12 @@ public final class InMemoryConstraintRepository implements ConstraintRepository 
     }
 
     @Override
-    public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code) {
+    public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code,
+            String defaultLanguage) {
+        // This fake holds one value per field, not one per language tag, so it has no language
+        // variant to select between - defaultLanguage is accepted to honour the port contract and
+        // deliberately ignored (the real adapter's selection is pinned in
+        // KognioRdfConstraintRepositoryMultilingualTest instead).
         return findByCode(projectId, code, null)
                 .map(constraint -> new CurrentConstraint(constraint, headByIdentity.get(constraint.id()),
                         titleLanguageByIdentity.get(constraint.id()),

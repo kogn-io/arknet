@@ -186,8 +186,9 @@ class ConstraintServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code) {
-            Optional<CurrentConstraint> result = delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code,
+                String defaultLanguage) {
+            Optional<CurrentConstraint> result = delegate.findCurrentByCode(projectId, code, defaultLanguage);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -247,8 +248,9 @@ class ConstraintServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code) {
-            return delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code,
+                String defaultLanguage) {
+            return delegate.findCurrentByCode(projectId, code, defaultLanguage);
         }
 
         @Override
@@ -307,8 +309,9 @@ class ConstraintServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code) {
-            return delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code,
+                String defaultLanguage) {
+            return delegate.findCurrentByCode(projectId, code, defaultLanguage);
         }
 
         @Override
