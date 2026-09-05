@@ -409,8 +409,15 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             Set<Integer> touchedAcceptanceCriteriaPositions, UnaryOperator<Requirement> mutation) {
         RequirementConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-            RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(projectId, code)
-                    .orElseThrow(() -> new RequirementNotFoundException(projectId, code));
+            // The project's own default language, not the reading process's, decides which
+            // language variant this read-modify-write round trip sees (issue #456): its values are
+            // what an untouched field is echoed back as and compared against, its tags what such a
+            // field is written back under. A lifecycle call (accept/propose/linkTerm/
+            // linkConstraint) passes null here for the same reason it passes null below - it never
+            // resolves a fresh write language - and so keeps reading under the process default.
+            RequirementRepository.CurrentRequirement current =
+                    repository.findCurrentByCode(projectId, code, defaultLanguage)
+                            .orElseThrow(() -> new RequirementNotFoundException(projectId, code));
             Requirement updated = mutation.apply(current.value());
             // A byte-for-byte-unchanged requirement might still not be a no-op (a touched field
             // retagged to an explicit language without changing its text, issue #271) - the check

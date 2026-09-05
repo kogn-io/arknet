@@ -242,8 +242,9 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code) {
-            Optional<CurrentRequirement> result = delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code,
+                String defaultLanguage) {
+            Optional<CurrentRequirement> result = delegate.findCurrentByCode(projectId, code, defaultLanguage);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -305,8 +306,9 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code) {
-            return delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code,
+                String defaultLanguage) {
+            return delegate.findCurrentByCode(projectId, code, defaultLanguage);
         }
 
         @Override
@@ -369,8 +371,9 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code) {
-            return delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code,
+                String defaultLanguage) {
+            return delegate.findCurrentByCode(projectId, code, defaultLanguage);
         }
 
         @Override

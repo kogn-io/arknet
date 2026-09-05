@@ -886,9 +886,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * <p>{@code displayLocale} selects one {@code title}/{@code description}/{@code rationale}
      * candidate out of however many language-tagged variants {@link #readTitles}/
      * {@link #readDescriptions}/{@link #readRationales} find;
-     * {@link #findByCode} passes its per-call override, {@link #findCurrentByCode} passes this
-     * adapter's own configured {@link #displayLocale} (an internal read-modify-write round trip
-     * has no per-call display preference of its own to honour - see that method's javadoc).</p>
+     * {@link #findByCode} passes its per-call override, {@link #findCurrentByCode} passes the
+     * calling project's own default language (see that method's javadoc).</p>
      *
      * <p>{@code query} is deliberately typed as the neutral {@link SparqlQuery} port, not
      * {@link DatasetHandle}: {@link #findByCode} passes the live {@link DatasetTx} of a single
@@ -1160,9 +1159,18 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      */
     @Override
     public Optional<RequirementRepository.CurrentRequirement> findCurrentByCode(
-            ProjectId projectId, RequirementCode code) {
+            ProjectId projectId, RequirementCode code, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        // The project's own default language decides which variant this read-modify-write round
+        // trip sees, not the reading process's (issue #456) - exactly the tag findByCode is handed
+        // for a req_get without a displayLocale argument. Its values are echoed back for a field
+        // this update leaves alone, and its tags are what such a field is written back under, so
+        // reading under the process default would answer a German project in English and compare
+        // its correction against the English variant. Lenient canonicalization, and
+        // withRequestedOverride's own null/blank no-op, degrade a project without a (well-formed)
+        // default language to the configured preference unchanged.
+        DisplayLocale effective = withRequestedOverride(canonicalizeLenient(defaultLanguage));
 
         String query = "SELECT ?s ?type ?status ?priority ?motivatedBy ?qualityCategory ?head "
                 + "WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
@@ -1179,19 +1187,14 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             BindingSet row = found.get();
             String subjectIriString = iriOf(row, "s").getIRIString();
             String subject = SparqlTerms.iriRef(subjectIriString);
-            // No per-call display-language override here: an internal read-modify-write round
-            // trip is not a caller-facing read, so this adapter's own configured displayLocale
-            // (never withRequestedOverride's per-call one) is used, exactly like
-            // KognioRdfTermRepository#attemptUpdate uses its own displayLocale field for
-            // resultingTerm rather than any override.
             Optional<TitleDescriptionSelection> titleAndDescription =
-                    selectTitleDescription(handle.sparqlQuery()::select, subject, displayLocale);
+                    selectTitleDescription(handle.sparqlQuery()::select, subject, effective);
             if (titleAndDescription.isEmpty()) {
                 return Optional.empty();
             }
             List<AcceptanceCriterionAssembly> criterionAssemblies =
                     readAcceptanceCriterionAssemblies(handle.sparqlQuery()::select, subject);
-            List<AcceptanceCriterion> rawCriteria = toAcceptanceCriteria(criterionAssemblies, displayLocale);
+            List<AcceptanceCriterion> rawCriteria = toAcceptanceCriteria(criterionAssemblies, effective);
             boolean acceptanceCriteriaIsSynthesized =
                     rawCriteria.isEmpty() || !hasConsecutiveAcceptanceCriterionPositions(rawCriteria);
             List<AcceptanceCriterion> acceptanceCriteria = acceptanceCriteriaIsSynthesized
@@ -1199,13 +1202,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     : rawCriteria;
             Map<Integer, String> acceptanceCriteriaLanguageByPosition = acceptanceCriteriaIsSynthesized
                     ? Map.of()
-                    : toAcceptanceCriteriaLanguages(criterionAssemblies, displayLocale);
+                    : toAcceptanceCriteriaLanguages(criterionAssemblies, effective);
             TitleDescriptionSelection selection = titleAndDescription.get();
             // Optional, so unlike title/description an empty selection is a null field rather than
             // a skipped requirement - and its tag is null both for an untagged literal and for no
             // literal at all, which the service tells apart by the value itself (issue #321).
             Optional<LocalizedLiteral> rationale =
-                    selectRationale(handle.sparqlQuery()::select, subject, displayLocale);
+                    selectRationale(handle.sparqlQuery()::select, subject, effective);
             Requirement requirement = new Requirement(
                     new RequirementId(ResourceId.of(subjectIriString)),
                     code,

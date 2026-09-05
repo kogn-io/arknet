@@ -133,7 +133,7 @@ class RequirementServiceTest {
     void addWithoutLanguageFallsBackToTheProjectsDefaultLanguage() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), "de").code();
 
-        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code).orElseThrow();
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals("de", current.titleLanguage());
         assertEquals("de", current.descriptionLanguage());
     }
@@ -158,7 +158,7 @@ class RequirementServiceTest {
 
         service.update(WS, code, "New title", null, null, null, null, null, null, "de");
 
-        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code).orElseThrow();
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals("de", current.titleLanguage());
     }
 
@@ -184,11 +184,11 @@ class RequirementServiceTest {
     @Test
     void updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
-        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code).orElseThrow();
+        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code, null).orElseThrow();
 
         Requirement updated = service.update(WS, code, "User can log in", null, null, null, null, null, null, null);
 
-        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code).orElseThrow();
+        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals(before.head(), after.head());
         assertEquals("User can log in", updated.title());
     }
@@ -197,12 +197,12 @@ class RequirementServiceTest {
     @Test
     void updateResendingUnchangedAcceptanceCriterionTextWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
-        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code).orElseThrow();
+        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code, null).orElseThrow();
 
         service.update(WS, code, null, null, null, null,
                 List.of(new AcceptanceCriterionTextPatch(1, "Done when it works")), null, null, null);
 
-        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code).orElseThrow();
+        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals(before.head(), after.head());
     }
 
@@ -219,7 +219,7 @@ class RequirementServiceTest {
 
         service.update(WS, code, "User can log in", null, null, null, null, null, "de", null);
 
-        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code).orElseThrow();
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals("de", current.titleLanguage());
     }
 
@@ -231,11 +231,11 @@ class RequirementServiceTest {
     @Test
     void updateWithIdenticalTitleTextAndLanguageIsATrueNoOpAndDoesNotWrite() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
-        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code).orElseThrow();
+        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code, null).orElseThrow();
 
         service.update(WS, code, "User can log in", null, null, null, null, null, DEFAULT_LANGUAGE, null);
 
-        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code).orElseThrow();
+        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals(before.head(), after.head());
     }
 
@@ -247,7 +247,7 @@ class RequirementServiceTest {
         service.update(WS, code, null, null, null, null,
                 List.of(new AcceptanceCriterionTextPatch(1, "Done when it works")), null, "de", null);
 
-        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code).orElseThrow();
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals("de", current.acceptanceCriteriaLanguageByPosition().get(1));
     }
 
@@ -1048,7 +1048,7 @@ class RequirementServiceTest {
         Requirement added = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
 
         assertNull(added.rationale());
-        assertNull(repository.findCurrentByCode(WS, added.code()).orElseThrow().rationaleLanguage());
+        assertNull(repository.findCurrentByCode(WS, added.code(), null).orElseThrow().rationaleLanguage());
     }
 
     /** {@code req_update} is how a requirement registered without a reason gets one afterwards. */
@@ -1059,7 +1059,7 @@ class RequirementServiceTest {
         Requirement updated = service.update(WS, code, null, null, RATIONALE, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals(RATIONALE, updated.rationale());
-        assertEquals(DEFAULT_LANGUAGE, repository.findCurrentByCode(WS, code).orElseThrow().rationaleLanguage());
+        assertEquals(DEFAULT_LANGUAGE, repository.findCurrentByCode(WS, code, null).orElseThrow().rationaleLanguage());
     }
 
     /**
@@ -1108,11 +1108,11 @@ class RequirementServiceTest {
     @Test
     void updateResendingUnchangedRationaleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
         RequirementCode code = service.add(WS, newFunctionalRequirementWithRationale(), DEFAULT_LANGUAGE).code();
-        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code).orElseThrow();
+        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code, null).orElseThrow();
 
         Requirement updated = service.update(WS, code, null, null, RATIONALE, null, null, null, null, null);
 
-        assertEquals(before.head(), repository.findCurrentByCode(WS, code).orElseThrow().head());
+        assertEquals(before.head(), repository.findCurrentByCode(WS, code, null).orElseThrow().head());
         assertEquals(RATIONALE, updated.rationale());
     }
 

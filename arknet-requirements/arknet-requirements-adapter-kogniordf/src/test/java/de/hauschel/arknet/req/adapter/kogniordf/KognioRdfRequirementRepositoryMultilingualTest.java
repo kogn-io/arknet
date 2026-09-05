@@ -243,7 +243,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         RequirementId id = freshId();
         givenLegacyRequirementWithUntaggedAcceptanceCriterionText(PROJECT_A, id, "FR-1");
         RequirementCode code = new RequirementCode("FR-1");
-        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code, null)
                 .orElseThrow();
         List<AcceptanceCriterion> updatedCriteria =
                 List.of(new AcceptanceCriterion(1, "Anmeldung gelingt mit gueltigen Zugangsdaten"));
@@ -376,7 +376,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         RequirementId id = freshId();
         givenLegacyRequirementWithUntaggedTitle(PROJECT_A, id, "FR-1");
         RequirementCode code = new RequirementCode("FR-1");
-        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code, null)
                 .orElseThrow();
         Requirement withGermanTitle = new Requirement(current.value().id(), code, "Anmeldung",
                 current.value().description(), null, current.value().type(), current.value().status(),
@@ -402,7 +402,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         RequirementId id = freshId();
         givenLegacyRequirementWithUntaggedTitle(PROJECT_A, id, "FR-1");
         RequirementCode code = new RequirementCode("FR-1");
-        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code, null)
                 .orElseThrow();
         Requirement withFrenchTitle = new Requirement(current.value().id(), code, "Connexion",
                 current.value().description(), null, current.value().type(), current.value().status(),
@@ -445,7 +445,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         RequirementId id = freshId();
         givenLegacyRequirementWithTitleLanguageTag(PROJECT_A, id, "FR-1", "en-a");
         RequirementCode code = new RequirementCode("FR-1");
-        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code, null)
                 .orElseThrow();
         Requirement statusChangeOnly = new Requirement(current.value().id(), code, current.value().title(),
                 current.value().description(), null, current.value().type(), RequirementStatus.ACCEPTED,
@@ -476,7 +476,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         RequirementId id = freshId();
         givenLegacyRequirementWithTitleLanguageTag(PROJECT_A, id, "FR-1", "de-de");
         RequirementCode code = new RequirementCode("FR-1");
-        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code, null)
                 .orElseThrow();
         Requirement statusChangeOnly = new Requirement(current.value().id(), code, current.value().title(),
                 current.value().description(), null, current.value().type(), RequirementStatus.ACCEPTED,
@@ -652,7 +652,8 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         RequirementId id = freshId();
         givenLegacyRequirementWithUntaggedRationale(PROJECT_A, id, "FR-1");
         RequirementCode code = new RequirementCode("FR-1");
-        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        RequirementRepository.CurrentRequirement current =
+                repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
         Requirement withGermanRationale = requirement(id, code, current.value().title(),
                 current.value().description(), "damit der Support kein Passwort mehr von Hand zuruecksetzt");
 
@@ -671,7 +672,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         repository.create(PROJECT_A, requirement(freshId(), code, "Anmeldung", "Das System soll authentifizieren.",
                 "damit der Support kein Passwort mehr von Hand zuruecksetzt"), "de");
 
-        assertEquals("de", repository.findCurrentByCode(PROJECT_A, code).orElseThrow().rationaleLanguage());
+        assertEquals("de", repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().rationaleLanguage());
     }
 
     /** No rationale, no tag - and the requirement still reads back with its head (issue #321). */
@@ -681,9 +682,97 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         repository.create(PROJECT_A, requirement(freshId(), code, "Login", "The system shall authenticate a user."),
                 "en");
 
-        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        RequirementRepository.CurrentRequirement current =
+                repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
         assertNull(current.rationaleLanguage());
         assertNull(current.value().rationale());
+    }
+
+    // --- the read-modify-write read under the project's language (issue #456) ----------------
+
+    /**
+     * Issue #456: {@link RequirementRepository#findCurrentByCode} - the read behind every
+     * {@code req_update} - used to project a multilingual {@code title}/{@code description}/
+     * {@code rationale} through this repository's process-wide configured {@link DisplayLocale}
+     * (English by default), while {@link RequirementRepository#findByCode} projects those very
+     * same fields through the calling project's own default language. A field this update leaves
+     * alone is echoed straight back to the caller, so one and the same store state answered
+     * {@code req_update} with the English title and a directly following {@code req_get} with the
+     * German one.
+     */
+    @Test
+    void findCurrentByCodeSelectsTheTextFieldsInTheProjectsDefaultLanguage() {
+        RequirementCode code = new RequirementCode("FR-1");
+        givenBilingualRequirement(code);
+
+        RequirementRepository.CurrentRequirement current =
+                repository.findCurrentByCode(PROJECT_A, code, "de").orElseThrow();
+
+        assertEquals("Anmeldung", current.value().title());
+        assertEquals("Das System soll einen Benutzer authentifizieren.", current.value().description());
+        assertEquals("damit der Support kein Passwort mehr von Hand zuruecksetzt", current.value().rationale());
+        assertEquals("Anmeldung gelingt mit gueltigen Zugangsdaten",
+                current.value().acceptanceCriteria().get(0).text());
+        assertEquals(repository.findByCode(PROJECT_A, code, "de").orElseThrow(), current.value(),
+                "req_update must read the requirement req_get shows for the same project");
+    }
+
+    /**
+     * The half of the same defect that steers the <em>write</em> rather than only the reply: the
+     * tags this read hands back are the tags {@code RequirementService} writes an untouched field
+     * back under, and the values it hands back are what its no-op check compares a correction
+     * against. Read under the process default, a German project's {@code req_update} would
+     * round-trip its title as the English variant - and would mistake a genuine German correction
+     * for a no-op whenever the English variant happens to already carry that text.
+     */
+    @Test
+    void findCurrentByCodeCarriesTheLanguageTagsOfTheProjectsDefaultLanguage() {
+        RequirementCode code = new RequirementCode("FR-1");
+        givenBilingualRequirement(code);
+
+        RequirementRepository.CurrentRequirement current =
+                repository.findCurrentByCode(PROJECT_A, code, "de").orElseThrow();
+
+        assertEquals("de", current.titleLanguage());
+        assertEquals("de", current.descriptionLanguage());
+        assertEquals("de", current.rationaleLanguage());
+        assertEquals(Map.of(1, "de"), current.acceptanceCriteriaLanguageByPosition());
+    }
+
+    /**
+     * A project without a configured default language degrades exactly as before: the tag is
+     * {@code null}, {@link DisplayLocale#withRequestedOverride} is a no-op for it, and this
+     * repository's own configured preference (English here) decides - the guard that keeps this
+     * fix from turning into a silent behaviour change for every project that has no default.
+     */
+    @Test
+    void findCurrentByCodeWithoutAProjectDefaultLanguageStaysOnTheConfiguredPreference() {
+        RequirementCode code = new RequirementCode("FR-1");
+        givenBilingualRequirement(code);
+
+        RequirementRepository.CurrentRequirement current =
+                repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
+
+        assertEquals("Login", current.value().title());
+        assertEquals("en", current.titleLanguage());
+    }
+
+    /**
+     * A requirement carrying every multilingual field in both {@code @en} and {@code @de} - the
+     * shape a project whose default language is German ends up with once an English-first
+     * requirement has been translated.
+     */
+    private void givenBilingualRequirement(RequirementCode code) {
+        Requirement english = requirement(freshId(), code, "Login", "The system shall authenticate a user.",
+                "so that support stops resetting passwords by hand");
+        repository.create(PROJECT_A, english, "en");
+        Requirement german = new Requirement(english.id(), code, "Anmeldung",
+                "Das System soll einen Benutzer authentifizieren.",
+                "damit der Support kein Passwort mehr von Hand zuruecksetzt", english.type(), english.status(),
+                english.priority(), english.motivatedBy(), english.qualityCategory(), english.usesTerms(),
+                List.of(new AcceptanceCriterion(1, "Anmeldung gelingt mit gueltigen Zugangsdaten")),
+                english.constrainedBy());
+        repository.compareAndUpdate(PROJECT_A, currentHead(code), german, "de", "de", "de", Map.of(1, "de"), "de");
     }
 
     /**
@@ -718,7 +807,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
     }
 
     private RevisionToken currentHead(RequirementCode code) {
-        return repository.findCurrentByCode(PROJECT_A, code)
+        return repository.findCurrentByCode(PROJECT_A, code, null)
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
     }

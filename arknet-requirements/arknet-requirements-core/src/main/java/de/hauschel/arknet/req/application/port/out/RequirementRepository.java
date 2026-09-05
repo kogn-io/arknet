@@ -221,8 +221,24 @@ public interface RequirementRepository {
      * never older than its paired token), not a guarantee that the whole requirement comes from a
      * single read.</p>
      *
+     * <p><strong>Which language variant this read sees (issue #456).</strong> Every multilingual
+     * field is projected through {@code defaultLanguage}, the very tag {@link #findByCode} is
+     * handed for a {@code req_get} without an explicit {@code displayLocale} argument - not
+     * through the reading process's own configured display preference. This read is not merely an
+     * internal detail: the values it returns are what {@code req_update} echoes back for a field
+     * this call left alone, and the tags it returns
+     * ({@link CurrentRequirement#titleLanguage()} and friends) are what such an untouched field is
+     * written back under. Reading it under the process default would let a project whose default
+     * language is German have its update compared against, answered with, and rewritten under the
+     * English variant.</p>
+     *
      * @param projectId the project (architecture model) to look up the requirement in
      * @param code        the requirement code (e.g. {@code FR-1})
+     * @param defaultLanguage the project's configured default language, or {@code null} if it has
+     *                        none - the BCP-47 tag {@code title}/{@code description}/
+     *                        {@code rationale}/each acceptance criterion's text is selected under,
+     *                        degrading along the usual fallback chain when the resource carries no
+     *                        literal in it
      * @return the requirement and its current head, or {@link Optional#empty()} if no requirement
      *         with this code exists
      * @throws UnsupportedRequirementStatusException if the found requirement's stored status is
@@ -231,7 +247,8 @@ public interface RequirementRepository {
      *                                                 implements (only reachable via a store-first
      *                                                 edit)
      */
-    Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code);
+    Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code,
+            String defaultLanguage);
 
     /**
      * A requirement's state paired with its current concurrency token (the {@link RevisionToken},

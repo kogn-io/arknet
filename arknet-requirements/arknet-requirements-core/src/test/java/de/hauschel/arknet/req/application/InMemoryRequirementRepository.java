@@ -132,7 +132,12 @@ final class InMemoryRequirementRepository implements RequirementRepository {
     }
 
     @Override
-    public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code) {
+    public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code,
+            String defaultLanguage) {
+        // This fake holds one value per field, not one per language tag, so it has no language
+        // variant to select between - defaultLanguage is accepted to honour the port contract and
+        // deliberately ignored (the real adapter's selection is pinned in
+        // KognioRdfRequirementRepositoryMultilingualTest instead).
         return findByCode(projectId, code, null)
                 .map(requirement -> new CurrentRequirement(requirement, headByIdentity.get(requirement.id()),
                         legacyAcceptanceCriteria.contains(requirement.id()),
