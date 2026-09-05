@@ -235,7 +235,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
                         .map(StepTextPatch::position)
                         .collect(Collectors.toUnmodifiableSet());
         boolean extensionsTouched = correction.extensions() != null;
-        return updateWithOptimisticRetry(projectId, code, correction.language(), defaultLanguage,
+        return updateWithOptimisticRetry(projectId, code, correction.language(), defaultLanguage, defaultLanguage,
                 correction.title() != null, correction.goal() != null, correction.scope() != null,
                 correction.trigger() != null, correction.precondition() != null,
                 correction.postcondition() != null, touchedStepPositions, extensionsTouched, current -> {
@@ -260,7 +260,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
     }
 
     @Override
-    public UseCase linkTerm(ProjectId projectId, UseCaseCode code, String termCode) {
+    public UseCase linkTerm(ProjectId projectId, UseCaseCode code, String termCode, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(termCode, "termCode");
@@ -268,10 +268,13 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
         // the retry loop below - a lookup failure must propagate immediately and leave the use
         // case untouched, exactly as RequirementService#linkTerm.
         TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
-        // linkTerm() touches no language-tagged field - same null/null/all-untouched call shape as
-        // update() would use for a call that names nothing.
-        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, false, false, false,
-                Set.of(), false, current -> {
+        // linkTerm() touches no language-tagged field, so it always passes a null WRITE-side
+        // language/defaultLanguage below - the same all-untouched call shape update() would use
+        // for a call that names nothing. It still passes its own defaultLanguage argument as the
+        // READ-side language (issue #468), so an untouched field is echoed back under the
+        // project's own language rather than the process default.
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false, false,
+                false, false, Set.of(), false, current -> {
             if (current.usesTerms().contains(term)) {
                 return current;
             }
@@ -285,7 +288,8 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
     }
 
     @Override
-    public UseCase linkConstraint(ProjectId projectId, UseCaseCode code, String constraintCode) {
+    public UseCase linkConstraint(
+            ProjectId projectId, UseCaseCode code, String constraintCode, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(constraintCode, "constraintCode");
@@ -294,8 +298,8 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
         // neighbouring requirements bounded context via ConstraintLookup rather than a
         // same-module repository (see the class-level note).
         ConstraintRef ref = new ConstraintRef(constraintLookup.resolveByCode(projectId, constraintCode));
-        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, false, false, false,
-                Set.of(), false, current -> {
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false, false,
+                false, false, Set.of(), false, current -> {
             if (current.constrainedBy().contains(ref)) {
                 return current;
             }
@@ -348,18 +352,24 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
      *                                                is given
      */
     private UseCase updateWithOptimisticRetry(ProjectId projectId, UseCaseCode code, String language,
-            String defaultLanguage, boolean titleTouched, boolean goalTouched, boolean scopeTouched,
-            boolean triggerTouched, boolean preconditionTouched, boolean postconditionTouched,
-            Set<Integer> touchedStepPositions, boolean extensionsTouched, UnaryOperator<UseCase> mutation) {
+            String defaultLanguage, String readDefaultLanguage, boolean titleTouched, boolean goalTouched,
+            boolean scopeTouched, boolean triggerTouched, boolean preconditionTouched,
+            boolean postconditionTouched, Set<Integer> touchedStepPositions, boolean extensionsTouched,
+            UnaryOperator<UseCase> mutation) {
         UseCaseConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             // The project's own default language, not the reading process's, decides which
-            // language variant this read-modify-write round trip sees (issue #456): its values are
-            // what an untouched field is echoed back as and compared against, its tags what such a
-            // field is written back under. linkTerm/linkConstraint pass null here for the same
-            // reason they pass a null write language - they never touch a language-tagged field.
+            // language variant this read-modify-write round trip sees (issue #456, extended to
+            // linkTerm/linkConstraint by issue #468): its values are what an untouched field is
+            // echoed back as and compared against, its tags what such a field is written back
+            // under. `readDefaultLanguage` is what the caller's resolved project actually
+            // configured, whether or not this call touches a language-tagged field itself -
+            // linkTerm/linkConstraint still pass it here even though they always pass a null
+            // WRITE-side `defaultLanguage` below (they never resolve a fresh write language and
+            // must not sweep an untagged sibling literal on a call that changes no text, issue
+            // #258's sweep stays scoped to update()).
             UseCaseRepository.CurrentUseCase current =
-                    repository.findCurrentByCode(projectId, code, defaultLanguage)
+                    repository.findCurrentByCode(projectId, code, readDefaultLanguage)
                             .orElseThrow(() -> new UseCaseNotFoundException(projectId, code));
             UseCase updated = mutation.apply(current.value());
             // title/goal/scope/trigger/precondition/postcondition/each step's text/each

@@ -131,12 +131,25 @@ final class InMemoryRequirementRepository implements RequirementRepository {
                 .findFirst();
     }
 
+    /**
+     * The {@code defaultLanguage} argument the most recent {@link #findCurrentByCode} call actually
+     * received - a test-only backdoor for issue #468: this fake holds one value per field, not one
+     * per language tag, so it cannot select a different literal for a different
+     * {@code defaultLanguage} the way the real out-adapter does (see
+     * {@code KognioRdfRequirementRepositoryMultilingualTest} for that pin); this field instead lets
+     * a service-level test assert on the argument itself, which is what {@code
+     * RequirementService#accept}/{@code #propose}/{@code #linkTerm}/{@code #linkConstraint} used
+     * to get wrong (always {@code null}, regardless of what their caller passed in).
+     */
+    String lastFindCurrentByCodeDefaultLanguage;
+
     @Override
     public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code,
             String defaultLanguage) {
+        lastFindCurrentByCodeDefaultLanguage = defaultLanguage;
         // This fake holds one value per field, not one per language tag, so it has no language
         // variant to select between - defaultLanguage is accepted to honour the port contract and
-        // deliberately ignored (the real adapter's selection is pinned in
+        // deliberately ignored for selection purposes (the real adapter's selection is pinned in
         // KognioRdfRequirementRepositoryMultilingualTest instead).
         return findByCode(projectId, code, null)
                 .map(requirement -> new CurrentRequirement(requirement, headByIdentity.get(requirement.id()),

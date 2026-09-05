@@ -20,6 +20,11 @@ import de.hauschel.arknet.kernel.ProjectId;
  * its own tool ({@code adr_supersede}) rather than travelling through {@code adr_update}'s four
  * tri-state reference lists: reversing "this decision replaces that one" is itself a decision about
  * the decision, not the completion of a reference that could not be written earlier.</p>
+ *
+ * <p><strong>{@code defaultLanguage} (issue #468).</strong> Same reasoning as {@link SupersedeAdr}:
+ * this call touches no language-tagged field itself, but still needs the project's own default
+ * language for the read behind it, so an untouched field is echoed back under the project's own
+ * language rather than the process-wide configured one.</p>
  */
 public interface UnsupersedeAdr {
 
@@ -29,14 +34,18 @@ public interface UnsupersedeAdr {
      * {@code supersededBy} edge in the same write. Neither reads nor writes the former successor's own
      * record.
      *
-     * @param projectId the project (architecture model) the decision lives in
-     * @param code      the decision's code, e.g. {@code ADR-1}; must currently be
-     *                  {@link de.hauschel.arknet.adr.domain.AdrStatus#SUPERSEDED}
+     * @param projectId       the project (architecture model) the decision lives in
+     * @param code            the decision's code, e.g. {@code ADR-1}; must currently be
+     *                        {@link de.hauschel.arknet.adr.domain.AdrStatus#SUPERSEDED}
+     * @param defaultLanguage the target project's configured default language (see
+     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        or {@code null} if it has none - consulted only for the read this call
+     *                        makes to echo an untouched field back, never for a write
      * @return the restored decision
      * @throws de.hauschel.arknet.adr.domain.AdrNotFoundException if no decision with {@code code}
      *                                                             exists
      * @throws IllegalStateException                              if the decision is not currently
      *                                                              {@code SUPERSEDED}
      */
-    AdrDetail unsupersede(ProjectId projectId, AdrCode code);
+    AdrDetail unsupersede(ProjectId projectId, AdrCode code, String defaultLanguage);
 }

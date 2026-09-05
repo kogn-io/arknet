@@ -136,7 +136,7 @@ class UseCaseServiceConcurrencyTest {
     void updateSurvivesAConcurrentLinkTermBetweenReadAndWrite() {
         UseCaseCode code = otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
-                () -> otherCaller.linkTerm(WS, code, "TERM-1"));
+                () -> otherCaller.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE));
         UseCaseService underTest = new UseCaseService(
                 racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
 

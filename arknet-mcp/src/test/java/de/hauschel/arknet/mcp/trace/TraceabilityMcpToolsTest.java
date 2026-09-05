@@ -111,7 +111,7 @@ class TraceabilityMcpToolsTest {
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null, null,
                     List.of("Login succeeds with valid credentials"), null), "en");
-            requirements.linkTerm(project, fr1.code(), term.code().value());
+            requirements.linkTerm(project, fr1.code(), term.code().value(), "en");
             Requirement fr2 = requirements.add(project, new NewRequirement("Logout",
                     "The system shall let a user log out.", null, RequirementType.FUNCTIONAL, null, null, null,
                     List.of("Logout succeeds"), null), "en");
@@ -191,7 +191,7 @@ class TraceabilityMcpToolsTest {
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null, null,
                     List.of("Login succeeds with valid credentials"), null), "en");
-            requirements.linkTerm(project, fr1.code(), term.code().value());
+            requirements.linkTerm(project, fr1.code(), term.code().value(), "en");
 
             useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,

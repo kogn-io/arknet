@@ -383,6 +383,57 @@ class RequirementMcpToolsTest {
         assertTrue(rendered.contains("[constraints: TCON-1]"), rendered);
     }
 
+    /**
+     * Issue #468: {@code req_set_status}, {@code req_link_term} and {@code req_link_constraint}
+     * share {@code req_update}'s read-modify-write round trip, but - unlike {@code req_update}
+     * since issue #456 - used to always pass a {@code null} {@code defaultLanguage} to their
+     * in-ports regardless of the resolved project's own configured default. A project with
+     * {@code defaultLanguage: de} could therefore get the English title back from
+     * {@code req_set_status}/{@code req_link_term}/{@code req_link_constraint} and the German one
+     * from a directly following {@code req_get}. This pins that the adapter now passes
+     * {@link ResolvedProject#defaultLanguage()} through at every one of these call sites, exactly
+     * as it already does for {@code req_update}.
+     */
+    @Test
+    void acceptPassesTheProjectsDefaultLanguageThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
+                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithGermanDefault.accept(null, "FR-1", "ACCEPTED", null);
+
+        assertEquals("de", stub.lastAcceptDefaultLanguage);
+    }
+
+    @Test
+    void proposePassesTheProjectsDefaultLanguageThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
+                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithGermanDefault.accept(null, "FR-1", "PROPOSED", null);
+
+        assertEquals("de", stub.lastProposeDefaultLanguage);
+    }
+
+    @Test
+    void linkTermPassesTheProjectsDefaultLanguageThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
+                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithGermanDefault.linkTerm(null, "FR-1", "TERM-1", null);
+
+        assertEquals("de", stub.lastLinkTermDefaultLanguage);
+    }
+
+    @Test
+    void linkConstraintPassesTheProjectsDefaultLanguageThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
+                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithGermanDefault.linkConstraint(null, "FR-1", "TCON-1", null);
+
+        assertEquals("de", stub.lastLinkConstraintDefaultLanguage);
+    }
+
     /** Hard invariant, mirroring the term case: an unresolvable constraint falls back to its bare IRI. */
     @Test
     void linkConstraintFallsBackToTheBareIriWhenResolveConstraintsCannotResolveIt() {
@@ -610,6 +661,10 @@ class RequirementMcpToolsTest {
         private Priority lastUpdatePriority;
         private String lastUpdateLanguage;
         private String lastListDisplayLocale;
+        private String lastAcceptDefaultLanguage;
+        private String lastProposeDefaultLanguage;
+        private String lastLinkTermDefaultLanguage;
+        private String lastLinkConstraintDefaultLanguage;
 
         @Override
         public Requirement add(ProjectId projectId, NewRequirement command, String defaultLanguage) {
@@ -637,23 +692,27 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public Requirement accept(ProjectId projectId, RequirementCode code) {
+        public Requirement accept(ProjectId projectId, RequirementCode code, String defaultLanguage) {
             lastAcceptedRequirement = code;
+            lastAcceptDefaultLanguage = defaultLanguage;
             return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
                     Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA, List.of());
         }
 
         @Override
-        public Requirement propose(ProjectId projectId, RequirementCode code) {
+        public Requirement propose(ProjectId projectId, RequirementCode code, String defaultLanguage) {
             lastProposedRequirement = code;
+            lastProposeDefaultLanguage = defaultLanguage;
             return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                     Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA, List.of());
         }
 
         @Override
-        public Requirement linkTerm(ProjectId projectId, RequirementCode code, String termCode) {
+        public Requirement linkTerm(
+                ProjectId projectId, RequirementCode code, String termCode, String defaultLanguage) {
             lastLinkedRequirement = code;
             lastLinkedTermCode = termCode;
+            lastLinkTermDefaultLanguage = defaultLanguage;
             List<ResourceId> ids = new ArrayList<>(nextLinkedTerms);
             if (nextLinkedTermResourceId != null) {
                 ids.add(nextLinkedTermResourceId);
@@ -667,9 +726,11 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public Requirement linkConstraint(ProjectId projectId, RequirementCode code, String constraintCode) {
+        public Requirement linkConstraint(
+                ProjectId projectId, RequirementCode code, String constraintCode, String defaultLanguage) {
             lastLinkedConstraintRequirement = code;
             lastLinkedConstraintCode = constraintCode;
+            lastLinkConstraintDefaultLanguage = defaultLanguage;
             ResourceId id = nextLinkedConstraintResourceId != null
                     ? nextLinkedConstraintResourceId
                     : ResourceId.of("https://w3id.org/arknet/id/" + constraintCode);

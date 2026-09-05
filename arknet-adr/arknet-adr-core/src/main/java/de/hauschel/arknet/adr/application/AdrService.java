@@ -384,33 +384,36 @@ public class AdrService
     }
 
     @Override
-    public AdrDetail accept(ProjectId projectId, AdrCode code, LocalDate decidedOn) {
+    public AdrDetail accept(ProjectId projectId, AdrCode code, LocalDate decidedOn, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         LocalDate stamp = decidedOn != null ? decidedOn : LocalDate.now(clock);
-        // accept() never touches any multilingual field - null language/defaultLanguage is safe
-        // even on a project that has one configured, since resolution is never reached (issue #258).
+        // accept() never touches any multilingual field - a null WRITE-side language/
+        // defaultLanguage is safe even on a project that has one configured, since resolution is
+        // never reached (issue #258). defaultLanguage is still passed as the READ-side language
+        // below (issue #468), so an untouched field is echoed back under the project's own
+        // language rather than the process default.
         return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
-                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null,
+                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null, defaultLanguage,
                 current -> current.value().accept(stamp)));
     }
 
     @Override
-    public AdrDetail reject(ProjectId projectId, AdrCode code, LocalDate decidedOn) {
+    public AdrDetail reject(ProjectId projectId, AdrCode code, LocalDate decidedOn, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         LocalDate stamp = decidedOn != null ? decidedOn : LocalDate.now(clock);
         return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
-                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null,
+                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null, defaultLanguage,
                 current -> current.value().reject(stamp)));
     }
 
     @Override
-    public AdrDetail deprecate(ProjectId projectId, AdrCode code) {
+    public AdrDetail deprecate(ProjectId projectId, AdrCode code, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
-                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null,
+                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null, defaultLanguage,
                 current -> current.value().deprecate()));
     }
 
@@ -463,7 +466,7 @@ public class AdrService
         Adr updated = updateWithOptimisticRetry(projectId, code, nameTouched, contextTouched, decisionTouched,
                 touchedConsequencePositions, touchedOptionPositions, correction.removedConsequencePositions(),
                 correction.removedConsideredOptionPositions(), correction.language(), defaultLanguage,
-                current -> current.value()
+                defaultLanguage, current -> current.value()
                         .reviseText(
                                 correction.name() != null ? correction.name() : current.value().name(),
                                 correction.context() != null ? correction.context() : current.value().context(),
@@ -539,7 +542,8 @@ public class AdrService
     }
 
     @Override
-    public AdrDetail supersede(ProjectId projectId, AdrCode code, AdrCode supersededCode) {
+    public AdrDetail supersede(
+            ProjectId projectId, AdrCode code, AdrCode supersededCode, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(supersededCode, "supersededCode");
@@ -563,9 +567,12 @@ public class AdrService
         AdrId supersedingId = repository.findByCode(projectId, code, null)
                 .orElseThrow(() -> new AdrNotFoundException(projectId, code))
                 .id();
-        // Never touches any multilingual field.
+        // Never touches any multilingual field on the write side (issue #468: defaultLanguage is
+        // still passed as the READ-side language below, so an untouched field on the superseded
+        // record is echoed back under the project's own language rather than the process default).
         return detailOf(projectId, updateWithOptimisticRetry(projectId, supersededCode, false, false, false,
-                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null, current -> {
+                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null, defaultLanguage,
+                current -> {
             // Idempotency first, before the fresh status check below: Adr#supersededBy would take
             // this very same early return internally, but taking it here too means recording the
             // same pair a second time never depends on the superseding decision's current status -
@@ -615,11 +622,11 @@ public class AdrService
      * superseded one, this is a single-resource correction.
      */
     @Override
-    public AdrDetail unsupersede(ProjectId projectId, AdrCode code) {
+    public AdrDetail unsupersede(ProjectId projectId, AdrCode code, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
-                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null,
+                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null, defaultLanguage,
                 current -> current.value().unsupersede()));
     }
 
@@ -711,6 +718,14 @@ public class AdrService
      * @param defaultLanguage               the project's configured fallback, or {@code null} -
      *                                      resolved together with {@code language} only when a
      *                                      touched field/position actually needs it (issue #258)
+     * @param readDefaultLanguage           the project's configured default language, or
+     *                                      {@code null} - always passed to
+     *                                      {@link AdrRepository#findCurrentByCode} for the read
+     *                                      side (issue #468), whether or not this call touches a
+     *                                      multilingual field itself; a lifecycle call
+     *                                      (accept/reject/deprecate/supersede/unsupersede) passes
+     *                                      it here even though it always passes a {@code null}
+     *                                      WRITE-side {@code defaultLanguage} above
      * @throws AdrNotFoundException             if no decision with {@code code} exists
      * @throws AdrConcurrentlyModifiedException if the write keeps losing the race across every retry
      *                                          attempt
@@ -719,16 +734,20 @@ public class AdrService
             boolean contextTouched, boolean decisionTouched, Set<Integer> touchedConsequencePositions,
             Set<Integer> touchedOptionPositions, RemovedPositions removedConsequencePositions,
             RemovedPositions removedOptionPositions, String language, String defaultLanguage,
-            Function<AdrRepository.CurrentAdr, Adr> mutation) {
+            String readDefaultLanguage, Function<AdrRepository.CurrentAdr, Adr> mutation) {
         AdrConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             // The project's own default language, not the reading process's, decides which
-            // language variant this read-modify-write round trip sees (issue #456): its values are
-            // what an untouched field is echoed back as and compared against, its tags what such a
-            // field is written back under. A lifecycle call (accept/reject/deprecate/supersede/
-            // unsupersede) passes null here for the same reason it passes a null write language -
-            // it never touches a multilingual field.
-            AdrRepository.CurrentAdr current = repository.findCurrentByCode(projectId, code, defaultLanguage)
+            // language variant this read-modify-write round trip sees (issue #456, extended to
+            // every lifecycle call by issue #468): its values are what an untouched field is
+            // echoed back as and compared against, its tags what such a field is written back
+            // under. `readDefaultLanguage` is what the caller's resolved project actually
+            // configured, whether or not this call touches a multilingual field itself - a
+            // lifecycle call (accept/reject/deprecate/supersede/unsupersede) still passes it here
+            // even though it always passes a null WRITE-side `defaultLanguage` (it never resolves
+            // a fresh write language and must not sweep an untagged sibling literal on a call that
+            // changes no text, issue #258's sweep stays scoped to update()).
+            AdrRepository.CurrentAdr current = repository.findCurrentByCode(projectId, code, readDefaultLanguage)
                     .orElseThrow(() -> new AdrNotFoundException(projectId, code));
             Adr updated = mutation.apply(current);
             if (updated.equals(current.value())) {

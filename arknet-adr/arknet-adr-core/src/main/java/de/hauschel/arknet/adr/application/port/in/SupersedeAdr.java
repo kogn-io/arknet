@@ -26,6 +26,12 @@ import de.hauschel.arknet.kernel.ProjectId;
  * {@link de.hauschel.arknet.adr.domain.AdrStatus#ACCEPTED}. This tool's own parameter order
  * ({@code code} first, {@code supersededCode} second) is unchanged by that flip - only which of the
  * two records this port actually writes.</p>
+ *
+ * <p><strong>{@code defaultLanguage} (issue #468).</strong> This call touches no language-tagged
+ * field on the superseded record, but it still reads it to echo an untouched field back in the
+ * reply: without the project's own default language, the read-modify-write round trip behind this
+ * call would fall back to the process-wide configured language instead, the same defect issue
+ * #456 fixed for {@code adr_update}, one call further.</p>
  */
 public interface SupersedeAdr {
 
@@ -33,12 +39,17 @@ public interface SupersedeAdr {
      * Records that the decision {@code code} supersedes the decision {@code supersededCode}.
      * Recording the same pair twice is an idempotent no-op.
      *
-     * @param projectId      the project (architecture model) both decisions live in
-     * @param code           the superseding (newer) decision's code, e.g. {@code ADR-2}; must
-     *                       already be {@link de.hauschel.arknet.adr.domain.AdrStatus#ACCEPTED}
-     * @param supersededCode the superseded (older) decision's code, e.g. {@code ADR-1}; must
-     *                       already be {@link de.hauschel.arknet.adr.domain.AdrStatus#ACCEPTED} (a
-     *                       decision that is not is refused, naming its own status)
+     * @param projectId       the project (architecture model) both decisions live in
+     * @param code            the superseding (newer) decision's code, e.g. {@code ADR-2}; must
+     *                        already be {@link de.hauschel.arknet.adr.domain.AdrStatus#ACCEPTED}
+     * @param supersededCode  the superseded (older) decision's code, e.g. {@code ADR-1}; must
+     *                        already be {@link de.hauschel.arknet.adr.domain.AdrStatus#ACCEPTED} (a
+     *                        decision that is not is refused, naming its own status)
+     * @param defaultLanguage the target project's configured default language (see
+     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        or {@code null} if it has none - consulted only for the read of the
+     *                        superseded record this call makes to echo an untouched field back,
+     *                        never for a write
      * @return the superseded decision including the edge (not the superseding one)
      * @throws de.hauschel.arknet.adr.domain.AdrNotFoundException if either decision does not exist
      * @throws IllegalArgumentException                           if both codes name the same
@@ -50,5 +61,5 @@ public interface SupersedeAdr {
      *                                                              already being superseded by a
      *                                                              different decision)
      */
-    AdrDetail supersede(ProjectId projectId, AdrCode code, AdrCode supersededCode);
+    AdrDetail supersede(ProjectId projectId, AdrCode code, AdrCode supersededCode, String defaultLanguage);
 }

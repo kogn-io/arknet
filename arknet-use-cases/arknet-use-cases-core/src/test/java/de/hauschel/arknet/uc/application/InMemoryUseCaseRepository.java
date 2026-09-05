@@ -135,12 +135,22 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
                 .findFirst();
     }
 
+    /**
+     * The {@code defaultLanguage} argument the most recent {@link #findCurrentByCode} call actually
+     * received - a test-only backdoor for issue #468, mirroring
+     * {@code InMemoryRequirementRepository}'s identically-purposed field: this fake cannot select a
+     * different literal per language, so a service-level test asserts on the argument itself
+     * instead.
+     */
+    String lastFindCurrentByCodeDefaultLanguage;
+
     @Override
     public Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code,
             String defaultLanguage) {
+        lastFindCurrentByCodeDefaultLanguage = defaultLanguage;
         // This fake holds one value per field, not one per language tag, so it has no language
         // variant to select between - defaultLanguage is accepted to honour the port contract and
-        // deliberately ignored (the real adapter's selection is pinned in
+        // deliberately ignored for selection purposes (the real adapter's selection is pinned in
         // KognioRdfUseCaseRepositoryMultilingualTest instead).
         return findByCode(projectId, code, null)
                 .map(useCase -> new CurrentUseCase(useCase, headByIdentity.get(useCase.id()),

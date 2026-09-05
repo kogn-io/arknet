@@ -611,9 +611,16 @@ public final class AdrMcpTools {
         } catch (IllegalArgumentException e) {
             target = null;
         }
+        // project.defaultLanguage() is passed through even though none of these three transitions
+        // touches a language-tagged field itself - the read-modify-write round trip behind each
+        // still needs it to echo an untouched name/context/decision back under the project's own
+        // language instead of the process default (issue #468, extending #456's fix for
+        // adr_update to the lifecycle tools).
         return switch (target) {
-            case ACCEPTED -> format(project, acceptAdr.accept(project.id(), code, decisionDay));
-            case REJECTED -> format(project, rejectAdr.reject(project.id(), code, decisionDay));
+            case ACCEPTED ->
+                    format(project, acceptAdr.accept(project.id(), code, decisionDay, project.defaultLanguage()));
+            case REJECTED ->
+                    format(project, rejectAdr.reject(project.id(), code, decisionDay, project.defaultLanguage()));
             // Refused rather than ignored: a caller passing a date here means it to land somewhere,
             // and DEPRECATED has nowhere to put it - the decision's own date belongs to the day it
             // was accepted, and deprecating does not re-decide anything.
@@ -624,7 +631,7 @@ public final class AdrMcpTools {
                                     + "does not make one, and leaves the date it was accepted on "
                                     + "untouched");
                 }
-                yield format(project, deprecateAdr.deprecate(project.id(), code));
+                yield format(project, deprecateAdr.deprecate(project.id(), code, project.defaultLanguage()));
             }
             case SUPERSEDED -> throw new IllegalArgumentException(
                     "adr_set_status does not set SUPERSEDED directly - it needs a successor decision, "
@@ -652,8 +659,11 @@ public final class AdrMcpTools {
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        final AdrDetail updated =
-                supersedeAdr.supersede(project.id(), new AdrCode(id), new AdrCode(supersededId));
+        // Touches no language-tagged field on the superseded record itself, but the
+        // read-modify-write round trip behind it still needs the project's own default language
+        // to echo an untouched field back under it rather than the process default (issue #468).
+        final AdrDetail updated = supersedeAdr.supersede(
+                project.id(), new AdrCode(id), new AdrCode(supersededId), project.defaultLanguage());
         return format(project, updated);
     }
 
@@ -670,7 +680,11 @@ public final class AdrMcpTools {
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        final AdrDetail restored = unsupersedeAdr.unsupersede(project.id(), new AdrCode(id));
+        // Touches no language-tagged field itself, but the read-modify-write round trip behind it
+        // still needs the project's own default language to echo an untouched field back under it
+        // rather than the process default (issue #468).
+        final AdrDetail restored =
+                unsupersedeAdr.unsupersede(project.id(), new AdrCode(id), project.defaultLanguage());
         return format(project, restored);
     }
 
