@@ -25,6 +25,7 @@ import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
+import de.hauschel.arknet.adr.domain.RemovedPositions;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -260,9 +261,11 @@ class AdrServiceConcurrencyTest {
         public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
                 String nameLanguage, String contextLanguage, String decisionLanguage,
                 Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
-                String defaultLanguage) {
+                String defaultLanguage, RemovedPositions removedConsequencePositions,
+                RemovedPositions removedConsideredOptionPositions) {
             delegate.compareAndUpdate(projectId, expectedHead, updated, nameLanguage, contextLanguage,
-                    decisionLanguage, consequenceLanguageByPosition, optionLanguageByPosition, defaultLanguage);
+                    decisionLanguage, consequenceLanguageByPosition, optionLanguageByPosition, defaultLanguage,
+                    removedConsequencePositions, removedConsideredOptionPositions);
         }
 
         @Override
@@ -421,7 +424,8 @@ class AdrServiceConcurrencyTest {
         public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
                 String nameLanguage, String contextLanguage, String decisionLanguage,
                 Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
-                String defaultLanguage) {
+                String defaultLanguage, RemovedPositions removedConsequencePositions,
+                RemovedPositions removedConsideredOptionPositions) {
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
             delegate.findByCode(projectId, updated.code(), null)
                     .orElseThrow(() -> new AdrNotFoundException(projectId, updated.code()));

@@ -14,6 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
@@ -54,6 +55,7 @@ import de.hauschel.arknet.adr.domain.ConsequenceType;
 import de.hauschel.arknet.adr.domain.ConsideredOption;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.OptionOutcome;
+import de.hauschel.arknet.adr.domain.RemovedPositions;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.adr.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.adr.domain.TermRef;
@@ -255,7 +257,8 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 tx -> {
                     rejectIfPeersVanished(tx, projectId, graphIri, adr);
                     replaceTriples(tx, graphIri, subjectIri, subject, graph, false, tag, tag, tag, null,
-                            consequenceTags, optionTags, null, candidate);
+                            consequenceTags, optionTags, null, candidate, RemovedPositions.NONE,
+                            RemovedPositions.NONE);
                 });
     }
 
@@ -263,11 +266,14 @@ public class KognioRdfAdrRepository implements AdrRepository {
     public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
             String nameLanguage, String contextLanguage, String decisionLanguage,
             Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
-            String defaultLanguage) {
+            String defaultLanguage, RemovedPositions removedConsequencePositions,
+            RemovedPositions removedConsideredOptionPositions) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(updated, "updated");
         Objects.requireNonNull(consequenceLanguageByPosition, "consequenceLanguageByPosition");
         Objects.requireNonNull(optionLanguageByPosition, "optionLanguageByPosition");
+        Objects.requireNonNull(removedConsequencePositions, "removedConsequencePositions");
+        Objects.requireNonNull(removedConsideredOptionPositions, "removedConsideredOptionPositions");
         String nameTag = canonicalizeLenient(nameLanguage);
         String contextTag = canonicalizeLenient(contextLanguage);
         String decisionTag = canonicalizeLenient(decisionLanguage);
@@ -292,7 +298,8 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 tx -> {
                     rejectIfPeersVanished(tx, projectId, graphIri, updated);
                     replaceTriples(tx, graphIri, subjectIri, subject, graph, true, nameTag, contextTag,
-                            decisionTag, defaultTag, consequenceTags, optionTags, defaultTag, candidate);
+                            decisionTag, defaultTag, consequenceTags, optionTags, defaultTag, candidate,
+                            removedConsequencePositions, removedConsideredOptionPositions);
                 });
     }
 
@@ -498,9 +505,13 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * <li>Every other-language variant of {@code name}/{@code context}/{@code decision} not written
      * by this call, and of each consequence/considered-option's own multilingual text, keyed by
      * {@code arknet:position} rather than by the about-to-be-deleted child IRI (mirrors
-     * {@code KognioRdfRequirementRepository#otherLanguageAcceptanceCriterionTexts} - safe here for
-     * the same reason: {@code adr_update} never reorders or removes a position, only appends or
-     * patches in place).</li>
+     * {@code KognioRdfRequirementRepository#otherLanguageAcceptanceCriterionTexts}). Unlike the
+     * requirements precedent, a position here can move: {@code adr_update} removes a
+     * consequence/considered-option while the decision is still PROPOSED (kogn-io/arknet#483) and
+     * the ones after it move up, so each stored position is re-keyed under
+     * {@link RemovedPositions#survivingPositionOf} before the variant is re-attached - a German
+     * statement written at position 3 follows its consequence to position 2 when position 1 goes,
+     * and the variants of the removed position go with it.</li>
      * </ul>
      *
      * <p>{@code deleteExisting} follows both {@code arkarch:consequence}/{@code arkarch:consideredOption}
@@ -510,7 +521,8 @@ public class KognioRdfAdrRepository implements AdrRepository {
     private void replaceTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
             boolean exists, String nameTag, String contextTag, String decisionTag, String defaultTag,
             Map<Integer, String> consequenceTagByPosition, Map<Integer, String> optionTagByPosition,
-            String childDefaultTag, AdrCandidate candidate) {
+            String childDefaultTag, AdrCandidate candidate, RemovedPositions removedConsequencePositions,
+            RemovedPositions removedOptionPositions) {
         String selectPreservedEdges = "SELECT ?p ?o WHERE { GRAPH <" + ADR_GRAPH + "> { " + subject + " ?p ?o } "
                 + "FILTER( ?p = <" + SUPERSEDES_PROPERTY + "> "
                 + "|| ( ?p IN (<" + ADDRESSES_REQUIREMENT_PROPERTY + ">, <" + AFFECTS_CONTEXT_PROPERTY
@@ -541,15 +553,15 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 ? otherLanguageLiterals(tx, subject, DECISION_PROPERTY, decisionTag, defaultTag) : List.of();
         Map<Integer, List<Literal>> preservedConsequenceTexts = exists
                 ? otherLanguageChildTexts(tx, subject, CONSEQUENCE_PROPERTY, CONSEQUENCE_STATEMENT_PROPERTY,
-                        consequenceTagByPosition, childDefaultTag)
+                        consequenceTagByPosition, childDefaultTag, removedConsequencePositions)
                 : Map.of();
         Map<Integer, List<Literal>> preservedOptionNames = exists
                 ? otherLanguageChildTexts(tx, subject, CONSIDERED_OPTION_PROPERTY, NAME_PROPERTY,
-                        optionTagByPosition, childDefaultTag)
+                        optionTagByPosition, childDefaultTag, removedOptionPositions)
                 : Map.of();
         Map<Integer, List<Literal>> preservedOptionRationales = exists
                 ? otherLanguageChildTexts(tx, subject, CONSIDERED_OPTION_PROPERTY, OPTION_RATIONALE_PROPERTY,
-                        optionTagByPosition, childDefaultTag)
+                        optionTagByPosition, childDefaultTag, removedOptionPositions)
                 : Map.of();
 
         if (exists) {
@@ -623,23 +635,33 @@ public class KognioRdfAdrRepository implements AdrRepository {
     /**
      * {@link #otherLanguageLiterals} for a child resource's text predicate, keyed by
      * {@code arknet:position} rather than by the about-to-be-deleted child IRI - mirrors
-     * {@code KognioRdfRequirementRepository#otherLanguageAcceptanceCriterionTexts}.
+     * {@code KognioRdfRequirementRepository#otherLanguageAcceptanceCriterionTexts}, plus the
+     * re-keying a removal needs (kogn-io/arknet#483): the query yields the <em>stored</em> position,
+     * the result is keyed by the position the same entry holds after {@code removed} is applied, and
+     * a removed position's texts are not carried over at all.
      *
      * @param childEdgePredicate {@code arkarch:consequence}/{@code arkarch:consideredOption}
      * @param textPredicate      {@code arkarch:consequenceStatement}/{@code arknet:name}/
      *                           {@code arkarch:optionRationale}
-     * @param writtenTagByPosition the tag this write is about to (re)write at each position
+     * @param writtenTagByPosition the tag this write is about to (re)write at each position, keyed
+     *                           by the post-removal position like the result
      * @param defaultTag         the target project's configured default language, canonicalized
+     * @param removed            the stored positions this write drops
      */
     private Map<Integer, List<Literal>> otherLanguageChildTexts(DatasetTx tx, String subject,
             String childEdgePredicate, String textPredicate, Map<Integer, String> writtenTagByPosition,
-            String defaultTag) {
+            String defaultTag, RemovedPositions removed) {
         String query = "SELECT ?position ?text WHERE { GRAPH <" + ADR_GRAPH + "> { "
                 + subject + " <" + childEdgePredicate + "> ?child . "
                 + "?child <" + POSITION_PROPERTY + "> ?position ; <" + textPredicate + "> ?text } }";
         Map<Integer, List<Literal>> byPosition = new LinkedHashMap<>();
         tx.select(query).forEach(row -> {
-            int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
+            int storedPosition = Integer.parseInt(literalOf(row, "position").getLexicalForm());
+            OptionalInt survivingPosition = removed.survivingPositionOf(storedPosition);
+            if (survivingPosition.isEmpty()) {
+                return;
+            }
+            int position = survivingPosition.getAsInt();
             Literal text = literalOf(row, "text");
             String writtenTag = writtenTagByPosition.get(position);
             String existingTag = canonicalizeLenient(text.getLanguageTag().orElse(null));

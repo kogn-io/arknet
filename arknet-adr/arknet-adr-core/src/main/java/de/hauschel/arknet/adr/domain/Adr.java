@@ -496,6 +496,60 @@ public record Adr(
     }
 
     /**
+     * Returns this decision with the consequences at {@code removed}'s positions taken out and the
+     * survivors renumbered consecutively from 1 (kogn-io/arknet#483) - the one thing neither
+     * {@link #withAppendedConsequences} nor {@link #withConsequenceCorrections} can do. Before this
+     * method, a consequence recorded by mistake could only leave with the whole record
+     * ({@code adr_delete} plus a fresh {@code adr_add} under a new code, orphaning every reference
+     * to the old one).
+     *
+     * <p><strong>Gated exactly like a wording correction, without the translation exemption.</strong>
+     * Removing a consequence changes what the record says was decided, so it is
+     * {@link AdrStatus#PROPOSED}-only and raises the same {@link AdrTextImmutableException} with the
+     * same status-specific remedy. There is no per-position exemption to carry over: a removal is
+     * never a translation. Order matches the siblings: compare first ({@code removed} empty is a no-op
+     * returning {@code this} in any status), then the positions, then the status.</p>
+     *
+     * <p><strong>The survivors move up, and their language variants must move with them.</strong>
+     * Position is a consequence's only identity, and the out-adapter carries every other-language
+     * variant of a consequence's text across a write keyed by that position. This method renumbers
+     * through {@link RemovedPositions#survivingPositionOf} and nothing else, so the write path
+     * ({@code AdrService}, the out-adapter) can re-key each surviving position's language state by the
+     * very same rule - see {@link RemovedPositions} for why that is one value object rather than two
+     * loops.</p>
+     *
+     * @param projectId the project the removal is issued against, for the exception message only
+     * @param removed   the 1-based positions, as this record currently numbers them, to remove
+     * @return a new decision without those consequences, or {@code this} if {@code removed} is empty
+     * @throws ConsequencePositionNotFoundException if a removed position matches no consequence in
+     *                                               {@link #consequences()}
+     * @throws AdrTextImmutableException             if this decision is no longer
+     *                                               {@link AdrStatus#PROPOSED}
+     */
+    public Adr withoutConsequences(ProjectId projectId, RemovedPositions removed) {
+        Objects.requireNonNull(removed, "removed");
+        if (removed.isEmpty()) {
+            return this;
+        }
+        Set<Integer> present = new HashSet<>(consequences.stream().map(Consequence::position).toList());
+        for (Integer position : removed.positions()) {
+            if (!present.contains(position)) {
+                throw new ConsequencePositionNotFoundException(projectId, code, position);
+            }
+        }
+        if (status != AdrStatus.PROPOSED) {
+            throw new AdrTextImmutableException(code, status);
+        }
+        List<Consequence> surviving = consequences.stream()
+                .filter(consequence -> !removed.contains(consequence.position()))
+                .map(consequence -> new Consequence(removed.survivingPositionOf(consequence.position()).getAsInt(),
+                        consequence.statement(), consequence.type()))
+                .toList();
+        return new Adr(id, code, name, status, context, decision, surviving, consideredOptions,
+                decisionDate, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
+    }
+
+    /**
      * {@link #withAppendedConsequences} for {@link #consideredOptions()}. Never gated by status, for
      * the same reason.
      *
@@ -590,6 +644,44 @@ public record Adr(
             throw new AdrTextImmutableException(code, status);
         }
         return new Adr(id, code, name, status, context, decision, consequences, patched,
+                decisionDate, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
+    }
+
+    /**
+     * {@link #withoutConsequences} for {@link #consideredOptions()} - same {@link AdrStatus#PROPOSED}
+     * gate without exemption, same renumbering through {@link RemovedPositions#survivingPositionOf}.
+     * Removing the one {@link OptionOutcome#CHOSEN} option is legal here: a proposed record may carry
+     * any number of options without a chosen one, and {@link #accept(LocalDate)} is where "exactly one
+     * CHOSEN" is enforced (kogn-io/arknet#427).
+     *
+     * @param projectId the project the removal is issued against, for the exception message only
+     * @param removed   the 1-based positions, as this record currently numbers them, to remove
+     * @return a new decision without those options, or {@code this} if {@code removed} is empty
+     * @throws ConsideredOptionPositionNotFoundException if a removed position matches no option in
+     *                                                    {@link #consideredOptions()}
+     * @throws AdrTextImmutableException                 if this decision is no longer
+     *                                                    {@link AdrStatus#PROPOSED}
+     */
+    public Adr withoutConsideredOptions(ProjectId projectId, RemovedPositions removed) {
+        Objects.requireNonNull(removed, "removed");
+        if (removed.isEmpty()) {
+            return this;
+        }
+        Set<Integer> present = new HashSet<>(consideredOptions.stream().map(ConsideredOption::position).toList());
+        for (Integer position : removed.positions()) {
+            if (!present.contains(position)) {
+                throw new ConsideredOptionPositionNotFoundException(projectId, code, position);
+            }
+        }
+        if (status != AdrStatus.PROPOSED) {
+            throw new AdrTextImmutableException(code, status);
+        }
+        List<ConsideredOption> surviving = consideredOptions.stream()
+                .filter(option -> !removed.contains(option.position()))
+                .map(option -> new ConsideredOption(removed.survivingPositionOf(option.position()).getAsInt(),
+                        option.name(), option.rationale(), option.outcome()))
+                .toList();
+        return new Adr(id, code, name, status, context, decision, consequences, surviving,
                 decisionDate, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
     }
 

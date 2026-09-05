@@ -31,6 +31,7 @@ import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrStatus;
+import de.hauschel.arknet.adr.domain.RemovedPositions;
 import de.hauschel.arknet.adr.domain.Consequence;
 import de.hauschel.arknet.adr.domain.ConsequenceType;
 import de.hauschel.arknet.adr.domain.ConsideredOption;
@@ -120,7 +121,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
                 original.status(), original.context(), original.decision(), List.of(), List.of(), null,
                 List.of(), List.of(), List.of(), null, List.of());
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), translated,
-                "de", "en", "en", Map.of(), Map.of(), null);
+                "de", "en", "en", Map.of(), Map.of(), null, RemovedPositions.NONE, RemovedPositions.NONE);
 
         Adr enSelected = repository.findByCode(PROJECT, original.code(), "en").orElseThrow();
         Adr deSelected = repository.findByCode(PROJECT, original.code(), "de").orElseThrow();
@@ -143,7 +144,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         repository.create(PROJECT, original, null);
 
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), original.accept(DECIDED_ON),
-                "en", "en", "en", Map.of(), Map.of(), "en");
+                "en", "en", "en", Map.of(), Map.of(), "en", RemovedPositions.NONE, RemovedPositions.NONE);
 
         String askUntagged = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value()
                 + "> <https://w3id.org/arknet/core#name> ?name . FILTER(lang(?name) = \"\") } }";
@@ -224,7 +225,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
                 found.consequences());
 
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), original.accept(DECIDED_ON),
-                "en", "en", "en", Map.of(), Map.of(), null);
+                "en", "en", "en", Map.of(), Map.of(), null, RemovedPositions.NONE, RemovedPositions.NONE);
 
         String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
                 + ArkarchVocabulary.ADR_CONSEQUENCES + "> \"A flat, pre-#357 consequence.\" } }";
@@ -252,7 +253,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         assertEquals(null, found.consideredOptions().get(0).outcome());
 
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), original.accept(DECIDED_ON),
-                "en", "en", "en", Map.of(), Map.of(), null);
+                "en", "en", "en", Map.of(), Map.of(), null, RemovedPositions.NONE, RemovedPositions.NONE);
 
         String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
                 + ArkarchVocabulary.ADR_ALTERNATIVES + "> \"A flat, pre-#357 alternative.\" } }";
@@ -305,7 +306,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
                 List.of(new de.hauschel.arknet.adr.domain.ConsequenceCorrection(1, "Corrected wording",
                         ConsequenceType.POSITIVE)), Set.of());
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), corrected,
-                "en", "en", "en", Map.of(1, "en"), Map.of(), null);
+                "en", "en", "en", Map.of(1, "en"), Map.of(), null, RemovedPositions.NONE, RemovedPositions.NONE);
 
         String askOldChildHasTriples = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + oldChildIri + "> ?p ?o } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
@@ -346,12 +347,59 @@ class KognioRdfAdrRepositoryMultilingualTest {
                 original.decision(), original.consequences(), original.consideredOptions(), null,
                 List.of(), List.of(), List.of(), null, List.of());
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), renamed,
-                "en", "en", "en", Map.of(1, "en"), Map.of(), null);
+                "en", "en", "en", Map.of(1, "en"), Map.of(), null, RemovedPositions.NONE, RemovedPositions.NONE);
 
         Adr deSelected = repository.findByCode(PROJECT, original.code(), "de").orElseThrow();
         assertEquals("Deutscher Wortlaut", deSelected.consequences().get(0).statement());
         Adr enSelected = repository.findByCode(PROJECT, original.code(), "en").orElseThrow();
         assertEquals("English wording", enSelected.consequences().get(0).statement());
+    }
+
+    /**
+     * kogn-io/arknet#483: a removal moves the consequences after it up, and their preserved
+     * other-language variants have to move with them - keyed by position, a German statement
+     * written at position 2 would otherwise land on whatever now sits at 2 (nothing, here) and the
+     * removed position 1's German text would attach to the survivor. Mutation test: dropping the
+     * {@code RemovedPositions#survivingPositionOf} re-keying in {@code otherLanguageChildTexts}
+     * leaves position 1 reading "Erster Wortlaut" in German and loses "Zweiter Wortlaut" entirely.
+     */
+    @Test
+    void compareAndUpdateMovesAnOtherLanguageConsequenceTextAlongWithItsSurvivingEntry() {
+        AdrId id = freshId();
+        Adr original = adr(id, new AdrCode("ADR-1"),
+                List.of(new Consequence(1, "First wording", ConsequenceType.NEUTRAL),
+                        new Consequence(2, "Second wording", ConsequenceType.POSITIVE)), List.of());
+        repository.create(PROJECT, original, "en");
+        String selectChildren = "SELECT ?c ?pos WHERE { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
+                + ArkarchVocabulary.CONSEQUENCE + "> ?c . ?c <" + ArkarchVocabulary.POSITION + "> ?pos } }";
+        Map<String, String> childIriByPosition = new java.util.HashMap<>();
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.sparqlQuery().select(selectChildren).forEach(row -> childIriByPosition.put(
+                    ((io.kogn.rdf.terms.Literal) row.getValue("pos").orElseThrow()).getLexicalForm(),
+                    row.getValue("c").orElseThrow().toString()));
+        }
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + childIriByPosition.get("1") + "> <"
+                + ArkarchVocabulary.CONSEQUENCE_STATEMENT + "> \"Erster Wortlaut\"@de . <"
+                + childIriByPosition.get("2") + "> <"
+                + ArkarchVocabulary.CONSEQUENCE_STATEMENT + "> \"Zweiter Wortlaut\"@de } }");
+
+        RemovedPositions removed = new RemovedPositions(Set.of(1));
+        Adr trimmed = original.withoutConsequences(PROJECT, removed);
+        repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), trimmed,
+                "en", "en", "en", Map.of(1, "en"), Map.of(), null, removed, RemovedPositions.NONE);
+
+        Adr deSelected = repository.findByCode(PROJECT, original.code(), "de").orElseThrow();
+        assertEquals(List.of(new Consequence(1, "Zweiter Wortlaut", ConsequenceType.POSITIVE)),
+                deSelected.consequences());
+        Adr enSelected = repository.findByCode(PROJECT, original.code(), "en").orElseThrow();
+        assertEquals(List.of(new Consequence(1, "Second wording", ConsequenceType.POSITIVE)),
+                enSelected.consequences());
+        String askRemovedTextSurvives = "ASK { GRAPH <" + ADR_GRAPH + "> { ?s <"
+                + ArkarchVocabulary.CONSEQUENCE_STATEMENT + "> \"Erster Wortlaut\"@de } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            assertFalse(handle.sparqlQuery().ask(askRemovedTextSurvives),
+                    "the removed position's other-language variant must go with it, not attach to the survivor");
+        }
     }
 
     /**
@@ -376,7 +424,8 @@ class KognioRdfAdrRepositoryMultilingualTest {
                         new ConsideredOption(2, "Option B", "Rationale B", OptionOutcome.REJECTED)));
         repository.create(PROJECT, original, "en");
         repository.compareAndUpdate(PROJECT, currentHeadOf(code), original.accept(DECIDED_ON),
-                "en", "en", "en", Map.of(1, "en", 2, "en"), Map.of(1, "en", 2, "en"), null);
+                "en", "en", "en", Map.of(1, "en", 2, "en"), Map.of(1, "en", 2, "en"), null,
+                RemovedPositions.NONE, RemovedPositions.NONE);
 
         AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, code, null).orElseThrow();
         assertEquals(AdrStatus.ACCEPTED, current.value().status());
@@ -401,7 +450,8 @@ class KognioRdfAdrRepositoryMultilingualTest {
                         Set.of(1, 2));
 
         repository.compareAndUpdate(PROJECT, current.head(), translated,
-                "de", "de", "de", Map.of(1, "de", 2, "de"), Map.of(1, "de", 2, "de"), null);
+                "de", "de", "de", Map.of(1, "de", 2, "de"), Map.of(1, "de", 2, "de"), null,
+                RemovedPositions.NONE, RemovedPositions.NONE);
 
         Adr enSelected = repository.findByCode(PROJECT, code, "en").orElseThrow();
         assertEquals(AdrStatus.ACCEPTED, enSelected.status());
@@ -511,6 +561,6 @@ class KognioRdfAdrRepositoryMultilingualTest {
                 List.of(new ConsideredOption(1, "Option A (de)", "Begruendung A", OptionOutcome.CHOSEN)),
                 null, List.of(), List.of(), List.of(), null, List.of());
         repository.compareAndUpdate(PROJECT, currentHeadOf(code), german, "de", "de", "de",
-                Map.of(1, "de"), Map.of(1, "de"), "de");
+                Map.of(1, "de"), Map.of(1, "de"), "de", RemovedPositions.NONE, RemovedPositions.NONE);
     }
 }
