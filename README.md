@@ -439,7 +439,7 @@ Active modules (consumed by a BC, published under `w3id.org/arknet/`):
 | Module | Prefix | Concepts |
 |--------|--------|----------|
 | `arknet-core.ttl` | `arknet:` | Generic utility vocabulary (name, description, ...), reusable across every module |
-| `arknet-ddd.ttl` | `arkddd:` | BoundedContext, Domain, Subdomain, ContextRelationship, RelationshipType -- the strategic-DDD concepts `arknet-bounded-context` actually writes. Namespace shared with the parked `arknet-ddd_parked.ttl` below (Context Mapping, tactical DDD) |
+| `arknet-ddd.ttl` | `arkddd:` | BoundedContext, Domain, Subdomain, ContextRelationship, RelationshipType -- the strategic-DDD concepts `arknet-bounded-context` actually writes. Namespace shared with the parked `arknet-ddd_parked.ttl` below (ContextMap, tactical DDD) |
 | `arknet-actor.ttl` | `arkproc:` | Actor (a `prov:Agent` subclass), HumanActor, SystemActor, LegalActor, GroupActor, actorRole -- split out of `parked/arknet-process.ttl`; the only slice of that module a BC touches. `arknet-actor` persists it; `arknet-use-cases` only reads it (resolving `primaryActor`/`supportingActor`), never writes |
 | `arknet-requirements.ttl` | `arkreq:` | Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release |
 | `arknet-provenance.ttl` | `arkprov:` | Revision, head -- PROV-O-based revision trail written by the shared write funnel |
