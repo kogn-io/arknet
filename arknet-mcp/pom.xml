@@ -213,6 +213,21 @@
                             <goal>repackage</goal>
                         </goals>
                     </execution>
+                    <!-- build-info.properties (issue #194): makes ${revision} and the build
+                         timestamp readable AT RUNTIME. One shared, hand-started daemon serves
+                         every project on the machine, so "which build am I calling?" had no
+                         answer short of `docker ps` and an image timestamp. The generated file
+                         feeds Spring Boot's BuildProperties bean and - imported as a config
+                         location in application.properties - the arknet.version property behind
+                         the MCP handshake, the project_export envelope and the error suffix.
+                         The Docker image builds with `mvn package`, so the file is inside the
+                         fat jar it copies out. -->
+                    <execution>
+                        <id>build-info</id>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
                 </executions>
             </plugin>
         </plugins>

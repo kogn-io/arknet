@@ -6,8 +6,11 @@ package de.hauschel.arknet.mcp;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.Locale;
+import java.util.Optional;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
@@ -30,7 +33,11 @@ import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcp.report.RequirementCards;
 import de.hauschel.arknet.mcp.report.TermCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
+import de.hauschel.arknet.mcp.store.ExportMetadata;
 import de.hauschel.arknet.mcp.store.Prefixes;
+import de.hauschel.arknet.mcp.version.OntologyVersions;
+import de.hauschel.arknet.mcp.version.ServerVersion;
+import de.hauschel.arknet.mcp.version.ToolErrorVersionStamp;
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepositoryFactory;
 import de.hauschel.arknet.actor.adapter.mcp.ActorMcpTools;
 import de.hauschel.arknet.actor.application.ActorService;
@@ -932,8 +939,54 @@ public class ArknetMcpConfiguration {
      * project-identity graph, because a backup exists to restore both.
      */
     @Bean
-    StoreExporter storeExporter(final DatasetLifecycle datasetLifecycle) {
-        return new StoreExporter(datasetLifecycle);
+    StoreExporter storeExporter(final DatasetLifecycle datasetLifecycle, final ExportMetadata exportMetadata) {
+        return new StoreExporter(datasetLifecycle, exportMetadata);
+    }
+
+    /**
+     * The build this daemon runs, as one string three places state (issue #194): the MCP
+     * {@code initialize} handshake, every backup dump's envelope, and the suffix on every failing
+     * tool call.
+     *
+     * <p>Read from {@code arknet.version}, the very property {@code application.properties}
+     * feeds into {@code spring.ai.mcp.server.version}, rather than derived here a second time -
+     * an error suffix that could disagree with the version the client was handed at connect time
+     * would be worse than no suffix at all. The build time comes from Spring Boot's
+     * {@link BuildProperties}, present only when {@code build-info.properties} was produced by the
+     * Maven build; without it the version degrades to {@link ServerVersion#UNKNOWN} and no build
+     * time is claimed.</p>
+     *
+     * <p>A blank value is treated as no value at all rather than passed on: Spring reads a
+     * present-but-empty {@code ARKNET_VERSION} env var as a real value, and a daemon that refused
+     * to start over an empty version string would fail far more expensively than it would inform.</p>
+     */
+    @Bean
+    ServerVersion serverVersion(
+            @Value("${arknet.version:" + ServerVersion.UNKNOWN + "}") final String version,
+            final ObjectProvider<BuildProperties> buildProperties) {
+        return new ServerVersion(version.isBlank() ? ServerVersion.UNKNOWN : version,
+                Optional.ofNullable(buildProperties.getIfAvailable()).map(BuildProperties::getTime));
+    }
+
+    /**
+     * The metadata graph appended to every {@code project_export} dump. Reads the shipped ontology
+     * modules' {@code owl:versionInfo} once, at wiring time: they are classpath resources of a
+     * running server and cannot change under it.
+     */
+    @Bean
+    ExportMetadata exportMetadata(final ServerVersion serverVersion) {
+        return new ExportMetadata(serverVersion, OntologyVersions.onClasspath(), Clock.systemUTC());
+    }
+
+    /**
+     * Stamps the server version onto every failing tool call, across all seven hexagons at once
+     * (issue #194). Declared {@code static} because a {@link org.springframework.beans.factory.config.BeanPostProcessor}
+     * is instantiated before ordinary beans; {@link ServerVersion} is therefore taken as a
+     * provider and resolved on the first failure rather than during wiring.
+     */
+    @Bean
+    static ToolErrorVersionStamp toolErrorVersionStamp(final ObjectProvider<ServerVersion> serverVersion) {
+        return new ToolErrorVersionStamp(() -> serverVersion.getIfAvailable(ServerVersion::unknown));
     }
 
     /**

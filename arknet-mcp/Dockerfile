@@ -47,12 +47,14 @@ COPY --from=build /build/arknet-mcp/target/arknet-mcp-*-exec.jar app.jar
 COPY arknet-mcp/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# serverInfo.version for the MCP initialize handshake (issue #159): the caller passes
-# the real released version (release.yml: vX.Y.Z) or a commit sha (docker.yml: continuous
-# :latest/:sha build) as a build-arg; application.properties' ARKNET_VERSION placeholder
-# picks up this baked-in env var at runtime. Defaults to "dev" for a manual, un-parameterized
-# `docker build` -- an empty ARKNET_VERSION would otherwise win over application.properties'
-# own "dev" fallback, since Spring treats a present-but-empty env var as a real value.
+# The version this daemon reports everywhere (issue #159, extended by issue #194: the MCP
+# initialize handshake, every project_export dump's metadata graph, and the suffix on every
+# failed tool call). The caller passes the real released version (release.yml: vX.Y.Z) or a
+# commit sha (docker.yml: continuous :latest/:sha build) as a build-arg; application.properties'
+# arknet.version placeholder picks up this baked-in env var at runtime and prefers it over the
+# jar's own build-info.properties. Defaults to "dev" for a manual, un-parameterized
+# `docker build` -- an empty ARKNET_VERSION would otherwise win over that fallback chain
+# outright, since Spring treats a present-but-empty env var as a real value.
 ARG ARKNET_VERSION=dev
 ENV ARKNET_VERSION=${ARKNET_VERSION}
 

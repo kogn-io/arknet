@@ -100,7 +100,7 @@ class StoreExportToolsTest {
     void exportWritesEachProjectToAFileUnderATimestampSubdirectoryOfTheFallbackDir() {
         StoreExportTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/home/f/DEV/arknet")))),
-                new StoreExporter(lifecycle), exportDir, null);
+                ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
         String result = tools.export(null, null, null);
 
@@ -126,7 +126,7 @@ class StoreExportToolsTest {
     void exportOfTwoRapidCallsWritesToDistinctSubdirectories() {
         StoreExportTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/home/f/DEV/arknet")))),
-                new StoreExporter(lifecycle), exportDir, null);
+                ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
         tools.export(null, null, null);
         tools.export(null, null, null);
@@ -144,7 +144,7 @@ class StoreExportToolsTest {
     void exportSanitizesTheProjectLabelIntoAFilesystemSafeFileName() {
         StoreExportTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet / dev (main)", List.of(pathAnchor("/x")))),
-                new StoreExporter(lifecycle), exportDir, null);
+                ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
         tools.export(null, null, null);
 
@@ -171,7 +171,7 @@ class StoreExportToolsTest {
                     listProjectsOf(
                             new Project(PROJECT_1, "team/main", List.of(pathAnchor("/x"))),
                             new Project(PROJECT_2, "team main", List.of(pathAnchor("/y")))),
-                    new StoreExporter(lifecycle), exportDir, null);
+                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
             String result = tools.export(null, null, null);
 
@@ -210,7 +210,7 @@ class StoreExportToolsTest {
                     listProjectsOf(
                             new Project(idA, "team", List.of(pathAnchor("/x"))),
                             new Project(idB, "team", List.of(pathAnchor("/y")))),
-                    new StoreExporter(lifecycle), exportDir, null);
+                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
             tools.export(null, null, null);
 
@@ -240,7 +240,7 @@ class StoreExportToolsTest {
                     listProjectsOf(
                             new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
                             new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
-                    new StoreExporter(lifecycle), exportDir, null);
+                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
             tools.export(null, null, null);
 
@@ -261,7 +261,7 @@ class StoreExportToolsTest {
     void exportReportsTheHostDirInsteadOfTheFallbackDirWhenSet(@TempDir Path hostDir) {
         StoreExportTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/home/f/DEV/arknet")))),
-                new StoreExporter(lifecycle), exportDir, hostDir);
+                ExportFixtures.exporterOver(lifecycle), exportDir, hostDir);
 
         String result = tools.export(null, null, null);
 
@@ -307,7 +307,7 @@ class StoreExportToolsTest {
                     List.of(working, broken),
                     () -> blockTmpFileOfTheOnlyTimestampSubdirectory(root, brokenTmpFileName));
             StoreExportTools tools =
-                    exportToolsOver(() -> workingThenBroken, new StoreExporter(lifecycle), root, null);
+                    exportToolsOver(() -> workingThenBroken, ExportFixtures.exporterOver(lifecycle), root, null);
 
             String result = tools.export(null, null, null);
 
@@ -383,7 +383,7 @@ class StoreExportToolsTest {
             DatasetLifecycle competingLifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
             StoreExportTools tools = exportToolsOver(
                     listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
-                    new StoreExporter(competingLifecycle), exportDir, null);
+                    ExportFixtures.exporterOver(competingLifecycle), exportDir, null);
 
             String result = tools.export(null, null, null);
 
@@ -396,7 +396,7 @@ class StoreExportToolsTest {
 
     @Test
     void exportOfNoRegisteredProjectsRendersAPlaceholderInsteadOfAnEmptyString() {
-        StoreExportTools tools = exportToolsOver(listProjectsOf(), new StoreExporter(lifecycle), exportDir, null);
+        StoreExportTools tools = exportToolsOver(listProjectsOf(), ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
         assertThat(tools.export(null, null, null)).contains("no projects");
     }
@@ -449,7 +449,7 @@ class StoreExportToolsTest {
                     listProjectsOf(
                             new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
                             new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
-                    new StoreExporter(lifecycle), exportDir, null);
+                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
             String result = tools.export(contextAnchoredAt("/y"), true, null);
 
@@ -479,7 +479,7 @@ class StoreExportToolsTest {
                     listProjectsOf(
                             new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
                             new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
-                    new StoreExporter(lifecycle), exportDir, null);
+                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
             assertThat(tools.export(null, true, "/y")).contains("# Exported second: ");
             assertThat(tools.export(contextAnchoredAt("/x"), true, "/y"))
@@ -499,7 +499,7 @@ class StoreExportToolsTest {
     void exportOfProjectOnlyWithoutARegisteredAnchorFailsInsteadOfExportingEverything() {
         StoreExportTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
-                new StoreExporter(lifecycle), exportDir, null);
+                ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
         assertThatThrownBy(() -> tools.export(null, true, null))
                 .as("no anchor at all")
@@ -525,7 +525,7 @@ class StoreExportToolsTest {
         ProjectResolver resolver = anchor -> new ResolvedProject(PROJECT_1, null);
         FindProject findProject = id -> Optional.empty();
         StoreExportTools tools = new StoreExportTools(
-                listProjectsOf(), findProject, resolver, new StoreExporter(lifecycle), exportDir, null);
+                listProjectsOf(), findProject, resolver, ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
         String result = tools.export(contextAnchoredAt("/x"), true, null);
 
@@ -553,7 +553,7 @@ class StoreExportToolsTest {
                     listProjectsOf(
                             new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
                             new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
-                    new StoreExporter(lifecycle), exportDir, null);
+                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
             String result = tools.export(contextAnchoredAt("/nobody/registered/this"), false, null);
 
@@ -582,7 +582,7 @@ class StoreExportToolsTest {
     void exportOfAnExplicitAnchorWithoutProjectOnlyIsRejected() {
         StoreExportTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
-                new StoreExporter(lifecycle), exportDir, null);
+                ExportFixtures.exporterOver(lifecycle), exportDir, null);
 
         assertThatThrownBy(() -> tools.export(null, null, "/x"))
                 .as("projectOnly left unset")

@@ -34,6 +34,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ExportMetadataVocabulary;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
@@ -75,7 +76,7 @@ class StoreExporterTest {
         lifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
         RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         requirements.create(PROJECT, requirementTitled("Login"), null);
-        exporter = new StoreExporter(lifecycle);
+        exporter = ExportFixtures.exporterOver(lifecycle);
     }
 
     @AfterEach
@@ -121,6 +122,28 @@ class StoreExporterTest {
 
         assertThat(trig).contains("<" + REQUIREMENTS_GRAPH + ">");
         assertThat(trig).contains("<" + ArkprovVocabulary.PROVENANCE_GRAPH + ">");
+    }
+
+    /**
+     * A dump must say which server wrote it and against which ontology versions (issue #194) -
+     * a backup nobody can date or version is a backup nobody can safely restore. Asserted on the
+     * whole exported document, not on {@link ExportMetadata} alone, because the envelope is
+     * appended to another writer's output: the risk being covered is that the two halves together
+     * stop being parseable TriG.
+     */
+    @Test
+    void exportTrigAppendsTheExportMetadataGraphNamingTheServerVersion() throws Exception {
+        String trig = exportTrig();
+
+        Model model = Rio.parse(new ByteArrayInputStream(trig.getBytes(StandardCharsets.UTF_8)), RDFFormat.TRIG);
+        Model envelope = model.filter(
+                Values.iri(ExportMetadataVocabulary.SERVER_AGENT),
+                Values.iri(ExportMetadataVocabulary.OWL_VERSION_INFO),
+                null,
+                Values.iri(ExportMetadataVocabulary.EXPORT_METADATA_GRAPH));
+        assertThat(Models.objectString(envelope)).contains(ExportFixtures.TEST_VERSION);
+        // The model's own graphs are untouched by the addition.
+        assertThat(model.contexts()).contains(Values.iri(REQUIREMENTS_GRAPH));
     }
 
     /**

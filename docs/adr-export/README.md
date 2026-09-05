@@ -15,7 +15,12 @@ daemon (ADR-2, [issue #415](https://github.com/kogn-io/arknet/issues/415)).
   tool `project_export` (`projectOnly=true`). Its `project-identity` graph is
   stripped before it lands here: that graph carries the local, machine-specific
   anchor value (e.g. a filesystem path) of whoever ran the export, which has
-  no place in a public repository. Everything else is exported unchanged.
+  no place in a public repository. Everything else is exported unchanged --
+  including the `export-metadata` graph every dump ends with (issue #194):
+  which arknet version wrote it, when that version was built, when the export
+  ran, and the `owl:versionInfo` of each shipped ontology module. Those are
+  server facts, not machine-specific ones, and they are what lets a reader of
+  this file years from now know which vocabulary it was written against.
 - **`report.html`** -- the same self-contained HTML report `store_overview`
   produces, fetched via the daemon's `GET /report` endpoint. Already free of
   the `project-identity` graph on its own (`StoreReader.HIDDEN_GRAPHS`).
@@ -31,8 +36,10 @@ data loaded (see the root `README.md`).
    fetches the report into this directory.
 3. Review the diff (see below) and commit if it reflects real changes.
 
-Empirically the `.trig` dump is byte-identical across repeated exports of an
-unchanged store (RDF4J's TriG writer orders deterministically), so a diff
-here reflects an actual store change, not serialization noise -- useful for
-review, though ADR-2 does not rely on that: the dump is deliberately treated
-as non-diffable, never a merge basis.
+Empirically the store's own graphs are byte-identical across repeated exports
+of an unchanged store (RDF4J's TriG writer orders deterministically), so a
+diff there reflects an actual store change, not serialization noise -- useful
+for review, though ADR-2 does not rely on that: the dump is deliberately
+treated as non-diffable, never a merge basis. The trailing `export-metadata`
+graph is the one exception and always differs: it states when this export ran,
+which is the point of it.
