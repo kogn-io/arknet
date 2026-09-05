@@ -1407,7 +1407,7 @@
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/7bd5be19-89c3-49d5-ba0c-7f285785c088> .
   
   <https://w3id.org/arknet/id/fafb3370-a9a5-46a7-bca5-824c1b2023e0> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/2ade688d-5490-493b-94d1-f57b22477806> .
+      <https://w3id.org/arknet/revision/36d4df46-6110-45fc-b189-5c089fd7329a> .
   
   <https://w3id.org/arknet/activity/f4e6e9e9-ea5c-481d-8eb3-e93f9b656acb> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -1459,7 +1459,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:04:46.075884278Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/5c3aebd2-9297-4d40-b05f-43b4bf2accc7> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/27e4db3e-839d-4ea5-99f8-030b46019cdc> .
+      <https://w3id.org/arknet/revision/68b0903e-de32-40ab-a9bc-6a0e2f33b512> .
   
   <https://w3id.org/arknet/activity/43015bfa-d889-4cc5-a2dd-5842064794c2> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -1478,7 +1478,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:05:02.051723158Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/e5903a5d-4546-43c2-8f21-cfed965893df> .
+      <https://w3id.org/arknet/revision/029d8824-1429-4f04-8ad6-c1665310b298> .
   
   <https://w3id.org/arknet/activity/2d8a83d6-acf1-495b-b5a4-03163c5169ab> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -1519,7 +1519,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:05:34.901511571Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/31e417b9-d918-4e25-b4cf-13f3490ab4ff> .
+      <https://w3id.org/arknet/revision/61a3a524-433d-4605-9bfc-04b4fd0da20c> .
   
   <https://w3id.org/arknet/activity/30f5d74a-5ebc-4cf0-9643-507cb41c445c> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -1538,7 +1538,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:05:47.711722305Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/f247af64-a548-491d-9840-018509d7fcd5> .
+      <https://w3id.org/arknet/revision/d8b4901d-b66f-44d4-a009-cde9499c9200> .
   
   <https://w3id.org/arknet/activity/fdff69ca-c1c1-479f-b65e-f0eb1317f588> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -1565,7 +1565,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:06:06.984549898Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/6aae6fb7-69c9-47b2-8568-3ab1273e189c> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/7b36158a-5a24-46fe-87e3-3e9fd2cfb7dc> .
+      <https://w3id.org/arknet/revision/808ca0c6-b973-44c8-b13e-15b953f48d8b> .
   
   <https://w3id.org/arknet/activity/da769952-97f0-4077-9e93-a7c43ef26573> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -1576,7 +1576,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:06:14.157642269Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/d033d67e-4c59-49b3-a310-e791eacdc711> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/a3a1ee0d-bc23-424e-a855-c0171437b784> .
+      <https://w3id.org/arknet/revision/a0ee3da2-ee07-489b-8f20-c715675721ab> .
   
   <https://w3id.org/arknet/activity/63750841-64a4-4fef-a3d4-0e0a76ba1161> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -1619,7 +1619,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:06:50.668057486Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/82d3744a-408a-4f07-96ca-90748c10fc98> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/55026267-612b-465e-b855-a0bbc24f0f93> .
+      <https://w3id.org/arknet/revision/395b3d19-30b3-4d12-b95e-02c12abd4ebb> .
   
   <https://w3id.org/arknet/activity/dbc6cbef-a063-494b-9fa0-9cccc96ed2d6> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -2190,10 +2190,10 @@
     <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Proposed>;
     <https://w3id.org/arknet/architecture#adrContext> "Damit die Revision als Concurrency-Token verlässlich funktioniert, muss die Kombination aus Modelldaten, Revision und Head-Fortschreibung atomar geschehen -- und zwar für jeden Schreibpfad, nicht nur für die meisten."@de;
     <https://w3id.org/arknet/architecture#adrDecision> "Alle Schreibpfade laufen durch einen geteilten Trichter. Er schreibt Modelldaten, Revision und Head-Fortschreibung atomar in derselben Transaktion."@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/ef289a44-6cc0-41fb-bcd6-25ec28c442ed>,
-      <https://w3id.org/arknet/id/efd12ba9-480f-4bc7-a99c-b9a8267415c2>, <https://w3id.org/arknet/id/1c9ec57a-46d4-4697-8cfb-716f29cbb707>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/a490c8db-19f7-4812-a6c3-815d3c27090a>,
-      <https://w3id.org/arknet/id/13b57e1a-12be-4252-811a-44b8ea957f4a>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/4b669b37-b2e5-436b-b50f-e7acb1c378e2>,
+      <https://w3id.org/arknet/id/1e8bd214-302e-4f60-bddd-0493605ffd88>, <https://w3id.org/arknet/id/2808c46c-9fc3-4ab8-a717-0883d7219630>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/dbdd127e-eb12-46d6-80c6-f3aa56754fa9>,
+      <https://w3id.org/arknet/id/93f29429-d728-4c28-bf65-4b61183a94cc>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/58dd5050-2c33-4723-a789-479f7c4c47a8>,
       <https://w3id.org/arknet/id/c3a189a2-b7ea-4ac6-8096-9f18a5692fec>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f> .
@@ -2259,12 +2259,12 @@ Der Kern dieser Entscheidung ist die Unterscheidung \"noch nicht gebaut\" gegen 
     <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Proposed>;
     <https://w3id.org/arknet/architecture#adrContext> "Die Frage ist, ob ein späteres Backend einen Umbau der Kontext-Cores erzwingen würde. Ein Store-Zugriff, der heute an eine konkrete Abfragesprache gebunden wird, wäre später nicht mehr aufzulösen."@de;
     <https://w3id.org/arknet/architecture#adrDecision> "Persistenz läuft ausschließlich über domänennahe Out-Ports. Ein Port nimmt und liefert Domänentypen -- keine Triples, keine RDF-Typen, keine Query-Sprache in der Signatur. Ein Backend-Wechsel bleibt damit ein Adapter-Austausch."@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/6808fc77-caea-450c-a5c4-2d2f2fb98acc>,
-      <https://w3id.org/arknet/id/c44610d5-9a6e-41de-8d2f-d2caa9ddcfa3>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/ac369aa8-cf9f-4811-88bc-ed11be0a570b>,
-      <https://w3id.org/arknet/id/787ab3c7-7d7a-4a1c-90db-a713e43718a8>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/b29ef973-86c8-42c0-a2d3-2c71cfbd0846>,
+      <https://w3id.org/arknet/id/8b037c66-aedf-491f-a482-9fc3f620261e>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/53de5072-7a8c-4109-b2ea-acf15a7aa82d>,
+      <https://w3id.org/arknet/id/c8509dd4-8c2d-4f17-ae48-b39146c4b279>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/00b2a409-8b29-405e-895c-d593702817f2>,
-      <https://w3id.org/arknet/id/d033d67e-4c59-49b3-a310-e791eacdc711>, <https://w3id.org/arknet/id/bdd08ced-66a4-4871-b53c-b316f76b4ba6> .
+      <https://w3id.org/arknet/id/bdd08ced-66a4-4871-b53c-b316f76b4ba6> .
   
   <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
     <http://purl.org/dc/terms/identifier> "ADR-10";
@@ -2290,18 +2290,19 @@ Der Zielschnitt legt anders:
 Die Liste benennt, wohin die bestehenden Kontexte umgeschnitten werden; sie ist kein geschlossener Katalog aller Modell-Kontexte. Ein Ressourcentyp, der erst später eigenständig wird, bekommt seinen Kontext in einer eigenen Entscheidung.
 
 Eine Kontextgrenze ist nicht dasselbe wie eine Modulgrenze -- ein Kontext darf mehrere Module halten; diese Entscheidung legt fest, wo Sprachgrenzen verlaufen, nicht wie viele Module es gibt."""@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/1ed36f2f-a285-46aa-ab09-fee937540d36>,
-      <https://w3id.org/arknet/id/5e709a7d-3b69-484e-8e0c-3918c2d375a6>, <https://w3id.org/arknet/id/be220818-e298-4d8e-8a7a-29f5ba4bdef1>,
-      <https://w3id.org/arknet/id/6e9401b6-27c7-4f79-9d0b-26fc11f37f6b>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/455edfdd-3582-4849-9062-66400acbae24>,
-      <https://w3id.org/arknet/id/1fcebb3c-2548-4caa-b923-9dad41a9b99d>, <https://w3id.org/arknet/id/8d2ba435-cf9a-4c06-9283-1442440a8d98>,
-      <https://w3id.org/arknet/id/dd8b93a0-aea0-4134-8a87-37c698462653>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/5564da4d-a12a-4e53-8b80-f1c2dcce00c1>,
+      <https://w3id.org/arknet/id/158fde50-8a5d-430b-8c8f-132634163321>, <https://w3id.org/arknet/id/94f0c7d7-2b0a-45c4-b7f2-36049b05c4a2>,
+      <https://w3id.org/arknet/id/bdd46469-3275-4584-bd45-b01f750e935c>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/b73a3c1a-50c2-4e6e-aa70-7f1dbc27e512>,
+      <https://w3id.org/arknet/id/5dd851fe-4f31-4803-b274-f5293db0a3ef>, <https://w3id.org/arknet/id/de22deec-4ccf-4dcc-8513-44029cf3098f>,
+      <https://w3id.org/arknet/id/f343e403-2cc6-454f-a1fb-cd9070046f25>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/1b5ba6e9-4c93-4afd-b35a-86affc89d44c>,
       <https://w3id.org/arknet/id/53c40f6c-0af0-43f0-89d2-a88e32947331>, <https://w3id.org/arknet/id/acf820e0-d3a5-4e84-95e5-948538994549>,
       <https://w3id.org/arknet/id/e2fd7f3a-3c3f-44c4-8d02-8c13567151fd>, <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551>,
       <https://w3id.org/arknet/id/0c5ff58a-96c6-4143-80e2-683586edf6e8>, <https://w3id.org/arknet/id/87ab2eca-efa7-4067-be38-103b0ab6f299>,
-      <https://w3id.org/arknet/id/c2df3868-3a66-46ca-8621-677374d02aa6>, <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9> .
+      <https://w3id.org/arknet/id/c2df3868-3a66-46ca-8621-677374d02aa6>, <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9>,
+      <https://w3id.org/arknet/id/130e82c2-e6d4-488a-968d-3a377a6fc4b9> .
   
   <https://w3id.org/arknet/id/acf820e0-d3a5-4e84-95e5-948538994549> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
     <http://purl.org/dc/terms/identifier> "ADR-12";
@@ -2339,12 +2340,12 @@ Eine Kontextgrenze ist nicht dasselbe wie eine Modulgrenze -- ein Kontext darf m
     <https://w3id.org/arknet/core#name> "Spring AI als Technologie-Linie des MCP-Layers"@de;
     <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Proposed>;
     <https://w3id.org/arknet/architecture#adrContext> "Die einzige Auslieferungsfläche des Werkzeugs ist MCP. Die Frage ist, ob Tool-Deklaration und Transport gegen das rohe MCP-SDK gebaut werden -- mit handgeschriebenen Tool-Spezifikationen und JSON-Schemata -- oder gegen eine Rahmenbibliothek. Die Zahl der Tools wächst mit jedem Ressourcentyp. Handgebaute Schemata sind bei drei Tools Nebensache und bei vierzig eine eigene Fehlerquelle, die niemand testet."@de;
-    <https://w3id.org/arknet/architecture#adrDecision> "Spring AI ist die Technologie-Linie für den MCP-Layer, als Server wie als Client. Tools werden als annotierte Methoden auf Spring-Beans deklariert; Name, Beschreibung und Eingabeschema werden aus Annotation und Methodensignatur abgeleitet, nicht handgebaut. Die Composition Root ist eine Spring-Boot-Anwendung, die die Tool-Beans der Kontext-Adapter einsammelt und die Hexagone verdrahtet. Es wird kein rohes MCP-SDK verwendet. Der Transport selbst ist damit nicht entschieden."@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/910dc88b-6cbf-466f-9d70-2a3ad2baca8f>,
-      <https://w3id.org/arknet/id/6aab4817-3303-475c-b361-15d5fc1cc076>, <https://w3id.org/arknet/id/590d8b1f-b311-4009-a4c8-759a3bddd505>,
-      <https://w3id.org/arknet/id/4dbd3543-a25c-4e17-9400-304125aedc3d>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/f5f0f817-d7c7-4413-a129-e30db19b91f9>,
-      <https://w3id.org/arknet/id/78a59380-d068-4d35-af66-cec456f67cc1>, <https://w3id.org/arknet/id/82ba2597-f794-4bbf-9b63-acd6eba55ff6>;
+    <https://w3id.org/arknet/architecture#adrDecision> "Spring AI ist die Technologie-Linie für den MCP-Layer. Tools werden als annotierte Methoden auf Spring-Beans deklariert; Name, Beschreibung und Eingabeschema werden aus Annotation und Methodensignatur abgeleitet, nicht handgebaut. Die Composition Root ist eine Spring-Boot-Anwendung. Es wird kein rohes MCP-SDK verwendet. Der Transport selbst ist damit nicht entschieden."@de;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/15307afb-e811-439e-8fb8-138361ecab57>,
+      <https://w3id.org/arknet/id/3db8a2a6-3dce-41e9-905b-a24d253d2f98>, <https://w3id.org/arknet/id/331d1b0b-1d96-4012-bebc-29a7170226d6>,
+      <https://w3id.org/arknet/id/77365d42-843a-472d-a4b5-53b7d3abe8f5>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/102aecc7-6daa-44c9-8005-8c33f3c3c73a>,
+      <https://w3id.org/arknet/id/89aeeb89-a496-4c6d-946f-280c73e4204a>, <https://w3id.org/arknet/id/6036a9dc-2420-48dd-b422-a3d1cb29a1df>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/53c40f6c-0af0-43f0-89d2-a88e32947331>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4> .
   
@@ -2354,16 +2355,16 @@ Eine Kontextgrenze ist nicht dasselbe wie eine Modulgrenze -- ein Kontext darf m
     <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Proposed>;
     <https://w3id.org/arknet/architecture#adrContext> "Der übliche MCP-Betrieb ist ein stdio-Subprozess pro Client-Session. Das funktioniert, solange ein Server nur eine Session bedient. Der Store ist ein Verzeichnis mit einem Schreib-Lock: zwei Sessions desselben Projekts -- zwei Terminals, ein Worktree daneben -- starten zwei Subprozesse, und der zweite scheitert am Lock des ersten. Ein Daemon je Projekt löst das nicht, sondern verschiebt es: dann braucht jedes Projekt einen eigenen Port und einen eigenen Starteintrag."@de;
     <https://w3id.org/arknet/architecture#adrDecision> "Der MCP-Server läuft als ein langlebiger Daemon, erreichbar über einen HTTP-basierten Transport auf einem festen Loopback-Port, und bedient alle Projekte der Maschine. Ein Prozess hält die Stores aller Projekte und erwirbt pro Aufruf das Dataset des Projekts, das der Aufruf benennt, ohne Lock-Konflikt zwischen Sessions."@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/f12bcd8b-b9e4-48d7-88a7-edf1b11d8a36>,
-      <https://w3id.org/arknet/id/829ae283-e769-42de-8542-9c46ab7d5dfb>, <https://w3id.org/arknet/id/caf60ed1-64a3-47a8-b24d-5966a6b0f9a5>,
-      <https://w3id.org/arknet/id/5ecc2db3-2a80-46f5-8b6c-debe581a0c1d>, <https://w3id.org/arknet/id/2f6e6c53-3f6b-4fff-9f96-665ffdcb3a2e>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/e0f2769b-c257-4996-b2dc-b64787600c98>,
-      <https://w3id.org/arknet/id/31054eb0-6164-4b9d-a3df-9b7771308df4>, <https://w3id.org/arknet/id/64445998-1577-4f33-8321-86423651c6f5>,
-      <https://w3id.org/arknet/id/13284d0b-a6fd-47e9-901a-237962e79fb4>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/4fcb7633-533d-47df-8867-1d2e687bab75>,
+      <https://w3id.org/arknet/id/edf94080-1411-4f3b-b024-1d45281a517d>, <https://w3id.org/arknet/id/251d566e-f925-40c7-99cc-f9023982454e>,
+      <https://w3id.org/arknet/id/b3a3ffc9-8816-4738-917c-65ae270a933a>, <https://w3id.org/arknet/id/ee469292-4039-4ad4-a7b4-7acddace0ce5>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/7b922f1f-7016-485f-ada4-85ae3d32806f>,
+      <https://w3id.org/arknet/id/51edc7e1-a6df-427c-9252-bdbb3b9a7374>, <https://w3id.org/arknet/id/fed543d0-bc71-4cb5-b50a-f89bc73ca209>,
+      <https://w3id.org/arknet/id/176384b7-b04a-41c2-9fc2-e4cec431c632>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/00b2a409-8b29-405e-895c-d593702817f2>,
       <https://w3id.org/arknet/id/aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>,
-      <https://w3id.org/arknet/id/8fc7d040-da89-4b17-9aff-5d557709088a>;
+      <https://w3id.org/arknet/id/8fc7d040-da89-4b17-9aff-5d557709088a>, <https://w3id.org/arknet/id/2334e63d-bcf6-4923-9ce3-ea70d6f3b72e>;
     <https://w3id.org/arknet/architecture#addressesRequirement> <https://w3id.org/arknet/id/3ece1754-b46d-4627-ba1e-194b0563bc2f> .
   
   <https://w3id.org/arknet/id/6aae6fb7-69c9-47b2-8568-3ab1273e189c> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
@@ -2376,12 +2377,13 @@ Gebraucht werden sie trotzdem: Delivery & Release muss wissen, welche Commits ei
 
 Die naheliegende Antwort wäre je ein eigener Bounded Context (etwa \"Codebasis\"), der das fremde System spiegelt. Dann führte arknet ein Modell, das es nicht besitzt, und müsste jede Änderung des fremden Systems nachziehen."""@de;
     <https://w3id.org/arknet/architecture#adrDecision> "Für ein Konzept, dessen Daten ein anderes System besitzt, entsteht kein eigener Bounded Context. Stattdessen liest der Kontext, der das Konzept fachlich braucht, es aus dem fremden System ein und übersetzt es an seiner Grenze in seine eigene Sprache -- das Muster heißt Anti-Corruption Layer. Er übernimmt nur die Felder, die er braucht, und behält seine eigenen Begriffe: er spricht von einem freigegebenen Stand, nicht von einem Git-Tag."@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/3198688c-d64a-422c-b443-9717636fffa5>,
-      <https://w3id.org/arknet/id/be74b55c-eddc-4bd4-82fa-7e33f0bebeb7>, <https://w3id.org/arknet/id/3b171ae7-a18b-4a6f-bbf1-8734958e81d8>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/9537c276-c777-4680-8e35-52f6434109e1>,
-      <https://w3id.org/arknet/id/fad693ea-ed12-4733-902e-1e95ee4440ad>, <https://w3id.org/arknet/id/51ade8e4-1ccd-4956-b97a-babaa7a4ef89>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/c85fcb1f-2825-4b64-a988-f43f5478c349>,
+      <https://w3id.org/arknet/id/4eca34fb-789a-48b1-b07e-e79838daebbb>, <https://w3id.org/arknet/id/e8193dff-e5bb-40c6-ac85-8b0abf78d815>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/67c099a5-5078-475d-a7ac-8c13decc9f09>,
+      <https://w3id.org/arknet/id/83c6742e-b1f4-4468-ace0-ad82e1308c84>, <https://w3id.org/arknet/id/5e8970ef-9db6-4eb7-a5d0-385c54463b44>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/1b5ba6e9-4c93-4afd-b35a-86affc89d44c>;
-    <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9> .
+    <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9>,
+      <https://w3id.org/arknet/id/e61c91ce-5a7b-44b1-af34-58cde80a5143> .
   
   <https://w3id.org/arknet/id/d033d67e-4c59-49b3-a310-e791eacdc711> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
     <http://purl.org/dc/terms/identifier> "ADR-20";
@@ -2397,14 +2399,14 @@ Jeder dieser Fälle erzeugt still ein neues, leeres Projekt statt eines Fehlers.
     <https://w3id.org/arknet/architecture#adrDecision> """Projekt-Identität wird registriert, nicht abgeleitet. Der Client sendet einen Anker, den der Server nie interpretiert: eine opake Zeichenkette mit Typ (Pfad, URL oder UUID) -- ob er wie ein Pfad aussieht, ist Sache des Clients, der Server schlägt ihn nur nach. Anker und Projekt-Kennung sind zwei Dinge: der Anker ist der Haltepunkt, an dem sich ein Client festmacht, die Projekt-Kennung ist die Identität, die der Server führt -- darum zeigen mehrere Anker auf dasselbe Projekt, ohne es zu verdoppeln.
 
 Ein Aufruf ohne oder mit unbekanntem Anker scheitert mit einer Meldung, die auf die Projektanlage verweist. Es gibt keinen stillen Rückfall auf ein Server-Arbeitsverzeichnis oder ein Default-Projekt."""@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/9e0caacf-5973-4a9e-82c7-2828be6ffcc4>,
-      <https://w3id.org/arknet/id/dff5dc35-abeb-4734-8a41-b5c6097fc806>, <https://w3id.org/arknet/id/1805c6f4-e40c-47c5-88b3-eceec852154c>,
-      <https://w3id.org/arknet/id/bfe0fab8-2f16-490f-9ebe-52b2e07c8d87>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/f6335ab5-82fe-4026-8016-1d0211e7e066>,
-      <https://w3id.org/arknet/id/1d17954a-30af-496e-8437-4142f15a3361>, <https://w3id.org/arknet/id/b650b6b9-0763-4046-8040-184721d68422>;
-    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/5c3aebd2-9297-4d40-b05f-43b4bf2accc7>,
-      <https://w3id.org/arknet/id/e2fd7f3a-3c3f-44c4-8d02-8c13567151fd>, <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8>,
-      <https://w3id.org/arknet/id/82d3744a-408a-4f07-96ca-90748c10fc98>, <https://w3id.org/arknet/id/8196847e-ff13-4afe-b0ae-d5deb7e28ae9>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/23157e64-f620-49cc-821e-2259883b60ff>,
+      <https://w3id.org/arknet/id/faa178cf-ccbe-4303-a84c-19306c8682c4>, <https://w3id.org/arknet/id/55e35058-3d9d-4e98-b762-b907b639619a>,
+      <https://w3id.org/arknet/id/ac373672-209c-44f3-9b21-47c6f4f26554>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/eda4c955-4eb7-4e69-9923-598c2124e91b>,
+      <https://w3id.org/arknet/id/1d32bc05-2d67-4285-8ace-a1db46585579>, <https://w3id.org/arknet/id/fa1d3233-3d1a-441f-81b5-e500e53bceca>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/e2fd7f3a-3c3f-44c4-8d02-8c13567151fd>,
+      <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8>, <https://w3id.org/arknet/id/82d3744a-408a-4f07-96ca-90748c10fc98>,
+      <https://w3id.org/arknet/id/8196847e-ff13-4afe-b0ae-d5deb7e28ae9>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>,
       <https://w3id.org/arknet/id/8fc7d040-da89-4b17-9aff-5d557709088a> .
   
@@ -2419,11 +2421,11 @@ Ein Aufruf ohne oder mit unbekanntem Anker scheitert mit einer Meldung, die auf 
 - Eine Zwischenebene, unter der mehrere Projekte eines Arbeitsbereichs zusammenliegen.
 
 Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
-    <https://w3id.org/arknet/architecture#adrDecision> "Ein Dataset hält die Daten genau eines Projekts; die Projektgrenze ist damit die Datengrenze. Es gibt keine Ebene dazwischen -- ein Zwischenbegriff für einen Arbeitsbereich, unter dem mehrere Projekte zusammenlägen, existiert nicht."@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/baa9d0e0-eb10-490b-aedf-9fca718962f0>,
-      <https://w3id.org/arknet/id/061383d9-1c10-4eeb-a5d3-207c42f8aed1>, <https://w3id.org/arknet/id/58b1316d-4d7d-430b-b1da-0a69a2a0d307>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/4905db33-7a3a-4830-832c-e5ee5b763f5e>,
-      <https://w3id.org/arknet/id/57f3f75b-7b37-4f30-a63d-c3bad8cf8f36>, <https://w3id.org/arknet/id/7e86733b-be9e-465b-847b-85fdd26c592c>;
+    <https://w3id.org/arknet/architecture#adrDecision> "Ein Dataset hält die Daten genau eines Projekts; die Projektgrenze ist damit die Datengrenze. Die einzige Ausnahme ist das reservierte Dataset, das kein Projekt hält, sondern die Projekt-Registry. Es gibt keine Ebene dazwischen -- ein Zwischenbegriff für einen Arbeitsbereich, unter dem mehrere Projekte zusammenlägen, existiert nicht."@de;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/914a4712-2ccc-49d7-81ba-b37253edb9f0>,
+      <https://w3id.org/arknet/id/6f8df9c3-ee09-4710-8c20-d86d124a1949>, <https://w3id.org/arknet/id/d5b9958e-6058-4ff3-9d59-b873b41c1860>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/8f14fc35-aff2-4c41-890a-ae215a241b4e>,
+      <https://w3id.org/arknet/id/3248f4f0-2875-4dc3-9720-6e8dcba7788e>, <https://w3id.org/arknet/id/1897b8d8-2fa3-45e4-b4fc-44b66f8c2197>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8>,
       <https://w3id.org/arknet/id/d033d67e-4c59-49b3-a310-e791eacdc711>, <https://w3id.org/arknet/id/8196847e-ff13-4afe-b0ae-d5deb7e28ae9>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>,
@@ -2590,7 +2592,7 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T17:59:34.830656002Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/7777a2c0-87ff-48fa-ba58-6d6e3e4c2834> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/b60b1537-f227-47a8-9508-5ac772876aa5> .
+      <https://w3id.org/arknet/revision/2d2476a0-5e61-4453-b14c-d9a7e89edc2b> .
   
   <https://w3id.org/arknet/activity/bddc0d9a-a012-40ae-b430-85445c72dd29> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -3554,8 +3556,7 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
   
   <https://w3id.org/arknet/revision/4d32eadc-2d18-463a-92cc-409eab2f3b68> a <http://www.w3.org/ns/prov#Entity>,
       <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/39a7dbe1-e9b5-41be-a844-f7afc6669bc4>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/c59e841c-5366-4f8e-bbed-fb9c9b181333> .
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/39a7dbe1-e9b5-41be-a844-f7afc6669bc4> .
 }
 
 <https://w3id.org/arknet/model/adr> {
@@ -3599,14 +3600,14 @@ Der Zieltyp der tragenden Kanten ist dadurch falsch, und zwar bis in die Validie
 - Die Spezifikation verweist auf Rollen, nicht auf Träger: die Use-Case-Kanten und die Herkunftskante des Requirements enden bei einer Rolle.
 - Die Besetzung ist eine eigene, optionale Aussage von der Rolle zum Träger und die einzige Verbindung zwischen Spezifikation und Trägerwelt.
 - Die Rolle entsteht als zweiter Ressourcentyp im Actor-Kontext, nicht in einem eigenen daneben. Das folgt aus dem Sprachbruch-Kriterium für Kontextgrenzen: zwischen Träger und Rolle liegt keiner, beide beantworten, wer handelt oder ein Interesse hat, und unterscheiden sich in der Rigidität, nicht in ihren Regeln."""@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/59d9b5f0-00ec-4e74-a2db-3aeb4062d2a3>,
-      <https://w3id.org/arknet/id/f48c5e8d-dadb-4a6d-8133-7e98f3a3ee2a>, <https://w3id.org/arknet/id/61480c7f-4736-41ca-a8ce-2e887226eb25>,
-      <https://w3id.org/arknet/id/8f333e4b-5c24-4338-83ba-41525b63b817>, <https://w3id.org/arknet/id/578ea4e5-7067-4d8b-9d76-8117ad38f4a7>,
-      <https://w3id.org/arknet/id/ef2ff599-3127-4a69-bd1f-e9d18446676d>, <https://w3id.org/arknet/id/26b54567-b0aa-4d70-8cac-afe2295e4c7b>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/af1584c1-d753-4df9-8005-279265383abb>,
-      <https://w3id.org/arknet/id/58bee5e8-a398-4255-b9b2-28a60a94a341>, <https://w3id.org/arknet/id/aaac9933-4c07-4aa7-95eb-5fcb0f936151>,
-      <https://w3id.org/arknet/id/f3cfd80b-4b89-4feb-b05b-70e8b3dc509a>, <https://w3id.org/arknet/id/77a0f438-5833-4edf-952a-bb5c732029a7>,
-      <https://w3id.org/arknet/id/bbc3b100-8822-4f5d-80c8-55cfdc6d6d7d>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/db898cfc-44ae-4e88-9bc0-5d553689500c>,
+      <https://w3id.org/arknet/id/68cb153b-6616-47ba-8aa4-f7e931555b85>, <https://w3id.org/arknet/id/0960915f-451f-4cbd-a5a7-29a873e2fad5>,
+      <https://w3id.org/arknet/id/f143ebf3-f943-45c1-ad6e-fb5bb007f9e2>, <https://w3id.org/arknet/id/737b130a-8a14-4595-9055-4a78e258341c>,
+      <https://w3id.org/arknet/id/b7a68d0c-aca0-479e-a1a8-87c6cd48099f>, <https://w3id.org/arknet/id/9bc0e0ff-9525-4efc-a106-ca8c204b195f>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/a000d7c2-6d82-453c-8048-3a189d5f890b>,
+      <https://w3id.org/arknet/id/1f5daf6a-5126-457d-831d-2286c67f1654>, <https://w3id.org/arknet/id/e61fb112-b053-4bf0-9fee-e33d17506a45>,
+      <https://w3id.org/arknet/id/1fbc831f-4077-47a9-a4ac-050e974cdac7>, <https://w3id.org/arknet/id/e36b89e0-40f8-4867-8642-1b5060dc9c7b>,
+      <https://w3id.org/arknet/id/793ac0d3-a262-43ad-b908-1ab10b089be0>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551>,
       <https://w3id.org/arknet/id/9608c8f0-3197-4ab7-978f-2c8ba908a042>, <https://w3id.org/arknet/id/87ab2eca-efa7-4067-be38-103b0ab6f299>,
@@ -3811,8 +3812,9 @@ Reason: a glossary exists so that there is one word per concept. A translated la
 }
 
 <https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/revision/4d32eadc-2d18-463a-92cc-409eab2f3b68> <http://www.w3.org/ns/prov#generatedAtTime>
-      "2026-09-05T09:03:42.411015675Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+  <https://w3id.org/arknet/revision/4d32eadc-2d18-463a-92cc-409eab2f3b68> <http://www.w3.org/ns/prov#wasGeneratedBy>
+      <https://w3id.org/arknet/activity/c59e841c-5366-4f8e-bbed-fb9c9b181333>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T09:03:42.411015675Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/eaf465ee-fce2-482b-8beb-23bd9c40bc4f> .
   
   <https://w3id.org/arknet/activity/07d5d8a4-92f6-45b3-b81c-0e1bb3532ed8> a <http://www.w3.org/ns/prov#Activity> .
@@ -4593,69 +4595,120 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:13.404451762Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/9a45e161-5d75-4faa-99d0-5c817ade0516>;
     <http://www.w3.org/ns/prov#invalidatedAtTime> "2026-09-05T14:18:08.836025439Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/dbffd059-e8bd-4b47-af19-edec6f0131df> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/b60b1537-f227-47a8-9508-5ac772876aa5> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/7777a2c0-87ff-48fa-ba58-6d6e3e4c2834>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/dbffd059-e8bd-4b47-af19-edec6f0131df>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:15.903133260Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/45b4e75e-f589-465d-8f8b-fb5ca67dc92c> .
+  
+  <https://w3id.org/arknet/activity/b53eecda-6dd4-4d5b-a69d-6db1902d4345> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/98cbc37a-dc7e-4a67-8c1f-7edaa54f5dcc> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b53eecda-6dd4-4d5b-a69d-6db1902d4345>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:18.273462999Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/41fa0ea4-52b4-41b0-9076-36050f55f976> .
+  
+  <https://w3id.org/arknet/activity/c5297efa-3e77-4af6-894b-017674ce9a18> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/55026267-612b-465e-b855-a0bbc24f0f93> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/82d3744a-408a-4f07-96ca-90748c10fc98>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/c5297efa-3e77-4af6-894b-017674ce9a18>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:20.072952891Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/ff482498-73c8-4d4c-9090-740775a914fd> .
+  
+  <https://w3id.org/arknet/activity/1426e1ae-e5eb-4126-836d-969295d5d665> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/178a7a54-7ef1-45dd-b354-99745fc8a6f6> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/00b2a409-8b29-405e-895c-d593702817f2>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1426e1ae-e5eb-4126-836d-969295d5d665>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:21.958822242Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/c91d1378-3cc1-4981-a414-f0dcc93a830a> .
+  
+  <https://w3id.org/arknet/activity/53960873-ccea-412f-8da5-23e33a4bb340> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/2ade688d-5490-493b-94d1-f57b22477806> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/fafb3370-a9a5-46a7-bca5-824c1b2023e0>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/53960873-ccea-412f-8da5-23e33a4bb340>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:23.567867435Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/128cae73-0906-40eb-a853-11db1f200788> .
+  
+  <https://w3id.org/arknet/activity/e969286f-682c-468c-aa5c-908cb2739330> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/f95a2663-bcc0-4267-a504-ea10d7461f7e> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/bdd08ced-66a4-4871-b53c-b316f76b4ba6>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/e969286f-682c-468c-aa5c-908cb2739330>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:25.586893245Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/51f56875-b1b5-44c8-9fc6-c33b66e9e2c8> .
+  
+  <https://w3id.org/arknet/activity/6738a059-0b50-4dbf-8617-268401749e53> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/31e417b9-d918-4e25-b4cf-13f3490ab4ff> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision> .
+}
+
+<https://w3id.org/arknet/model/requirements> {
+  <https://w3id.org/arknet/id/6001ca59-021e-4dbe-8baf-355345a8671b> a <https://w3id.org/arknet/requirements#FunctionalRequirement>;
+    <http://purl.org/dc/terms/identifier> "FR-8";
+    <http://purl.org/dc/terms/title> "Entscheidungsbestand ohne laufenden Store lesbar machen"@de,
+      "Make the decision corpus readable without a running store"@en;
+    <http://purl.org/dc/terms/description> "Das System muss es ermöglichen, den Modellbestand eines Projekts als in sich geschlossene, schreibgeschützte Lesefläche zu erzeugen, die ein Leser ohne laufenden Store öffnen kann."@de,
+      "The system shall be able to produce a project's model corpus as a self-contained, read-only reading surface that a reader can open without a running store."@en;
+    <https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed>;
+    <https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#ShouldHave>;
+    <https://w3id.org/arknet/requirements#acceptanceCriterion> <https://w3id.org/arknet/id/e1e5f219-5730-4b96-ad1c-6a43fb0cb4dc>,
+      <https://w3id.org/arknet/id/091bff12-534b-4f23-a303-50bfd0911e44>, <https://w3id.org/arknet/id/b8eb7b52-fb60-4cf8-bcc8-ce1b55922562>,
+      <https://w3id.org/arknet/id/bc110676-955c-433e-ab97-58a8743ff1cd>;
+    <https://w3id.org/arknet/requirements#usesTerm> <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>;
+    <https://w3id.org/arknet/requirements#rationale> "Der Store läuft nur dort, wo ihn jemand startet. Ein Besucher des Repositoriums, ein Beitragender vor dem ersten Setup und die Bauumgebung haben keinen. Ohne Lesefläche kostet store-first genau die Nachvollziehbarkeit, mit der das Werkzeug wirbt."@de,
+      "The store only runs where someone starts it. A visitor of the repository, a contributor before their first setup and the build environment have none. Without a reading surface, store-first costs exactly the traceability the tool advertises."@en .
+  
+  <https://w3id.org/arknet/id/e1e5f219-5730-4b96-ad1c-6a43fb0cb4dc> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 1;
+    <https://w3id.org/arknet/requirements#criterionText> "Die Lesefläche wird aus dem Store erzeugt und ist kein Schreibweg: eine Änderung an ihr erreicht den Store nie."@de,
+      "The reading surface is generated from the store and is not a write path: a change made to it never reaches the store."@en .
+  
+  <https://w3id.org/arknet/id/091bff12-534b-4f23-a303-50bfd0911e44> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 2;
+    <https://w3id.org/arknet/requirements#criterionText> "Sie ist in sich geschlossen und braucht zur Anzeige weder den Store noch einen Netzzugriff."@de,
+      "It is self-contained and needs neither the store nor network access to be displayed."@en .
+  
+  <https://w3id.org/arknet/id/b8eb7b52-fb60-4cf8-bcc8-ce1b55922562> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 3;
+    <https://w3id.org/arknet/requirements#criterionText> "Zwei Erzeugungen auf unverändertem Store liefern denselben Inhalt."@de,
+      "Two generations on an unchanged store yield the same content."@en .
+  
+  <https://w3id.org/arknet/id/bc110676-955c-433e-ab97-58a8743ff1cd> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 4;
+    <https://w3id.org/arknet/requirements#criterionText> "Sie zeigt jede Entscheidung mit demselben Detailgrad wie das gezielte Nachschlagen."@de,
+      "It shows every decision at the same level of detail as a targeted lookup."@en .
+  
+  <https://w3id.org/arknet/id/3ece1754-b46d-4627-ba1e-194b0563bc2f> a <https://w3id.org/arknet/requirements#NonFunctionalRequirement>;
+    <http://purl.org/dc/terms/identifier> "NFR-1";
+    <http://purl.org/dc/terms/title> "Daemon nimmt nur Aufrufe von erlaubten Origin und Host an"@de,
+      "Daemon accepts calls only from allowlisted Origin and Host"@en;
+    <http://purl.org/dc/terms/description> "Das System muss als langlebiger Daemon jeden HTTP-Aufruf ablehnen, dessen Origin- oder Host-Angabe nicht auf einer expliziten Allowlist der lokalen Loopback-Namen steht, damit ein per DNS-Rebinding umgebogener Hostname nicht als same-origin mit dem Daemon gilt."@de,
+      "As a long-lived daemon, the system shall reject every HTTP call whose Origin or Host value is not on an explicit allowlist of local loopback names, so that a hostname redirected by DNS rebinding is never treated as same-origin with the daemon."@en;
+    <https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed>;
+    <https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#MustHave>;
+    <https://w3id.org/arknet/requirements#acceptanceCriterion> <https://w3id.org/arknet/id/9e0edbd0-951e-48fb-9e1c-da0d3a0c071a>,
+      <https://w3id.org/arknet/id/5a395477-ae8f-4e6e-84d7-9359a0148f07>, <https://w3id.org/arknet/id/07ee80d1-580a-4b41-aec1-f572f698cde5>,
+      <https://w3id.org/arknet/id/55497ae3-6098-4169-9dcb-9ab696516f2c>;
+    <https://w3id.org/arknet/requirements#rationale> "Ein langlebiger Prozess auf einem festen Loopback-Port ist eine dauerhaft offene lokale Fläche. Loopback allein ist keine Vertrauensgrenze, solange sie nicht geprüft wird: ohne Origin- und Host-Prüfung könnte eine Webseite über einen umgebogenen Hostnamen jedes Werkzeug des Daemons fahren. Die verwendete Rahmenbibliothek ruft zwar einen Transport-Security-Validator auf, verdrahtet aber standardmäßig einen, der nichts tut; die Prüfung muss darum ausdrücklich gefordert und gesetzt werden."@de,
+      "A long-lived process on a fixed loopback port is a permanently open local surface. Loopback alone is not a trust boundary as long as it is not checked: without an Origin and Host check, a web page could drive every tool of the daemon through a redirected hostname. The framework in use does call a transport security validator, but wires a no-op one by default; the check therefore has to be required and set explicitly."@en;
+    <https://w3id.org/arknet/requirements#qualityCategory> "security" .
 }
 
 <https://w3id.org/arknet/model/adr> {
-  <https://w3id.org/arknet/id/6808fc77-caea-450c-a5c4-2d2f2fb98acc> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Store ist austauschbar, ohne dass eine Zeile Fachlogik fällt."@de .
-  
-  <https://w3id.org/arknet/id/c44610d5-9a6e-41de-8d2f-d2caa9ddcfa3> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Domänennahe Ports kosten Übersetzung im Adapter -- eine direkt ladende Graph-Abfrage wäre kürzer."@de .
-  
-  <https://w3id.org/arknet/id/ac369aa8-cf9f-4811-88bc-ed11be0a570b> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Store direkt als RDF-Port (Triples in der Signatur)"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Macht jeden Backend-Wechsel zu einem Fachlogik-Umbau."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/787ab3c7-7d7a-4a1c-90db-a713e43718a8> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Domänennahe Out-Ports mit Domänentypen in Signatur"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Hält die Cores frei von Infrastrukturbegriffen und macht den Store austauschbar."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/9e0caacf-5973-4a9e-82c7-2828be6ffcc4> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Worktrees, verschobene Verzeichnisse und Clients ohne Versionskontrolle funktionieren gleich."@de .
-  
-  <https://w3id.org/arknet/id/dff5dc35-abeb-4734-8a41-b5c6097fc806> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Projekt kann umziehen, ohne seine Daten zu verlieren -- es bekommt einen zweiten Anker."@de .
-  
-  <https://w3id.org/arknet/id/1805c6f4-e40c-47c5-88b3-eceec852154c> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Projekt muss angelegt werden, bevor irgendetwas geschrieben werden kann -- der erste Kontakt ist damit ein Registrierungsschritt, kein Ergebnis."@de .
-  
-  <https://w3id.org/arknet/id/bfe0fab8-2f16-490f-9ebe-52b2e07c8d87> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Wer die Fehlermeldung bei unbekanntem Anker nicht liest, hält eine fehlende Registrierung für einen Bug im Werkzeug statt für einen fehlenden Schritt."@de .
-  
-  <https://w3id.org/arknet/id/f6335ab5-82fe-4026-8016-1d0211e7e066> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Identität aus dem Verzeichnis ableiten"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Bricht bei Worktree, Umzug und fehlender Versionskontrolle und erzeugt dabei stille Leerprojekte."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/1d17954a-30af-496e-8437-4142f15a3361> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Identität über einen registrierten, opaken Anker mit Server-seitiger Registry"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Hält Worktree, Umzug und Client-Vielfalt aus, weil der Server nichts ableitet, sondern nur nachschlägt."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/b650b6b9-0763-4046-8040-184721d68422> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Default-Projekt als Rückfall bei unbekanntem Anker"@de;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Schreibt Daten an einen Ort, den niemand gewählt hat -- genau die stille Fehlzuordnung, die die Registrierung beseitigen soll."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
   <https://w3id.org/arknet/id/1c2357fa-24c0-45d3-a9a5-3cc1916fad33> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 1;
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
@@ -4692,39 +4745,6 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/core#name> "Generischer Lesepfad im Composition Root, typunabhängig"@de;
     <https://w3id.org/arknet/core#position> 3;
     <https://w3id.org/arknet/architecture#optionRationale> "Deckt jeden Ressourcentyp gleich ab, ohne einen Kontext ohne Domäne zu erzeugen."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/3198688c-d64a-422c-b443-9717636fffa5> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Ändert das Versionskontroll-, CI- oder Monitoring-System sein Modell, ist nur die Übersetzung am Rand des betroffenen Kontexts anzupassen, kein eigener Kontext im Zielschnitt."@de .
-  
-  <https://w3id.org/arknet/id/be74b55c-eddc-4bd4-82fa-7e33f0bebeb7> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Jeder Kontext behält seine eigene Sprache, statt die Begriffe des Versionskontroll- oder Monitoring-Systems zu übernehmen."@de .
-  
-  <https://w3id.org/arknet/id/3b171ae7-a18b-4a6f-bbf1-8734958e81d8> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Brauchen zwei Kontexte dasselbe fremde Konzept (Verifikation & Qualität und Delivery & Release lesen beide vom CI-System), übersetzt jeder für sich. Diese Duplikation ist der Preis dafür, dass die beiden Kontexte nicht aneinander hängen."@de .
-  
-  <https://w3id.org/arknet/id/9537c276-c777-4680-8e35-52f6434109e1> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Eigener Bounded Context je fremdem System"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "arknet führte eine Kopie eines Modells (etwa \"Codebasis\"), das es nicht besitzt und dessen Änderungen es nicht kontrolliert."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/fad693ea-ed12-4733-902e-1e95ee4440ad> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Fremde Konzepte unübersetzt übernehmen"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Die Begriffe des Versionskontroll-, CI- oder Monitoring-Systems stünden direkt in arknets Kontexten und verdrängten deren eigene Sprache."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/51ade8e4-1ccd-4956-b97a-babaa7a4ef89> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Übersetzung im konsumierenden Kontext (Anti-Corruption Layer)"@de;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Hält das fremde Modell draußen und die Sprache des Kontexts intakt; die Duplikation bei mehreren Konsumenten wird in Kauf genommen."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
   
   <https://w3id.org/arknet/id/bae904d6-6ac9-41f1-a88c-af9aa8396566> a <https://w3id.org/arknet/architecture#Consequence>;
@@ -4965,185 +4985,6 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/architecture#optionRationale> "Liefert ein Kriterium für Reihenfolge und Zugehörigkeit, ohne sich einer einzelnen Norm unterzuordnen."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
   
-  <https://w3id.org/arknet/id/59d9b5f0-00ec-4e74-a2db-3aeb4062d2a3> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Zieltyp der Pflichtkanten stimmt wieder mit dem überein, was die Spezifikation meint; das Actor-Register nimmt nur noch Träger auf."@de .
-  
-  <https://w3id.org/arknet/id/f48c5e8d-dadb-4a6d-8133-7e98f3a3ee2a> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Eine Rolle lässt sich benennen, ohne eine Person zu erfinden, die sie besetzt."@de .
-  
-  <https://w3id.org/arknet/id/61480c7f-4736-41ca-a8ce-2e887226eb25> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Besetzungskante bleibt kontextintern und braucht kein Gateway zu einem Nachbar-Kontext."@de .
-  
-  <https://w3id.org/arknet/id/8f333e4b-5c24-4338-83ba-41525b63b817> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Zieltypwechsel trifft eine Pflichtkante -- das ist keine Umbenennung, sondern eine andere Zusage an jeden, der Use Cases schreibt."@de .
-  
-  <https://w3id.org/arknet/id/578ea4e5-7067-4d8b-9d76-8117ad38f4a7> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 5;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein bestehendes Modell muss jeden vorhandenen Actor einzeln einordnen: Träger oder Rolle. Ein Modell kann danach vollständig sein, ohne einen einzigen Träger zu kennen."@de .
-  
-  <https://w3id.org/arknet/id/ef2ff599-3127-4a69-bd1f-e9d18446676d> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 6;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative> .
-}
-
-<https://w3id.org/arknet/model/requirements> {
-  <https://w3id.org/arknet/id/6001ca59-021e-4dbe-8baf-355345a8671b> a <https://w3id.org/arknet/requirements#FunctionalRequirement>;
-    <http://purl.org/dc/terms/identifier> "FR-8";
-    <http://purl.org/dc/terms/title> "Entscheidungsbestand ohne laufenden Store lesbar machen"@de,
-      "Make the decision corpus readable without a running store"@en;
-    <http://purl.org/dc/terms/description> "Das System muss es ermöglichen, den Modellbestand eines Projekts als in sich geschlossene, schreibgeschützte Lesefläche zu erzeugen, die ein Leser ohne laufenden Store öffnen kann."@de,
-      "The system shall be able to produce a project's model corpus as a self-contained, read-only reading surface that a reader can open without a running store."@en;
-    <https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed>;
-    <https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#ShouldHave>;
-    <https://w3id.org/arknet/requirements#acceptanceCriterion> <https://w3id.org/arknet/id/e1e5f219-5730-4b96-ad1c-6a43fb0cb4dc>,
-      <https://w3id.org/arknet/id/091bff12-534b-4f23-a303-50bfd0911e44>, <https://w3id.org/arknet/id/b8eb7b52-fb60-4cf8-bcc8-ce1b55922562>,
-      <https://w3id.org/arknet/id/bc110676-955c-433e-ab97-58a8743ff1cd>;
-    <https://w3id.org/arknet/requirements#usesTerm> <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>;
-    <https://w3id.org/arknet/requirements#rationale> "Der Store läuft nur dort, wo ihn jemand startet. Ein Besucher des Repositoriums, ein Beitragender vor dem ersten Setup und die Bauumgebung haben keinen. Ohne Lesefläche kostet store-first genau die Nachvollziehbarkeit, mit der das Werkzeug wirbt."@de,
-      "The store only runs where someone starts it. A visitor of the repository, a contributor before their first setup and the build environment have none. Without a reading surface, store-first costs exactly the traceability the tool advertises."@en .
-  
-  <https://w3id.org/arknet/id/e1e5f219-5730-4b96-ad1c-6a43fb0cb4dc> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
-    <https://w3id.org/arknet/requirements#position> 1;
-    <https://w3id.org/arknet/requirements#criterionText> "Die Lesefläche wird aus dem Store erzeugt und ist kein Schreibweg: eine Änderung an ihr erreicht den Store nie."@de,
-      "The reading surface is generated from the store and is not a write path: a change made to it never reaches the store."@en .
-  
-  <https://w3id.org/arknet/id/091bff12-534b-4f23-a303-50bfd0911e44> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
-    <https://w3id.org/arknet/requirements#position> 2;
-    <https://w3id.org/arknet/requirements#criterionText> "Sie ist in sich geschlossen und braucht zur Anzeige weder den Store noch einen Netzzugriff."@de,
-      "It is self-contained and needs neither the store nor network access to be displayed."@en .
-  
-  <https://w3id.org/arknet/id/b8eb7b52-fb60-4cf8-bcc8-ce1b55922562> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
-    <https://w3id.org/arknet/requirements#position> 3;
-    <https://w3id.org/arknet/requirements#criterionText> "Zwei Erzeugungen auf unverändertem Store liefern denselben Inhalt."@de,
-      "Two generations on an unchanged store yield the same content."@en .
-  
-  <https://w3id.org/arknet/id/bc110676-955c-433e-ab97-58a8743ff1cd> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
-    <https://w3id.org/arknet/requirements#position> 4;
-    <https://w3id.org/arknet/requirements#criterionText> "Sie zeigt jede Entscheidung mit demselben Detailgrad wie das gezielte Nachschlagen."@de,
-      "It shows every decision at the same level of detail as a targeted lookup."@en .
-  
-  <https://w3id.org/arknet/id/3ece1754-b46d-4627-ba1e-194b0563bc2f> a <https://w3id.org/arknet/requirements#NonFunctionalRequirement>;
-    <http://purl.org/dc/terms/identifier> "NFR-1";
-    <http://purl.org/dc/terms/title> "Daemon nimmt nur Aufrufe von erlaubten Origin und Host an"@de,
-      "Daemon accepts calls only from allowlisted Origin and Host"@en;
-    <http://purl.org/dc/terms/description> "Das System muss als langlebiger Daemon jeden HTTP-Aufruf ablehnen, dessen Origin- oder Host-Angabe nicht auf einer expliziten Allowlist der lokalen Loopback-Namen steht, damit ein per DNS-Rebinding umgebogener Hostname nicht als same-origin mit dem Daemon gilt."@de,
-      "As a long-lived daemon, the system shall reject every HTTP call whose Origin or Host value is not on an explicit allowlist of local loopback names, so that a hostname redirected by DNS rebinding is never treated as same-origin with the daemon."@en;
-    <https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed>;
-    <https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#MustHave>;
-    <https://w3id.org/arknet/requirements#acceptanceCriterion> <https://w3id.org/arknet/id/9e0edbd0-951e-48fb-9e1c-da0d3a0c071a>,
-      <https://w3id.org/arknet/id/5a395477-ae8f-4e6e-84d7-9359a0148f07>, <https://w3id.org/arknet/id/07ee80d1-580a-4b41-aec1-f572f698cde5>,
-      <https://w3id.org/arknet/id/55497ae3-6098-4169-9dcb-9ab696516f2c>;
-    <https://w3id.org/arknet/requirements#rationale> "Ein langlebiger Prozess auf einem festen Loopback-Port ist eine dauerhaft offene lokale Fläche. Loopback allein ist keine Vertrauensgrenze, solange sie nicht geprüft wird: ohne Origin- und Host-Prüfung könnte eine Webseite über einen umgebogenen Hostnamen jedes Werkzeug des Daemons fahren. Die verwendete Rahmenbibliothek ruft zwar einen Transport-Security-Validator auf, verdrahtet aber standardmäßig einen, der nichts tut; die Prüfung muss darum ausdrücklich gefordert und gesetzt werden."@de,
-      "A long-lived process on a fixed loopback port is a permanently open local surface. Loopback alone is not a trust boundary as long as it is not checked: without an Origin and Host check, a web page could drive every tool of the daemon through a redirected hostname. The framework in use does call a transport security validator, but wires a no-op one by default; the check therefore has to be required and set explicitly."@en;
-    <https://w3id.org/arknet/requirements#qualityCategory> "security" .
-}
-
-<https://w3id.org/arknet/model/ubiquitous-language> {
-  <https://w3id.org/arknet/id/2334e63d-bcf6-4923-9ce3-ea70d6f3b72e> a <http://www.w3.org/2004/02/skos/core#Concept>;
-    <http://purl.org/dc/terms/identifier> "TERM-23";
-    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Dataset"@de, "Dataset"@en;
-    <http://www.w3.org/2004/02/skos/core#definition> "Ein Dataset ist die Speichereinheit, in der die Ressourcen und Revisionen genau eines Projekts liegen; seine Grenze ist die Grenze, an der eine Abfrage endet. Daneben gibt es genau ein reserviertes Dataset, das kein Projekt hält, sondern die Projekt-Registry."@de,
-      "A dataset is the unit of storage that holds the resources and revisions of exactly one project; its boundary is the boundary at which a query ends. Besides these there is exactly one reserved dataset that holds no project but the project registry."@en;
-    <http://www.w3.org/2004/02/skos/core#related> <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4>,
-      <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>, <https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f> .
-  
-  <https://w3id.org/arknet/id/e61c91ce-5a7b-44b1-af34-58cde80a5143> a <http://www.w3.org/2004/02/skos/core#Concept>;
-    <http://purl.org/dc/terms/identifier> "TERM-24";
-    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Commit"@de, "Commit"@en;
-    <http://www.w3.org/2004/02/skos/core#definition> "Ein Commit ist in arknet ein Stellvertreter für eine in der Versionsverwaltung festgehaltene Code-Änderung: er führt nur deren Kennung und die Verknüpfung zu den Revisionen, die im Zusammenhang mit ihr entstanden sind. Die Code-Änderung selbst besitzt und beschreibt arknet nicht."@de,
-      "In arknet, a commit is a stand-in for a code change recorded in the version control system: it carries only that change's identifier and the link to the revisions that arose in connection with it. The code change itself is neither owned nor described by arknet."@en;
-    <http://www.w3.org/2004/02/skos/core#related> <https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f> .
-}
-
-<https://w3id.org/arknet/model/adr> {
-  <https://w3id.org/arknet/id/ef2ff599-3127-4a69-bd1f-e9d18446676d> <https://w3id.org/arknet/architecture#consequenceStatement>
-      "Das bisherige freitextliche Rollenfeld am Actor wird durch die Ressource ersetzt."@de .
-  
-  <https://w3id.org/arknet/id/26b54567-b0aa-4d70-8cac-afe2295e4c7b> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 7;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Actor-Kontext heißt weiter nach einem seiner beiden Ressourcentypen; dieselbe Ungenauigkeit trägt der Requirements-Kontext mit dem Constraint bereits."@de .
-  
-  <https://w3id.org/arknet/id/af1584c1-d753-4df9-8005-279265383abb> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Rolle als eigene Ressource, Actor nur noch Träger"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Trennt die beiden Bedeutungen entlang der Rigidität und macht den Zieltyp der Pflichtkanten wieder richtig; die Rolle kann unbesetzt existieren, was der Normalfall der Spezifikation ist."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/58bee5e8-a398-4255-b9b2-28a60a94a341> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Beim zwitterhaften Actor bleiben und nur die Kanten sauber benennen"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Die Bequemlichkeit ist genau der Fehler: eine Kante, deren Ziel zwei Bedeutungen trägt, trifft immer zu, und die Pflicht-Shape zwingt weiterhin Rollen ins Träger-Register."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/aaac9933-4c07-4aa7-95eb-5fcb0f936151> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Die Rolle als Marker oder Freitextfeld am Actor"@de;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Ein Marker sagt \"irgendwo Rolle\", nicht welche; und er kann nicht unbesetzt existieren, was der Normalfall der Spezifikation ist."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/f3cfd80b-4b89-4feb-b05b-70e8b3dc509a> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Die Rolle als Unterklasse des Actors"@de;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#optionRationale> "Ein anti-rigider Typ unter einem rigiden, genau der Fehler, den der Rigiditätstest ausschließt. Dieselbe Besetzung wäre in einem Use Case primär und in einem anderen unterstützend; das ist eine Eigenschaft der Beziehung, nicht des Typs."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/77a0f438-5833-4edf-952a-bb5c732029a7> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Die Rolle in einem eigenen Bounded Context"@de;
-    <https://w3id.org/arknet/core#position> 5;
-    <https://w3id.org/arknet/architecture#optionRationale> "Eine Kontextgrenze verlangt einen Sprachbruch, und zwischen Träger und Rolle liegt keiner. Die Grenze kostete stattdessen eine Brücke: die Besetzungskante würde zur Cross-Kontext-Kante mit Gateway und Auflösung."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/bbc3b100-8822-4f5d-80c8-55cfdc6d6d7d> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Die Rolle im Use-Cases-Kontext"@de;
-    <https://w3id.org/arknet/core#position> 6;
-    <https://w3id.org/arknet/architecture#optionRationale> "Mit der Herkunftskante brauchen auch die Requirements sie; wo immer sie läge, wäre der andere Konsument zu Gast. Dasselbe Argument stand bereits beim Actor gegen den Requirements-Kontext."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/baa9d0e0-eb10-490b-aedf-9fca718962f0> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Eine Abfrage kann kein fremdes Projekt treffen, weil sie dessen Daten gar nicht sieht -- die Trennung liegt im Speicher, nicht in einer Filterbedingung, die man vergessen kann."@de .
-  
-  <https://w3id.org/arknet/id/061383d9-1c10-4eeb-a5d3-207c42f8aed1> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Projekt lässt sich als Ganzes sichern, kopieren oder verwerfen, ohne fremde Daten mitzunehmen."@de .
-  
-  <https://w3id.org/arknet/id/58b1316d-4d7d-430b-b1da-0a69a2a0d307> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Eine Frage über mehrere Projekte hinweg hat keinen Ort -- sie bräuchte einen Leser, der mehrere Datasets zugleich öffnet, und den gibt es nicht."@de .
-  
-  <https://w3id.org/arknet/id/4905db33-7a3a-4830-832c-e5ee5b763f5e> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Ein Dataset für mehrere Projekte, getrennt über eine Bedingung in der Abfrage"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Die Trennung hängt dann an jeder einzelnen Abfrage; eine vergessene Bedingung mischt zwei Projekte, ohne dass es auffällt."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/57f3f75b-7b37-4f30-a63d-c3bad8cf8f36> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Zwischenebene für einen Arbeitsbereich über mehreren Projekten"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Ein Begriff mehr, den jeder Aufruf mitführen muss, ohne dass eine Frage existiert, die er beantwortet."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/7e86733b-be9e-465b-847b-85fdd26c592c> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Ein Dataset je Projekt"@de;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Macht die Projektgrenze zur Datengrenze, ohne dass eine einzelne Abfrage sie halten muss."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
   <https://w3id.org/arknet/id/2e106d57-5e0a-4949-9dc4-8de16b1456ed> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 1;
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
@@ -5164,33 +5005,6 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/core#name> "Single-User-Client ohne Auth-/Team-Begriff in den Cores"@de;
     <https://w3id.org/arknet/core#position> 2;
     <https://w3id.org/arknet/architecture#optionRationale> "Hält die Cores klein und frei von Spekulation über einen Betrieb, der nicht existiert."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/ef289a44-6cc0-41fb-bcd6-25ec28c442ed> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Modelldaten, Nachvollziehbarkeit und Concurrency-Schutz können nicht auseinanderlaufen, weil sie atomar in einem Schritt entstehen."@de .
-  
-  <https://w3id.org/arknet/id/efd12ba9-480f-4bc7-a99c-b9a8267415c2> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Trichter ist ein Engpass, durch den alles muss; ein Fehler darin trifft jeden Kontext."@de .
-  
-  <https://w3id.org/arknet/id/1c9ec57a-46d4-4697-8cfb-716f29cbb707> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Head darf erst dann als Token gelten, wenn kein Schreibpfad mehr am Trichter vorbeiläuft -- solange einer vorbeiläuft, würde ein bedingter Write genau den Lost Update durchwinken, den er verhindern soll; eine teilweise ausgelieferte Umstellung ist damit schlechter als gar keine."@de .
-  
-  <https://w3id.org/arknet/id/a490c8db-19f7-4812-a6c3-815d3c27090a> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Jeder Schreibpfad sichert Atomarität selbst"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Vervielfacht dieselbe heikle Transaktionslogik in jedem Adapter statt sie einmal zu bauen."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/13b57e1a-12be-4252-811a-44b8ea957f4a> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Ein geteilter Trichter für alle Schreibpfade"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Garantiert die Atomarität an einer einzigen Stelle statt an vielen."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
   
   <https://w3id.org/arknet/id/c8bf7215-4d7d-49b9-8042-b7da52e9f67e> a <https://w3id.org/arknet/architecture#Consequence>;
@@ -5235,221 +5049,30 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/core#position> 3;
     <https://w3id.org/arknet/architecture#optionRationale> "Hält die Invarianten an einer unumgehbaren Stelle und den Core frei vom Substrat. Der Preis, die Bewahrung nicht geführter Tripel im Adapter, ist lokal und benennbar."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+}
+
+<https://w3id.org/arknet/model/ubiquitous-language> {
+  <https://w3id.org/arknet/id/2334e63d-bcf6-4923-9ce3-ea70d6f3b72e> a <http://www.w3.org/2004/02/skos/core#Concept>;
+    <http://purl.org/dc/terms/identifier> "TERM-23";
+    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Dataset"@de, "Dataset"@en;
+    <http://www.w3.org/2004/02/skos/core#definition> "Ein Dataset ist die Speichereinheit, in der die Ressourcen und Revisionen genau eines Projekts liegen; seine Grenze ist die Grenze, an der eine Abfrage endet. Daneben gibt es genau ein reserviertes Dataset, das kein Projekt hält, sondern die Projekt-Registry."@de,
+      "A dataset is the unit of storage that holds the resources and revisions of exactly one project; its boundary is the boundary at which a query ends. Besides these there is exactly one reserved dataset that holds no project but the project registry."@en;
+    <http://www.w3.org/2004/02/skos/core#related> <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4>,
+      <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>, <https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f> .
   
-  <https://w3id.org/arknet/id/910dc88b-6cbf-466f-9d70-2a3ad2baca8f> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Tool-Schema und Methodensignatur können nicht auseinanderlaufen, weil es nur eine Quelle gibt."@de .
-  
-  <https://w3id.org/arknet/id/6aab4817-3303-475c-b361-15d5fc1cc076> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Neue Tools kosten eine annotierte Methode."@de .
-  
-  <https://w3id.org/arknet/id/590d8b1f-b311-4009-a4c8-759a3bddd505> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Das Werkzeug hängt an einer Rahmenbibliothek, deren MCP-Unterstützung jünger ist als das Protokoll -- wo sie eine Protokollfähigkeit nicht abbildet oder unsicher vorbelegt, muss nachgebessert statt ausgewichen werden."@de .
-  
-  <https://w3id.org/arknet/id/4dbd3543-a25c-4e17-9400-304125aedc3d> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Rahmenbibliothek zieht eine Startzeit und einen Speicherbedarf mit, die ein reiner SDK-Server nicht hätte."@de .
-  
-  <https://w3id.org/arknet/id/f5f0f817-d7c7-4413-a129-e30db19b91f9> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Rohes MCP-SDK"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Handgebaute Schemata skalieren nicht mit der Toolzahl."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/78a59380-d068-4d35-af66-cec456f67cc1> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Pro Modul entscheiden"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Führt zu zwei MCP-Stacks im selben Reaktor."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/82ba2597-f794-4bbf-9b63-acd6eba55ff6> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Rahmenbibliothek mit Annotation-basierter Tool-Deklaration"@de;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Hält Schema und Signatur zwangsläufig konsistent und skaliert mit der Toolzahl."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/f12bcd8b-b9e4-48d7-88a7-edf1b11d8a36> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Beliebig viele Sessions und Worktrees desselben Projekts arbeiten gleichzeitig."@de .
-  
-  <https://w3id.org/arknet/id/829ae283-e769-42de-8542-9c46ab7d5dfb> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Starteintrag statt einem pro Projekt."@de .
-  
-  <https://w3id.org/arknet/id/caf60ed1-64a3-47a8-b24d-5966a6b0f9a5> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Daemon aktualisiert sich bei einem Release nicht selbst -- nach einem Bau läuft weiter der alte Stand, bis jemand neu startet, und der Fehler sieht aus wie ein Bug im Tool."@de .
-  
-  <https://w3id.org/arknet/id/5ecc2db3-2a80-46f5-8b6c-debe581a0c1d> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Absturz trifft alle Projekte gleichzeitig statt nur eines."@de .
-  
-  <https://w3id.org/arknet/id/2f6e6c53-3f6b-4fff-9f96-665ffdcb3a2e> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 5;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein langlebiger Prozess auf einem festen Port ist eine dauerhaft offene lokale Fläche, die der Subprozess nicht war."@de .
-  
-  <https://w3id.org/arknet/id/e0f2769b-c257-4996-b2dc-b64787600c98> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "stdio-Subprozess je Session"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Kollidiert am Store-Lock."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/31054eb0-6164-4b9d-a3df-9b7771308df4> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Ein Daemon je Projekt"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Verschiebt das Problem in die Portverwaltung."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/64445998-1577-4f33-8321-86423651c6f5> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Store ohne Verzeichnis-Lock"@de;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Nicht in der Hand des Werkzeugs; Eigenschaft des Substrats."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/13284d0b-a6fd-47e9-901a-237962e79fb4> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Ein geteilter Daemon für alle Projekte, Routing per Anker"@de;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#optionRationale> "Löst die Lock-Kollision und braucht nur einen Starteintrag."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/a6b2be4b-e5fa-4763-aa1f-102308b6f505> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Verbindung zwischen Modelländerung und ihrem Zeitpunkt ist explizit und vollständig, unabhängig vom Schreibpfad."@de .
-  
-  <https://w3id.org/arknet/id/c2757b37-055c-4cf3-8d0e-0f1f9c3f390a> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Jeder Write kostet zusätzliche Tripel -- der Store wächst deutlich schneller als das Modell."@de .
-  
-  <https://w3id.org/arknet/id/d911b25f-e708-4566-9549-e7713564429a> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Nur ausgewählte Schreibpfade erzeugen eine Revision"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Erzeugt eine stille Lücke im Nachweis genau dort, wo sie am wenigsten auffällt."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/8605d975-af46-48b4-9e36-0989521f56e9> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Jeder Schreibpfad ohne Ausnahme erzeugt eine unveränderliche Revision"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Schließt die Lücke vollständig statt teilweise."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/1ed36f2f-a285-46aa-ab09-fee937540d36> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die dichtesten Cross-Kontext-Kanten werden zu kontextinternen Kanten und brauchen keine Gateway-Konstruktion mehr."@de .
-  
-  <https://w3id.org/arknet/id/5e709a7d-3b69-484e-8e0c-3918c2d375a6> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Schnitt läuft auf das Zielbild zu, statt quer dazu zu liegen -- künftige Kontexte werden angebaut, nicht eingepasst."@de .
-  
-  <https://w3id.org/arknet/id/be220818-e298-4d8e-8a7a-29f5ba4bdef1> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Umbau an Modulgrenzen und Verdrahtung, ohne dass ein Nutzer davon etwas sieht."@de .
-  
-  <https://w3id.org/arknet/id/6e9401b6-27c7-4f79-9d0b-26fc11f37f6b> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Entlastung ist nur teilweise: mehrere Kanten bleiben über eine Kontextgrenze hinweg bestehen, das Gateway-Muster wird seltener gebraucht, aber nicht überflüssig."@de .
-  
-  <https://w3id.org/arknet/id/455edfdd-3582-4849-9062-66400acbae24> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Schnitt lassen wie er ist"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Er ist nicht klein, sondern fein, und läuft nicht auf das Zielbild zu."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/1fcebb3c-2548-4caa-b923-9dad41a9b99d> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Ein einziger Kontext für alles"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Zwischen der Sprache der Requirements, der Sprache des Glossars und der Sprache der Entscheidungen verlaufen echte Sprachbrüche."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/8d2ba435-cf9a-4c06-9283-1442440a8d98> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Erst die Module umschneiden, Kontextgrenzen später"@de;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Dann entscheidet wieder der Bauzustand über die Grenze statt umgekehrt."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/dd8b93a0-aea0-4134-8a87-37c698462653> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Modell-Kontexte entlang des Zielschnitts schneiden"@de;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#optionRationale> "Reduziert die dichtesten Cross-Kontext-Kanten auf kontextinterne Kanten und läuft auf das Zielbild zu."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  <https://w3id.org/arknet/id/e61c91ce-5a7b-44b1-af34-58cde80a5143> a <http://www.w3.org/2004/02/skos/core#Concept>;
+    <http://purl.org/dc/terms/identifier> "TERM-24";
+    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Commit"@de, "Commit"@en;
+    <http://www.w3.org/2004/02/skos/core#definition> "Ein Commit ist in arknet ein Stellvertreter für eine in der Versionsverwaltung festgehaltene Code-Änderung: er führt nur deren Kennung und die Verknüpfung zu den Revisionen, die im Zusammenhang mit ihr entstanden sind. Die Code-Änderung selbst besitzt und beschreibt arknet nicht."@de,
+      "In arknet, a commit is a stand-in for a code change recorded in the version control system: it carries only that change's identifier and the link to the revisions that arose in connection with it. The code change itself is neither owned nor described by arknet."@en;
+    <http://www.w3.org/2004/02/skos/core#related> <https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f> .
 }
 
 <https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/activity/dbffd059-e8bd-4b47-af19-edec6f0131df> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/b60b1537-f227-47a8-9508-5ac772876aa5> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/7777a2c0-87ff-48fa-ba58-6d6e3e4c2834>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/dbffd059-e8bd-4b47-af19-edec6f0131df>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:15.903133260Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/45b4e75e-f589-465d-8f8b-fb5ca67dc92c> .
-  
-  <https://w3id.org/arknet/activity/b53eecda-6dd4-4d5b-a69d-6db1902d4345> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/98cbc37a-dc7e-4a67-8c1f-7edaa54f5dcc> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b53eecda-6dd4-4d5b-a69d-6db1902d4345>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:18.273462999Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/41fa0ea4-52b4-41b0-9076-36050f55f976> .
-  
-  <https://w3id.org/arknet/activity/c5297efa-3e77-4af6-894b-017674ce9a18> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/55026267-612b-465e-b855-a0bbc24f0f93> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/82d3744a-408a-4f07-96ca-90748c10fc98>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/c5297efa-3e77-4af6-894b-017674ce9a18>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:20.072952891Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/ff482498-73c8-4d4c-9090-740775a914fd> .
-  
-  <https://w3id.org/arknet/activity/1426e1ae-e5eb-4126-836d-969295d5d665> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/178a7a54-7ef1-45dd-b354-99745fc8a6f6> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/00b2a409-8b29-405e-895c-d593702817f2>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1426e1ae-e5eb-4126-836d-969295d5d665>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:21.958822242Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/c91d1378-3cc1-4981-a414-f0dcc93a830a> .
-  
-  <https://w3id.org/arknet/activity/53960873-ccea-412f-8da5-23e33a4bb340> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/2ade688d-5490-493b-94d1-f57b22477806> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/fafb3370-a9a5-46a7-bca5-824c1b2023e0>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/53960873-ccea-412f-8da5-23e33a4bb340>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:23.567867435Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/128cae73-0906-40eb-a853-11db1f200788> .
-  
-  <https://w3id.org/arknet/activity/e969286f-682c-468c-aa5c-908cb2739330> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/f95a2663-bcc0-4267-a504-ea10d7461f7e> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/bdd08ced-66a4-4871-b53c-b316f76b4ba6>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/e969286f-682c-468c-aa5c-908cb2739330>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:25.586893245Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/51f56875-b1b5-44c8-9fc6-c33b66e9e2c8> .
-  
-  <https://w3id.org/arknet/activity/6738a059-0b50-4dbf-8617-268401749e53> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/31e417b9-d918-4e25-b4cf-13f3490ab4ff> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5>;
+  <https://w3id.org/arknet/revision/31e417b9-d918-4e25-b4cf-13f3490ab4ff> <http://www.w3.org/ns/prov#specializationOf>
+      <https://w3id.org/arknet/id/aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/6738a059-0b50-4dbf-8617-268401749e53>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:17:51.378822304Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/d3a23c31-0097-4dd0-8897-96cbd5c1482e> .
@@ -5489,6 +5112,96 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/ff275462-e20a-4d1a-887c-daee66f94a24>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:33:13.006926833Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/3e56fb08-dbd5-467c-b46c-d3eaca1c52ef> .
+  
+  <https://w3id.org/arknet/activity/3a2e860a-bb8d-4d2b-9d46-bb53e5cd4389> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/61a3a524-433d-4605-9bfc-04b4fd0da20c> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/3a2e860a-bb8d-4d2b-9d46-bb53e5cd4389>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:37:54.082620316Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/31e417b9-d918-4e25-b4cf-13f3490ab4ff> .
+  
+  <https://w3id.org/arknet/activity/f2771c9e-5e53-46a5-9a64-d0cdc5b60650> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/412f020a-8aef-4b76-bfe7-b98372b3feef> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/82d3744a-408a-4f07-96ca-90748c10fc98>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/f2771c9e-5e53-46a5-9a64-d0cdc5b60650>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:37:56.976340228Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/55026267-612b-465e-b855-a0bbc24f0f93> .
+  
+  <https://w3id.org/arknet/activity/a21b6497-97dc-4850-81f7-37763986a938> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/029d8824-1429-4f04-8ad6-c1665310b298> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/a21b6497-97dc-4850-81f7-37763986a938>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:37:58.917454639Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/e5903a5d-4546-43c2-8f21-cfed965893df> .
+  
+  <https://w3id.org/arknet/activity/1f0747e8-4ca7-420d-8146-24a53f1c00ba> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/d8b4901d-b66f-44d4-a009-cde9499c9200> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1f0747e8-4ca7-420d-8146-24a53f1c00ba>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:38:00.855174056Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/f247af64-a548-491d-9840-018509d7fcd5> .
+  
+  <https://w3id.org/arknet/activity/4a2ad99e-0d90-4be2-9ae6-bacbfd5597c0> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/808ca0c6-b973-44c8-b13e-15b953f48d8b> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/6aae6fb7-69c9-47b2-8568-3ab1273e189c>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/4a2ad99e-0d90-4be2-9ae6-bacbfd5597c0>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:38:02.820261869Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/7b36158a-5a24-46fe-87e3-3e9fd2cfb7dc> .
+  
+  <https://w3id.org/arknet/activity/4d38f98e-7ec4-40f9-b7ce-d00f5b366684> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/a0ee3da2-ee07-489b-8f20-c715675721ab> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d033d67e-4c59-49b3-a310-e791eacdc711>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/4d38f98e-7ec4-40f9-b7ce-d00f5b366684>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:38:05.212358356Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/a3a1ee0d-bc23-424e-a855-c0171437b784> .
+  
+  <https://w3id.org/arknet/activity/8eab30b5-a054-420f-9704-bc9424efd084> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/68b0903e-de32-40ab-a9bc-6a0e2f33b512> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/5c3aebd2-9297-4d40-b05f-43b4bf2accc7>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/8eab30b5-a054-420f-9704-bc9424efd084>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:38:11.270959160Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/27e4db3e-839d-4ea5-99f8-030b46019cdc> .
+  
+  <https://w3id.org/arknet/activity/970716a1-e3c1-4707-b9d6-1711d9ed971d> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/395b3d19-30b3-4d12-b95e-02c12abd4ebb> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/82d3744a-408a-4f07-96ca-90748c10fc98>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/970716a1-e3c1-4707-b9d6-1711d9ed971d>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:38:34.755640895Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/412f020a-8aef-4b76-bfe7-b98372b3feef> .
+  
+  <https://w3id.org/arknet/activity/d0f5fdc7-a6d8-4b05-853a-71b799e79d72> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/36d4df46-6110-45fc-b189-5c089fd7329a> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/fafb3370-a9a5-46a7-bca5-824c1b2023e0>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/d0f5fdc7-a6d8-4b05-853a-71b799e79d72>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:40:19.035901044Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/2ade688d-5490-493b-94d1-f57b22477806> .
+  
+  <https://w3id.org/arknet/activity/39a680d0-70d9-4826-af59-f463046c8e9b> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/2d2476a0-5e61-4453-b14c-d9a7e89edc2b> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/7777a2c0-87ff-48fa-ba58-6d6e3e4c2834>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/39a680d0-70d9-4826-af59-f463046c8e9b>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T14:40:20.856565632Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/b60b1537-f227-47a8-9508-5ac772876aa5> .
 }
 
 <https://w3id.org/arknet/model/requirements> {
@@ -5513,10 +5226,389 @@ Reason: a glossary exists so that there is one word per concept. A translated la
       "A call over an allowed loopback name is accepted regardless of the port."@en .
 }
 
+<https://w3id.org/arknet/model/adr> {
+  <https://w3id.org/arknet/id/a6b2be4b-e5fa-4763-aa1f-102308b6f505> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Verbindung zwischen Modelländerung und ihrem Zeitpunkt ist explizit und vollständig, unabhängig vom Schreibpfad."@de .
+  
+  <https://w3id.org/arknet/id/c2757b37-055c-4cf3-8d0e-0f1f9c3f390a> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Jeder Write kostet zusätzliche Tripel -- der Store wächst deutlich schneller als das Modell."@de .
+  
+  <https://w3id.org/arknet/id/d911b25f-e708-4566-9549-e7713564429a> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Nur ausgewählte Schreibpfade erzeugen eine Revision"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Erzeugt eine stille Lücke im Nachweis genau dort, wo sie am wenigsten auffällt."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/8605d975-af46-48b4-9e36-0989521f56e9> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Jeder Schreibpfad ohne Ausnahme erzeugt eine unveränderliche Revision"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Schließt die Lücke vollständig statt teilweise."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/15307afb-e811-439e-8fb8-138361ecab57> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Tool-Schema und Methodensignatur können nicht auseinanderlaufen, weil es nur eine Quelle gibt."@de .
+  
+  <https://w3id.org/arknet/id/3db8a2a6-3dce-41e9-905b-a24d253d2f98> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Neue Tools kosten eine annotierte Methode."@de .
+  
+  <https://w3id.org/arknet/id/331d1b0b-1d96-4012-bebc-29a7170226d6> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Das Werkzeug hängt an einer Rahmenbibliothek, deren MCP-Unterstützung jünger ist als das Protokoll -- wo sie eine Protokollfähigkeit nicht abbildet oder unsicher vorbelegt, muss nachgebessert statt ausgewichen werden."@de .
+  
+  <https://w3id.org/arknet/id/77365d42-843a-472d-a4b5-53b7d3abe8f5> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Rahmenbibliothek zieht eine Startzeit und einen Speicherbedarf mit, die ein reiner SDK-Server nicht hätte."@de .
+  
+  <https://w3id.org/arknet/id/102aecc7-6daa-44c9-8005-8c33f3c3c73a> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Rohes MCP-SDK"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Handgebaute Schemata skalieren nicht mit der Toolzahl."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/89aeeb89-a496-4c6d-946f-280c73e4204a> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Pro Modul entscheiden"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Führt zu zwei MCP-Stacks im selben Reaktor."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/6036a9dc-2420-48dd-b422-a3d1cb29a1df> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Rahmenbibliothek mit Annotation-basierter Tool-Deklaration"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Hält Schema und Signatur zwangsläufig konsistent und skaliert mit der Toolzahl."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/5564da4d-a12a-4e53-8b80-f1c2dcce00c1> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die dichtesten Cross-Kontext-Kanten werden zu kontextinternen Kanten und brauchen keine Gateway-Konstruktion mehr."@de .
+  
+  <https://w3id.org/arknet/id/158fde50-8a5d-430b-8c8f-132634163321> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Schnitt läuft auf das Zielbild zu, statt quer dazu zu liegen -- künftige Kontexte werden angebaut, nicht eingepasst."@de .
+  
+  <https://w3id.org/arknet/id/94f0c7d7-2b0a-45c4-b7f2-36049b05c4a2> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Umbau an Modulgrenzen und Verdrahtung, ohne dass ein Nutzer davon etwas sieht."@de .
+  
+  <https://w3id.org/arknet/id/bdd46469-3275-4584-bd45-b01f750e935c> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Entlastung ist nur teilweise: mehrere Kanten bleiben über eine Kontextgrenze hinweg bestehen, das Gateway-Muster wird seltener gebraucht, aber nicht überflüssig."@de .
+  
+  <https://w3id.org/arknet/id/b73a3c1a-50c2-4e6e-aa70-7f1dbc27e512> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Schnitt lassen wie er ist"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Er ist nicht klein, sondern fein, und läuft nicht auf das Zielbild zu."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/5dd851fe-4f31-4803-b274-f5293db0a3ef> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein einziger Kontext für alles"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Zwischen der Sprache der Requirements, der Sprache des Glossars und der Sprache der Entscheidungen verlaufen echte Sprachbrüche."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/de22deec-4ccf-4dcc-8513-44029cf3098f> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Erst die Module umschneiden, Kontextgrenzen später"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Dann entscheidet wieder der Bauzustand über die Grenze statt umgekehrt."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/f343e403-2cc6-454f-a1fb-cd9070046f25> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Modell-Kontexte entlang des Zielschnitts schneiden"@de;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Reduziert die dichtesten Cross-Kontext-Kanten auf kontextinterne Kanten und läuft auf das Zielbild zu."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/4fcb7633-533d-47df-8867-1d2e687bab75> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Beliebig viele Sessions und Worktrees desselben Projekts arbeiten gleichzeitig."@de .
+  
+  <https://w3id.org/arknet/id/edf94080-1411-4f3b-b024-1d45281a517d> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Starteintrag statt einem pro Projekt."@de .
+  
+  <https://w3id.org/arknet/id/251d566e-f925-40c7-99cc-f9023982454e> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Daemon aktualisiert sich bei einem Release nicht selbst -- nach einem Bau läuft weiter der alte Stand, bis jemand neu startet, und der Fehler sieht aus wie ein Bug im Tool."@de .
+  
+  <https://w3id.org/arknet/id/b3a3ffc9-8816-4738-917c-65ae270a933a> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Absturz trifft alle Projekte gleichzeitig statt nur eines."@de .
+  
+  <https://w3id.org/arknet/id/ee469292-4039-4ad4-a7b4-7acddace0ce5> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein langlebiger Prozess auf einem festen Port ist eine dauerhaft offene lokale Fläche, die der Subprozess nicht war."@de .
+  
+  <https://w3id.org/arknet/id/7b922f1f-7016-485f-ada4-85ae3d32806f> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "stdio-Subprozess je Session"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Kollidiert am Store-Lock."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/51edc7e1-a6df-427c-9252-bdbb3b9a7374> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein Daemon je Projekt"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Verschiebt das Problem in die Portverwaltung."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/fed543d0-bc71-4cb5-b50a-f89bc73ca209> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Store ohne Verzeichnis-Lock"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Nicht in der Hand des Werkzeugs; Eigenschaft des Substrats."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/176384b7-b04a-41c2-9fc2-e4cec431c632> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein geteilter Daemon für alle Projekte, Routing per Anker"@de;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Löst die Lock-Kollision und braucht nur einen Starteintrag."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/c85fcb1f-2825-4b64-a988-f43f5478c349> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ändert das Versionskontroll-, CI- oder Monitoring-System sein Modell, ist nur die Übersetzung am Rand des betroffenen Kontexts anzupassen, kein eigener Kontext im Zielschnitt."@de .
+  
+  <https://w3id.org/arknet/id/4eca34fb-789a-48b1-b07e-e79838daebbb> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Jeder Kontext behält seine eigene Sprache, statt die Begriffe des Versionskontroll- oder Monitoring-Systems zu übernehmen."@de .
+  
+  <https://w3id.org/arknet/id/e8193dff-e5bb-40c6-ac85-8b0abf78d815> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Brauchen zwei Kontexte dasselbe fremde Konzept (Verifikation & Qualität und Delivery & Release lesen beide vom CI-System), übersetzt jeder für sich. Diese Duplikation ist der Preis dafür, dass die beiden Kontexte nicht aneinander hängen."@de .
+  
+  <https://w3id.org/arknet/id/67c099a5-5078-475d-a7ac-8c13decc9f09> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Eigener Bounded Context je fremdem System"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "arknet führte eine Kopie eines Modells (etwa \"Codebasis\"), das es nicht besitzt und dessen Änderungen es nicht kontrolliert."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/83c6742e-b1f4-4468-ace0-ad82e1308c84> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Fremde Konzepte unübersetzt übernehmen"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Die Begriffe des Versionskontroll-, CI- oder Monitoring-Systems stünden direkt in arknets Kontexten und verdrängten deren eigene Sprache."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/5e8970ef-9db6-4eb7-a5d0-385c54463b44> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Übersetzung im konsumierenden Kontext (Anti-Corruption Layer)"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Hält das fremde Modell draußen und die Sprache des Kontexts intakt; die Duplikation bei mehreren Konsumenten wird in Kauf genommen."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/23157e64-f620-49cc-821e-2259883b60ff> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Worktrees, verschobene Verzeichnisse und Clients ohne Versionskontrolle funktionieren gleich."@de .
+  
+  <https://w3id.org/arknet/id/faa178cf-ccbe-4303-a84c-19306c8682c4> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Projekt kann umziehen, ohne seine Daten zu verlieren -- es bekommt einen zweiten Anker."@de .
+  
+  <https://w3id.org/arknet/id/55e35058-3d9d-4e98-b762-b907b639619a> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Projekt muss angelegt werden, bevor irgendetwas geschrieben werden kann -- der erste Kontakt ist damit ein Registrierungsschritt, kein Ergebnis."@de .
+  
+  <https://w3id.org/arknet/id/ac373672-209c-44f3-9b21-47c6f4f26554> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Wer die Fehlermeldung bei unbekanntem Anker nicht liest, hält eine fehlende Registrierung für einen Bug im Werkzeug statt für einen fehlenden Schritt."@de .
+  
+  <https://w3id.org/arknet/id/eda4c955-4eb7-4e69-9923-598c2124e91b> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Identität aus dem Verzeichnis ableiten"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Bricht bei Worktree, Umzug und fehlender Versionskontrolle und erzeugt dabei stille Leerprojekte."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/1d32bc05-2d67-4285-8ace-a1db46585579> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Identität über einen registrierten, opaken Anker mit Server-seitiger Registry"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Hält Worktree, Umzug und Client-Vielfalt aus, weil der Server nichts ableitet, sondern nur nachschlägt."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/fa1d3233-3d1a-441f-81b5-e500e53bceca> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Default-Projekt als Rückfall bei unbekanntem Anker"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Schreibt Daten an einen Ort, den niemand gewählt hat -- genau die stille Fehlzuordnung, die die Registrierung beseitigen soll."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/b29ef973-86c8-42c0-a2d3-2c71cfbd0846> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Store ist austauschbar, ohne dass eine Zeile Fachlogik fällt."@de .
+  
+  <https://w3id.org/arknet/id/8b037c66-aedf-491f-a482-9fc3f620261e> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Domänennahe Ports kosten Übersetzung im Adapter -- eine direkt ladende Graph-Abfrage wäre kürzer."@de .
+  
+  <https://w3id.org/arknet/id/53de5072-7a8c-4109-b2ea-acf15a7aa82d> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Store direkt als RDF-Port (Triples in der Signatur)"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Macht jeden Backend-Wechsel zu einem Fachlogik-Umbau."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/c8509dd4-8c2d-4f17-ae48-b39146c4b279> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Domänennahe Out-Ports mit Domänentypen in Signatur"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Hält die Cores frei von Infrastrukturbegriffen und macht den Store austauschbar."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/914a4712-2ccc-49d7-81ba-b37253edb9f0> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Eine Abfrage kann kein fremdes Projekt treffen, weil sie dessen Daten gar nicht sieht -- die Trennung liegt im Speicher, nicht in einer Filterbedingung, die man vergessen kann."@de .
+  
+  <https://w3id.org/arknet/id/6f8df9c3-ee09-4710-8c20-d86d124a1949> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Projekt lässt sich als Ganzes sichern, kopieren oder verwerfen, ohne fremde Daten mitzunehmen."@de .
+  
+  <https://w3id.org/arknet/id/d5b9958e-6058-4ff3-9d59-b873b41c1860> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Eine Frage über mehrere Projekte hinweg hat keinen Ort -- sie bräuchte einen Leser, der mehrere Datasets zugleich öffnet, und den gibt es nicht."@de .
+  
+  <https://w3id.org/arknet/id/8f14fc35-aff2-4c41-890a-ae215a241b4e> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein Dataset für mehrere Projekte, getrennt über eine Bedingung in der Abfrage"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Die Trennung hängt dann an jeder einzelnen Abfrage; eine vergessene Bedingung mischt zwei Projekte, ohne dass es auffällt."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/3248f4f0-2875-4dc3-9720-6e8dcba7788e> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Zwischenebene für einen Arbeitsbereich über mehreren Projekten"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Ein Begriff mehr, den jeder Aufruf mitführen muss, ohne dass eine Frage existiert, die er beantwortet."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/1897b8d8-2fa3-45e4-b4fc-44b66f8c2197> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein Dataset je Projekt"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Macht die Projektgrenze zur Datengrenze, ohne dass eine einzelne Abfrage sie halten muss."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/4b669b37-b2e5-436b-b50f-e7acb1c378e2> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Modelldaten, Nachvollziehbarkeit und Concurrency-Schutz können nicht auseinanderlaufen, weil sie atomar in einem Schritt entstehen."@de .
+  
+  <https://w3id.org/arknet/id/1e8bd214-302e-4f60-bddd-0493605ffd88> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Trichter ist ein Engpass, durch den alles muss; ein Fehler darin trifft jeden Kontext."@de .
+  
+  <https://w3id.org/arknet/id/2808c46c-9fc3-4ab8-a717-0883d7219630> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Schreibpfad, der am Trichter vorbeiläuft, bricht den Concurrency-Schutz für jede Ressource, die er berührt: ein bedingter Write würde genau den Lost Update durchwinken, den er verhindern soll. Der Trichter ist darum keine Empfehlung, sondern eine Invariante, die jeder neue Schreibpfad einhalten muss."@de .
+  
+  <https://w3id.org/arknet/id/dbdd127e-eb12-46d6-80c6-f3aa56754fa9> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Jeder Schreibpfad sichert Atomarität selbst"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Vervielfacht dieselbe heikle Transaktionslogik in jedem Adapter statt sie einmal zu bauen."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/93f29429-d728-4c28-bf65-4b61183a94cc> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein geteilter Trichter für alle Schreibpfade"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Garantiert die Atomarität an einer einzigen Stelle statt an vielen."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/db898cfc-44ae-4e88-9bc0-5d553689500c> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Zieltyp der Pflichtkanten stimmt wieder mit dem überein, was die Spezifikation meint; das Actor-Register nimmt nur noch Träger auf."@de .
+  
+  <https://w3id.org/arknet/id/68cb153b-6616-47ba-8aa4-f7e931555b85> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Eine Rolle lässt sich benennen, ohne eine Person zu erfinden, die sie besetzt."@de .
+  
+  <https://w3id.org/arknet/id/0960915f-451f-4cbd-a5a7-29a873e2fad5> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Besetzungskante bleibt kontextintern und braucht kein Gateway zu einem Nachbar-Kontext."@de .
+  
+  <https://w3id.org/arknet/id/f143ebf3-f943-45c1-ad6e-fb5bb007f9e2> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Zieltypwechsel trifft eine Pflichtkante -- das ist keine Umbenennung, sondern eine andere Zusage an jeden, der Use Cases schreibt."@de .
+  
+  <https://w3id.org/arknet/id/737b130a-8a14-4595-9055-4a78e258341c> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein bestehendes Modell muss jeden vorhandenen Actor einzeln einordnen: Träger oder Rolle. Ein Modell kann danach vollständig sein, ohne einen einzigen Träger zu kennen."@de .
+  
+  <https://w3id.org/arknet/id/b7a68d0c-aca0-479e-a1a8-87c6cd48099f> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 6;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Das bisherige freitextliche Rollenfeld am Actor wird durch die Ressource ersetzt."@de .
+  
+  <https://w3id.org/arknet/id/9bc0e0ff-9525-4efc-a106-ca8c204b195f> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 7;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Actor-Kontext heißt weiter nach einem seiner beiden Ressourcentypen; der Name benennt den Kontext, nicht seinen vollständigen Inhalt."@de .
+  
+  <https://w3id.org/arknet/id/a000d7c2-6d82-453c-8048-3a189d5f890b> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Rolle als eigene Ressource, Actor nur noch Träger"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Trennt die beiden Bedeutungen entlang der Rigidität und macht den Zieltyp der Pflichtkanten wieder richtig; die Rolle kann unbesetzt existieren, was der Normalfall der Spezifikation ist."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/1f5daf6a-5126-457d-831d-2286c67f1654> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Beim zwitterhaften Actor bleiben und nur die Kanten sauber benennen"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Die Bequemlichkeit ist genau der Fehler: eine Kante, deren Ziel zwei Bedeutungen trägt, trifft immer zu, und die Pflicht-Shape zwingt weiterhin Rollen ins Träger-Register."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/e61fb112-b053-4bf0-9fee-e33d17506a45> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Die Rolle als Marker oder Freitextfeld am Actor"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Ein Marker sagt \"irgendwo Rolle\", nicht welche; und er kann nicht unbesetzt existieren, was der Normalfall der Spezifikation ist."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/1fbc831f-4077-47a9-a4ac-050e974cdac7> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Die Rolle als Unterklasse des Actors"@de;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Ein anti-rigider Typ unter einem rigiden, genau der Fehler, den der Rigiditätstest ausschließt. Dieselbe Besetzung wäre in einem Use Case primär und in einem anderen unterstützend; das ist eine Eigenschaft der Beziehung, nicht des Typs."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/e36b89e0-40f8-4867-8642-1b5060dc9c7b> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Die Rolle in einem eigenen Bounded Context"@de;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#optionRationale> "Eine Kontextgrenze verlangt einen Sprachbruch, und zwischen Träger und Rolle liegt keiner. Die Grenze kostete stattdessen eine Brücke: die Besetzungskante würde zur Cross-Kontext-Kante mit Gateway und Auflösung."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/793ac0d3-a262-43ad-b908-1ab10b089be0> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Die Rolle im Use-Cases-Kontext"@de;
+    <https://w3id.org/arknet/core#position> 6;
+    <https://w3id.org/arknet/architecture#optionRationale> "Mit der Herkunftskante brauchen auch die Requirements sie; wo immer sie läge, wäre der andere Konsument zu Gast. Dasselbe Argument stand bereits beim Actor gegen den Requirements-Kontext."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+}
+
 <https://w3id.org/arknet/model/export-metadata> {
-    <https://w3id.org/arknet/export/785c73f0-a865-4228-b790-fd05a22db5e3>
+    <https://w3id.org/arknet/export/a2207e90-4fdb-408a-8a95-f98ce3763e10>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#Activity> ;
-        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-05T14:35:56Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
+        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-05T14:40:46Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
         <http://www.w3.org/ns/prov#wasAssociatedWith> <https://w3id.org/arknet/agent/arknet> ;
         <http://www.w3.org/ns/prov#used> <https://w3id.org/arknet/core> , <https://w3id.org/arknet/ddd> , <https://w3id.org/arknet/process> , <https://w3id.org/arknet/requirements> , <https://w3id.org/arknet/architecture> , <https://w3id.org/arknet/provenance> , <https://w3id.org/arknet/project> .
 
