@@ -65,7 +65,7 @@ final class InMemoryTermRepository implements TermRepository {
 
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            String language, String defaultLanguage, Optional<TermCode> broader) {
+            String language, String defaultLanguage, Optional<TermCode> broader, List<TermCode> related) {
         // Nothing multi-valued to sweep in this plain in-memory fake either (see class-level
         // note) - defaultLanguage is accepted and ignored here too. broader (issue #252) is not
         // resolved/cycle-checked here either - that is the real out-adapter's concern (see
@@ -79,9 +79,32 @@ final class InMemoryTermRepository implements TermRepository {
         Term updated = new Term(current.id(), current.code(),
                 prefLabel != null ? prefLabel : current.prefLabel(),
                 definition != null ? definition : current.definition(),
-                broader != null ? broader.orElse(null) : current.broader());
+                broader != null ? broader.orElse(null) : current.broader(),
+                // related (kogn-io/arknet#420) is not resolved against the glossary here either -
+                // the same null-unchanged/empty-clear/list-replace tri-state TermService hands over
+                // is simply applied to the forward direction, which is all this port ever stores.
+                related != null ? related : current.related());
         terms.put(updated.id(), updated);
         return updated;
+    }
+
+    /**
+     * The backward half of the symmetric {@code skos:related} relation: every stored term whose own
+     * forward list names {@code id}. Kept honest rather than stubbed empty, so
+     * {@link TermService}'s merge can actually be exercised without a real store.
+     */
+    @Override
+    public List<TermCode> findRelatedCodes(ProjectId projectId, TermId id) {
+        Map<TermId, Term> terms = byProject.getOrDefault(projectId, Map.of());
+        Term target = terms.get(id);
+        if (target == null) {
+            return List.of();
+        }
+        return terms.values().stream()
+                .filter(t -> !t.id().equals(id))
+                .filter(t -> t.related().contains(target.code()))
+                .map(Term::code)
+                .toList();
     }
 
     @Override

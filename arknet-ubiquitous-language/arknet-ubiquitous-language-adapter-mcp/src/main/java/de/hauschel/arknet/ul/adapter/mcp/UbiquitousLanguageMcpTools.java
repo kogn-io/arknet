@@ -190,6 +190,12 @@ public final class UbiquitousLanguageMcpTools {
                     + "broader term of 'Customer'. Rejected if the code does not resolve to an existing term",
                     required = false)
             final String broader,
+            @McpToolParam(description = "Optional: identities (e.g. TERM-1) of already-existing terms this one "
+                    + "is associatively related to (skos:related) - a non-hierarchical connection, e.g. 'Anchor' "
+                    + "and 'Project'. Use broader instead when one term specializes the other. The relation is "
+                    + "symmetric: it shows on both terms, and naming it on either one is enough. Rejected if a "
+                    + "code does not resolve to an existing term, or names this term itself", required = false)
+            final List<String> related,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the label and definition "
                     + "are written in. Falls back to the project's configured default language "
                     + "(project_update) if omitted; if the project has no default either, the call is "
@@ -200,7 +206,7 @@ public final class UbiquitousLanguageMcpTools {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode broaderCode = blankToNull(broader) == null ? null : new TermCode(broader.trim());
         final Term created = addTerm.add(project.id(),
-                new NewTerm(label, definition, blankToNull(language), broaderCode),
+                new NewTerm(label, definition, blankToNull(language), broaderCode, toTermCodes(related)),
                 project.defaultLanguage());
         return format(created);
     }
@@ -243,7 +249,7 @@ public final class UbiquitousLanguageMcpTools {
     }
 
     @McpTool(name = "term_update",
-            description = "Correct an already-created term's preferred label and/or definition, "
+            description = "Correct an already-created term's preferred label, definition and/or relations, "
                     + "keeping its identity and every existing link into it (e.g. arkreq:usesTerm) unchanged. "
                     + "Every argument is optional - an omitted one leaves that field unchanged." + PROSE_MARKUP)
     public String update(
@@ -262,6 +268,14 @@ public final class UbiquitousLanguageMcpTools {
                     + "term, or if it would make the term its own (direct or transitive) broader term",
                     required = false)
             final String broader,
+            @McpToolParam(description = "Optional: identities (e.g. TERM-1) of the already-existing terms this "
+                    + "one should be associatively related to going forward (skos:related), replacing the "
+                    + "existing ones wholesale. Omit to leave them unchanged; pass an empty list to remove all "
+                    + "of them. The relation is symmetric, but only this term's own edges are rewritten - an "
+                    + "edge another term asserts towards this one is cleared with a term_update on that term. "
+                    + "Rejected if a code does not resolve to an existing term, or names this term itself",
+                    required = false)
+            final List<String> related,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the new label/definition "
                     + "is written in. Falls back to the project's configured default language (see "
                     + "term_add's same parameter) if omitted; if the project has no default either, the "
@@ -277,7 +291,7 @@ public final class UbiquitousLanguageMcpTools {
         final TermCode code = new TermCode(id);
         final Optional<TermCode> broaderPatch = parseBroaderPatch(broader);
         final Term updated = updateTerm.update(project.id(), code, blankToNull(label), blankToNull(definition),
-                blankToNull(language), project.defaultLanguage(), broaderPatch);
+                blankToNull(language), project.defaultLanguage(), broaderPatch, toTermCodes(related));
         return format(updated);
     }
 
@@ -286,8 +300,9 @@ public final class UbiquitousLanguageMcpTools {
                     + "definition, in every language) - not just a correction, the whole resource goes "
                     + "away. Rejected if anything else still references it: a requirement's or use case's "
                     + "arkreq:usesTerm, an architecture decision's arkarch:usesTerm, a bounded context's "
-                    + "ubiquitousLanguageTerm, or another term's broader. Remove those edges first "
-                    + "(req_update/uc_update, adr_update, bc_link_term, or term_update to clear broader).")
+                    + "ubiquitousLanguageTerm, or another term's broader or related. Remove those edges first "
+                    + "(req_update/uc_update, adr_update, bc_link_term, or term_update on the other term to "
+                    + "clear its broader/related).")
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
@@ -315,9 +330,28 @@ public final class UbiquitousLanguageMcpTools {
         return broader.isBlank() ? Optional.empty() : Optional.of(new TermCode(broader.trim()));
     }
 
+    /**
+     * Maps {@code term_add}/{@code term_update}'s {@code related} argument onto {@link TermCode}s,
+     * keeping the "omitted" signal intact: {@code null} stays {@code null} (leave unchanged for
+     * {@code term_update}, none for {@code term_add}), while an explicitly empty list stays an
+     * empty list (clear all). Blank entries are dropped rather than turned into a code no term can
+     * carry, mirroring {@code blankToNull} on the scalar arguments.
+     */
+    private static List<TermCode> toTermCodes(final List<String> codes) {
+        if (codes == null) {
+            return null;
+        }
+        return codes.stream()
+                .filter(code -> blankToNull(code) != null)
+                .map(code -> new TermCode(code.trim()))
+                .toList();
+    }
+
     private static String format(final Term t) {
         final String broader = t.broader() == null ? "" : " [broader:%s]".formatted(t.broader().value());
-        return "%s %s - %s%s".formatted(t.code().value(), t.prefLabel(), t.definition(), broader);
+        final String related = t.related().isEmpty() ? "" : " [related:%s]".formatted(
+                t.related().stream().map(TermCode::value).reduce((a, b) -> a + "," + b).orElseThrow());
+        return "%s %s - %s%s%s".formatted(t.code().value(), t.prefLabel(), t.definition(), broader, related);
     }
 
     private static String blankToNull(final String value) {

@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.ul.application.port.in;
 
+import java.util.List;
 import java.util.Optional;
 
 import de.hauschel.arknet.kernel.ProjectId;
@@ -40,6 +41,14 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * Optional#empty()} explicitly clears it; a non-{@code null} {@link Optional#of} sets/replaces
  * it. Setting a new broader term is resolved and cycle-checked against the target project's own
  * glossary - a term must not become its own (direct or transitive) broader term.</p>
+ *
+ * <p><strong>Related (kogn-io/arknet#420).</strong> {@code related} needs the same three states,
+ * but being multi-valued it can express them without an extra wrapper, exactly as the ADR bounded
+ * context's own reference lists do: {@code null} leaves the existing peers untouched, an empty list
+ * clears them, a non-empty list replaces them wholesale. Only the forward direction is written -
+ * {@code skos:related} is an {@code owl:SymmetricProperty}, so the returned {@link Term} carries
+ * the merged view of both directions, and clearing this term's own peers does not remove an edge
+ * another term asserts towards it (clear that one with a {@code term_update} on the other term).</p>
  */
 public interface UpdateTerm {
 
@@ -68,15 +77,23 @@ public interface UpdateTerm {
      *                        Optional#empty()} to clear it, or {@link Optional#of} the code of an
      *                        already-existing term to set/replace it (see the class-level
      *                        "Broader" note)
-     * @return the updated term
+     * @param related         {@code null} to leave the existing {@code skos:related} peers
+     *                        untouched, an empty list to clear them, or the codes of
+     *                        already-existing terms to replace them wholesale (see the class-level
+     *                        "Related" note)
+     * @return the updated term, its {@code related} list carrying the merged view of both
+     *         directions
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code prefLabel} or
      *                        {@code definition} is non-{@code null}, {@code language} is
      *                        {@code null} and {@code defaultLanguage} is {@code null} too
-     * @throws de.hauschel.arknet.ul.domain.TermNotFoundException if {@code broader} carries a
-     *                        code that does not resolve to an existing term in the target project
+     * @throws IllegalArgumentException if {@code related} names {@code code} itself or names the
+     *                        same term twice
+     * @throws de.hauschel.arknet.ul.domain.TermNotFoundException if {@code broader} or any entry of
+     *                        {@code related} carries a code that does not resolve to an existing
+     *                        term in the target project
      * @throws de.hauschel.arknet.ul.domain.TermCycleException if setting {@code broader} would
      *                        make {@code code} its own (direct or transitive) broader term
      */
     Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            String language, String defaultLanguage, Optional<TermCode> broader);
+            String language, String defaultLanguage, Optional<TermCode> broader, List<TermCode> related);
 }

@@ -171,7 +171,7 @@ class TermServiceTest {
         SpyTermRepository spy = new SpyTermRepository(repository);
         TermService serviceUnderTest = new TermService(spy, new UuidResourceIdFactory());
 
-        serviceUnderTest.update(WS, added.code(), "Erstattung", null, null, "de", null);
+        serviceUnderTest.update(WS, added.code(), "Erstattung", null, null, "de", null, null);
 
         assertEquals("de", spy.lastUpdateLanguage);
     }
@@ -182,7 +182,7 @@ class TermServiceTest {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null), DEFAULT_LANGUAGE);
 
         assertThrows(MissingDefaultLanguageException.class,
-                () -> service.update(WS, added.code(), "Erstattung", null, null, null, null));
+                () -> service.update(WS, added.code(), "Erstattung", null, null, null, null, null));
 
         assertEquals("Gutschrift", service.get(WS, added.code(), null).orElseThrow().prefLabel());
     }
@@ -199,9 +199,98 @@ class TermServiceTest {
         TermCode broaderCode = service.add(WS, new NewTerm("Actor", "def a", null), DEFAULT_LANGUAGE).code();
         Term added = service.add(WS, new NewTerm("Kunde", "def a", null), DEFAULT_LANGUAGE);
 
-        Term updated = service.update(WS, added.code(), null, null, null, null, Optional.of(broaderCode));
+        Term updated = service.update(WS, added.code(), null, null, null, null, Optional.of(broaderCode), null);
 
         assertEquals(broaderCode, updated.broader());
+    }
+
+    // ---- skos:related, read symmetrically (kogn-io/arknet#420) -------------------------------
+
+    /**
+     * The forward direction alone is written, but {@code term_get} must show the relation from
+     * either end: TERM-2 names TERM-1, and TERM-1 - which asserts nothing itself - still reports
+     * TERM-2 as its peer.
+     */
+    @Test
+    void getMergesTheBackwardDirectionOfTheSymmetricRelation() {
+        Term first = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        Term second = service.add(WS, new NewTerm("Anker", "def b", null, null, List.of(first.code())),
+                DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(second.code()), service.get(WS, first.code(), null).orElseThrow().related());
+        assertEquals(List.of(first.code()), service.get(WS, second.code(), null).orElseThrow().related());
+    }
+
+    /** A peer reachable in both directions is named once, not twice. */
+    @Test
+    void getDoesNotReportAMutuallyAssertedPeerTwice() {
+        Term first = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        Term second = service.add(WS, new NewTerm("Anker", "def b", null, null, List.of(first.code())),
+                DEFAULT_LANGUAGE);
+        service.update(WS, first.code(), null, null, null, DEFAULT_LANGUAGE, null, List.of(second.code()));
+
+        assertEquals(List.of(second.code()), service.get(WS, first.code(), null).orElseThrow().related());
+    }
+
+    /** {@code term_list} shows the same symmetric view {@code term_get} does, without a reverse read. */
+    @Test
+    void listMergesTheBackwardDirectionToo() {
+        Term first = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        service.add(WS, new NewTerm("Anker", "def b", null, null, List.of(first.code())), DEFAULT_LANGUAGE);
+
+        List<Term> listed = service.list(WS, null);
+
+        assertEquals(List.of(new TermCode("TERM-2")), listed.get(0).related());
+        assertEquals(List.of(new TermCode("TERM-1")), listed.get(1).related());
+    }
+
+    /** {@code term_update}'s own answer is merged the same way its {@code term_get} would be. */
+    @Test
+    void updateReturnsTheMergedRelatedView() {
+        Term first = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        Term second = service.add(WS, new NewTerm("Anker", "def b", null, null, List.of(first.code())),
+                DEFAULT_LANGUAGE);
+        Term third = service.add(WS, new NewTerm("Dataset", "def c", null), DEFAULT_LANGUAGE);
+
+        Term updated = service.update(WS, first.code(), null, null, null, DEFAULT_LANGUAGE, null,
+                List.of(third.code()));
+
+        assertEquals(List.of(second.code(), third.code()), updated.related());
+    }
+
+    /**
+     * Clearing a term's own peers only removes what it asserts itself - the edge the other term
+     * asserts towards it survives, and is therefore still reported.
+     */
+    @Test
+    void clearingRelatedLeavesAnIncomingEdgeIntact() {
+        Term first = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        Term second = service.add(WS, new NewTerm("Anker", "def b", null, null, List.of(first.code())),
+                DEFAULT_LANGUAGE);
+
+        Term updated = service.update(WS, first.code(), null, null, null, DEFAULT_LANGUAGE, null, List.of());
+
+        assertEquals(List.of(second.code()), updated.related());
+    }
+
+    /** Rejected before the store is touched, not while rendering the result afterwards. */
+    @Test
+    void updateRejectsATermAsItsOwnRelatedPeer() {
+        Term added = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+
+        assertThrows(IllegalArgumentException.class, () -> service.update(
+                WS, added.code(), null, null, null, DEFAULT_LANGUAGE, null, List.of(added.code())));
+        assertEquals(List.of(), service.get(WS, added.code(), null).orElseThrow().related());
+    }
+
+    @Test
+    void updateRejectsTheSameRelatedPeerTwice() {
+        Term added = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        Term peer = service.add(WS, new NewTerm("Anker", "def b", null), DEFAULT_LANGUAGE);
+
+        assertThrows(IllegalArgumentException.class, () -> service.update(
+                WS, added.code(), null, null, null, DEFAULT_LANGUAGE, null,
+                List.of(peer.code(), peer.code())));
     }
 
     /**
@@ -252,7 +341,7 @@ class TermServiceTest {
     void updateChangesOnlyPrefLabel() {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null), DEFAULT_LANGUAGE);
 
-        Term updated = service.update(WS, added.code(), "Erstattung", null, null, DEFAULT_LANGUAGE, null);
+        Term updated = service.update(WS, added.code(), "Erstattung", null, null, DEFAULT_LANGUAGE, null, null);
 
         assertEquals("Erstattung", updated.prefLabel());
         assertEquals("def a", updated.definition());
@@ -262,7 +351,7 @@ class TermServiceTest {
     void updateChangesOnlyDefinition() {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null), DEFAULT_LANGUAGE);
 
-        Term updated = service.update(WS, added.code(), null, "def b", null, DEFAULT_LANGUAGE, null);
+        Term updated = service.update(WS, added.code(), null, "def b", null, DEFAULT_LANGUAGE, null, null);
 
         assertEquals("Gutschrift", updated.prefLabel());
         assertEquals("def b", updated.definition());
@@ -272,7 +361,7 @@ class TermServiceTest {
     void updateChangesBothFieldsAtOnce() {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null), DEFAULT_LANGUAGE);
 
-        Term updated = service.update(WS, added.code(), "Erstattung", "def b", null, DEFAULT_LANGUAGE, null);
+        Term updated = service.update(WS, added.code(), "Erstattung", "def b", null, DEFAULT_LANGUAGE, null, null);
 
         assertEquals("Erstattung", updated.prefLabel());
         assertEquals("def b", updated.definition());
@@ -282,7 +371,7 @@ class TermServiceTest {
     void updateKeepsIdentityAndCodeUnchanged() {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null), DEFAULT_LANGUAGE);
 
-        Term updated = service.update(WS, added.code(), "Erstattung", "def b", null, DEFAULT_LANGUAGE, null);
+        Term updated = service.update(WS, added.code(), "Erstattung", "def b", null, DEFAULT_LANGUAGE, null, null);
 
         assertEquals(added.id(), updated.id());
         assertEquals(added.code(), updated.code());
@@ -292,7 +381,7 @@ class TermServiceTest {
     void updatePersistsTheChange() {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null), DEFAULT_LANGUAGE);
 
-        service.update(WS, added.code(), "Erstattung", null, null, DEFAULT_LANGUAGE, null);
+        service.update(WS, added.code(), "Erstattung", null, null, DEFAULT_LANGUAGE, null, null);
 
         assertEquals("Erstattung", repository.findByCode(WS, added.code(), null).orElseThrow().prefLabel());
     }
@@ -300,7 +389,7 @@ class TermServiceTest {
     @Test
     void updateThrowsWhenCodeIsUnknown() {
         assertThrows(TermNotFoundException.class,
-                () -> service.update(WS, new TermCode("TERM-99"), "Erstattung", null, null, DEFAULT_LANGUAGE, null));
+                () -> service.update(WS, new TermCode("TERM-99"), "Erstattung", null, null, DEFAULT_LANGUAGE, null, null));
     }
 
     /** {@code add}'s optional {@code broader} command field passes straight through. */
@@ -326,7 +415,7 @@ class TermServiceTest {
         assertEquals(broader, added.broader());
 
         Term updated = service.update(
-                WS, added.code(), null, null, null, DEFAULT_LANGUAGE, Optional.empty());
+                WS, added.code(), null, null, null, DEFAULT_LANGUAGE, Optional.empty(), null);
 
         assertNull(updated.broader());
     }
@@ -349,7 +438,7 @@ class TermServiceTest {
         SpyTermRepository spy = new SpyTermRepository(delegate);
         TermService serviceUnderTest = new TermService(spy, new UuidResourceIdFactory());
 
-        serviceUnderTest.update(WS, seeded.code(), "Erstattung", null, null, DEFAULT_LANGUAGE, null);
+        serviceUnderTest.update(WS, seeded.code(), "Erstattung", null, null, DEFAULT_LANGUAGE, null, null);
 
         assertEquals(0, spy.findByCodeCalls);
         assertEquals(0, spy.findAllCalls);
@@ -377,9 +466,15 @@ class TermServiceTest {
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                String language, String defaultLanguage, Optional<TermCode> broader) {
+                String language, String defaultLanguage, Optional<TermCode> broader, List<TermCode> related) {
             lastUpdateLanguage = language;
-            return delegate.update(projectId, code, prefLabel, definition, language, defaultLanguage, broader);
+            return delegate.update(projectId, code, prefLabel, definition, language, defaultLanguage, broader,
+                    related);
+        }
+
+        @Override
+        public List<TermCode> findRelatedCodes(ProjectId projectId, TermId id) {
+            return delegate.findRelatedCodes(projectId, id);
         }
 
         @Override

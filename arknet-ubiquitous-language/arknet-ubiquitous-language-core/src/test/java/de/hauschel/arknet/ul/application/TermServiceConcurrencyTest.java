@@ -21,6 +21,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermId;
 
 /**
  * Regression test: {@link TermService#add} used to compute the next business code
@@ -114,8 +115,14 @@ class TermServiceConcurrencyTest {
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                String language, String defaultLanguage, Optional<TermCode> broader) {
-            return delegate.update(projectId, code, prefLabel, definition, language, defaultLanguage, broader);
+                String language, String defaultLanguage, Optional<TermCode> broader, List<TermCode> related) {
+            return delegate.update(projectId, code, prefLabel, definition, language, defaultLanguage, broader,
+                    related);
+        }
+
+        @Override
+        public List<TermCode> findRelatedCodes(ProjectId projectId, TermId id) {
+            return delegate.findRelatedCodes(projectId, id);
         }
 
         @Override

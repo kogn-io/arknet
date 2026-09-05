@@ -14,6 +14,7 @@ import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermCycleException;
+import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 import de.hauschel.arknet.ul.domain.TermReferencedException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
@@ -50,6 +51,14 @@ import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
  * at all survive unconditionally. The code itself is never among the correctable fields and is
  * therefore never rewritten - a code collision is now structurally unreachable via
  * this method, not merely checked.</p>
+ *
+ * <p><strong>Forward direction only, on both sides of the symmetric relation
+ * (kogn-io/arknet#420).</strong> Every {@link Term} this port hands back carries the {@code
+ * skos:related} peers the term itself points at, never the ones pointing back at it, and every
+ * write asserts that same one direction. The reverse direction is a read of its own,
+ * {@link #findRelatedCodes}, so the application service can merge the two into the single symmetric
+ * list its driving ports promise without this port ever having to guess which half of a merged list
+ * it is expected to persist.</p>
  */
 public interface TermRepository {
 
@@ -65,8 +74,9 @@ public interface TermRepository {
      * @throws DuplicateTermCodeException     if another term already carries this term's
      *                                        {@link TermCode} - identity collision and
      *                                        business-label collision are distinct failure modes
-     * @throws TermNotFoundException          if {@code term.broader()} is set but does not
-     *                                        resolve to an existing term in the project
+     * @throws TermNotFoundException          if {@code term.broader()} is set, or {@code
+     *                                        term.related()} holds a code, that does not resolve to
+     *                                        an existing term in the project
      * @throws RuntimeException if {@code term} violates a SHACL write constraint. The concrete
      *                          signal type is deliberately not fixed by this port: a real
      *                          implementation's {@code WriteConstraintViolationException} lives
@@ -89,9 +99,9 @@ public interface TermRepository {
      * discarded. Only once every retry attempt keeps losing the race does
      * {@link TermConcurrentlyModifiedException} reach the caller.</p>
      *
-     * <p>A call with {@code prefLabel} and {@code definition} both {@code null}
-     * is a no-op: nothing is written, no revision is recorded, and the revision head does not
-     * move.</p>
+     * <p>A call with every correctable field ({@code prefLabel}, {@code definition},
+     * {@code broader}, {@code related}) {@code null} is a no-op: nothing is written, no revision is
+     * recorded, and the revision head does not move.</p>
      *
      * @param projectId the project (architecture model) the term lives in
      * @param code        the term's own, unchanged business code - {@code update} never rewrites
@@ -124,10 +134,20 @@ public interface TermRepository {
      *                    {@link Optional#empty()} to clear it, or {@link Optional#of} the code of
      *                    an already-existing term to set/replace it - resolved and cycle-checked
      *                    against this project's own glossary (issue #252)
-     * @return the term's up-to-date state after the correction
+     * @param related     {@code null} to leave the term's own {@code skos:related} peers untouched,
+     *                    an empty list to clear them, or the codes of already-existing terms to
+     *                    replace them wholesale - resolved against this project's own glossary
+     *                    (kogn-io/arknet#420). Only this term's own forward edges are ever touched;
+     *                    an edge another term asserts towards this one is that term's to clear
+     * @return the term's up-to-date state after the correction, its {@code related} list holding
+     *         the forward direction alone (see the type-level note)
+     * @throws IllegalArgumentException          if {@code related} names {@code code} itself or
+     *                                            names the same term twice - rejected before
+     *                                            anything is written
      * @throws TermNotFoundException             if no term with this code exists, or if
-     *                                            {@code broader} carries a code that does not
-     *                                            resolve to an existing term in the project
+     *                                            {@code broader} or an entry of {@code related}
+     *                                            carries a code that does not resolve to an
+     *                                            existing term in the project
      * @throws TermCycleException                if setting {@code broader} would make
      *                                            {@code code} its own (direct or transitive)
      *                                            broader term
@@ -140,7 +160,28 @@ public interface TermRepository {
      *                          {@code arknet-ubiquitous-language-core} must not depend on.
      */
     Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            String language, String defaultLanguage, Optional<TermCode> broader);
+            String language, String defaultLanguage, Optional<TermCode> broader, List<TermCode> related);
+
+    /**
+     * Reads the backward direction of {@code skos:related}: the business codes of every term in the
+     * project whose own {@code skos:related} edge points at {@code id} (kogn-io/arknet#420).
+     *
+     * <p>Exists because only the forward direction is ever asserted, while the property is an
+     * {@code owl:SymmetricProperty} - so the application service unions this with the term's own
+     * forward peers into the single list its driving ports hand out, rather than reporting two
+     * directions of one and the same relation. One step backwards, never a traversal: the peers
+     * returned here are not themselves followed, which is what keeps a legitimate {@code A related
+     * B}, {@code B related A} pair - which this relation, unlike {@code skos:broader}, explicitly
+     * permits - from looping. Mirrors {@code AdrRepository#findRelatedCodes} exactly.</p>
+     *
+     * <p>Never rejects: an identity absent from the project simply has no referrers, which is an
+     * empty list, not an error. Never reports a code twice.</p>
+     *
+     * @param projectId the project (architecture model) to read in
+     * @param id        the identity of the term to find the referencing peers of
+     * @return the referencing terms' codes, ordered by running number, never {@code null}
+     */
+    List<TermCode> findRelatedCodes(ProjectId projectId, TermId id);
 
     /**
      * Finds a term by its human-readable business code within a project.
