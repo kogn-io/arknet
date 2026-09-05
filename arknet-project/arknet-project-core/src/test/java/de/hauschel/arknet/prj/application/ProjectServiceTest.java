@@ -20,6 +20,7 @@ import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.RevisionToken;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.DatasetAlreadyAdoptedException;
+import de.hauschel.arknet.prj.domain.DefaultLanguageNotMaintainedException;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
@@ -55,7 +56,7 @@ class ProjectServiceTest {
     void registerCreatesAProjectWithExactlyOneAnchorAndTheGivenLabel() {
         Anchor anchor = pathAnchor("/home/fred/arknet");
 
-        Project project = service.register("arknet", anchor, null, null, null);
+        Project project = service.register("arknet", anchor, null, null, null, null);
 
         assertNotNull(project.id());
         assertEquals("arknet", project.label());
@@ -65,10 +66,10 @@ class ProjectServiceTest {
     @Test
     void registerWithAnAlreadyRegisteredAnchorThrowsAndNamesTheOwningProject() {
         Anchor anchor = pathAnchor("/home/fred/arknet");
-        Project owner = service.register("arknet", anchor, null, null, null);
+        Project owner = service.register("arknet", anchor, null, null, null, null);
 
         AnchorAlreadyRegisteredException ex = assertThrows(AnchorAlreadyRegisteredException.class,
-                () -> service.register("arknet-copy", anchor, null, null, null));
+                () -> service.register("arknet-copy", anchor, null, null, null, null));
 
         assertEquals(owner.id(), ex.owner());
         assertEquals(anchor, ex.anchor());
@@ -82,10 +83,10 @@ class ProjectServiceTest {
      */
     @Test
     void registerWithADuplicateLabelThrowsAndPropagatesTheDuplicateProjectLabelException() {
-        service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
 
         DuplicateProjectLabelException ex = assertThrows(DuplicateProjectLabelException.class,
-                () -> service.register("arknet", pathAnchor("/home/fred/arknet-copy"), null, null, null));
+                () -> service.register("arknet", pathAnchor("/home/fred/arknet-copy"), null, null, null, null));
 
         assertEquals("arknet", ex.label());
     }
@@ -104,7 +105,7 @@ class ProjectServiceTest {
      */
     @Test
     void findByIdReturnsTheRegisteredProject() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
 
         assertEquals(Optional.of(project), service.findById(project.id()));
     }
@@ -116,7 +117,7 @@ class ProjectServiceTest {
 
     @Test
     void attachAddsASecondAnchorAndBothAnchorsThenResolveToTheSameProject() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
 
         Project attached = service.attach(project.id(), pathAnchor("/home/fred/arknet-worktree"));
 
@@ -127,7 +128,7 @@ class ProjectServiceTest {
 
     @Test
     void attachingTheSameAnchorTwiceIsIdempotentAndPerformsNoSecondWrite() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         int writesAfterRegister = registry.writeCount();
 
         Project attached = service.attach(project.id(), pathAnchor("/home/fred/arknet"));
@@ -143,7 +144,7 @@ class ProjectServiceTest {
      */
     @Test
     void attachingTheSameAnchorValueUnderADifferentTypeIsIdempotentAndPerformsNoSecondWrite() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         int writesAfterRegister = registry.writeCount();
 
         Project attached = service.attach(project.id(), new Anchor("/home/fred/arknet", AnchorType.URL));
@@ -154,8 +155,8 @@ class ProjectServiceTest {
 
     @Test
     void attachingAnAnchorAlreadyOwnedByAnotherProjectThrows() {
-        Project a = service.register("project-a", pathAnchor("/home/fred/a"), null, null, null);
-        Project b = service.register("project-b", pathAnchor("/home/fred/b"), null, null, null);
+        Project a = service.register("project-a", pathAnchor("/home/fred/a"), null, null, null, null);
+        Project b = service.register("project-b", pathAnchor("/home/fred/b"), null, null, null, null);
 
         AnchorAlreadyRegisteredException ex = assertThrows(AnchorAlreadyRegisteredException.class,
                 () -> service.attach(b.id(), pathAnchor("/home/fred/a")));
@@ -171,7 +172,7 @@ class ProjectServiceTest {
 
     @Test
     void renameChangesTheLabelKeepsTheAnchorsAndKeepsTheIdentityStable() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
 
         Project renamed = service.rename(project.id(), "arknet-renamed");
 
@@ -188,8 +189,8 @@ class ProjectServiceTest {
 
     @Test
     void renameToADuplicateLabelThrows() {
-        Project a = service.register("project-a", pathAnchor("/home/fred/a"), null, null, null);
-        service.register("project-b", pathAnchor("/home/fred/b"), null, null, null);
+        Project a = service.register("project-a", pathAnchor("/home/fred/a"), null, null, null, null);
+        service.register("project-b", pathAnchor("/home/fred/b"), null, null, null, null);
 
         DuplicateProjectLabelException ex = assertThrows(DuplicateProjectLabelException.class,
                 () -> service.rename(a.id(), "project-b"));
@@ -204,7 +205,7 @@ class ProjectServiceTest {
      */
     @Test
     void renamingToTheCurrentLabelIsIdempotentAndPerformsNoSecondWrite() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         int writesAfterRegister = registry.writeCount();
 
         Project renamed = service.rename(project.id(), "arknet");
@@ -215,7 +216,7 @@ class ProjectServiceTest {
 
     @Test
     void everySuccessfulWriteAlsoWritesTheSelfDescription() {
-        Project registered = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project registered = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         assertEquals(registered, selfDescription.lastDescribed(registered.id()));
 
         Project attached = service.attach(registered.id(), pathAnchor("/home/fred/arknet-worktree"));
@@ -264,7 +265,7 @@ class ProjectServiceTest {
     @Test
     void adoptRejectsAnAnchorThatAlreadyBelongsToAnotherProject() {
         Anchor taken = pathAnchor("/home/fred/DEV/arknet");
-        service.register("arknet", taken, null, null, null);
+        service.register("arknet", taken, null, null, null, null);
         ProjectId existing = new ProjectId("other-dataset");
         datasets.with(existing);
 
@@ -294,7 +295,7 @@ class ProjectServiceTest {
     @Test
     void aFreshlyRegisteredProjectIsNotAdoptable() {
         datasets.with(new ProjectId("arknet"));
-        service.register("something-new", pathAnchor("/home/fred/new"), null, null, null);
+        service.register("something-new", pathAnchor("/home/fred/new"), null, null, null, null);
 
         assertEquals(List.of(new ProjectId("arknet")), service.adoptable());
     }
@@ -314,7 +315,7 @@ class ProjectServiceTest {
      */
     @Test
     void aStaleCompareAndUpdateOnTheFirstAttemptIsRetriedTransparently() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         ProjectService retryingService =
                 new ProjectService(new ConflictsOnCompareAndUpdateRegistry(registry, 1), selfDescription, datasets);
 
@@ -332,7 +333,7 @@ class ProjectServiceTest {
      */
     @Test
     void aStaleCompareAndUpdateThatNeverClearsOnAttachIsRethrownAfterTheRetryBudgetIsSpent() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         int writesAfterRegister = registry.writeCount();
         ProjectService retryingService = new ProjectService(
                 new ConflictsOnCompareAndUpdateRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
@@ -345,7 +346,7 @@ class ProjectServiceTest {
     /** The {@code rename} counterpart of {@link #aStaleCompareAndUpdateThatNeverClearsOnAttachIsRethrownAfterTheRetryBudgetIsSpent}. */
     @Test
     void aStaleCompareAndUpdateThatNeverClearsOnRenameIsRethrownAfterTheRetryBudgetIsSpent() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         int writesAfterRegister = registry.writeCount();
         ProjectService retryingService = new ProjectService(
                 new ConflictsOnCompareAndUpdateRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
@@ -367,13 +368,121 @@ class ProjectServiceTest {
      */
     @Test
     void updateWithNoFieldsIsANoOpAndPerformsNoWrite() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         int writesAfterRegister = registry.writeCount();
 
-        Project unchanged = service.update(project.id(), null, null, null);
+        Project unchanged = service.update(project.id(), null, null, null, null);
 
         assertEquals(project, unchanged);
         assertEquals(writesAfterRegister, registry.writeCount());
+    }
+
+    // --- the maintained language set (kogn-io/arknet#412) -------------------
+
+    @Test
+    void registerStoresTheMaintainedLanguageSetCanonicalizedAndInTheStatedOrder() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, "de",
+                List.of("DE", "en"));
+
+        assertEquals(List.of("de", "en"), project.maintainedLanguages());
+        assertEquals(List.of("de", "en"), registry.findById(project.id()).orElseThrow().maintainedLanguages(),
+                "what the caller reads back and what the registry holds must be the same set");
+    }
+
+    @Test
+    void registerRefusesADefaultLanguageOutsideTheMaintainedSetAndWritesNothing() {
+        int writesBefore = registry.writeCount();
+
+        assertThrows(DefaultLanguageNotMaintainedException.class,
+                () -> service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, "fr",
+                        List.of("de", "en")));
+
+        assertEquals(writesBefore, registry.writeCount(),
+                "the pair is checked before an identity is minted, so a refused registration leaves "
+                        + "neither a project nor a spent identity behind");
+        assertTrue(registry.findAll().isEmpty());
+    }
+
+    @Test
+    void updateReplacesTheMaintainedSetWholesaleRatherThanMergingIntoIt() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, "de",
+                List.of("de", "en"));
+
+        Project updated = service.update(project.id(), null, null, null, List.of("de"));
+
+        assertEquals(List.of("de"), updated.maintainedLanguages(),
+                "a set is corrected by stating it, not by amending one member of it");
+    }
+
+    @Test
+    void updateWithAnEmptyListRemovesTheSetWhileOmittingItLeavesItAlone() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, "de",
+                List.of("de", "en"));
+
+        Project untouched = service.update(project.id(), "a description", "en", null, null);
+        assertEquals(List.of("de", "en"), untouched.maintainedLanguages(),
+                "omission means 'leave alone' for this argument as for every other one");
+
+        Project cleared = service.update(project.id(), null, null, null, List.of());
+        assertEquals(List.of(), cleared.maintainedLanguages(),
+                "an empty list is the only way back to 'no commitment', since omitting already "
+                        + "means something else");
+    }
+
+    /**
+     * The half of the pair invariant that a per-argument check would miss: nothing about this call
+     * touches the maintained set, yet it is the set the new default language has to fit into.
+     */
+    @Test
+    void updateRefusesADefaultLanguageThatWouldLeaveTheUntouchedMaintainedSet() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, "de",
+                List.of("de", "en"));
+        int writesAfterRegister = registry.writeCount();
+
+        assertThrows(DefaultLanguageNotMaintainedException.class,
+                () -> service.update(project.id(), null, null, "fr", null));
+
+        assertEquals(writesAfterRegister, registry.writeCount(), "a refused update must write nothing");
+        assertEquals("de", registry.findById(project.id()).orElseThrow().defaultLanguage());
+    }
+
+    /** The mirror image of the test above: the set moves out from under an untouched default language. */
+    @Test
+    void updateRefusesAMaintainedSetThatWouldNoLongerHoldTheUntouchedDefaultLanguage() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, "de",
+                List.of("de", "en"));
+        int writesAfterRegister = registry.writeCount();
+
+        assertThrows(DefaultLanguageNotMaintainedException.class,
+                () -> service.update(project.id(), null, null, null, List.of("en", "fr")));
+
+        assertEquals(writesAfterRegister, registry.writeCount());
+        assertEquals(List.of("de", "en"), registry.findById(project.id()).orElseThrow().maintainedLanguages());
+    }
+
+    @Test
+    void updateAcceptsBothHalvesMovingTogetherInOneCall() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, "de",
+                List.of("de", "en"));
+
+        Project updated = service.update(project.id(), null, null, "fr", List.of("fr", "en"));
+
+        assertEquals("fr", updated.defaultLanguage());
+        assertEquals(List.of("fr", "en"), updated.maintainedLanguages(),
+                "the invariant is about the state the call leaves behind, so a pair that moves "
+                        + "together never has to pass through an inconsistent intermediate step");
+    }
+
+    @Test
+    void attachAndRenameCarryTheMaintainedSetForwardUntouched() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, "de",
+                List.of("de", "en"));
+
+        service.attach(project.id(), pathAnchor("/home/fred/arknet-worktree"));
+        Project renamed = service.rename(project.id(), "arknet-renamed");
+
+        assertEquals(List.of("de", "en"), renamed.maintainedLanguages(),
+                "neither writes the set, and the replace-by-identity write must not drop it either");
     }
 
     /**
@@ -385,11 +494,11 @@ class ProjectServiceTest {
      */
     @Test
     void aStaleUpdateAttributesOnTheFirstAttemptIsRetriedTransparently() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         ProjectService retryingService =
                 new ProjectService(new ConflictsOnUpdateAttributesRegistry(registry, 1), selfDescription, datasets);
 
-        Project updated = retryingService.update(project.id(), "Architecture + Knowledge Net", "en", null);
+        Project updated = retryingService.update(project.id(), "Architecture + Knowledge Net", "en", null, null);
 
         assertEquals("Architecture + Knowledge Net", updated.description());
         assertEquals("Architecture + Knowledge Net",
@@ -399,13 +508,13 @@ class ProjectServiceTest {
     /** The {@code update} counterpart of {@link #aStaleCompareAndUpdateThatNeverClearsOnAttachIsRethrownAfterTheRetryBudgetIsSpent}. */
     @Test
     void aStaleUpdateAttributesThatNeverClearsIsRethrownAfterTheRetryBudgetIsSpent() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         int writesAfterRegister = registry.writeCount();
         ProjectService retryingService = new ProjectService(
                 new ConflictsOnUpdateAttributesRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
 
         assertThrows(StaleProjectException.class,
-                () -> retryingService.update(project.id(), "Architecture + Knowledge Net", "en", null));
+                () -> retryingService.update(project.id(), "Architecture + Knowledge Net", "en", null, null));
         assertEquals(writesAfterRegister, registry.writeCount(), "an exhausted retry must not have written anything");
     }
 
@@ -421,7 +530,7 @@ class ProjectServiceTest {
         ProjectService retryingService =
                 new ProjectService(new ConflictsOnRegisterRegistry(registry, 1), selfDescription, datasets);
 
-        Project project = retryingService.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        Project project = retryingService.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
 
         assertEquals("arknet", project.label());
         assertEquals(1, registry.writeCount(), "the retry must apply the same candidate exactly once");
@@ -438,7 +547,7 @@ class ProjectServiceTest {
                 new ConflictsOnRegisterRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
 
         assertThrows(UnattributedRegistrationConflictException.class,
-                () -> retryingService.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null));
+                () -> retryingService.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null));
         assertEquals(0, registry.writeCount(), "an exhausted retry must not have written anything");
     }
 
@@ -519,8 +628,8 @@ class ProjectServiceTest {
 
         @Override
         public void register(Project project, String description, String descriptionLanguage,
-                String defaultLanguage) {
-            delegate.register(project, description, descriptionLanguage, defaultLanguage);
+                String defaultLanguage, List<String> maintainedLanguages) {
+            delegate.register(project, description, descriptionLanguage, defaultLanguage, maintainedLanguages);
         }
 
         @Override
@@ -554,9 +663,9 @@ class ProjectServiceTest {
 
         @Override
         public Project updateAttributes(ProjectId projectId, RevisionToken expectedHead, String description,
-                String descriptionLanguage, String defaultLanguage) {
+                String descriptionLanguage, String defaultLanguage, List<String> maintainedLanguages) {
             return delegate.updateAttributes(projectId, expectedHead, description, descriptionLanguage,
-                    defaultLanguage);
+                    defaultLanguage, maintainedLanguages);
         }
     }
 
@@ -580,8 +689,8 @@ class ProjectServiceTest {
 
         @Override
         public void register(Project project, String description, String descriptionLanguage,
-                String defaultLanguage) {
-            delegate.register(project, description, descriptionLanguage, defaultLanguage);
+                String defaultLanguage, List<String> maintainedLanguages) {
+            delegate.register(project, description, descriptionLanguage, defaultLanguage, maintainedLanguages);
         }
 
         @Override
@@ -611,13 +720,13 @@ class ProjectServiceTest {
 
         @Override
         public Project updateAttributes(ProjectId projectId, RevisionToken expectedHead, String description,
-                String descriptionLanguage, String defaultLanguage) {
+                String descriptionLanguage, String defaultLanguage, List<String> maintainedLanguages) {
             attempts++;
             if (attempts <= failuresBeforeSuccess) {
                 throw new StaleProjectException(projectId);
             }
             return delegate.updateAttributes(projectId, expectedHead, description, descriptionLanguage,
-                    defaultLanguage);
+                    defaultLanguage, maintainedLanguages);
         }
     }
 
@@ -641,12 +750,12 @@ class ProjectServiceTest {
 
         @Override
         public void register(Project project, String description, String descriptionLanguage,
-                String defaultLanguage) {
+                String defaultLanguage, List<String> maintainedLanguages) {
             attempts++;
             if (attempts <= failuresBeforeSuccess) {
                 throw new UnattributedRegistrationConflictException(new RuntimeException("lost the commit"));
             }
-            delegate.register(project, description, descriptionLanguage, defaultLanguage);
+            delegate.register(project, description, descriptionLanguage, defaultLanguage, maintainedLanguages);
         }
 
         @Override
@@ -676,9 +785,9 @@ class ProjectServiceTest {
 
         @Override
         public Project updateAttributes(ProjectId projectId, RevisionToken expectedHead, String description,
-                String descriptionLanguage, String defaultLanguage) {
+                String descriptionLanguage, String defaultLanguage, List<String> maintainedLanguages) {
             return delegate.updateAttributes(projectId, expectedHead, description, descriptionLanguage,
-                    defaultLanguage);
+                    defaultLanguage, maintainedLanguages);
         }
     }
 
@@ -699,7 +808,7 @@ class ProjectServiceTest {
 
         @Override
         public void register(Project project, String description, String descriptionLanguage,
-                String defaultLanguage) {
+                String defaultLanguage, List<String> maintainedLanguages) {
             throw new ResourceAlreadyExistsException(project.id());
         }
 
@@ -730,9 +839,9 @@ class ProjectServiceTest {
 
         @Override
         public Project updateAttributes(ProjectId projectId, RevisionToken expectedHead, String description,
-                String descriptionLanguage, String defaultLanguage) {
+                String descriptionLanguage, String defaultLanguage, List<String> maintainedLanguages) {
             return delegate.updateAttributes(projectId, expectedHead, description, descriptionLanguage,
-                    defaultLanguage);
+                    defaultLanguage, maintainedLanguages);
         }
     }
 }

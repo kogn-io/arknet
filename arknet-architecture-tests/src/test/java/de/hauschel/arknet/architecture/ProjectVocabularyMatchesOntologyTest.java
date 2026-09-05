@@ -90,7 +90,8 @@ class ProjectVocabularyMatchesOntologyTest {
                 ArkprjVocabulary.PATH_ANCHOR,
                 ArkprjVocabulary.URL_ANCHOR,
                 ArkprjVocabulary.UUID_ANCHOR,
-                ArkprjVocabulary.DEFAULT_LANGUAGE), declared,
+                ArkprjVocabulary.DEFAULT_LANGUAGE,
+                ArkprjVocabulary.MAINTAINED_LANGUAGE), declared,
                 "arknet-project.ttl and ArkprjVocabulary must describe the same vocabulary");
     }
 
@@ -147,6 +148,21 @@ class ProjectVocabularyMatchesOntologyTest {
         assertTrue(ontology.contains(iri(ArkprjVocabulary.DEFAULT_LANGUAGE), RDFS.DOMAIN,
                 iri(ArkprjVocabulary.PROJECT_TYPE)),
                 "arkprj:defaultLanguage must be scoped to arkprj:Project");
+    }
+
+    /**
+     * A project's maintained language set (kogn-io/arknet#412) is a set of plain BCP-47 tags, not
+     * of resources - same reasoning as {@link #theOntologyDeclaresDefaultLanguageAsADatatypeProperty}
+     * above, and the reason the two are asserted separately at all is that they are two terms
+     * saying two different things (a fallback and a commitment), not one term used twice.
+     */
+    @Test
+    void theOntologyDeclaresMaintainedLanguageAsADatatypeProperty() {
+        assertTrue(ontology.contains(iri(ArkprjVocabulary.MAINTAINED_LANGUAGE), RDF.TYPE, OWL.DATATYPEPROPERTY),
+                "arkprj:maintainedLanguage must be declared an owl:DatatypeProperty");
+        assertTrue(ontology.contains(iri(ArkprjVocabulary.MAINTAINED_LANGUAGE), RDFS.DOMAIN,
+                iri(ArkprjVocabulary.PROJECT_TYPE)),
+                "arkprj:maintainedLanguage must be scoped to arkprj:Project");
     }
 
     /**

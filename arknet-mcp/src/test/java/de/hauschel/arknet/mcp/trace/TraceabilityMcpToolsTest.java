@@ -77,7 +77,7 @@ class TraceabilityMcpToolsTest {
      */
     private static ProjectId registerProject(final org.springframework.context.ApplicationContext context) {
         return context.getBean(ProjectService.class)
-                .register("trace-tools-test", new Anchor(ANCHOR, AnchorType.PATH), null, null, null)
+                .register("trace-tools-test", new Anchor(ANCHOR, AnchorType.PATH), null, null, null, null)
                 .id();
     }
 
@@ -90,7 +90,7 @@ class TraceabilityMcpToolsTest {
     private static ProjectId registerProject(
             final org.springframework.context.ApplicationContext context, final String defaultLanguage) {
         return context.getBean(ProjectService.class)
-                .register("trace-tools-test", new Anchor(ANCHOR, AnchorType.PATH), null, null, defaultLanguage)
+                .register("trace-tools-test", new Anchor(ANCHOR, AnchorType.PATH), null, null, defaultLanguage, null)
                 .id();
     }
 

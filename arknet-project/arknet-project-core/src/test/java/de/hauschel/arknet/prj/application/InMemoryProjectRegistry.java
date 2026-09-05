@@ -57,7 +57,7 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
 
     @Override
     public synchronized void register(Project project, String description, String descriptionLanguage,
-            String defaultLanguage) {
+            String defaultLanguage, List<String> maintainedLanguages) {
         if (byId.containsKey(project.id())) {
             throw new ResourceAlreadyExistsException(project.id());
         }
@@ -74,7 +74,7 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
         // the real adapter's scoped delete, see KognioRdfProjectRegistry) - a plain overwrite
         // suffices to exercise ProjectService's policy.
         byId.put(project.id(), new Project(project.id(), project.label(), project.anchors(), description,
-                defaultLanguage));
+                defaultLanguage, maintainedLanguages));
         headById.put(project.id(), new RevisionToken(UUID.randomUUID().toString()));
         writeCount.incrementAndGet();
     }
@@ -129,7 +129,8 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
 
     @Override
     public synchronized Project updateAttributes(ProjectId projectId, RevisionToken expectedHead,
-            String description, String descriptionLanguage, String defaultLanguage) {
+            String description, String descriptionLanguage, String defaultLanguage,
+            List<String> maintainedLanguages) {
         Project current = byId.get(projectId);
         if (current == null) {
             throw new ProjectNotFoundException(projectId);
@@ -139,7 +140,8 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
         }
         Project updated = new Project(current.id(), current.label(), current.anchors(),
                 description != null ? description : current.description(),
-                defaultLanguage != null ? defaultLanguage : current.defaultLanguage());
+                defaultLanguage != null ? defaultLanguage : current.defaultLanguage(),
+                maintainedLanguages != null ? maintainedLanguages : current.maintainedLanguages());
         byId.put(projectId, updated);
         headById.put(projectId, new RevisionToken(UUID.randomUUID().toString()));
         writeCount.incrementAndGet();

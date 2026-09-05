@@ -78,11 +78,28 @@ public final class ArkprjVocabulary {
      * {@code arkprj:defaultLanguage} - a project's single, optional default display/write
      * language, as a BCP-47 tag (e.g. {@code "de"}). Used by other bounded contexts (via
      * {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}) as the second-priority
-     * tier of a display-language fallback chain, after an explicit per-call override - never as a
-     * write-time default (a write that omits a language always writes untagged, regardless of
-     * this value; see {@code UbiquitousLanguageMcpTools#effectiveDisplayLocale}).
+     * tier of a display-language fallback chain, after an explicit per-call override, and - since
+     * issue #258 - as the write-time fallback a write that omits its own {@code language} argument
+     * resolves to ({@code LanguageTag#resolveWriteLanguage}).
+     *
+     * <p>A <em>fallback</em>, not a commitment: it says which language a call that names none
+     * lands in, never which languages the project undertakes to carry. That second, different
+     * statement is {@link #MAINTAINED_LANGUAGE}.</p>
      */
     public static final String DEFAULT_LANGUAGE = NAMESPACE + "defaultLanguage";
+
+    /**
+     * {@code arkprj:maintainedLanguage} - one tag of the multi-valued set of BCP-47 languages a
+     * project undertakes to maintain its model in (kogn-io/arknet#412), the target state against
+     * which incompleteness becomes definable at all. An empty set is the legal "no commitment"
+     * state every project was in before this term existed.
+     *
+     * <p>Deliberately a second term rather than a widened {@link #DEFAULT_LANGUAGE}: the two say
+     * different things (fallback vs. commitment) and a single multi-valued property would have to
+     * mean both at once. Where the set is non-empty, the default language is one of its members -
+     * an invariant the project component enforces on every write that could break it.</p>
+     */
+    public static final String MAINTAINED_LANGUAGE = NAMESPACE + "maintainedLanguage";
 
     /** {@code arkprj:anchorValue} - the anchor's opaque string, never interpreted by the server. */
     public static final String ANCHOR_VALUE = NAMESPACE + "anchorValue";

@@ -134,6 +134,28 @@ public final class ProjectMcpTools {
                     + "an explicit 'anchor' parameter for clients that cannot supply one via their "
                     + "transport context - pass that instead.";
 
+    /**
+     * Shared by {@code project_add} and {@code project_update}. States what the default language
+     * is <em>for</em> - both halves of it, since issue #258 made it the write-time fallback too -
+     * and, since kogn-io/arknet#412, what it is not: a statement about which languages the project
+     * keeps. Only the tool schema reliably reaches an agent, so the distinction has to be here and
+     * not only in the documentation.
+     */
+    private static final String DEFAULT_LANGUAGE_DESCRIPTION =
+            "The project's default display/write language, as a BCP-47 tag (e.g. 'de'). It is a "
+                    + "FALLBACK, not a commitment: a call that names no language of its own is written "
+                    + "under it, and a read without an explicit displayLocale prefers it. It says "
+                    + "nothing about which languages the project keeps its model in - that is the "
+                    + "'languages' parameter.";
+
+    /** Shared by {@code project_add} and {@code project_update}; the two differ only in their tri-state. */
+    private static final String LANGUAGES_DESCRIPTION =
+            "The set of languages this project undertakes to maintain its model in, as BCP-47 tags "
+                    + "(e.g. ['de','en']). A COMMITMENT, unlike defaultLanguage: it is the target state "
+                    + "store_check compares the store against, so a field carrying only some of these "
+                    + "languages can be reported as incomplete at all. If the set is non-empty, "
+                    + "defaultLanguage has to be one of its members - the call is refused otherwise.";
+
     private final RegisterProject registerProject;
     private final AdoptProject adoptProject;
     private final AttachAnchor attachAnchor;
@@ -264,16 +286,16 @@ public final class ProjectMcpTools {
                     + "written in, or omitted for a plain, untagged literal. Ignored if 'description' is "
                     + "omitted.", required = false)
             final String language,
-            @McpToolParam(description = "Optional: the project's default display/write language, as a "
-                    + "BCP-47 tag (e.g. 'de'). Used by other tools (e.g. term_get) as a fallback display "
-                    + "language, and never as an implicit write-time default - a write that omits its own "
-                    + "language argument always writes untagged, regardless of this value.", required = false)
-            final String defaultLanguage) {
+            @McpToolParam(description = DEFAULT_LANGUAGE_DESCRIPTION, required = false)
+            final String defaultLanguage,
+            @McpToolParam(description = LANGUAGES_DESCRIPTION + " Omit it to declare no set at all, "
+                    + "which is how every project behaved before this parameter existed.", required = false)
+            final List<String> languages) {
         final Anchor resolvedAnchor = isBlank(anchor)
                 ? requireContextAnchor(context, NO_CONTEXT_ANCHOR_MESSAGE_ADD)
                 : new Anchor(anchor, parseAnchorType(anchorType));
         final Project created = registerProject.register(label, resolvedAnchor, blankToNull(description),
-                blankToNull(language), blankToNull(defaultLanguage));
+                blankToNull(language), blankToNull(defaultLanguage), languages);
         return format(created);
     }
 
@@ -323,9 +345,13 @@ public final class ProjectMcpTools {
     }
 
     @McpTool(name = "project_update", description = "Correct the project the call comes from: its "
-            + "optional description and/or default display language. Every argument is optional - an "
-            + "omitted one leaves that field unchanged. Unlike project_rename, this never touches the "
-            + "project's label or anchors.")
+            + "optional description, its default display language and/or the set of languages it "
+            + "maintains. Every argument is optional - an omitted one leaves that field unchanged; "
+            + "'languages' is the one argument whose EMPTY list is a change rather than an omission, "
+            + "removing the declared set. Unlike project_rename, this never touches the project's label "
+            + "or anchors. A default language and a maintained set cannot contradict each other: if the "
+            + "resulting set is non-empty, the resulting default language has to be one of its members, "
+            + "and a call that would break that is refused whichever of the two it moves.")
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "New description (optional, unchanged if omitted). Replaces only "
@@ -337,8 +363,12 @@ public final class ProjectMcpTools {
                     + "omitted.", required = false)
             final String language,
             @McpToolParam(description = "New default display/write language, as a BCP-47 tag (e.g. 'de') "
-                    + "(optional, unchanged if omitted).", required = false)
+                    + "(optional, unchanged if omitted). " + DEFAULT_LANGUAGE_DESCRIPTION, required = false)
             final String defaultLanguage,
+            @McpToolParam(description = LANGUAGES_DESCRIPTION + " Passing a list replaces the current "
+                    + "set wholesale, passing an EMPTY list removes it, omitting it leaves it "
+                    + "untouched.", required = false)
+            final List<String> languages,
             @McpToolParam(description = "Optional anchor ALREADY REGISTERED for the caller's own "
                     + "project, used INSTEAD of the calling client's transport context to find which "
                     + "project to correct. Only needed for a client that cannot supply an origin directory "
@@ -348,7 +378,7 @@ public final class ProjectMcpTools {
             final String callerAnchor) {
         final Project caller = resolveCaller(context, callerAnchor);
         final Project updated = updateProject.update(caller.id(), blankToNull(description), blankToNull(language),
-                blankToNull(defaultLanguage));
+                blankToNull(defaultLanguage), languages);
         return format(updated);
     }
 
@@ -402,7 +432,7 @@ public final class ProjectMcpTools {
     /**
      * Renders a project as its label, every anchor it is reachable by (value first, type as a
      * trailing annotation, e.g. {@code /home/f/DEV/arknet (path)}), its opaque identity, and its
-     * description/default language if either is set - the identity is not a caller-facing tool
+     * description, default language and maintained language set if any of them is set - the identity is not a caller-facing tool
      * parameter anywhere in this adapter, but a later surface without an anchor of its own needs
      * a stable value to address a project by.
      *
@@ -428,6 +458,10 @@ public final class ProjectMcpTools {
         }
         if (project.defaultLanguage() != null) {
             rendered.append(" [defaultLanguage: ").append(project.defaultLanguage()).append(']');
+        }
+        if (!project.maintainedLanguages().isEmpty()) {
+            rendered.append(" [languages: ").append(String.join(", ", project.maintainedLanguages()))
+                    .append(']');
         }
         return rendered.toString();
     }
