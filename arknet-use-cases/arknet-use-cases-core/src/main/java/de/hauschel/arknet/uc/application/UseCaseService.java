@@ -353,8 +353,14 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             Set<Integer> touchedStepPositions, boolean extensionsTouched, UnaryOperator<UseCase> mutation) {
         UseCaseConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-            UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(projectId, code)
-                    .orElseThrow(() -> new UseCaseNotFoundException(projectId, code));
+            // The project's own default language, not the reading process's, decides which
+            // language variant this read-modify-write round trip sees (issue #456): its values are
+            // what an untouched field is echoed back as and compared against, its tags what such a
+            // field is written back under. linkTerm/linkConstraint pass null here for the same
+            // reason they pass a null write language - they never touch a language-tagged field.
+            UseCaseRepository.CurrentUseCase current =
+                    repository.findCurrentByCode(projectId, code, defaultLanguage)
+                            .orElseThrow(() -> new UseCaseNotFoundException(projectId, code));
             UseCase updated = mutation.apply(current.value());
             // title/goal/scope/trigger/precondition/postcondition/each step's text/each
             // extension's text each get their own language: a field, step or extension this call

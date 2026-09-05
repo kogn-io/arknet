@@ -226,8 +226,9 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code) {
-            return delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code,
+                String defaultLanguage) {
+            return delegate.findCurrentByCode(projectId, code, defaultLanguage);
         }
 
         @Override
@@ -287,8 +288,9 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code) {
-            Optional<CurrentUseCase> result = delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code,
+                String defaultLanguage) {
+            Optional<CurrentUseCase> result = delegate.findCurrentByCode(projectId, code, defaultLanguage);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -345,8 +347,9 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code) {
-            return delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code,
+                String defaultLanguage) {
+            return delegate.findCurrentByCode(projectId, code, defaultLanguage);
         }
 
         @Override

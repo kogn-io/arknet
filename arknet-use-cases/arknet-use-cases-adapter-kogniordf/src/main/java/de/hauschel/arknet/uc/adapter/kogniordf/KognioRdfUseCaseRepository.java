@@ -793,13 +793,16 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * of. Mirrors {@code KognioRdfRequirementRepository#findCurrentByCode}: reuses the same
      * subject lookup {@link #findByCode} does, then pairs the scalar/head read in one query call
      * via {@link #readCurrentBySubject} - one snapshot for the core fields and the head, exactly
-     * as {@link #readBySubject} reads the core fields alone. No per-call display-language override
-     * here: an internal read-modify-write round trip is not a caller-facing read, so this
-     * adapter's own configured {@link #displayLocale} is used (mirrors
-     * {@code KognioRdfRequirementRepository#findCurrentByCode}).
+     * as {@link #readBySubject} reads the core fields alone. The projection language is the
+     * calling project's own default (issue #456, mirrors
+     * {@code KognioRdfRequirementRepository#findCurrentByCode}): this read's values are echoed
+     * back for a field {@code uc_update} leaves alone, and its tags decide what such a field is
+     * written back under, so it must see what {@link #findByCode} shows the same project rather
+     * than what the reading process happens to be configured for.
      */
     @Override
-    public Optional<UseCaseRepository.CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code) {
+    public Optional<UseCaseRepository.CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code,
+            String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         String query = "SELECT ?s WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
@@ -810,7 +813,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             if (head.isEmpty()) {
                 return Optional.empty();
             }
-            return readCurrentBySubject(handle, iriOf(head.get(), "s").getIRIString(), code);
+            // Lenient canonicalization, and withRequestedOverride's own null/blank no-op, degrade a
+            // project without a (well-formed) default language to the configured preference.
+            return readCurrentBySubject(handle, iriOf(head.get(), "s").getIRIString(), code,
+                    withRequestedOverride(canonicalizeLenient(defaultLanguage)));
         }
     }
 
@@ -877,7 +883,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * instead of overwriting a state it never actually saw.
      */
     private Optional<UseCaseRepository.CurrentUseCase> readCurrentBySubject(
-            DatasetHandle handle, String subjectIriString, UseCaseCode code) {
+            DatasetHandle handle, String subjectIriString, UseCaseCode code, DisplayLocale locale) {
         if (!SparqlTerms.isValidIriReference(subjectIriString)) {
             return Optional.empty();
         }
@@ -891,23 +897,23 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         if (row.isEmpty()) {
             return Optional.empty();
         }
-        Optional<UseCase> useCase = buildUseCase(handle, subjectIriString, code, subject, row.get(), displayLocale);
+        Optional<UseCase> useCase = buildUseCase(handle, subjectIriString, code, subject, row.get(), locale);
         if (useCase.isEmpty()) {
             return Optional.empty();
         }
-        Optional<LocalizedLiteral> title = displayLocale.select(readTitles(handle, subject));
-        Optional<LocalizedLiteral> goal = displayLocale.select(readGoals(handle, subject));
+        Optional<LocalizedLiteral> title = locale.select(readTitles(handle, subject));
+        Optional<LocalizedLiteral> goal = locale.select(readGoals(handle, subject));
         if (title.isEmpty() || goal.isEmpty()) {
             return Optional.empty();
         }
-        Optional<LocalizedLiteral> scope = displayLocale.select(readScopes(handle, subject));
-        Optional<LocalizedLiteral> trigger = displayLocale.select(readTriggers(handle, subject));
-        Optional<LocalizedLiteral> precondition = displayLocale.select(readPreconditions(handle, subject));
-        Optional<LocalizedLiteral> postcondition = displayLocale.select(readPostconditions(handle, subject));
+        Optional<LocalizedLiteral> scope = locale.select(readScopes(handle, subject));
+        Optional<LocalizedLiteral> trigger = locale.select(readTriggers(handle, subject));
+        Optional<LocalizedLiteral> precondition = locale.select(readPreconditions(handle, subject));
+        Optional<LocalizedLiteral> postcondition = locale.select(readPostconditions(handle, subject));
         List<StepAssembly> stepAssemblies = readMainStepAssemblies(handle, subject);
-        Map<Integer, String> stepTextLanguageByPosition = toStepLanguages(stepAssemblies, displayLocale);
+        Map<Integer, String> stepTextLanguageByPosition = toStepLanguages(stepAssemblies, locale);
         List<StepAssembly> extensionAssemblies = readExtensionStepAssemblies(handle, subject);
-        Map<Integer, String> extensionTextLanguageByPosition = toStepLanguages(extensionAssemblies, displayLocale);
+        Map<Integer, String> extensionTextLanguageByPosition = toStepLanguages(extensionAssemblies, locale);
         RevisionToken head = row.get().getValue("head")
                 .filter(IRI.class::isInstance)
                 .map(value -> new RevisionToken(((IRI) value).getIRIString()))

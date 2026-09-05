@@ -198,12 +198,25 @@ public interface UseCaseRepository {
      * {@link #compareAndUpdate} guards the write side of - mirrors
      * {@code RequirementRepository#findCurrentByCode}.
      *
+     * <p><strong>Which language variant this read sees (issue #456).</strong> Every multilingual
+     * field is projected through {@code defaultLanguage}, the very tag {@link #findByCode} is
+     * handed for a {@code uc_get} without an explicit {@code displayLocale} argument - not through
+     * the reading process's own configured display preference. The values this read returns are
+     * what {@code uc_update} echoes back for a field the call left alone and compares a correction
+     * against, and the tags it returns are what such an untouched field is written back under.</p>
+     *
      * @param projectId the project (architecture model) to look up the use case in
      * @param code        the use-case code (e.g. {@code UC1})
+     * @param defaultLanguage the project's configured default language, or {@code null} if it has
+     *                        none - the BCP-47 tag {@code title}/{@code goal}/{@code scope}/
+     *                        {@code trigger}/{@code precondition}/{@code postcondition}/each
+     *                        step's and extension's {@code text} is selected under, degrading
+     *                        along the usual fallback chain when the use case carries no literal
+     *                        in it
      * @return the use case and its current head, or {@link Optional#empty()} if no use case with
      *         this code exists
      */
-    Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code);
+    Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code, String defaultLanguage);
 
     /**
      * A use case's state paired with its current concurrency token (the {@link RevisionToken}, or
