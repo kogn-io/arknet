@@ -134,9 +134,10 @@ arkreq:AcceptanceCriterion a owl:Class ;
 
 arkreq:criterionText a owl:DatatypeProperty ;
     rdfs:domain arkreq:AcceptanceCriterion ;
-    rdfs:range  xsd:string ;
+    rdfs:range  rdfs:Literal ;
     rdfs:label  "criterion text"@en ;
-    rdfs:comment "Der testbare Kriterientext (Done when ...)."@de .
+    rdfs:comment "The testable criterion text (Done when ...). Multilingual: rdfs:Literal instead of xsd:string, because rshapes:AcceptanceCriterion-text allows one own (then rdf:langString) literal per language tag (sh:uniqueLang)."@en ,
+                 "Der testbare Kriterientext (Done when ...). Mehrsprachig: rdfs:Literal statt xsd:string, weil rshapes:AcceptanceCriterion-text je Sprach-Tag ein eigenes (dann rdf:langString-) Literal erlaubt (sh:uniqueLang)."@de .
 
 arkreq:qualityCategory a owl:DatatypeProperty ;
     rdfs:domain arkreq:NonFunctionalRequirement ;
@@ -233,36 +234,41 @@ arkreq:UseCase a owl:Class ;
 
 arkreq:useCaseGoal a owl:DatatypeProperty ;
     rdfs:domain arkreq:UseCase ;
-    rdfs:range  xsd:string ;
+    rdfs:range  rdfs:Literal ;
     rdfs:label  "use case goal"@en ;
-    rdfs:comment "Das Ziel im Kontext (goal-in-context nach Cockburn)."@de .
+    rdfs:comment "The goal in context (goal-in-context per Cockburn). Multilingual: rdfs:Literal instead of xsd:string, because rshapes:UseCase-goal-uniqueLang allows one own (then rdf:langString) literal per language tag (sh:uniqueLang)."@en ,
+                 "Das Ziel im Kontext (goal-in-context nach Cockburn). Mehrsprachig: rdfs:Literal statt xsd:string, weil rshapes:UseCase-goal-uniqueLang je Sprach-Tag ein eigenes (dann rdf:langString-) Literal erlaubt (sh:uniqueLang)."@de .
 
 arkreq:designScope a owl:DatatypeProperty ;
     rdfs:domain arkreq:UseCase ;
-    rdfs:range  xsd:string ;
+    rdfs:range  rdfs:Literal ;
     rdfs:label  "design scope"@en ;
-    rdfs:comment "Der Systemumfang, den dieser Use Case betrachtet (Design Scope nach Cockburn)."@de .
+    rdfs:comment "The system scope this use case considers (design scope per Cockburn). Multilingual: rdfs:Literal instead of xsd:string, because rshapes:UseCase-scope-uniqueLang allows one own (then rdf:langString) literal per language tag (sh:uniqueLang)."@en ,
+                 "Der Systemumfang, den dieser Use Case betrachtet (Design Scope nach Cockburn). Mehrsprachig: rdfs:Literal statt xsd:string, weil rshapes:UseCase-scope-uniqueLang je Sprach-Tag ein eigenes (dann rdf:langString-) Literal erlaubt (sh:uniqueLang)."@de .
 
 arkreq:trigger a owl:DatatypeProperty ;
     rdfs:domain arkreq:UseCase ;
-    rdfs:range  xsd:string ;
+    rdfs:range  rdfs:Literal ;
     rdfs:label  "trigger"@en ;
-    rdfs:comment "Das Ereignis, das den Use Case ausloest (Cockburn trigger)."@de .
+    rdfs:comment "The event that triggers the use case (Cockburn trigger). Multilingual: rdfs:Literal instead of xsd:string, because rshapes:UseCase-trigger-uniqueLang allows one own (then rdf:langString) literal per language tag (sh:uniqueLang)."@en ,
+                 "Das Ereignis, das den Use Case ausloest (Cockburn trigger). Mehrsprachig: rdfs:Literal statt xsd:string, weil rshapes:UseCase-trigger-uniqueLang je Sprach-Tag ein eigenes (dann rdf:langString-) Literal erlaubt (sh:uniqueLang)."@de .
 
 # Haupt- und Ausnahmeablaeufe sind strukturiert (arkreq:mainStep / arkreq:extensionStep
 # auf arkreq:Step), nicht mehr Freitext -- siehe Abschnitt 4b.
 
 arkreq:useCasePrecondition a owl:DatatypeProperty ;
     rdfs:domain arkreq:UseCase ;
-    rdfs:range  xsd:string ;
+    rdfs:range  rdfs:Literal ;
     rdfs:label  "precondition"@en ;
-    rdfs:comment "Zustand, der vor dem Use Case gelten muss."@de .
+    rdfs:comment "State that must hold before the use case. Multilingual: rdfs:Literal instead of xsd:string, because rshapes:UseCase-precondition-uniqueLang allows one own (then rdf:langString) literal per language tag (sh:uniqueLang)."@en ,
+                 "Zustand, der vor dem Use Case gelten muss. Mehrsprachig: rdfs:Literal statt xsd:string, weil rshapes:UseCase-precondition-uniqueLang je Sprach-Tag ein eigenes (dann rdf:langString-) Literal erlaubt (sh:uniqueLang)."@de .
 
 arkreq:useCasePostcondition a owl:DatatypeProperty ;
     rdfs:domain arkreq:UseCase ;
-    rdfs:range  xsd:string ;
+    rdfs:range  rdfs:Literal ;
     rdfs:label  "postcondition"@en ;
-    rdfs:comment "Garantierter Zustand nach erfolgreichem Use Case (success guarantee)."@de .
+    rdfs:comment "Guaranteed state after a successful use case (success guarantee). Multilingual: rdfs:Literal instead of xsd:string, because rshapes:UseCase-postcondition-uniqueLang allows one own (then rdf:langString) literal per language tag (sh:uniqueLang)."@en ,
+                 "Garantierter Zustand nach erfolgreichem Use Case (success guarantee). Mehrsprachig: rdfs:Literal statt xsd:string, weil rshapes:UseCase-postcondition-uniqueLang je Sprach-Tag ein eigenes (dann rdf:langString-) Literal erlaubt (sh:uniqueLang)."@de .
 
 # -- Use Case Relationships --------------------------------------------------
 #    UseCase oslc_rm:satisfies Requirement  (reused; siehe Requirement-Block)
@@ -330,9 +336,10 @@ arkreq:position a owl:DatatypeProperty ;
 
 arkreq:stepText a owl:DatatypeProperty ;
     rdfs:domain arkreq:Step ;
-    rdfs:range  xsd:string ;
+    rdfs:range  rdfs:Literal ;
     rdfs:label  "step text"@en ;
-    rdfs:comment "Beschreibung dessen, was in diesem Schritt geschieht."@de .
+    rdfs:comment "Description of what happens in this step. Multilingual: rdfs:Literal instead of xsd:string, because rshapes:Step-text allows one own (then rdf:langString) literal per language tag (sh:uniqueLang)."@en ,
+                 "Beschreibung dessen, was in diesem Schritt geschieht. Mehrsprachig: rdfs:Literal statt xsd:string, weil rshapes:Step-text je Sprach-Tag ein eigenes (dann rdf:langString-) Literal erlaubt (sh:uniqueLang)."@de .
 
 arkreq:stepLabel a owl:DatatypeProperty ;
     rdfs:domain arkreq:Step ;
