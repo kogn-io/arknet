@@ -3,9 +3,15 @@
 
 package de.hauschel.arknet.ul.application;
 
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.CodeCounter;
@@ -75,10 +81,32 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * against {@code defaultLanguage} (or rejected, see {@link
  * de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}) - a call that touches neither field
  * never reaches the resolver and can never throw for a missing default.</p>
+ *
+ * <p><strong>Symmetry (kogn-io/arknet#420).</strong> {@code skos:related} is an
+ * {@code owl:SymmetricProperty} whose stored direction carries no meaning, and only that one
+ * direction is ever written. Merging the two back into the single list {@link Term#related()}
+ * promises is this service's job, not the repository's - the same split
+ * {@code AdrService}/{@code AdrRepository} draw for {@code arkarch:relatedTo}. {@link #get} and
+ * {@link #update} pay one extra reverse read each ({@link TermRepository#findRelatedCodes});
+ * {@link #list} pays none at all, inverting the forward edges of the terms it already read in
+ * memory. {@link #add} pays none either, for a stronger reason: nothing can already point at an
+ * identity minted moments ago.</p>
  */
 public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, UpdateTerm, DeleteTerm {
 
     private static final String ID_PREFIX = "TERM";
+
+    /**
+     * Orders {@code TERM-N} code strings by their parsed running number rather than
+     * lexicographically ({@code "TERM-10"} would otherwise sort before {@code "TERM-2"}), falling
+     * back to natural string order for two non-conforming store-first codes that both parse to 0 -
+     * without that fallback the comparator would return 0 for two different codes and silently
+     * collapse them into one entry of a {@link TreeSet}. Same comparator, same reasoning, as
+     * {@code AdrService}'s.
+     */
+    private static final Comparator<String> CODE_BY_RUNNING_NUMBER =
+            Comparator.<String>comparingInt(code -> CodeCounter.runningNumber(ID_PREFIX + "-", code))
+                    .thenComparing(Comparator.naturalOrder());
 
     private final TermRepository repository;
     private final ResourceIdFactory resourceIdFactory;
@@ -109,30 +137,62 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         String language = LanguageTag.resolveWriteLanguage(command.language(), defaultLanguage);
         return CodeAssignment.createRetryingOnCodeCollision(DuplicateTermCodeException.class, () -> {
             TermCode code = nextCode(projectId);
-            Term term = new Term(id, code, command.prefLabel(), command.definition(), command.broader());
+            // No reverse read to merge in: the identity above was minted moments ago, so no
+            // existing term can already carry a skos:related edge towards it (see the class-level
+            // "Symmetry" note).
+            Term term = new Term(id, code, command.prefLabel(), command.definition(), command.broader(),
+                    command.related());
             repository.create(projectId, term, language);
             return term;
         });
     }
 
+    /**
+     * Lists a project's terms with every {@code skos:related} edge shown symmetrically, paying no
+     * store round-trip for the backward direction: with every term of the project already in hand,
+     * inverting their forward edges in memory answers "who points at me" for all of them at once -
+     * the same shape {@code AdrService#list} uses, and the reason {@code term_list} does not
+     * degenerate into one reverse query per term.
+     */
     @Override
     public List<Term> list(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
-        return repository.findAll(projectId, displayLocale);
+        List<Term> all = repository.findAll(projectId, displayLocale);
+        Map<TermCode, TreeSet<String>> relatedFrom = new LinkedHashMap<>();
+        for (Term term : all) {
+            for (TermCode peer : term.related()) {
+                relatedFrom.computeIfAbsent(peer, key -> new TreeSet<>(CODE_BY_RUNNING_NUMBER))
+                        .add(term.code().value());
+            }
+        }
+        return all.stream()
+                .map(term -> withRelated(term, mergedRelated(term.related(), relatedFrom.get(term.code()))))
+                .toList();
     }
 
     @Override
     public Optional<Term> get(ProjectId projectId, TermCode code, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.findByCode(projectId, code, displayLocale);
+        return repository.findByCode(projectId, code, displayLocale).map(term -> mergeRelated(projectId, term));
     }
 
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            String language, String defaultLanguage, Optional<TermCode> broader) {
+            String language, String defaultLanguage, Optional<TermCode> broader, List<TermCode> related) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        // Rejected here rather than in the out-adapter, and before anything is written: both faults
+        // are decidable from the arguments alone, and Term's own constructor would otherwise raise
+        // them only while rendering the result - after the store had already been changed.
+        if (related != null) {
+            if (related.contains(code)) {
+                throw new IllegalArgumentException("a term must not be related to itself: " + code.value());
+            }
+            if (new HashSet<>(related).size() != related.size()) {
+                throw new IllegalArgumentException("related must not name the same term twice: " + related);
+            }
+        }
         // Unlike RequirementService/UseCaseService, this method never reads the current term
         // first (see the class-level "pure pass-through" note), so it cannot compare a mutated
         // value against what was read to tell whether a language-tagged field is actually
@@ -145,8 +205,42 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         String effectiveLanguage = (prefLabel != null || definition != null)
                 ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
                 : language;
-        return repository.update(projectId, code, prefLabel, definition, effectiveLanguage,
-                defaultLanguage, broader);
+        Term updated = repository.update(projectId, code, prefLabel, definition, effectiveLanguage,
+                defaultLanguage, broader, related);
+        return mergeRelated(projectId, updated);
+    }
+
+    /**
+     * Unions {@code term}'s own forward {@code skos:related} edges with the backward direction read
+     * from the store, so a caller sees one symmetric list rather than whichever half happens to be
+     * asserted (kogn-io/arknet#420). One reverse read per term - which is why {@link #list} does not
+     * use this method.
+     */
+    private Term mergeRelated(ProjectId projectId, Term term) {
+        List<TermCode> backward = repository.findRelatedCodes(projectId, term.id());
+        TreeSet<String> codes = new TreeSet<>(CODE_BY_RUNNING_NUMBER);
+        backward.forEach(peer -> codes.add(peer.value()));
+        return withRelated(term, mergedRelated(term.related(), codes));
+    }
+
+    /**
+     * Merges the forward and backward halves of the symmetric relation into one deduplicated list,
+     * ordered by running number - a peer reachable in both directions is named once, not twice.
+     *
+     * @param backward the backward half, or {@code null} for none
+     */
+    private static List<TermCode> mergedRelated(List<TermCode> forward, Set<String> backward) {
+        TreeSet<String> merged = new TreeSet<>(CODE_BY_RUNNING_NUMBER);
+        forward.forEach(peer -> merged.add(peer.value()));
+        if (backward != null) {
+            merged.addAll(backward);
+        }
+        return merged.stream().map(TermCode::new).toList();
+    }
+
+    /** {@code term} with its {@code related} list replaced - every other field untouched. */
+    private static Term withRelated(Term term, List<TermCode> related) {
+        return new Term(term.id(), term.code(), term.prefLabel(), term.definition(), term.broader(), related);
     }
 
     @Override

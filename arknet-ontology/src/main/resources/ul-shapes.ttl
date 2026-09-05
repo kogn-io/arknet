@@ -25,7 +25,8 @@ ulshapes:TermShape
     sh:property ulshapes:Term-prefLabel ;
     sh:property ulshapes:Term-definition ;
     sh:property ulshapes:Term-inScheme ;
-    sh:property ulshapes:Term-broader .
+    sh:property ulshapes:Term-broader ;
+    sh:property ulshapes:Term-related .
 
 ulshapes:Term-prefLabel
     a sh:PropertyShape ;
@@ -58,6 +59,14 @@ ulshapes:Term-broader
     sh:class    skos:Concept ;
     sh:nodeKind sh:IRI ;
     sh:message  "skos:broader is optional but, if present, must reference exactly one other skos:Concept (IRI) - the term's single broader (superordinate) term."@en , "skos:broader ist optional, muss aber, falls vorhanden, genau einen anderen skos:Concept (IRI) referenzieren - den einen uebergeordneten (broader) Begriff des Begriffs."@de ;
+    sh:severity sh:Violation .
+
+ulshapes:Term-related
+    a sh:PropertyShape ;
+    sh:path     skos:related ;
+    sh:class    skos:Concept ;
+    sh:nodeKind sh:IRI ;
+    sh:message  "skos:related is optional and may name several terms, but every value must be another skos:Concept (IRI) - an associative, non-hierarchical relation between two terms. Use skos:broader instead when one term specializes the other."@en , "skos:related ist optional und darf mehrere Begriffe nennen, jeder Wert muss aber ein anderer skos:Concept (IRI) sein - eine assoziative, nicht-hierarchische Beziehung zwischen zwei Begriffen. Wenn ein Begriff den anderen spezialisiert, gehoert dorthin skos:broader."@de ;
     sh:severity sh:Violation .
 
 

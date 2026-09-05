@@ -86,14 +86,15 @@ public final class TraceabilityMcpTools {
             description = "Finds orphaned artifacts: requirements no use case realises, glossary terms never"
                     + " referenced (neither used by a requirement, a use case or an architecture decision"
                     + " (arkarch:usesTerm), playing an actor role in a use"
-                    + " case, a bounded context's ubiquitous language, nor another term's skos:broader), mentions"
+                    + " case, a bounded context's ubiquitous language, nor another term's skos:broader or skos:related),"
+                    + " mentions"
                     + " without a backing edge - a requirement's, use case's, bounded context's or architecture"
                     + " decision's text naming a term without the matching"
                     + " usesTerm/primaryActor/supportingActor/ubiquitousLanguageTerm edge (a use case's goal,"
                     + " scope, trigger, precondition, postcondition and every step/extension text count as its"
                     + " text; an architecture decision's name, context, decision, every consequence's statement"
                     + " and every considered option's name/rationale count as its text), or a term's own"
-                    + " skos:definition naming another term without a skos:broader edge - and constraints no"
+                    + " skos:definition naming another term without a skos:broader or skos:related edge - and constraints no"
                     + " requirement or use case is bound by via constrainedBy. Reported as four lists.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String orphanCheck(

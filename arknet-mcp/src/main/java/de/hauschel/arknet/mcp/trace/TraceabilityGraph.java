@@ -106,9 +106,16 @@ public final class TraceabilityGraph {
     private static final String BROADER = ArkreqVocabulary.BROADER;
 
     /**
+     * {@code skos:related} - Term -&gt; an associatively related Term (kogn-io/arknet#420). Written
+     * in one direction only, so both directions are read wherever this graph asks whether two terms
+     * are linked at all.
+     */
+    private static final String RELATED = ArkreqVocabulary.RELATED;
+
+    /**
      * {@code skos:definition} - a term's meaning, scanned by {@link #unlinkedMentions()}'s third
-     * sweep for a mention of another term the source does not link via {@code broader} (issue
-     * #252).
+     * sweep for a mention of another term the source links neither via {@code broader} nor via
+     * {@code related} (issue #252, kogn-io/arknet#420).
      */
     private static final String DEFINITION = ArkreqVocabulary.DEFINITION;
 
@@ -455,9 +462,17 @@ public final class TraceabilityGraph {
      *         ({@code arkreq:usesTerm}, issue #329), by an architecture decision
      *         ({@code arkarch:usesTerm}, kogn-io/arknet#393), plays an actor role in a use case
      *         ({@code arkreq:primaryActor}/{@code arkreq:supportingActor}), is a bounded context's
-     *         ubiquitous language ({@code arkddd:ubiquitousLanguageTerm}), or is another term's
+     *         ubiquitous language ({@code arkddd:ubiquitousLanguageTerm}), is another term's
      *         broader (superordinate) term ({@code skos:broader}, issue #252) - an interior/root
-     *         taxonomy term stops being reported as an orphan once something is hung under it
+     *         taxonomy term stops being reported as an orphan once something is hung under it - or
+     *         is another term's associatively related peer ({@code skos:related},
+     *         kogn-io/arknet#420)
+     *
+     *         <p>Only the incoming direction counts, for {@code skos:related} as much as for every
+     *         other predicate here: a term that merely names peers of its own has still not been
+     *         woven into the model by anything else, which is exactly what "orphan" means. The
+     *         symmetric peer at the other end of that edge does get credit for it - which is the
+     *         whole point of reading incoming edges.</p>
      */
     public boolean isReferencedTerm(String termIri) {
         Objects.requireNonNull(termIri, "termIri");
@@ -466,7 +481,30 @@ public final class TraceabilityGraph {
                         || PRIMARY_ACTOR.equals(t.predicate())
                         || SUPPORTING_ACTOR.equals(t.predicate())
                         || UBIQUITOUS_LANGUAGE_TERM.equals(t.predicate())
-                        || BROADER.equals(t.predicate()));
+                        || BROADER.equals(t.predicate())
+                        || RELATED.equals(t.predicate()));
+    }
+
+    /**
+     * @return the IRIs of every term this one is associatively related to, in either direction
+     *         ({@code skos:related}, kogn-io/arknet#420) - the relation is symmetric and written
+     *         once, so a caller asking "are these two linked" must look both ways or it would see
+     *         the link from one end only
+     */
+    public Set<String> relatedTerms(String termIri) {
+        Objects.requireNonNull(termIri, "termIri");
+        Set<String> peers = new HashSet<>();
+        outgoingBySubject.getOrDefault(termIri, List.of()).stream()
+                .filter(t -> RELATED.equals(t.predicate()))
+                .map(Triple::object)
+                .filter(RdfNode.Resource.class::isInstance)
+                .map(o -> ((RdfNode.Resource) o).iri())
+                .forEach(peers::add);
+        incomingByObject.getOrDefault(termIri, List.of()).stream()
+                .filter(t -> RELATED.equals(t.predicate()))
+                .map(Triple::subject)
+                .forEach(peers::add);
+        return peers;
     }
 
     /**
@@ -653,8 +691,10 @@ public final class TraceabilityGraph {
      * of some <em>other</em> glossary term: a taxonomy term's prose commonly names its
      * superordinate ("A Human Actor is an Actor who ...") without that being an accident the way
      * an unrelated mention in a requirement/bounded-context prose is - so a mentioned term counts
-     * as unlinked here only when it is not the very term {@link #broaderTerm(String)} already
-     * names as this term's own broader term. A term's mention of its own label within its own
+     * as unlinked here only when this term links it neither as its own broader term
+     * ({@link #broaderTerm(String)}) nor as an associatively related peer
+     * ({@link #relatedTerms(String)}, kogn-io/arknet#420; read in both directions, since only one
+     * is ever asserted). A term's mention of its own label within its own
      * definition is never reported (a term cannot be its own broader term anyway, see
      * {@link de.hauschel.arknet.ul.domain.TermCycleException}).</p>
      *
@@ -706,12 +746,13 @@ public final class TraceabilityGraph {
             }
         }
         for (String termIri : termIris) {
-            String broader = broaderTerm(termIri).orElse(null);
+            Set<String> linked = new HashSet<>(relatedTerms(termIri));
+            broaderTerm(termIri).ifPresent(linked::add);
             for (String mentionedTermIri : matcher.mentionedIn(termProseTexts(termIri))) {
                 if (mentionedTermIri.equals(termIri)) {
                     continue;
                 }
-                if (!mentionedTermIri.equals(broader)) {
+                if (!linked.contains(mentionedTermIri)) {
                     found.add(new UnlinkedMention(
                             termIri, mentionedTermIri, termLabels.get(mentionedTermIri), "broader"));
                 }

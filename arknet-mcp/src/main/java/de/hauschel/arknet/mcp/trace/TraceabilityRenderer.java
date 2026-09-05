@@ -77,7 +77,7 @@ public final class TraceabilityRenderer {
      * used (neither via {@code arkreq:usesTerm}/actor role - a requirement's or a use case's,
      * issue #329 - as a bounded context's ubiquitous language, nor via an architecture decision's
      * {@code arkarch:usesTerm}, kogn-io/arknet#393, nor as another term's {@code skos:broader},
-     * issue #252), terms a requirement's, use case's, bounded context's or architecture decision's
+     * issue #252, nor as another term's {@code skos:related} peer, kogn-io/arknet#420), terms a requirement's, use case's, bounded context's or architecture decision's
      * prose names without the edge to back it up (issue #406), and constraints no requirement or
      * use case is bound by (issue #223/#329).
      *

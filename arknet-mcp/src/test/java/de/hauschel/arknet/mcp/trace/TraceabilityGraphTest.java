@@ -532,6 +532,56 @@ class TraceabilityGraphTest {
             assertThat(freshGraph.isReferencedTerm(broaderIri)).isTrue();
         }
 
+        /**
+         * kogn-io/arknet#420: the symmetric relation is written in one direction only, so the term
+         * at the receiving end must stop counting as an orphan without asserting anything itself.
+         */
+        @Test
+        void isReferencedTermIsTrueForATermThatIsAnotherTermsRelatedPeer() {
+            String peerIri = "https://w3id.org/arknet/id/trace-test-related-peer";
+            String namerIri = "https://w3id.org/arknet/id/trace-test-related-namer";
+            seedTermWithRelated(peerIri, "TERM-REL-1", "Projekt", "Ein Vorhaben.", null);
+            seedTermWithRelated(namerIri, "TERM-REL-2", "Anker", "Ein opakes Merkmal.", peerIri);
+            StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+            TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+            assertThat(freshGraph.isReferencedTerm(peerIri)).isTrue();
+        }
+
+        /** Both ends of the one asserted edge see the peer - that is what "symmetric" has to mean here. */
+        @Test
+        void relatedTermsReadsBothDirectionsOfTheOneAssertedEdge() {
+            String peerIri = "https://w3id.org/arknet/id/trace-test-relatedterms-peer";
+            String namerIri = "https://w3id.org/arknet/id/trace-test-relatedterms-namer";
+            seedTermWithRelated(peerIri, "TERM-RT-1", "Projekt", "Ein Vorhaben.", null);
+            seedTermWithRelated(namerIri, "TERM-RT-2", "Anker", "Ein opakes Merkmal.", peerIri);
+            StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+            TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+            assertThat(freshGraph.relatedTerms(namerIri)).containsExactly(peerIri);
+            assertThat(freshGraph.relatedTerms(peerIri)).containsExactly(namerIri);
+        }
+
+        /**
+         * The {@code skos:related} counterpart of
+         * {@link #unlinkedMentionsDoesNotFlagATermsMentionOfItsOwnBroaderTerm()}: a term whose
+         * definition names a peer it is already related to has recorded that link, so the mention is
+         * not unlinked - and the edge counts from either end, since only one is asserted.
+         */
+        @Test
+        void unlinkedMentionsDoesNotFlagATermsMentionOfARelatedPeer() {
+            String peerIri = "https://w3id.org/arknet/id/trace-test-mention-related-peer";
+            String namerIri = "https://w3id.org/arknet/id/trace-test-mention-related-namer";
+            seedTermWithRelated(peerIri, "TERM-MR-1", "Projekt", "Wird durch einen Anker identifiziert.", null);
+            seedTermWithRelated(namerIri, "TERM-MR-2", "Anker", "Identifiziert ein Projekt.", peerIri);
+            StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+            TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+            assertThat(freshGraph.unlinkedMentions())
+                    .noneMatch(mention -> mention.sourceIri().equals(namerIri)
+                            || mention.sourceIri().equals(peerIri));
+        }
+
         @Test
         void broaderTermOfATermWithABroaderReturnsTheTarget() {
             String broaderIri = "https://w3id.org/arknet/id/trace-test-broadertermof-parent";
@@ -677,6 +727,33 @@ class TraceabilityGraphTest {
             try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
                 handle.transactor().inTransaction(tx -> {
                     tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-broader-graph"), graph);
+                    return null;
+                });
+            }
+        }
+
+        /**
+         * The {@code skos:related} counterpart of {@link #seedTermWithBroader} - one term, with the
+         * forward direction of the symmetric relation asserted on it (kogn-io/arknet#420).
+         */
+        private void seedTermWithRelated(String termIri, String code, String prefLabel, String definition,
+                String relatedIri) {
+            RDF rdf = new SimpleRdf();
+            Graph graph = rdf.createGraph();
+            IRI term = rdf.createIRI(termIri);
+            graph.add(term, rdf.createIRI(RDF_TYPE), rdf.createIRI("http://www.w3.org/2004/02/skos/core#Concept"));
+            graph.add(term, rdf.createIRI("http://purl.org/dc/terms/identifier"), rdf.createLiteral(code));
+            graph.add(term, rdf.createIRI("http://www.w3.org/2004/02/skos/core#prefLabel"),
+                    rdf.createLiteral(prefLabel));
+            graph.add(term, rdf.createIRI("http://www.w3.org/2004/02/skos/core#definition"),
+                    rdf.createLiteral(definition));
+            if (relatedIri != null) {
+                graph.add(term, rdf.createIRI("http://www.w3.org/2004/02/skos/core#related"),
+                        rdf.createIRI(relatedIri));
+            }
+            try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+                handle.transactor().inTransaction(tx -> {
+                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-related-graph"), graph);
                     return null;
                 });
             }

@@ -98,7 +98,7 @@ class UbiquitousLanguageMcpToolsTest {
      */
     @Test
     void addPassesTheLanguageArgumentThroughUnchanged() {
-        adapter.add(null, "Kunde", "def a", null, "de", null);
+        adapter.add(null, "Kunde", "def a", null, null, "de", null);
 
         assertEquals("de", stub.lastCommand.language());
     }
@@ -106,7 +106,7 @@ class UbiquitousLanguageMcpToolsTest {
     /** {@code term_update} passes every given field through to the in-port. */
     @Test
     void updatePassesAllGivenFieldsThroughToTheInPort() {
-        String rendered = adapter.update(null, "TERM-1", "Erstattung", "Neue Definition", null, "de", null);
+        String rendered = adapter.update(null, "TERM-1", "Erstattung", "Neue Definition", null, null, "de", null);
 
         assertEquals(new TermCode("TERM-1"), stub.lastUpdatedTerm);
         assertEquals("Erstattung", stub.lastUpdatePrefLabel);
@@ -122,7 +122,7 @@ class UbiquitousLanguageMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "TERM-1", null, null, null, null, null);
+        adapter.update(null, "TERM-1", null, null, null, null, null, null);
 
         assertEquals(new TermCode("TERM-1"), stub.lastUpdatedTerm);
         assertNull(stub.lastUpdatePrefLabel);
@@ -133,7 +133,7 @@ class UbiquitousLanguageMcpToolsTest {
     /** {@code term_add}'s optional {@code broader} argument resolves to a {@link TermCode}. */
     @Test
     void addPassesThroughTheBroaderCode() {
-        adapter.add(null, "Human Actor", "A human acting.", "TERM-1", null, null);
+        adapter.add(null, "Human Actor", "A human acting.", "TERM-1", null, null, null);
 
         assertEquals(new TermCode("TERM-1"), stub.lastCommand.broader());
     }
@@ -141,7 +141,7 @@ class UbiquitousLanguageMcpToolsTest {
     /** Omitting {@code broader} on {@code term_add} leaves it unset. */
     @Test
     void addWithoutBroaderLeavesItNull() {
-        adapter.add(null, "Actor", "Someone or something acting.", null, null, null);
+        adapter.add(null, "Actor", "Someone or something acting.", null, null, null, null);
 
         assertNull(stub.lastCommand.broader());
     }
@@ -153,7 +153,7 @@ class UbiquitousLanguageMcpToolsTest {
      */
     @Test
     void updateOmittingBroaderPassesNullThrough() {
-        adapter.update(null, "TERM-1", null, null, null, null, null);
+        adapter.update(null, "TERM-1", null, null, null, null, null, null);
 
         assertNull(stub.lastUpdateBroader);
     }
@@ -161,7 +161,7 @@ class UbiquitousLanguageMcpToolsTest {
     /** An explicit, non-blank {@code broader} resolves to {@code Optional.of(...)} - set/replace. */
     @Test
     void updatePassesANonBlankBroaderAsOptionalOfTheCode() {
-        adapter.update(null, "TERM-1", null, null, "TERM-2", null, null);
+        adapter.update(null, "TERM-1", null, null, "TERM-2", null, null, null);
 
         assertEquals(Optional.of(new TermCode("TERM-2")), stub.lastUpdateBroader);
     }
@@ -169,9 +169,66 @@ class UbiquitousLanguageMcpToolsTest {
     /** An explicit blank {@code broader} resolves to {@code Optional.empty()} - explicit clear. */
     @Test
     void updatePassesABlankBroaderAsOptionalEmpty() {
-        adapter.update(null, "TERM-1", null, null, "", null, null);
+        adapter.update(null, "TERM-1", null, null, "", null, null, null);
 
         assertEquals(Optional.empty(), stub.lastUpdateBroader);
+    }
+
+    /** {@code term_add}'s optional {@code related} argument resolves to {@link TermCode}s. */
+    @Test
+    void addPassesThroughTheRelatedCodes() {
+        adapter.add(null, "Anker", "Ein opakes Merkmal.", null, List.of("TERM-1", " TERM-2 "), null, null);
+
+        assertEquals(List.of(new TermCode("TERM-1"), new TermCode("TERM-2")), stub.lastCommand.related());
+    }
+
+    /** Omitting {@code related} on {@code term_add} leaves the term without any related peer. */
+    @Test
+    void addWithoutRelatedLeavesItEmpty() {
+        adapter.add(null, "Anker", "Ein opakes Merkmal.", null, null, null, null);
+
+        assertEquals(List.of(), stub.lastCommand.related());
+    }
+
+    /**
+     * {@code term_update}'s {@code related} argument is the same three-way signal {@code broader}
+     * is, spelt with the list itself: omitting it must reach {@link UpdateTerm} as {@code null}
+     * (leave the existing peers alone), never as an empty list, which is the explicit "remove them
+     * all" instruction.
+     */
+    @Test
+    void updateOmittingRelatedPassesNullThrough() {
+        adapter.update(null, "TERM-1", null, null, null, null, null, null);
+
+        assertNull(stub.lastUpdateRelated);
+    }
+
+    /** An explicitly empty {@code related} list reaches the port as an empty list - clear them all. */
+    @Test
+    void updatePassesAnEmptyRelatedListThroughAsAClear() {
+        adapter.update(null, "TERM-1", null, null, null, List.of(), null, null);
+
+        assertEquals(List.of(), stub.lastUpdateRelated);
+    }
+
+    /** A non-empty {@code related} list reaches the port as codes - replace them wholesale. */
+    @Test
+    void updatePassesTheRelatedCodesThrough() {
+        adapter.update(null, "TERM-1", null, null, null, List.of("TERM-2", "TERM-3"), null, null);
+
+        assertEquals(List.of(new TermCode("TERM-2"), new TermCode("TERM-3")), stub.lastUpdateRelated);
+    }
+
+    /** A term's related peers are rendered next to its broader term, not swallowed. */
+    @Test
+    void getRendersTheRelatedPeers() {
+        stub.termForGet = Optional.of(new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-17"), "Projekt", "def a", null,
+                List.of(new TermCode("TERM-18"), new TermCode("TERM-20"))));
+
+        String rendered = adapter.get(null, "TERM-17", null, null);
+
+        assertEquals("TERM-17 Projekt - def a [related:TERM-18,TERM-20]", rendered);
     }
 
     @Test
@@ -256,6 +313,7 @@ class UbiquitousLanguageMcpToolsTest {
         private String lastUpdateDefinition;
         private String lastUpdateLanguage;
         private Optional<TermCode> lastUpdateBroader;
+        private List<TermCode> lastUpdateRelated;
         private String lastGetDisplayLocale;
         private String lastListDisplayLocale;
         private List<Term> termsForList = List.of();
@@ -264,6 +322,10 @@ class UbiquitousLanguageMcpToolsTest {
         @Override
         public Term add(ProjectId projectId, NewTerm command, String defaultLanguage) {
             lastCommand = command;
+            // The relations are deliberately not echoed back into the returned Term: this stub
+            // always answers under the fixed code TERM-1, which a test naming TERM-1 as the broader
+            // or related peer would then hand straight into Term's own self-reference guard. What
+            // each test asserts is what reached the port (lastCommand), not what came back.
             return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")),
                     new TermCode("TERM-1"), command.prefLabel(), command.definition());
         }
@@ -282,15 +344,17 @@ class UbiquitousLanguageMcpToolsTest {
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                String language, String defaultLanguage, Optional<TermCode> broader) {
+                String language, String defaultLanguage, Optional<TermCode> broader, List<TermCode> related) {
             lastUpdatedTerm = code;
             lastUpdatePrefLabel = prefLabel;
             lastUpdateDefinition = definition;
             lastUpdateLanguage = language;
             lastUpdateBroader = broader;
+            lastUpdateRelated = related;
             return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")), code,
                     prefLabel != null ? prefLabel : "p", definition != null ? definition : "d",
-                    broader != null ? broader.orElse(null) : null);
+                    broader != null ? broader.orElse(null) : null,
+                    related != null ? related : List.of());
         }
 
         @Override

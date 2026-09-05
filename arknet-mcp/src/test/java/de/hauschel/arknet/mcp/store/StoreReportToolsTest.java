@@ -550,7 +550,7 @@ class StoreReportToolsTest {
         final Term deTerm = termService.add(PROJECT,
                 new NewTerm("Anmeldung", "Der Nachweis der eigenen Identitaet.", null, null), "de");
         termService.update(PROJECT, deTerm.code(), "Login", "The act of proving one's identity.",
-                "en", "de", null);
+                "en", "de", null, null);
 
         final Prefixes prefixes = Prefixes.defaults();
         final StoreReader reader = new StoreReader(lifecycle);

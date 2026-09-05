@@ -3,6 +3,8 @@
 
 package de.hauschel.arknet.ul.application.port.in;
 
+import java.util.List;
+
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
@@ -30,8 +32,9 @@ public interface AddTerm {
      * @return the persisted term including its assigned identity
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code
      *                        command.language()} and {@code defaultLanguage} are both {@code null}
-     * @throws de.hauschel.arknet.ul.domain.TermNotFoundException if {@code command.broader()} does
-     *                        not resolve to an existing term in the target project
+     * @throws de.hauschel.arknet.ul.domain.TermNotFoundException if {@code command.broader()} or
+     *                        any entry of {@code command.related()} does not resolve to an existing
+     *                        term in the target project
      */
     Term add(ProjectId projectId, NewTerm command, String defaultLanguage);
 
@@ -51,8 +54,28 @@ public interface AddTerm {
      *                   fresh term can never already sit anywhere in an existing broader chain,
      *                   cycle protection never triggers here (only {@code term_update} can create
      *                   a cycle)
+     * @param related    codes of already-existing terms this one is associatively related to
+     *                   ({@code skos:related}, kogn-io/arknet#420), or {@code null}/an empty list
+     *                   for none - each resolved against the target project's own glossary, an
+     *                   unresolvable code rejecting the whole call. Unlike {@code broader} this is
+     *                   multi-valued and symmetric, so only the forward direction is written; a
+     *                   fresh term can never already be anybody's related peer, so nothing has to
+     *                   be merged in on the way back out of {@code add}
      */
-    record NewTerm(String prefLabel, String definition, String language, TermCode broader) {
+    record NewTerm(String prefLabel, String definition, String language, TermCode broader,
+            List<TermCode> related) {
+
+        public NewTerm {
+            related = related == null ? List.of() : List.copyOf(related);
+        }
+
+        /**
+         * Convenience constructor for a new term with no {@code related} peers - equivalent to
+         * passing an empty list for {@link #related} explicitly.
+         */
+        public NewTerm(String prefLabel, String definition, String language, TermCode broader) {
+            this(prefLabel, definition, language, broader, List.of());
+        }
 
         /**
          * Convenience constructor for a new term with no {@code broader} reference - equivalent

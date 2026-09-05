@@ -327,7 +327,7 @@ class TraceabilityMcpToolsTest {
             Term term = terms.add(project,
                     new NewTerm("Business-Code", "Ein Business-Code ist eine kurze Kennung.", null), "de");
             terms.update(project, term.code(), "Business Code", "A business code is a short identifier.",
-                    "en", "de", null);
+                    "en", "de", null, null);
 
             requirements.add(project, new NewRequirement("Requirement anlegen",
                     "Nach dem Anlegen liefert das System einen eindeutigen Business-Code fuer das Requirement.", null,

@@ -156,6 +156,14 @@ public final class ArkreqVocabulary {
     public static final String BROADER = SKOS_NAMESPACE + "broader";
 
     /**
+     * {@code skos:related} - Term -&gt; an associatively (non-hierarchically) related Term
+     * (kogn-io/arknet#420). The property is symmetric, and only one direction is ever asserted as
+     * a triple: the reverse direction is read backwards and merged into one list on the way out,
+     * exactly the way the ADR bounded context handles {@code arkarch:relatedTo}.
+     */
+    public static final String RELATED = SKOS_NAMESPACE + "related";
+
+    /**
      * {@code skos:definition} - the meaning of a glossary term; scanned as its prose text by the
      * term-mention sweep of {@code orphan_check}'s unlinked-mention check (issue #252).
      */
