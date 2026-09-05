@@ -53,8 +53,12 @@ Things to raise in an issue first:
 - Build and test locally before pushing:
 
   ```bash
-  mvn verify
+  mvn -T 1C verify
   ```
+
+  `-T 1C` builds the reactor with one thread per core, which is measurably
+  faster and is the same verification CI runs on your pull request (plain
+  `mvn verify` is equivalent, just serial).
 
 Toolchain: Java 25+, Maven 3.9+.
 

@@ -16,7 +16,6 @@ import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -24,7 +23,6 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
@@ -80,12 +78,11 @@ import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
  * <p><strong>Timeout.</strong> {@link CyclicBarrier#await()}/{@link CountDownLatch#await()} block
  * indefinitely by default; a future regression that stops one caller from ever reaching its
  * barrier/latch would otherwise hang {@code join()} forever, and the build would hang instead of
- * failing. The project has no {@code junit-platform.properties}/Surefire-level timeout, so this
- * class-level {@link Timeout} is the only backstop. 60 s matches the budget
- * {@code BoundedContextServiceRealStoreConcurrencyTest} settled on after measuring the same
- * interleaving under a full parallel reactor build.</p>
+ * failing. The project sets no class-level timeouts: the backstop is project-wide,
+ * {@code junit.jupiter.execution.timeout.default} in the root POM's Surefire
+ * {@code configurationParameters}, sized to catch a hang rather than to police runtime
+ * (kogn-io/arknet#458).</p>
  */
-@Timeout(value = 60, unit = TimeUnit.SECONDS)
 class ActorServiceRealStoreConcurrencyTest {
 
     private static final ProjectId WS = new ProjectId("test-project");

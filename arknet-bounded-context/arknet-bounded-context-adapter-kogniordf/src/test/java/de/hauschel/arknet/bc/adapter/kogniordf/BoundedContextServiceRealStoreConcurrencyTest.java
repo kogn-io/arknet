@@ -19,7 +19,6 @@ import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -27,7 +26,6 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
@@ -100,23 +98,18 @@ import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
  * <p><strong>Timeout.</strong> {@link CyclicBarrier#await()}/{@link CountDownLatch#await()} block
  * indefinitely by default; a future regression that stops one caller from ever reaching its
  * barrier/latch would otherwise hang {@code join()} forever, so neither {@code @AfterEach} nor
- * {@code shutDownAll()} would ever run - the build would hang instead of failing. The project has
- * no {@code junit-platform.properties}/Surefire-level timeout, so this class-level {@link Timeout}
- * is the only backstop; the interleaving itself normally resolves in well under a second.
- * Uncontended, both methods together finish in about 4 s. The budget was originally 10 s, sized
- * while this class ran against {@code sail-memory} - moving it onto the on-disk
- * {@code NativeStore}, whose commit path serialises writers through
- * {@link org.eclipse.rdf4j.common.concurrent.locks.ExclusiveReentrantLockManager}, and under a full
- * parallel reactor build {@code linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead}
- * measured up to 13.44 s, occasionally tripping the 10 s budget. Reproduced locally by saturating
- * every core with busy-loops during a run: the method finished in 10.6-23 s across repeated runs
- * (bounded, not growing further under repeated saturation) - consistent with CPU-starved I/O, not
- * with a stuck lock, since {@code ExclusiveReentrantLockManager} would otherwise hold this class's
- * only writer waiting on nothing (the two test methods each open their own store, so neither
- * contends with the other). 60 s leaves several times that headroom while still catching a genuine
- * hang (see above) long before a human would notice the build stall.</p>
+ * {@code shutDownAll()} would ever run - the build would hang instead of failing. The project sets
+ * no class-level timeouts: the backstop is project-wide,
+ * {@code junit.jupiter.execution.timeout.default} in the root POM's Surefire
+ * {@code configurationParameters}, sized to catch a hang rather than to police runtime
+ * (kogn-io/arknet#458); the interleaving itself normally resolves in well under a second.
+ * Uncontended, both methods together finish in about 4 s. Under load they do not: the on-disk
+ * {@code NativeStore}'s commit path serialises writers through
+ * {@link org.eclipse.rdf4j.common.concurrent.locks.ExclusiveReentrantLockManager}, and
+ * {@code linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead} measured up to
+ * 13.44 s under a full parallel reactor build - which is why the budget is sized for a hang, not
+ * for a runtime; the root POM comment carries that measurement.</p>
  */
-@Timeout(value = 60, unit = TimeUnit.SECONDS)
 class BoundedContextServiceRealStoreConcurrencyTest {
 
     private static final ProjectId WS = new ProjectId("test-project");
@@ -305,7 +298,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
      * transaction, but there is no accessor for that private read path, so this queries it directly
      * via {@link io.kogn.rdf.dataset.SparqlQuery}.
      *
-     * <p>Never throws: a {@code @Timeout} interrupt landing mid-race can
+     * <p>Never throws: a timeout interrupt landing mid-race can
      * leave the sail in a bad state for a follow-up read, so both the dataset acquisition and the
      * query run inside one {@code try}/{@code catch(Throwable)} - a failure here becomes part of
      * the diagnostic text instead of replacing it. The interrupt status is recorded rather than

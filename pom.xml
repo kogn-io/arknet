@@ -246,6 +246,36 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.5.6</version>
+                    <configuration>
+                        <properties>
+                            <!-- ONE project-wide hang backstop for every test, instead of a
+                                 hand-sized class-level @Timeout per test class.
+
+                                 Why a backstop at all: the *RealStoreConcurrencyTest classes park
+                                 their racers on CyclicBarrier/CountDownLatch. A regression that
+                                 stops one caller from ever reaching its barrier hangs join()
+                                 forever, so neither @AfterEach nor the store's shutDownAll() ever
+                                 runs; the build would stall instead of failing.
+
+                                 Why 60 s: this budget catches a hang, it does not police
+                                 performance. The interleavings themselves resolve in well under a
+                                 second uncontended. Under load they do not: the on-disk
+                                 NativeStore serialises writers through RDF4J's
+                                 ExclusiveReentrantLockManager, and with every core saturated a
+                                 single interleaving was measured at 10.6-23 s (#182): bounded,
+                                 not growing, i.e. CPU-starved I/O rather than a stuck lock. 60 s
+                                 leaves several times that headroom and still fails a genuine hang
+                                 long before a human notices the stall.
+
+                                 Why central: the per-class budgets were sized one at a time and
+                                 had drifted to 10 s / 60 s / none, which made `mvn -T 1C` flaky:
+                                 a 10 s budget doubles as a load-sensitive performance gate that
+                                 the parallel reactor trips at random (#458). -->
+                            <configurationParameters>
+                                junit.jupiter.execution.timeout.default = 60 s
+                            </configurationParameters>
+                        </properties>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.springframework.boot</groupId>

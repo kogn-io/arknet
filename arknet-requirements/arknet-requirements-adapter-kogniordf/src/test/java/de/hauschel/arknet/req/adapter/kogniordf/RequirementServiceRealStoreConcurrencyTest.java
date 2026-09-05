@@ -18,7 +18,6 @@ import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -26,7 +25,6 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
@@ -79,11 +77,12 @@ import de.hauschel.arknet.req.domain.RequirementType;
  * <p><strong>Timeout.</strong> {@link CyclicBarrier#await()}/{@link CountDownLatch#await()} block
  * indefinitely by default; a future regression that stops one caller from ever reaching its
  * barrier/latch would otherwise hang {@code join()} forever, so neither {@code @AfterEach} nor
- * {@code shutDownAll()} would ever run - the build would hang instead of failing. The project has
- * no {@code junit-platform.properties}/Surefire-level timeout, so this class-level {@link Timeout}
- * is the only backstop; the interleaving itself normally resolves in well under a second.</p>
+ * {@code shutDownAll()} would ever run - the build would hang instead of failing. The project sets
+ * no class-level timeouts: the backstop is project-wide,
+ * {@code junit.jupiter.execution.timeout.default} in the root POM's Surefire
+ * {@code configurationParameters}, sized to catch a hang rather than to police runtime
+ * (kogn-io/arknet#458); the interleaving itself normally resolves in well under a second.</p>
  */
-@Timeout(value = 10, unit = TimeUnit.SECONDS)
 class RequirementServiceRealStoreConcurrencyTest {
 
     private static final ProjectId WS = new ProjectId("test-project");
@@ -313,7 +312,7 @@ class RequirementServiceRealStoreConcurrencyTest {
      * transaction, but there is no accessor for that private read path, so this queries it directly
      * via {@link io.kogn.rdf.dataset.SparqlQuery}.
      *
-     * <p>Never throws: a {@code @Timeout} interrupt landing mid-race can
+     * <p>Never throws: a timeout interrupt landing mid-race can
      * leave the sail in a bad state for a follow-up read, so both the dataset acquisition and the
      * query run inside one {@code try}/{@code catch(Throwable)} - a failure here becomes part of
      * the diagnostic text instead of replacing it. The interrupt status is recorded rather than
