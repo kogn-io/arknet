@@ -365,9 +365,17 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
     }
 
     @Override
-    public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code) {
+    public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code,
+            String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        // The project's own default language decides which variant this read-modify-write round
+        // trip sees, not the reading process's (issue #456) - the very tag findByCode is handed
+        // for a constraint_get without a displayLocale argument. Exactly as
+        // KognioRdfRequirementRepository#findCurrentByCode does, and for the same reason: this
+        // read's values are echoed back for an untouched field and its tags decide what such a
+        // field is written back under.
+        DisplayLocale effective = this.displayLocale.withRequestedOverride(canonicalizeLenient(defaultLanguage));
 
         String query = "SELECT ?s ?type ?head WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
                 + constraintWhereClause(
@@ -385,11 +393,8 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
             BindingSet row = found.get();
             String subjectIriString = iriOf(row, "s").getIRIString();
             String subject = SparqlTerms.iriRef(subjectIriString);
-            // No per-call display-language override here: an internal read-modify-write round trip
-            // is not a caller-facing read, so this adapter's own configured displayLocale is used -
-            // exactly as KognioRdfRequirementRepository#findCurrentByCode does.
             Optional<TitleStatementSelection> selection =
-                    selectTitleStatement(sparql::select, subject, displayLocale);
+                    selectTitleStatement(sparql::select, subject, effective);
             if (selection.isEmpty()) {
                 return Optional.empty();
             }

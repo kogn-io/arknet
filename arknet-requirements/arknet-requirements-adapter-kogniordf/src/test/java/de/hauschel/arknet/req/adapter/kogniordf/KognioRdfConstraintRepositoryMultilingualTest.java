@@ -210,7 +210,7 @@ class KognioRdfConstraintRepositoryMultilingualTest {
         repository.create(PROJECT_A, constraint(freshId(), code, "JVM only", "Must run on the JVM."), "en");
 
         ConstraintRepository.CurrentConstraint current =
-                repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+                repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
 
         assertEquals("en", current.titleLanguage());
         assertEquals("en", current.statementLanguage());
@@ -223,7 +223,7 @@ class KognioRdfConstraintRepositoryMultilingualTest {
         repository.create(PROJECT_A, constraint(freshId(), code, "JVM only", "Must run on the JVM."), null);
 
         ConstraintRepository.CurrentConstraint current =
-                repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+                repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
 
         assertEquals(null, current.titleLanguage());
         assertEquals(null, current.statementLanguage());
@@ -270,8 +270,79 @@ class KognioRdfConstraintRepositoryMultilingualTest {
         KognioRdfRequirementRepositoryFactory.buildGate(DisplayLocale.DEFAULT).enforce(candidate);
     }
 
+    // --- the read-modify-write read under the project's language (issue #456) ----------------
+
+    /**
+     * Issue #456: {@link ConstraintRepository#findCurrentByCode} - the read behind every
+     * {@code constraint_update} - used to project a multilingual {@code title}/
+     * {@code constraintStatement} through this repository's process-wide configured
+     * {@link DisplayLocale} (English by default), while {@link ConstraintRepository#findByCode}
+     * projects those very same fields through the calling project's own default language. A field
+     * this update leaves alone is echoed straight back to the caller, so one and the same store
+     * state answered {@code constraint_update} with the English title and a directly following
+     * {@code constraint_get} with the German one.
+     */
+    @Test
+    void findCurrentByCodeSelectsTheTextFieldsInTheProjectsDefaultLanguage() {
+        ConstraintCode code = new ConstraintCode("TCON-1");
+        givenBilingualConstraint(code);
+
+        ConstraintRepository.CurrentConstraint current =
+                repository.findCurrentByCode(PROJECT_A, code, "de").orElseThrow();
+
+        assertEquals("Nur JVM", current.value().title());
+        assertEquals("Muss auf der JVM laufen.", current.value().statement());
+        assertEquals(repository.findByCode(PROJECT_A, code, "de").orElseThrow(), current.value(),
+                "constraint_update must read the constraint constraint_get shows for the same project");
+    }
+
+    /**
+     * The half of the same defect that steers the <em>write</em> rather than only the reply: the
+     * tags this read hands back are the tags {@code ConstraintService} writes an untouched field
+     * back under, and the values it hands back are what its no-op check compares a correction
+     * against. Read under the process default, a German project's {@code constraint_update} would
+     * round-trip its title as the English variant - and would mistake a genuine German correction
+     * for a no-op whenever the English variant happens to already carry that text.
+     */
+    @Test
+    void findCurrentByCodeCarriesTheLanguageTagsOfTheProjectsDefaultLanguage() {
+        ConstraintCode code = new ConstraintCode("TCON-1");
+        givenBilingualConstraint(code);
+
+        ConstraintRepository.CurrentConstraint current =
+                repository.findCurrentByCode(PROJECT_A, code, "de").orElseThrow();
+
+        assertEquals("de", current.titleLanguage());
+        assertEquals("de", current.statementLanguage());
+    }
+
+    /**
+     * A project without a configured default language degrades exactly as before: the tag is
+     * {@code null}, {@link DisplayLocale#withRequestedOverride} is a no-op for it, and this
+     * repository's own configured preference (English here) decides.
+     */
+    @Test
+    void findCurrentByCodeWithoutAProjectDefaultLanguageStaysOnTheConfiguredPreference() {
+        ConstraintCode code = new ConstraintCode("TCON-1");
+        givenBilingualConstraint(code);
+
+        ConstraintRepository.CurrentConstraint current =
+                repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
+
+        assertEquals("JVM only", current.value().title());
+        assertEquals("en", current.titleLanguage());
+    }
+
+    /** A constraint carrying both its {@code @en} and its {@code @de} title/statement variant. */
+    private void givenBilingualConstraint(ConstraintCode code) {
+        ConstraintId id = freshId();
+        repository.create(PROJECT_A, constraint(id, code, "JVM only", "Must run on the JVM."), "en");
+        repository.compareAndUpdate(PROJECT_A, currentHead(code),
+                constraint(id, code, "Nur JVM", "Muss auf der JVM laufen."), "de", "de", "de");
+    }
+
     private RevisionToken currentHead(ConstraintCode code) {
-        return repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
+        return repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
     }
 
     /** Every literal actually stored on {@code subject}'s {@code predicateIri}, tags included. */

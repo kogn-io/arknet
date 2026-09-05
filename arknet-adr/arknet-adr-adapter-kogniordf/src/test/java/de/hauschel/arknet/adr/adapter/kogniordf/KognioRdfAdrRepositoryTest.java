@@ -512,7 +512,7 @@ class KognioRdfAdrRepositoryTest {
                 null, List.of(), List.of(), null);
         repository.create(PROJECT_A, original, "de");
 
-        var current = repository.findCurrentByCode(PROJECT_A, original.code()).orElseThrow();
+        var current = repository.findCurrentByCode(PROJECT_A, original.code(), null).orElseThrow();
         repository.compareAndUpdate(PROJECT_A, current.head(), current.value(), null, null, null,
                 Map.of(), Map.of(), "de");
 
@@ -1323,7 +1323,7 @@ class KognioRdfAdrRepositoryTest {
                 .filter(adr -> adr.code().equals(new AdrCode("ADR-2")))
                 .findFirst().orElseThrow().relatedTo());
         assertEquals(List.of(peer.id()),
-                repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-2")).orElseThrow()
+                repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-2"), null).orElseThrow()
                         .value().relatedTo());
     }
 
@@ -1552,7 +1552,7 @@ class KognioRdfAdrRepositoryTest {
         repository.create(PROJECT_A, created, "en");
 
         AdrRepository.CurrentAdr current =
-                repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-1")).orElseThrow();
+                repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-1"), null).orElseThrow();
 
         assertEquals(created, current.value());
         assertEquals(headsOf(created.id().value().value()), List.of(current.head()));
@@ -1560,7 +1560,7 @@ class KognioRdfAdrRepositoryTest {
 
     @Test
     void findCurrentByCodeReturnsEmptyForAnUnknownCode() {
-        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-9")));
+        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-9"), null));
     }
 
     /**
@@ -1584,7 +1584,7 @@ class KognioRdfAdrRepositoryTest {
                 + ArkarchVocabulary.ADR_CONTEXT + "> \"a second, store-first context value\" } }");
 
         AdrRepository.CurrentAdr current =
-                repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-1")).orElseThrow();
+                repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-1"), null).orElseThrow();
 
         assertEquals(created.context(), current.value().context(), "first-seen value still wins");
         assertEquals(expectedHead, current.head(), "the head must not be affected by row multiplication");
@@ -1841,7 +1841,7 @@ class KognioRdfAdrRepositoryTest {
 
     /** The head a caller would observe right now - what a well-behaved compare-and-set passes. */
     private String currentHeadOf(AdrCode code) {
-        return repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
+        return repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
     }
 
     /**

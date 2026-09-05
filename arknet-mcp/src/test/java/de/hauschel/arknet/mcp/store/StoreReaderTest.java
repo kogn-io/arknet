@@ -96,7 +96,7 @@ class StoreReaderTest {
 
     /** Reads {@code updated}'s current head and immediately applies it through the CAS guard. */
     private void replaceViaCompareAndUpdate(Requirement updated) {
-        RevisionToken head = requirements.findCurrentByCode(PROJECT, updated.code())
+        RevisionToken head = requirements.findCurrentByCode(PROJECT, updated.code(), null)
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
         requirements.compareAndUpdate(PROJECT, head, updated, null, null, null, noAcceptanceCriteriaLanguages(updated), null);

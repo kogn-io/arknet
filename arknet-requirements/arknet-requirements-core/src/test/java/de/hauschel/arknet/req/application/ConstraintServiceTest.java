@@ -316,7 +316,7 @@ class ConstraintServiceTest {
     }
 
     private ConstraintRepository.CurrentConstraint currentOf(ConstraintCode code) {
-        return repository.findCurrentByCode(WS, code).orElseThrow();
+        return repository.findCurrentByCode(WS, code, null).orElseThrow();
     }
 
     private static final class FakeResourceIdFactory implements ResourceIdFactory {

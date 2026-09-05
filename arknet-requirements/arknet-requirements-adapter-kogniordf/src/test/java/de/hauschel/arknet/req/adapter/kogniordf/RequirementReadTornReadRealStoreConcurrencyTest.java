@@ -163,7 +163,8 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code) {
+        public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code,
+                String defaultLanguage) {
             throw new UnsupportedOperationException("not exercised by this test");
         }
 

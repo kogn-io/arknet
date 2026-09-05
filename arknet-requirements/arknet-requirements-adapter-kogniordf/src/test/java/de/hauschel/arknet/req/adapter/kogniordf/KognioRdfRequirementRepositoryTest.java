@@ -113,7 +113,7 @@ class KognioRdfRequirementRepositoryTest {
      * {@code updated} through it - there is no unconditional {@code update} left on the port.
      */
     private void replaceViaCompareAndUpdate(ProjectId projectId, Requirement updated) {
-        RevisionToken head = repository.findCurrentByCode(projectId, updated.code())
+        RevisionToken head = repository.findCurrentByCode(projectId, updated.code(), null)
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
         repository.compareAndUpdate(projectId, head, updated, null, null, null, noAcceptanceCriteriaLanguages(updated), null);
@@ -369,7 +369,7 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
         repository.create(PROJECT_A, proposed, null);
-        RevisionToken head = repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
+        RevisionToken head = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
         Requirement accepted = new Requirement(id, code, "Login", "The system shall authenticate a user.", null,
                 RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED, null, null, null, null,
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
@@ -394,7 +394,7 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
         repository.create(PROJECT_A, original, null);
-        RevisionToken staleHead = repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
+        RevisionToken staleHead = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
         // Simulates a concurrent writer that already committed a change since staleHead was read.
         Requirement concurrentlyAccepted = new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
@@ -423,7 +423,7 @@ class KognioRdfRequirementRepositoryTest {
                 () -> repository.compareAndUpdate(
                         PROJECT_A, null, neverCreated, null, null, null, noAcceptanceCriteriaLanguages(neverCreated), null));
         assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
-        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, code));
+        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, code, null));
     }
 
     /**
@@ -436,7 +436,7 @@ class KognioRdfRequirementRepositoryTest {
         givenTerm(PROJECT_A, "TERM-1");
         Requirement created = requirementUsing(termRef("TERM-1"));
         repository.create(PROJECT_A, created, null);
-        RevisionToken head = repository.findCurrentByCode(PROJECT_A, created.code()).orElseThrow().head();
+        RevisionToken head = repository.findCurrentByCode(PROJECT_A, created.code(), null).orElseThrow().head();
 
         Requirement accepted = new Requirement(created.id(), created.code(), created.title(), created.description(), null,
                 created.type(), RequirementStatus.ACCEPTED, created.priority(), created.motivatedBy(),
@@ -750,7 +750,7 @@ class KognioRdfRequirementRepositoryTest {
         givenLegacyRequirementWithoutAcceptanceCriterion(PROJECT_A, id, "FR-1");
 
         RequirementRepository.CurrentRequirement current =
-                repository.findCurrentByCode(PROJECT_A, new RequirementCode("FR-1")).orElseThrow();
+                repository.findCurrentByCode(PROJECT_A, new RequirementCode("FR-1"), null).orElseThrow();
 
         assertTrue(current.acceptanceCriteriaIsSynthesized());
         assertTrue(current.value().acceptanceCriteria().get(0).text().contains("Altdatensatz"));
@@ -772,7 +772,7 @@ class KognioRdfRequirementRepositoryTest {
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of()), null);
 
         RequirementRepository.CurrentRequirement current =
-                repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+                repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
 
         assertFalse(current.acceptanceCriteriaIsSynthesized());
         assertEquals(List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), current.value().acceptanceCriteria());
@@ -1050,7 +1050,7 @@ class KognioRdfRequirementRepositoryTest {
         givenRequirementWithStatus(PROJECT_A, id, "FR-1", "https://w3id.org/arknet/requirements#Deprecated");
 
         assertThrows(UnsupportedRequirementStatusException.class,
-                () -> repository.findCurrentByCode(PROJECT_A, new RequirementCode("FR-1")));
+                () -> repository.findCurrentByCode(PROJECT_A, new RequirementCode("FR-1"), null));
     }
 
     /**
@@ -1860,7 +1860,7 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementStatus.PROPOSED, null, null, null, null, List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of()), null);
 
         assertEquals(1, revisionsOf(id).size(), "create must record exactly one revision");
-        RevisionToken headAfterCreate = repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
+        RevisionToken headAfterCreate = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
 
         Requirement accepted = new Requirement(id, code, "Login", "The system shall authenticate a user.", null,
                 RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED, null, null, null, null,
@@ -1873,7 +1873,7 @@ class KognioRdfRequirementRepositoryTest {
         List<String> heads = headsOf(id);
         assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
         assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
-        assertEquals(heads.get(0), repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head().value(),
+        assertEquals(heads.get(0), repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head().value(),
                 "findCurrentByCode must observe the advanced head");
     }
 

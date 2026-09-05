@@ -100,7 +100,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
     }
 
     private String currentHeadOf(AdrCode code) {
-        return repository.findCurrentByCode(PROJECT, code).orElseThrow().head();
+        return repository.findCurrentByCode(PROJECT, code, null).orElseThrow().head();
     }
 
     /**
@@ -194,7 +194,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
                 + "WHERE { GRAPH <" + ADR_GRAPH + "> { <" + childIri + "> <" + ArkarchVocabulary.CONSEQUENCE_STATEMENT
                 + "> ?old } }");
 
-        AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, original.code()).orElseThrow();
+        AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, original.code(), null).orElseThrow();
 
         assertTrue(current.nameContextDecisionLanguages().contains("en"),
                 "a non-canonical stored tag case must still surface as the canonical \"en\"");
@@ -378,7 +378,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT, currentHeadOf(code), original.accept(DECIDED_ON),
                 "en", "en", "en", Map.of(1, "en", 2, "en"), Map.of(1, "en", 2, "en"), null);
 
-        AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, code).orElseThrow();
+        AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, code, null).orElseThrow();
         assertEquals(AdrStatus.ACCEPTED, current.value().status());
 
         String germanName = "Einen eingebetteten Triple Store verwenden";
@@ -428,5 +428,89 @@ class KognioRdfAdrRepositoryMultilingualTest {
         assertEquals("Begruendung A", deSelected.consideredOptions().get(0).rationale());
         assertEquals(OptionOutcome.CHOSEN, deSelected.consideredOptions().get(0).outcome());
         assertEquals("Option B (de)", deSelected.consideredOptions().get(1).name());
+    }
+
+    // --- the read-modify-write read under the project's language (issue #456) ----------------
+
+    /**
+     * Issue #456: {@link AdrRepository#findCurrentByCode} - the read behind every
+     * {@code adr_update} - used to project {@code name}/{@code context}/{@code decision} and every
+     * consequence's and considered option's text through this repository's process-wide configured
+     * {@link DisplayLocale} (English by default), while {@link AdrRepository#findByCode} projects
+     * those very same fields through the calling project's own default language. A field this
+     * update leaves alone is echoed straight back to the caller, so one and the same store state
+     * answered {@code adr_update} with the English name and a directly following {@code adr_get}
+     * with the German one.
+     */
+    @Test
+    void findCurrentByCodeSelectsTheTextFieldsInTheProjectsDefaultLanguage() {
+        AdrCode code = new AdrCode("ADR-1");
+        givenBilingualAdr(code);
+
+        AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, code, "de").orElseThrow();
+
+        assertEquals("Einen eingebetteten Triple Store verwenden", current.value().name());
+        assertEquals("Deutsche Folge eins", current.value().consequences().get(0).statement());
+        assertEquals("Begruendung A", current.value().consideredOptions().get(0).rationale());
+        assertEquals(repository.findByCode(PROJECT, code, "de").orElseThrow(), current.value(),
+                "adr_update must read the decision adr_get shows for the same project");
+    }
+
+    /**
+     * The half of the same defect that steers the <em>write</em> rather than only the reply: the
+     * tags this read hands back are the tags {@code AdrService} writes an untouched field back
+     * under, and the values it hands back are what its no-op check compares a correction against.
+     * Read under the process default, a German project's {@code adr_update} would round-trip its
+     * name as the English variant - and would mistake a genuine German correction for a no-op
+     * whenever the English variant happens to already carry that text.
+     */
+    @Test
+    void findCurrentByCodeCarriesTheLanguageTagsOfTheProjectsDefaultLanguage() {
+        AdrCode code = new AdrCode("ADR-1");
+        givenBilingualAdr(code);
+
+        AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, code, "de").orElseThrow();
+
+        assertEquals("de", current.nameLanguage());
+        assertEquals("de", current.contextLanguage());
+        assertEquals("de", current.decisionLanguage());
+        assertEquals(Map.of(1, "de"), current.consequenceLanguageByPosition());
+        assertEquals(Map.of(1, "de"), current.optionLanguageByPosition());
+    }
+
+    /**
+     * A project without a configured default language degrades exactly as before: the tag is
+     * {@code null}, {@code withRequestedOverride} is a no-op for it, and this repository's own
+     * configured preference (English here) decides.
+     */
+    @Test
+    void findCurrentByCodeWithoutAProjectDefaultLanguageStaysOnTheConfiguredPreference() {
+        AdrCode code = new AdrCode("ADR-1");
+        givenBilingualAdr(code);
+
+        AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, code, null).orElseThrow();
+
+        assertEquals("Use an embedded triple store", current.value().name());
+        assertEquals("en", current.nameLanguage());
+    }
+
+    /**
+     * A decision carrying name, context, decision, one consequence and one considered option in
+     * both {@code @en} and {@code @de}.
+     */
+    private void givenBilingualAdr(AdrCode code) {
+        AdrId id = freshId();
+        Adr english = adr(id, code,
+                List.of(new Consequence(1, "English consequence one", ConsequenceType.POSITIVE)),
+                List.of(new ConsideredOption(1, "Option A", "Rationale A", OptionOutcome.CHOSEN)));
+        repository.create(PROJECT, english, "en");
+        Adr german = new Adr(id, code, "Einen eingebetteten Triple Store verwenden", english.status(),
+                "Das Modell muss irgendwo leben, das ein Einzelbenutzer-Client ohne Server erreichen kann.",
+                "Verwende kognio-rdf als eingebettetes RDF-Substrat hinter einem Out-Port.",
+                List.of(new Consequence(1, "Deutsche Folge eins", ConsequenceType.POSITIVE)),
+                List.of(new ConsideredOption(1, "Option A (de)", "Begruendung A", OptionOutcome.CHOSEN)),
+                null, List.of(), List.of(), List.of(), null, List.of());
+        repository.compareAndUpdate(PROJECT, currentHeadOf(code), german, "de", "de", "de",
+                Map.of(1, "de"), Map.of(1, "de"), "de");
     }
 }

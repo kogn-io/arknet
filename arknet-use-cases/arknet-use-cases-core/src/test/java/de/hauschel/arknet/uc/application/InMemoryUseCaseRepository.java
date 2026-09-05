@@ -136,7 +136,12 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
     }
 
     @Override
-    public Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code) {
+    public Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code,
+            String defaultLanguage) {
+        // This fake holds one value per field, not one per language tag, so it has no language
+        // variant to select between - defaultLanguage is accepted to honour the port contract and
+        // deliberately ignored (the real adapter's selection is pinned in
+        // KognioRdfUseCaseRepositoryMultilingualTest instead).
         return findByCode(projectId, code, null)
                 .map(useCase -> new CurrentUseCase(useCase, headByIdentity.get(useCase.id()),
                         titleLanguageByIdentity.get(useCase.id()), goalLanguageByIdentity.get(useCase.id()),

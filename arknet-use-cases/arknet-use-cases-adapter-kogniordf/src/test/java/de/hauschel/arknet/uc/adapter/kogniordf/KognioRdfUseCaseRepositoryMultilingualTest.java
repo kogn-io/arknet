@@ -101,7 +101,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
     }
 
     private RevisionToken currentHead(UseCaseCode code) {
-        return repository.findCurrentByCode(PROJECT_A, code)
+        return repository.findCurrentByCode(PROJECT_A, code, null)
                 .map(UseCaseRepository.CurrentUseCase::head)
                 .orElse(null);
     }
@@ -529,7 +529,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         givenLegacyUseCaseWithUntaggedTitle(PROJECT_A, id, "UC1");
         UseCaseCode code = new UseCaseCode("UC1");
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
         UseCase withGermanTitle = useCase(id, code, "Bestellung aufgeben", current.value().goal(),
                 current.value().steps());
 
@@ -552,7 +552,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         givenLegacyUseCaseWithUntaggedTitle(PROJECT_A, id, "UC1");
         UseCaseCode code = new UseCaseCode("UC1");
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
         UseCase withFrenchTitle = useCase(id, code, "Passer commande", current.value().goal(),
                 current.value().steps());
 
@@ -579,7 +579,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         givenLegacyUseCaseWithUntaggedStepText(PROJECT_A, id, "UC1");
         UseCaseCode code = new UseCaseCode("UC1");
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
         UseCase withGermanStepText = useCase(id, code, current.value().title(), current.value().goal(),
                 List.of(new Step(1, "Kunde waehlt Artikel", List.of())));
 
@@ -603,7 +603,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         givenLegacyUseCaseWithUntaggedStepText(PROJECT_A, id, "UC1");
         UseCaseCode code = new UseCaseCode("UC1");
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
         UseCase withFrenchStepText = useCase(id, code, current.value().title(), current.value().goal(),
                 List.of(new Step(1, "Le client choisit des articles", List.of())));
 
@@ -629,7 +629,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         givenLegacyUseCaseWithUntaggedScope(PROJECT_A, id, "UC1");
         UseCaseCode code = new UseCaseCode("UC1");
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
         UseCase withGermanScope = new UseCase(id, code, current.value().title(), current.value().goal(),
                 "Webshop (deutsch)", current.value().trigger(), CUSTOMER, List.of(),
                 current.value().precondition(), current.value().postcondition(), current.value().steps(),
@@ -654,7 +654,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         givenLegacyUseCaseWithUntaggedScope(PROJECT_A, id, "UC1");
         UseCaseCode code = new UseCaseCode("UC1");
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
         UseCase withFrenchScope = new UseCase(id, code, current.value().title(), current.value().goal(),
                 "Boutique en ligne", current.value().trigger(), CUSTOMER, List.of(),
                 current.value().precondition(), current.value().postcondition(), current.value().steps(),
@@ -684,7 +684,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         givenLegacyUseCaseWithUntaggedExtensionText(PROJECT_A, id, "UC1");
         UseCaseCode code = new UseCaseCode("UC1");
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
         UseCase withGermanExtension = new UseCase(id, code, current.value().title(), current.value().goal(),
                 current.value().scope(), current.value().trigger(), CUSTOMER, List.of(),
                 current.value().precondition(), current.value().postcondition(), current.value().steps(),
@@ -710,7 +710,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         givenLegacyUseCaseWithUntaggedExtensionText(PROJECT_A, id, "UC1");
         UseCaseCode code = new UseCaseCode("UC1");
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
         UseCase withFrenchExtension = new UseCase(id, code, current.value().title(), current.value().goal(),
                 current.value().scope(), current.value().trigger(), CUSTOMER, List.of(),
                 current.value().precondition(), current.value().postcondition(), current.value().steps(),
@@ -740,7 +740,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         givenLegacyUseCaseWithTitleLanguageTag(PROJECT_A, id, "UC1", "en-a");
         UseCaseCode code = new UseCaseCode("UC1");
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
 
         assertDoesNotThrow(() -> repository.compareAndUpdate(PROJECT_A, current.head(), current.value(),
                 current.titleLanguage(), current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
@@ -764,7 +764,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         givenLegacyUseCaseWithTitleLanguageTag(PROJECT_A, id, "UC1", "de-de");
         UseCaseCode code = new UseCaseCode("UC1");
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
 
         repository.compareAndUpdate(PROJECT_A, current.head(), current.value(),
                 current.titleLanguage(), current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
@@ -772,6 +772,80 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), null, Integer.MAX_VALUE);
 
         assertEquals(1, countTitleLiterals(PROJECT_A, id));
+    }
+
+    // --- the read-modify-write read under the project's language (issue #456) ----------------
+
+    /**
+     * Issue #456: {@link UseCaseRepository#findCurrentByCode} - the read behind every
+     * {@code uc_update} - used to project every multilingual field through this repository's
+     * process-wide configured {@link DisplayLocale} (English by default), while
+     * {@link UseCaseRepository#findByCode} projects those very same fields through the calling
+     * project's own default language. A field this update leaves alone is echoed straight back to
+     * the caller, so one and the same store state answered {@code uc_update} with the English
+     * title and a directly following {@code uc_get} with the German one.
+     */
+    @Test
+    void findCurrentByCodeSelectsTheTextFieldsInTheProjectsDefaultLanguage() {
+        UseCaseCode code = new UseCaseCode("UC1");
+        givenBilingualUseCase(code);
+
+        UseCaseRepository.CurrentUseCase current =
+                repository.findCurrentByCode(PROJECT_A, code, "de").orElseThrow();
+
+        assertEquals("Bestellung aufgeben", current.value().title());
+        assertEquals("Bestellung ist aufgegeben", current.value().goal());
+        assertEquals("Kunde waehlt Artikel", current.value().steps().get(0).text());
+        assertEquals(repository.findByCode(PROJECT_A, code, "de").orElseThrow(), current.value(),
+                "uc_update must read the use case uc_get shows for the same project");
+    }
+
+    /**
+     * The half of the same defect that steers the <em>write</em> rather than only the reply: the
+     * tags this read hands back are the tags {@code UseCaseService} writes an untouched field back
+     * under, and the values it hands back are what its no-op check compares a correction against.
+     * Read under the process default, a German project's {@code uc_update} would round-trip its
+     * title as the English variant - and would mistake a genuine German correction for a no-op
+     * whenever the English variant happens to already carry that text.
+     */
+    @Test
+    void findCurrentByCodeCarriesTheLanguageTagsOfTheProjectsDefaultLanguage() {
+        UseCaseCode code = new UseCaseCode("UC1");
+        givenBilingualUseCase(code);
+
+        UseCaseRepository.CurrentUseCase current =
+                repository.findCurrentByCode(PROJECT_A, code, "de").orElseThrow();
+
+        assertEquals("de", current.titleLanguage());
+        assertEquals("de", current.goalLanguage());
+        assertEquals(Map.of(1, "de"), current.stepTextLanguageByPosition());
+    }
+
+    /**
+     * A project without a configured default language degrades exactly as before: the tag is
+     * {@code null}, {@code withRequestedOverride} is a no-op for it, and this repository's own
+     * configured preference (English here) decides.
+     */
+    @Test
+    void findCurrentByCodeWithoutAProjectDefaultLanguageStaysOnTheConfiguredPreference() {
+        UseCaseCode code = new UseCaseCode("UC1");
+        givenBilingualUseCase(code);
+
+        UseCaseRepository.CurrentUseCase current =
+                repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow();
+
+        assertEquals("Place order", current.value().title());
+        assertEquals("en", current.titleLanguage());
+    }
+
+    /** A use case carrying its title, goal and step text in both {@code @en} and {@code @de}. */
+    private void givenBilingualUseCase(UseCaseCode code) {
+        UseCase english = useCase(freshId(), code, "Place order", "Order is placed", "Customer selects items");
+        repository.create(PROJECT_A, english, "en");
+        UseCase german = useCase(english.id(), code, "Bestellung aufgeben", "Bestellung ist aufgegeben",
+                "Kunde waehlt Artikel");
+        repository.compareAndUpdate(PROJECT_A, currentHead(code), german, "de", "de", null, null, null, null,
+                Map.of(1, "de"), Map.of(), "de", Integer.MAX_VALUE);
     }
 
     /**

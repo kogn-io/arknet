@@ -148,12 +148,25 @@ public interface AdrRepository {
      * optimistic. Backs the read side of the read-modify-write round trip
      * {@link #compareAndUpdate} guards the write side of.
      *
+     * <p><strong>Which language variant this read sees (issue #456).</strong> Every multilingual
+     * field is projected through {@code defaultLanguage}, the very tag {@link #findByCode} is
+     * handed for an {@code adr_get} without an explicit {@code displayLocale} argument - not
+     * through the reading process's own configured display preference. The values this read
+     * returns are what {@code adr_update} echoes back for a field the call left alone and compares
+     * a correction against, and the tags it returns are what such an untouched field is written
+     * back under.</p>
+     *
      * @param projectId the project (architecture model) to look up the decision in
      * @param code      the ADR code (e.g. {@code ADR-1})
+     * @param defaultLanguage the project's configured default language, or {@code null} if it has
+     *                        none - the BCP-47 tag {@code name}/{@code context}/{@code decision}
+     *                        and every consequence's and considered option's text is selected
+     *                        under, degrading along the usual fallback chain when the decision
+     *                        carries no literal in it
      * @return the decision and its current head, or {@link Optional#empty()} if no decision with
      *         this code exists
      */
-    Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code);
+    Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code, String defaultLanguage);
 
     /**
      * A decision's state paired with its current concurrency token (an opaque string, or

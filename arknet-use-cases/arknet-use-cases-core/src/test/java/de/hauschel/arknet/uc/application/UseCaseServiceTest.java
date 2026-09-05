@@ -109,7 +109,7 @@ class UseCaseServiceTest {
     void addWithoutLanguageFallsBackToTheProjectsDefaultLanguage() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), "de").code();
 
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals("de", current.titleLanguage());
         assertEquals("de", current.goalLanguage());
     }
@@ -133,7 +133,7 @@ class UseCaseServiceTest {
 
         service.update(WS, code, UseCaseCorrection.builder().title("New title").build(), "de");
 
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals("de", current.titleLanguage());
     }
 
@@ -162,7 +162,7 @@ class UseCaseServiceTest {
 
         service.update(WS, code, UseCaseCorrection.builder().title("Place order").language("de").build(), null);
 
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals("de", current.titleLanguage());
     }
 
@@ -174,14 +174,14 @@ class UseCaseServiceTest {
     @Test
     void updateWithIdenticalTitleTextAndLanguageIsATrueNoOpAndDoesNotWrite() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
-        UseCaseRepository.CurrentUseCase before = repository.findCurrentByCode(WS, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase before = repository.findCurrentByCode(WS, code, null).orElseThrow();
 
         service.update(WS, code, UseCaseCorrection.builder()
                 .title("Place order")
                 .language(DEFAULT_LANGUAGE)
                 .build(), null);
 
-        UseCaseRepository.CurrentUseCase after = repository.findCurrentByCode(WS, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase after = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals(before.head(), after.head());
     }
 
@@ -195,7 +195,7 @@ class UseCaseServiceTest {
                 .language("de")
                 .build(), null);
 
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals("de", current.stepTextLanguageByPosition().get(1));
     }
 
@@ -213,7 +213,7 @@ class UseCaseServiceTest {
                 .language("de")
                 .build(), null);
 
-        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals("de", current.extensionTextLanguageByPosition().get(1));
     }
 
@@ -228,11 +228,11 @@ class UseCaseServiceTest {
     @Test
     void updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
-        UseCaseRepository.CurrentUseCase before = repository.findCurrentByCode(WS, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase before = repository.findCurrentByCode(WS, code, null).orElseThrow();
 
         UseCase updated = service.update(WS, code, UseCaseCorrection.builder().title("Place order").build(), null);
 
-        UseCaseRepository.CurrentUseCase after = repository.findCurrentByCode(WS, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase after = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals(before.head(), after.head());
         assertEquals("Place order", updated.title());
     }
@@ -244,13 +244,13 @@ class UseCaseServiceTest {
     @Test
     void updateResendingUnchangedStepTextWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
-        UseCaseRepository.CurrentUseCase before = repository.findCurrentByCode(WS, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase before = repository.findCurrentByCode(WS, code, null).orElseThrow();
 
         service.update(WS, code, UseCaseCorrection.builder()
                 .stepTextPatches(List.of(new StepTextPatch(1, "do something")))
                 .build(), null);
 
-        UseCaseRepository.CurrentUseCase after = repository.findCurrentByCode(WS, code).orElseThrow();
+        UseCaseRepository.CurrentUseCase after = repository.findCurrentByCode(WS, code, null).orElseThrow();
         assertEquals(before.head(), after.head());
     }
 

@@ -225,7 +225,11 @@ class InMemoryAdrRepository implements AdrRepository {
     }
 
     @Override
-    public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code) {
+    public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code, String defaultLanguage) {
+        // This fake holds one value per field, not one per language tag, so it has no language
+        // variant to select between - defaultLanguage is accepted to honour the port contract and
+        // deliberately ignored (the real adapter's selection is pinned in
+        // KognioRdfAdrRepositoryMultilingualTest instead).
         return findByCode(projectId, code, null)
                 .map(adr -> new CurrentAdr(adr, headByIdentity.get(adr.id()),
                         nameLanguageByIdentity.get(adr.id()), contextLanguageByIdentity.get(adr.id()),

@@ -174,7 +174,10 @@ public final class UseCaseMcpTools {
      * {@code displayLocale} default; {@code uc_add}/{@code uc_update} instead pass
      * {@link ResolvedProject#defaultLanguage()} straight through to their in-port as the
      * {@code defaultLanguage} a write falls back to when the caller omits {@code language}
-     * (issue #258); and {@code uc_list} - which, unlike {@code uc_get}, exposes no explicit
+     * (issue #258) - and, for {@code uc_update} alone, as the language its read-modify-write round
+     * trip reads the current state in, so a field this call leaves alone is echoed back and
+     * rewritten in the project's own language rather than the daemon's (issue #456); and
+     * {@code uc_list} - which, unlike {@code uc_get}, exposes no explicit
      * {@code displayLocale} tool argument to merge against - likewise passes it straight through
      * as the display language every listed use case's text fields are read in (issue #281). Three
      * different consumers of the very same field, not one the other two skip.</p>

@@ -133,7 +133,7 @@ class KognioRdfUseCaseRepositoryTest {
      * {@code KognioRdfRequirementRepositoryTest#replaceViaCompareAndUpdate}.
      */
     private void replaceViaCompareAndUpdate(ProjectId projectId, UseCase updated) {
-        RevisionToken head = repository.findCurrentByCode(projectId, updated.code())
+        RevisionToken head = repository.findCurrentByCode(projectId, updated.code(), null)
                 .map(UseCaseRepository.CurrentUseCase::head)
                 .orElse(null);
         repository.compareAndUpdate(projectId, head, updated, null, null, null, null, null, null,
@@ -346,7 +346,7 @@ class KognioRdfUseCaseRepositoryTest {
     void compareAndUpdateAppliesWhenExpectedHeadMatchesTheStoredHead() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
-        RevisionToken head = repository.findCurrentByCode(PROJECT_A, CODE_1).orElseThrow().head();
+        RevisionToken head = repository.findCurrentByCode(PROJECT_A, CODE_1, null).orElseThrow().head();
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
@@ -367,7 +367,7 @@ class KognioRdfUseCaseRepositoryTest {
     void compareAndUpdateThrowsAndPersistsNothingWhenExpectedHeadIsStale() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
-        RevisionToken staleHead = repository.findCurrentByCode(PROJECT_A, CODE_1).orElseThrow().head();
+        RevisionToken staleHead = repository.findCurrentByCode(PROJECT_A, CODE_1, null).orElseThrow().head();
         // Simulates a concurrent writer that already committed a change since staleHead was read.
         UseCase concurrentlyRevised = new UseCase(ID_1, CODE_1, "Place order (concurrently revised)",
                 "Customer places an order", null, null, CUSTOMER, List.of(), null, null,
@@ -392,7 +392,7 @@ class KognioRdfUseCaseRepositoryTest {
                 () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder(), null, null, null, null, null, null,
                         java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE));
         assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
-        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, CODE_1));
+        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, CODE_1, null));
     }
 
     @Test
@@ -869,7 +869,7 @@ class KognioRdfUseCaseRepositoryTest {
         String subject = ID_1.value().value();
 
         assertEquals(1, revisionsOf(subject).size(), "create must record exactly one revision");
-        RevisionToken headAfterCreate = repository.findCurrentByCode(PROJECT_A, CODE_1).orElseThrow().head();
+        RevisionToken headAfterCreate = repository.findCurrentByCode(PROJECT_A, CODE_1, null).orElseThrow().head();
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
@@ -883,7 +883,7 @@ class KognioRdfUseCaseRepositoryTest {
                 + "> { <" + subject + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
         assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
         assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
-        assertEquals(heads.get(0), repository.findCurrentByCode(PROJECT_A, CODE_1).orElseThrow().head().value(),
+        assertEquals(heads.get(0), repository.findCurrentByCode(PROJECT_A, CODE_1, null).orElseThrow().head().value(),
                 "findCurrentByCode must observe the advanced head");
     }
 
