@@ -15,6 +15,8 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -32,6 +34,7 @@ import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
+import de.hauschel.arknet.adr.domain.RemovedPositions;
 import de.hauschel.arknet.adr.domain.AdrTextImmutableException;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.Consequence;
@@ -1293,6 +1296,113 @@ class AdrServiceTest {
                 () -> update(added.adr().code(), AdrCorrection.builder()
                         .consequenceCorrections(List.of(new ConsequenceCorrection(9, "x", ConsequenceType.NEUTRAL)))
                         .build()));
+    }
+
+    // --- update: removal (kogn-io/arknet#483) --------------------------------
+
+    @Test
+    void updateRemovesAConsequenceByPositionAndTheOnesAfterItMoveUp() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("First", ConsequenceType.NEUTRAL),
+                        new NewConsequence("Mistaken", ConsequenceType.NEGATIVE),
+                        new NewConsequence("Third", ConsequenceType.POSITIVE)),
+                null, DEFAULT_LANGUAGE, null, null, null, null));
+
+        Adr updated = update(added.adr().code(), AdrCorrection.builder()
+                .removedConsequencePositions(new RemovedPositions(Set.of(2)))
+                .build()).adr();
+
+        assertEquals(List.of(
+                new Consequence(1, "First", ConsequenceType.NEUTRAL),
+                new Consequence(2, "Third", ConsequenceType.POSITIVE)), updated.consequences());
+    }
+
+    @Test
+    void updateRemovesAConsideredOptionByPosition() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here", null,
+                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.CHOSEN),
+                        new NewConsideredOption("Folded-in duplicate", "Recorded by mistake", OptionOutcome.REJECTED)),
+                DEFAULT_LANGUAGE, null, null, null, null));
+
+        Adr updated = update(added.adr().code(), AdrCorrection.builder()
+                .removedConsideredOptionPositions(new RemovedPositions(Set.of(2)))
+                .build()).adr();
+
+        assertEquals(List.of(new ConsideredOption(1, "Option A", "Rationale A", OptionOutcome.CHOSEN)),
+                updated.consideredOptions());
+    }
+
+    /**
+     * The translation exemption the corrections carry does not extend to a removal: even a call that
+     * names a language the position never carried is refused once the decision is ACCEPTED, because
+     * taking a consequence out is never a translation. Mutation test: routing the removal through the
+     * per-position exemption set (as the corrections are) turns this into an unexpected pass.
+     */
+    @Test
+    void updateRejectsRemovingAConsequenceOnAnAcceptedDecisionEvenUnderANewLanguage() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null,
+                DEFAULT_LANGUAGE, null, null, null, null));
+        service.accept(PROJECT, added.adr().code(), null);
+
+        assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
+                .removedConsequencePositions(new RemovedPositions(Set.of(1)))
+                .language("de")
+                .build()));
+        assertEquals(1, get(PROJECT, added.adr().code()).orElseThrow().adr().consequences().size());
+    }
+
+    @Test
+    void updateRefusesToCorrectAndRemoveTheSamePositionInOneCall() {
+        assertThrows(IllegalArgumentException.class, () -> AdrCorrection.builder()
+                .consequenceCorrections(List.of(new ConsequenceCorrection(2, "Sharper", ConsequenceType.POSITIVE)))
+                .removedConsequencePositions(new RemovedPositions(Set.of(2)))
+                .build());
+    }
+
+    @Test
+    void updateRemovalOfAnUnknownConsequencePositionIsRejected() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null,
+                DEFAULT_LANGUAGE, null, null, null, null));
+
+        assertThrows(de.hauschel.arknet.adr.domain.ConsequencePositionNotFoundException.class,
+                () -> update(added.adr().code(), AdrCorrection.builder()
+                        .removedConsequencePositions(new RemovedPositions(Set.of(9)))
+                        .build()));
+    }
+
+    /**
+     * The whole reason the removal travels through the out-port as {@link RemovedPositions} rather
+     * than as a shorter list (kogn-io/arknet#483): a position is a consequence's only identity, and
+     * the language state the write path keeps per position must follow the surviving consequence to
+     * its new number. Position 2 is translated into German, then position 1 is removed - the German
+     * variant must now be on record for position 1, and the removed position's state gone. Mutation
+     * test: keying {@code AdrService#positionLanguages} by the updated position without the remap
+     * leaves the German tag on a position that no longer exists.
+     */
+    @Test
+    void updateMovesAPositionsLanguageStateAlongWithItsSurvivingConsequence() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("First", ConsequenceType.NEUTRAL),
+                        new NewConsequence("Second", ConsequenceType.POSITIVE)),
+                null, DEFAULT_LANGUAGE, null, null, null, null));
+        AdrCode code = added.adr().code();
+        update(code, AdrCorrection.builder()
+                .consequenceCorrections(List.of(new ConsequenceCorrection(2, "Zweite", ConsequenceType.POSITIVE)))
+                .language("de")
+                .build());
+        assertEquals(Map.of(1, Set.of("en"), 2, Set.of("en", "de")),
+                repository.findCurrentByCode(PROJECT, code, DEFAULT_LANGUAGE).orElseThrow()
+                        .consequenceLanguagesByPosition());
+
+        update(code, AdrCorrection.builder()
+                .removedConsequencePositions(new RemovedPositions(Set.of(1)))
+                .build());
+
+        AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, code, DEFAULT_LANGUAGE).orElseThrow();
+        assertEquals(Map.of(1, Set.of("en", "de")), current.consequenceLanguagesByPosition());
+        assertEquals(Map.of(1, "de"), current.consequenceLanguageByPosition());
     }
 
     // --- delete ---------------------------------------------------------------

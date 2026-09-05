@@ -9,6 +9,7 @@ import static de.hauschel.arknet.adr.adapter.mcp.ToolArguments.effectiveDisplayL
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -48,6 +49,7 @@ import de.hauschel.arknet.adr.domain.ConsideredOptionCorrection;
 import de.hauschel.arknet.adr.domain.NewConsequence;
 import de.hauschel.arknet.adr.domain.NewConsideredOption;
 import de.hauschel.arknet.adr.domain.OptionOutcome;
+import de.hauschel.arknet.adr.domain.RemovedPositions;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
@@ -304,6 +306,13 @@ public final class AdrMcpTools {
                 .toList();
     }
 
+    private static RemovedPositions toRemovedPositions(final List<Integer> positions) {
+        if (positions == null) {
+            return RemovedPositions.NONE;
+        }
+        return new RemovedPositions(new LinkedHashSet<>(positions));
+    }
+
     private static String contextAnchor(final McpSyncRequestContext context) {
         if (context == null) {
             return null;
@@ -482,7 +491,11 @@ public final class AdrMcpTools {
             + "by position and carry the same per-position translation exemption: writing a language "
             + "that position never carried yet is allowed in every status, correcting the wording of a "
             + "language that position already carries is PROPOSED-only, and changing consequenceType/"
-            + "optionOutcome is never exempt regardless of language once no longer PROPOSED. The four "
+            + "optionOutcome is never exempt regardless of language once no longer PROPOSED. "
+            + "removeConsequencePositions/removeConsideredOptionPositions take an entry out by its "
+            + "current position (the ones after it move up) and are PROPOSED-only with no exemption - "
+            + "from ACCEPTED on nothing is ever removed; a position cannot be corrected and removed in "
+            + "the same call. The four "
             + "reference lists stay correctable in EVERY status: passing a list replaces that relation "
             + "wholesale, passing an empty list removes every edge of it, omitting it leaves it "
             + "untouched. Status and the supersededBy relation are not changed here - use "
@@ -499,8 +512,8 @@ public final class AdrMcpTools {
             @McpToolParam(description = "The corrected decision (optional; unchanged if omitted, "
                     + "min. 5 characters)", required = false)
             final String decision,
-            @McpToolParam(description = "Consequences to append (optional; never removes an "
-                    + "already-recorded one)", required = false)
+            @McpToolParam(description = "Consequences to append (optional; to take one out use "
+                    + "removeConsequencePositions)", required = false)
             final List<NewConsequenceInput> newConsequences,
             @McpToolParam(description = "Text/type corrections for existing consequences, addressed "
                     + "by position (optional; only while PROPOSED)", required = false)
@@ -510,6 +523,14 @@ public final class AdrMcpTools {
             @McpToolParam(description = "Corrections for existing considered options, addressed by "
                     + "position (optional; only while PROPOSED)", required = false)
             final List<ConsideredOptionCorrectionInput> consideredOptionCorrections,
+            @McpToolParam(description = "1-based positions (as adr_get currently shows them) of "
+                    + "consequences to remove; the ones after a removed position move up (optional; "
+                    + "only while PROPOSED, never once ACCEPTED)", required = false)
+            final List<Integer> removeConsequencePositions,
+            @McpToolParam(description = "1-based positions (as adr_get currently shows them) of "
+                    + "considered options to remove; the ones after a removed position move up "
+                    + "(optional; only while PROPOSED, never once ACCEPTED)", required = false)
+            final List<Integer> removeConsideredOptionPositions,
             @McpToolParam(description = LANGUAGE_DESCRIPTION, required = false)
             final String language,
             @McpToolParam(description = "Business codes of the requirements this decision should "
@@ -540,6 +561,8 @@ public final class AdrMcpTools {
                 .consequenceCorrections(toConsequenceCorrections(consequenceCorrections))
                 .newConsideredOptions(toNewConsideredOptions(newConsideredOptions))
                 .consideredOptionCorrections(toConsideredOptionCorrections(consideredOptionCorrections))
+                .removedConsequencePositions(toRemovedPositions(removeConsequencePositions))
+                .removedConsideredOptionPositions(toRemovedPositions(removeConsideredOptionPositions))
                 .language(blankToNull(language))
                 .addressesRequirementCodes(addressesRequirements)
                 .affectsContextCodes(affectsContexts)

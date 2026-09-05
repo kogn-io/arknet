@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
@@ -52,6 +53,7 @@ import de.hauschel.arknet.adr.domain.ConsideredOptionCorrection;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.NewConsequence;
 import de.hauschel.arknet.adr.domain.NewConsideredOption;
+import de.hauschel.arknet.adr.domain.RemovedPositions;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.kernel.CodeAssignment;
@@ -389,7 +391,8 @@ public class AdrService
         // accept() never touches any multilingual field - null language/defaultLanguage is safe
         // even on a project that has one configured, since resolution is never reached (issue #258).
         return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
-                Set.of(), Set.of(), null, null, current -> current.value().accept(stamp)));
+                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null,
+                current -> current.value().accept(stamp)));
     }
 
     @Override
@@ -398,7 +401,8 @@ public class AdrService
         Objects.requireNonNull(code, "code");
         LocalDate stamp = decidedOn != null ? decidedOn : LocalDate.now(clock);
         return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
-                Set.of(), Set.of(), null, null, current -> current.value().reject(stamp)));
+                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null,
+                current -> current.value().reject(stamp)));
     }
 
     @Override
@@ -406,7 +410,8 @@ public class AdrService
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
-                Set.of(), Set.of(), null, null, current -> current.value().deprecate()));
+                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null,
+                current -> current.value().deprecate()));
     }
 
     @Override
@@ -456,7 +461,8 @@ public class AdrService
                 .map(ConsideredOptionCorrection::position)
                 .collect(Collectors.toUnmodifiableSet());
         Adr updated = updateWithOptimisticRetry(projectId, code, nameTouched, contextTouched, decisionTouched,
-                touchedConsequencePositions, touchedOptionPositions, correction.language(), defaultLanguage,
+                touchedConsequencePositions, touchedOptionPositions, correction.removedConsequencePositions(),
+                correction.removedConsideredOptionPositions(), correction.language(), defaultLanguage,
                 current -> current.value()
                         .reviseText(
                                 correction.name() != null ? correction.name() : current.value().name(),
@@ -469,11 +475,17 @@ public class AdrService
                                 newLanguageVariantPositions(touchedConsequencePositions,
                                         current.consequenceLanguagesByPosition(), correction.language(),
                                         defaultLanguage))
+                        // Removal comes last in each list's chain (kogn-io/arknet#483): appends and
+                        // corrections address the positions the caller saw via adr_get, and only
+                        // the removal renumbers - so it must not run before anything that is
+                        // addressed by position.
+                        .withoutConsequences(projectId, correction.removedConsequencePositions())
                         .withAppendedConsideredOptions(correction.newConsideredOptions())
                         .withConsideredOptionCorrections(projectId, correction.consideredOptionCorrections(),
                                 newLanguageVariantPositions(touchedOptionPositions,
                                         current.optionLanguagesByPosition(), correction.language(),
                                         defaultLanguage))
+                        .withoutConsideredOptions(projectId, correction.removedConsideredOptionPositions())
                         .reviseReferences(
                                 requirements != null ? requirements : current.value().addressesRequirements(),
                                 contexts != null ? contexts : current.value().affectsContexts(),
@@ -553,7 +565,7 @@ public class AdrService
                 .id();
         // Never touches any multilingual field.
         return detailOf(projectId, updateWithOptimisticRetry(projectId, supersededCode, false, false, false,
-                Set.of(), Set.of(), null, null, current -> {
+                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null, current -> {
             // Idempotency first, before the fresh status check below: Adr#supersededBy would take
             // this very same early return internally, but taking it here too means recording the
             // same pair a second time never depends on the superseding decision's current status -
@@ -607,7 +619,8 @@ public class AdrService
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
-                Set.of(), Set.of(), null, null, current -> current.value().unsupersede()));
+                Set.of(), Set.of(), RemovedPositions.NONE, RemovedPositions.NONE, null, null,
+                current -> current.value().unsupersede()));
     }
 
     @Override
@@ -686,6 +699,14 @@ public class AdrService
      *                                      fresh regardless of this set
      * @param touchedOptionPositions        {@code touchedConsequencePositions}'s counterpart for
      *                                      {@code consideredOptionCorrections}
+     * @param removedConsequencePositions   the consequence positions, as {@code current} numbers
+     *                                      them, that {@code mutation} removes (kogn-io/arknet#483) -
+     *                                      what re-keys every surviving position's language state
+     *                                      under its post-removal number, and what the out-adapter
+     *                                      needs to move a preserved other-language variant along
+     *                                      with its consequence
+     * @param removedOptionPositions        {@code removedConsequencePositions}' counterpart for
+     *                                      the considered options
      * @param language                      the call's own language argument, or {@code null}
      * @param defaultLanguage               the project's configured fallback, or {@code null} -
      *                                      resolved together with {@code language} only when a
@@ -696,7 +717,8 @@ public class AdrService
      */
     private Adr updateWithOptimisticRetry(ProjectId projectId, AdrCode code, boolean nameTouched,
             boolean contextTouched, boolean decisionTouched, Set<Integer> touchedConsequencePositions,
-            Set<Integer> touchedOptionPositions, String language, String defaultLanguage,
+            Set<Integer> touchedOptionPositions, RemovedPositions removedConsequencePositions,
+            RemovedPositions removedOptionPositions, String language, String defaultLanguage,
             Function<AdrRepository.CurrentAdr, Adr> mutation) {
         AdrConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
@@ -718,14 +740,19 @@ public class AdrService
             String decisionLanguage =
                     touchedLanguage(decisionTouched, current.decisionLanguage(), language, defaultLanguage);
             Map<Integer, String> consequenceLanguageByPosition = positionLanguages(
+                    current.value().consequences().stream().map(Consequence::position).toList(),
                     updated.consequences().stream().map(Consequence::position).toList(),
-                    current.consequenceLanguageByPosition(), touchedConsequencePositions, language, defaultLanguage);
+                    current.consequenceLanguageByPosition(), touchedConsequencePositions,
+                    removedConsequencePositions, language, defaultLanguage);
             Map<Integer, String> optionLanguageByPosition = positionLanguages(
+                    current.value().consideredOptions().stream().map(ConsideredOption::position).toList(),
                     updated.consideredOptions().stream().map(ConsideredOption::position).toList(),
-                    current.optionLanguageByPosition(), touchedOptionPositions, language, defaultLanguage);
+                    current.optionLanguageByPosition(), touchedOptionPositions, removedOptionPositions,
+                    language, defaultLanguage);
             try {
                 repository.compareAndUpdate(projectId, current.head(), updated, nameLanguage, contextLanguage,
-                        decisionLanguage, consequenceLanguageByPosition, optionLanguageByPosition, defaultLanguage);
+                        decisionLanguage, consequenceLanguageByPosition, optionLanguageByPosition, defaultLanguage,
+                        removedConsequencePositions, removedOptionPositions);
                 return updated;
             } catch (AdrConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the decision between our read and our write - retry
@@ -747,21 +774,36 @@ public class AdrService
     }
 
     /**
-     * The BCP-47 tag each position in {@code positions} is written under: a position absent from
-     * {@code currentLanguageByPosition} (a newly appended consequence/option) always resolves fresh;
-     * an existing position named in {@code touchedPositions} (this call's own corrections) also
-     * resolves fresh; every other existing position round-trips under the tag
-     * {@code currentLanguageByPosition} already carried for it.
+     * The BCP-47 tag each position in {@code updatedPositions} is written under, keyed by that
+     * (post-removal) position. Every stored position in {@code currentPositions} that survives
+     * {@code removed} is walked first, under the number {@link RemovedPositions#survivingPositionOf}
+     * gives it: one named in {@code touchedPositions} (this call's own corrections, addressed by the
+     * stored numbering) resolves fresh, one without a tag in {@code currentLanguageByPosition} (a
+     * legacy-synthesised entry) resolves fresh too, every other one round-trips under the tag it
+     * already carried - now under its new number, so a shift never retags a neighbour. Whatever
+     * position of {@code updatedPositions} is still unaccounted for was appended by this call and
+     * always resolves fresh.
      */
-    private static Map<Integer, String> positionLanguages(List<Integer> positions,
-            Map<Integer, String> currentLanguageByPosition, Set<Integer> touchedPositions, String language,
-            String defaultLanguage) {
+    private static Map<Integer, String> positionLanguages(List<Integer> currentPositions,
+            List<Integer> updatedPositions, Map<Integer, String> currentLanguageByPosition,
+            Set<Integer> touchedPositions, RemovedPositions removed, String language, String defaultLanguage) {
         Map<Integer, String> result = new LinkedHashMap<>();
-        for (Integer position : positions) {
-            boolean isNewPosition = !currentLanguageByPosition.containsKey(position);
-            result.put(position, isNewPosition || touchedPositions.contains(position)
+        for (Integer formerPosition : currentPositions) {
+            OptionalInt survivingPosition = removed.survivingPositionOf(formerPosition);
+            if (survivingPosition.isEmpty()) {
+                continue;
+            }
+            boolean carriesTag = currentLanguageByPosition.containsKey(formerPosition);
+            result.put(survivingPosition.getAsInt(), !carriesTag || touchedPositions.contains(formerPosition)
                     ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
-                    : currentLanguageByPosition.get(position));
+                    : currentLanguageByPosition.get(formerPosition));
+        }
+        for (Integer position : updatedPositions) {
+            // Resolved lazily, not via putIfAbsent: a lifecycle call passes no language at all and
+            // must not be asked for one on behalf of positions it merely carries through.
+            if (!result.containsKey(position)) {
+                result.put(position, LanguageTag.resolveWriteLanguage(language, defaultLanguage));
+            }
         }
         return result;
     }

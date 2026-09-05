@@ -223,6 +223,91 @@ class AdrTest {
     }
 
     @Test
+    void withoutConsequencesRenumbersTheSurvivorsWhileProposed() {
+        Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision",
+                List.of(new Consequence(1, "first", ConsequenceType.NEUTRAL),
+                        new Consequence(2, "second", ConsequenceType.NEGATIVE),
+                        new Consequence(3, "third", ConsequenceType.POSITIVE)),
+                null, null, null, null, null, null, null);
+
+        Adr trimmed = adr.withoutConsequences(PROJECT, new RemovedPositions(Set.of(2)));
+
+        assertEquals(List.of(
+                new Consequence(1, "first", ConsequenceType.NEUTRAL),
+                new Consequence(2, "third", ConsequenceType.POSITIVE)), trimmed.consequences());
+    }
+
+    /** Compare first, as every sibling does: nothing to remove is a no-op in any status, not a refusal. */
+    @Test
+    void withoutConsequencesWithNothingToRemoveIsANoOpEvenWhenAccepted() {
+        Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision",
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null,
+                null);
+
+        assertSame(accepted, accepted.withoutConsequences(PROJECT, RemovedPositions.NONE));
+    }
+
+    @Test
+    void withoutConsequencesThrowsForAnUnknownPosition() {
+        Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision",
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null,
+                null);
+
+        assertThrows(ConsequencePositionNotFoundException.class,
+                () -> adr.withoutConsequences(PROJECT, new RemovedPositions(Set.of(9))));
+    }
+
+    /**
+     * kogn-io/arknet#483: a removal is gated like a wording correction but carries no translation
+     * exemption at all - there is no language under which taking a consequence out is "just a
+     * translation". Mutation test: removing the status guard in {@code withoutConsequences} turns
+     * this into a silently accepted removal from a decision in force.
+     */
+    @Test
+    void withoutConsequencesThrowsOnAnAcceptedDecision() {
+        Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision",
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null,
+                null);
+
+        assertThrows(AdrTextImmutableException.class,
+                () -> accepted.withoutConsequences(PROJECT, new RemovedPositions(Set.of(1))));
+    }
+
+    /**
+     * Removing the one CHOSEN option is legal while PROPOSED - that status may carry any number of
+     * options without a chosen one; "exactly one CHOSEN" is {@code accept()}'s rule, not this
+     * method's (kogn-io/arknet#427).
+     */
+    @Test
+    void withoutConsideredOptionsMayRemoveTheChosenOneWhileProposed() {
+        Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "chosen for now", OptionOutcome.CHOSEN),
+                        new ConsideredOption(2, "B", "turned down", OptionOutcome.REJECTED)),
+                null, null, null, null, null, null);
+
+        Adr trimmed = adr.withoutConsideredOptions(PROJECT, new RemovedPositions(Set.of(1)));
+
+        assertEquals(List.of(new ConsideredOption(1, "B", "turned down", OptionOutcome.REJECTED)),
+                trimmed.consideredOptions());
+        assertEquals(List.of(), trimmed.consequences());
+    }
+
+    @Test
+    void withoutConsideredOptionsThrowsForAnUnknownPositionAndOnAnAcceptedDecision() {
+        Adr proposed = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "chosen", OptionOutcome.CHOSEN)), null, null, null, null,
+                null, null);
+        Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "chosen", OptionOutcome.CHOSEN)), null, null, null, null,
+                null, null);
+
+        assertThrows(ConsideredOptionPositionNotFoundException.class,
+                () -> proposed.withoutConsideredOptions(PROJECT, new RemovedPositions(Set.of(2))));
+        assertThrows(AdrTextImmutableException.class,
+                () -> accepted.withoutConsideredOptions(PROJECT, new RemovedPositions(Set.of(1))));
+    }
+
+    @Test
     void withConsequenceCorrectionsThrowsForAnUnknownPosition() {
         Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision",
                 List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null,

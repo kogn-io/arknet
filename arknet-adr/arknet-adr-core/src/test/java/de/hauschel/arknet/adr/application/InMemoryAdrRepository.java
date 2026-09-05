@@ -22,6 +22,7 @@ import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
+import de.hauschel.arknet.adr.domain.RemovedPositions;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.CodeCounter;
@@ -148,7 +149,8 @@ class InMemoryAdrRepository implements AdrRepository {
     public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
             String nameLanguage, String contextLanguage, String decisionLanguage,
             Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
-            String defaultLanguage) {
+            String defaultLanguage, RemovedPositions removedConsequencePositions,
+            RemovedPositions removedConsideredOptionPositions) {
         Map<AdrId, Adr> adrs = byProject.getOrDefault(projectId, Map.of());
         if (!adrs.containsKey(updated.id())) {
             throw new AdrNotFoundException(projectId, updated.code());
@@ -174,6 +176,13 @@ class InMemoryAdrRepository implements AdrRepository {
         decisionLanguageByIdentity.put(updated.id(), decisionLanguage);
         consequenceLanguageByIdentity.put(updated.id(), new LinkedHashMap<>(consequenceLanguageByPosition));
         optionLanguageByIdentity.put(updated.id(), new LinkedHashMap<>(optionLanguageByPosition));
+        // Re-key the accumulated per-position sets under the post-removal numbering and drop a
+        // removed position's, exactly what the real adapter's preservation step does with the
+        // other-language literals (kogn-io/arknet#483).
+        consequenceLanguagesByIdentity.computeIfPresent(updated.id(),
+                (key, languagesByPosition) -> reKeyed(languagesByPosition, removedConsequencePositions));
+        optionLanguagesByIdentity.computeIfPresent(updated.id(),
+                (key, languagesByPosition) -> reKeyed(languagesByPosition, removedConsideredOptionPositions));
         Map<Integer, Set<String>> consequenceLanguages =
                 consequenceLanguagesByIdentity.computeIfAbsent(updated.id(), key -> new LinkedHashMap<>());
         consequenceLanguageByPosition.forEach((position, tag) -> {
@@ -188,6 +197,14 @@ class InMemoryAdrRepository implements AdrRepository {
                 optionLanguages.computeIfAbsent(position, key -> new LinkedHashSet<>()).add(tag);
             }
         });
+    }
+
+    private static Map<Integer, Set<String>> reKeyed(Map<Integer, Set<String>> languagesByPosition,
+            RemovedPositions removed) {
+        Map<Integer, Set<String>> result = new LinkedHashMap<>();
+        languagesByPosition.forEach((formerPosition, languages) -> removed.survivingPositionOf(formerPosition)
+                .ifPresent(surviving -> result.put(surviving, languages)));
+        return result;
     }
 
     /**

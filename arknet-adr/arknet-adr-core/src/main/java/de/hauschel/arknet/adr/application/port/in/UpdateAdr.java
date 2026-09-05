@@ -14,6 +14,7 @@ import de.hauschel.arknet.adr.domain.ConsequenceCorrection;
 import de.hauschel.arknet.adr.domain.ConsideredOptionCorrection;
 import de.hauschel.arknet.adr.domain.NewConsequence;
 import de.hauschel.arknet.adr.domain.NewConsideredOption;
+import de.hauschel.arknet.adr.domain.RemovedPositions;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
@@ -61,7 +62,13 @@ import de.hauschel.arknet.kernel.ProjectId;
  * new-language exemption, at the finer grain of an individual position rather than the whole call -
  * see {@code Adr#withConsequenceCorrections}'s javadoc for the exact rule. A non-text field
  * ({@code consequenceType}/{@code optionOutcome}) is never exempt, even when the same correction also
- * writes a genuinely new language for that position's text.</p>
+ * writes a genuinely new language for that position's text. {@code removedConsequencePositions}/
+ * {@code removedConsideredOptionPositions} (kogn-io/arknet#483) take an entry out and let the ones
+ * after it move up; they are locked like the text fields but carry <em>no</em> exemption at all - a
+ * removal is never a translation - so from {@link AdrStatus#ACCEPTED} on nothing is ever removed.
+ * Positions in a removal and in a correction alike are the ones the record carries before the call
+ * (what {@code adr_get} shows); naming the same position in both is refused, because correcting
+ * what is being removed is a contradiction, not a sequence.</p>
  *
  * <p><strong>The four reference lists are the deliberate exception and stay correctable in every
  * status.</strong> Adding an {@code addressesRequirement}, {@code affectsContext},
@@ -139,8 +146,9 @@ public interface UpdateAdr {
      *                                  leave them unchanged
      * @param decision                  the corrected decision, or {@code null} to leave it unchanged
      * @param newConsequences           consequences to append (kogn-io/arknet#357), or {@code null}/
-     *                                  empty for none - never a way to remove an already-recorded
-     *                                  one; always allowed, in every status (see
+     *                                  empty for none - removing an already-recorded one is
+     *                                  {@code removedConsequencePositions}' job; always allowed, in
+     *                                  every status (see
      *                                  {@link de.hauschel.arknet.adr.domain.Adr#withAppendedConsequences})
      * @param consequenceCorrections    text/type corrections for existing consequences, addressed by
      *                                  position, or {@code null}/empty for none; only allowed while
@@ -152,6 +160,15 @@ public interface UpdateAdr {
      * @param consideredOptionCorrections corrections for existing options, addressed by position, or
      *                                  {@code null}/empty for none - same {@link AdrStatus#PROPOSED}-only
      *                                  rule as {@code consequenceCorrections}
+     * @param removedConsequencePositions the positions, as the record numbers them before this call,
+     *                                  of the consequences to remove (kogn-io/arknet#483), or
+     *                                  {@code null}/{@link RemovedPositions#NONE} for none; the
+     *                                  consequences after a removed one move up. Only allowed while
+     *                                  {@link AdrStatus#PROPOSED}, with no exemption (see
+     *                                  {@link de.hauschel.arknet.adr.domain.Adr#withoutConsequences})
+     * @param removedConsideredOptionPositions {@code removedConsequencePositions}' counterpart for
+     *                                  the considered options (see
+     *                                  {@link de.hauschel.arknet.adr.domain.Adr#withoutConsideredOptions})
      * @param language                  the BCP-47 language tag every multilingual text this call
      *                                  touches is written under (a corrected {@code name}/
      *                                  {@code context}/{@code decision}, an appended or corrected
@@ -181,6 +198,8 @@ public interface UpdateAdr {
             List<ConsequenceCorrection> consequenceCorrections,
             List<NewConsideredOption> newConsideredOptions,
             List<ConsideredOptionCorrection> consideredOptionCorrections,
+            RemovedPositions removedConsequencePositions,
+            RemovedPositions removedConsideredOptionPositions,
             String language,
             List<String> addressesRequirementCodes,
             List<String> affectsContextCodes,
@@ -193,11 +212,35 @@ public interface UpdateAdr {
             newConsideredOptions = newConsideredOptions == null ? List.of() : List.copyOf(newConsideredOptions);
             consideredOptionCorrections =
                     consideredOptionCorrections == null ? List.of() : List.copyOf(consideredOptionCorrections);
+            removedConsequencePositions =
+                    removedConsequencePositions == null ? RemovedPositions.NONE : removedConsequencePositions;
+            removedConsideredOptionPositions =
+                    removedConsideredOptionPositions == null ? RemovedPositions.NONE : removedConsideredOptionPositions;
+            rejectCorrectingARemovedPosition(consequenceCorrections.stream().map(ConsequenceCorrection::position)
+                    .toList(), removedConsequencePositions, "consequence");
+            rejectCorrectingARemovedPosition(consideredOptionCorrections.stream()
+                    .map(ConsideredOptionCorrection::position).toList(), removedConsideredOptionPositions,
+                    "considered option");
             addressesRequirementCodes =
                     addressesRequirementCodes == null ? null : List.copyOf(addressesRequirementCodes);
             affectsContextCodes = affectsContextCodes == null ? null : List.copyOf(affectsContextCodes);
             usesTermCodes = usesTermCodes == null ? null : List.copyOf(usesTermCodes);
             relatedToCodes = relatedToCodes == null ? null : List.copyOf(relatedToCodes);
+        }
+
+        /**
+         * A position both corrected and removed in one call is a contradiction, refused here on the
+         * correction object itself rather than deep in the mutation chain, so the caller learns which
+         * list collides before anything is read or written.
+         */
+        private static void rejectCorrectingARemovedPosition(
+                List<Integer> correctedPositions, RemovedPositions removed, String what) {
+            for (Integer position : correctedPositions) {
+                if (removed.contains(position)) {
+                    throw new IllegalArgumentException(what + " position " + position
+                            + " is named both as a correction and as a removal - remove it or correct it, not both");
+                }
+            }
         }
 
         /** @return a builder for a correction that, until something is set on it, changes nothing */
@@ -220,6 +263,8 @@ public interface UpdateAdr {
             private List<ConsequenceCorrection> consequenceCorrections;
             private List<NewConsideredOption> newConsideredOptions;
             private List<ConsideredOptionCorrection> consideredOptionCorrections;
+            private RemovedPositions removedConsequencePositions;
+            private RemovedPositions removedConsideredOptionPositions;
             private String language;
             private List<String> addressesRequirementCodes;
             private List<String> affectsContextCodes;
@@ -274,6 +319,24 @@ public interface UpdateAdr {
                 return this;
             }
 
+            /**
+             * @param value see {@link AdrCorrection#removedConsequencePositions()}
+             * @return this builder
+             */
+            public Builder removedConsequencePositions(RemovedPositions value) {
+                this.removedConsequencePositions = value;
+                return this;
+            }
+
+            /**
+             * @param value see {@link AdrCorrection#removedConsideredOptionPositions()}
+             * @return this builder
+             */
+            public Builder removedConsideredOptionPositions(RemovedPositions value) {
+                this.removedConsideredOptionPositions = value;
+                return this;
+            }
+
             /** @param value see {@link AdrCorrection#language()} @return this builder */
             public Builder language(String value) {
                 this.language = value;
@@ -310,7 +373,8 @@ public interface UpdateAdr {
             /** @return the correction collected so far */
             public AdrCorrection build() {
                 return new AdrCorrection(name, context, decision, newConsequences, consequenceCorrections,
-                        newConsideredOptions, consideredOptionCorrections, language,
+                        newConsideredOptions, consideredOptionCorrections, removedConsequencePositions,
+                        removedConsideredOptionPositions, language,
                         addressesRequirementCodes, affectsContextCodes, usesTermCodes, relatedToCodes);
             }
         }

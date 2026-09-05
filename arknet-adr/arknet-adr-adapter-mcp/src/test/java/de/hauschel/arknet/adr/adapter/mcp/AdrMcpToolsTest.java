@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -243,7 +244,7 @@ class AdrMcpToolsTest {
     /** {@code adr_update}'s default in-port result (the stub's stand-in) still carries neither list. */
     @Test
     void updateRepeatsTheWarningWhileTheResultStillHasNeitherList() {
-        String rendered = adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null,
+        String rendered = adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, ANCHOR);
 
         assertTrue(rendered.contains("no consequence recorded"), rendered);
@@ -693,7 +694,8 @@ class AdrMcpToolsTest {
                 List.of(new NewConsequenceInput("New one", "NEGATIVE")),
                 List.of(new ConsequenceCorrectionInput(1, "Corrected", "POSITIVE")),
                 List.of(new NewConsideredOptionInput("New option", "reason", "REJECTED")),
-                List.of(new ConsideredOptionCorrectionInput(1, "Corrected option", "reason", "CHOSEN")), "en",
+                List.of(new ConsideredOptionCorrectionInput(1, "Corrected option", "reason", "CHOSEN")),
+                List.of(2), List.of(3), "en",
                 List.of("FR-1"), List.of("BC-1"), List.of("TERM-1"), List.of("ADR-3"), ANCHOR);
 
         assertEquals(new AdrCode("ADR-1"), stub.lastUpdatedCode);
@@ -704,6 +706,8 @@ class AdrMcpToolsTest {
         assertEquals(1, stub.lastCorrection.consequenceCorrections().size());
         assertEquals(1, stub.lastCorrection.newConsideredOptions().size());
         assertEquals(1, stub.lastCorrection.consideredOptionCorrections().size());
+        assertEquals(Set.of(2), stub.lastCorrection.removedConsequencePositions().positions());
+        assertEquals(Set.of(3), stub.lastCorrection.removedConsideredOptionPositions().positions());
         assertEquals("en", stub.lastCorrection.language());
         assertEquals(List.of("FR-1"), stub.lastCorrection.addressesRequirementCodes());
         assertEquals(List.of("BC-1"), stub.lastCorrection.affectsContextCodes());
@@ -713,7 +717,7 @@ class AdrMcpToolsTest {
 
     @Test
     void updateNormalisesBlankFieldsToTheLeaveItUnchangedSentinel() {
-        adapter.update(null, "ADR-1", "  ", "", "   ", null, null, null, null, "  ",
+        adapter.update(null, "ADR-1", "  ", "", "   ", null, null, null, null, null, null, "  ",
                 null, null, null, null, ANCHOR);
 
         assertNull(stub.lastCorrection.name());
@@ -724,7 +728,7 @@ class AdrMcpToolsTest {
 
     @Test
     void updateKeepsTheReferenceListsTriStateApart() {
-        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null,
+        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, ANCHOR);
 
         assertNull(stub.lastCorrection.addressesRequirementCodes());
@@ -732,7 +736,7 @@ class AdrMcpToolsTest {
         assertNull(stub.lastCorrection.usesTermCodes());
         assertNull(stub.lastCorrection.relatedToCodes());
 
-        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null,
+        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, null, null,
                 List.of(), List.of(), List.of(), List.of(), ANCHOR);
 
         assertEquals(List.of(), stub.lastCorrection.addressesRequirementCodes());

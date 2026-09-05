@@ -15,6 +15,7 @@ import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
+import de.hauschel.arknet.adr.domain.RemovedPositions;
 import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
@@ -108,6 +109,17 @@ public interface AdrRepository {
      *                         {@code null} if it has none - drives the issue #258 sweep of a stale
      *                         untagged sibling literal, exactly as
      *                         {@code KognioRdfRequirementRepository#compareAndUpdate}'s own parameter
+     * @param removedConsequencePositions the consequence positions, as the <em>stored</em> decision
+     *                         numbers them, that {@code updated} no longer carries
+     *                         (kogn-io/arknet#483); {@link RemovedPositions#NONE} when none. An
+     *                         implementation that carries other-language variants of a
+     *                         consequence's text across the write keyed by position must re-key each
+     *                         surviving stored position under
+     *                         {@link RemovedPositions#survivingPositionOf} and drop the variants of
+     *                         a removed one - {@code consequenceLanguageByPosition} is already keyed
+     *                         by {@code updated}'s (post-removal) positions
+     * @param removedConsideredOptionPositions {@code removedConsequencePositions}' counterpart for
+     *                         {@code updated.consideredOptions()}
      * @throws AdrNotFoundException              if no decision with this identity exists at all
      * @throws AdrConcurrentlyModifiedException if {@code expectedHead} no longer matches the stored
      *                                          decision's current head - a concurrent write raced
@@ -121,7 +133,8 @@ public interface AdrRepository {
     void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
             String nameLanguage, String contextLanguage, String decisionLanguage,
             Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
-            String defaultLanguage);
+            String defaultLanguage, RemovedPositions removedConsequencePositions,
+            RemovedPositions removedConsideredOptionPositions);
 
     /**
      * Finds a decision by its human-readable business code within a project.
