@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Refreshes docs/adr-export/, the generated read surface that lets a
 # repository visitor (or the build environment) see arknet's own
-# architecture decisions without a running store (ADR-2, issue #415).
+# architecture decisions without a running store (CONTRIBUTING.md, issue #415).
 #
 # GENERATED, never hand-edited, never a merge basis -- the store stays the
 # only source of truth. Run manually, on demand, after writing to arknet's
