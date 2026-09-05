@@ -131,29 +131,8 @@ traegt denselben Anker an einen zweiten Ort, was sich anhand des zuletzt gesehen
 erkennen, aber an dieser Vertrauensgrenze nicht verhindern laesst (ADR-009 Punkt 4 gilt
 unveraendert). Wird der Anker als Tool-Parameter uebergeben, stammt er vom Sprachmodell; ein
 frei geratener, aber zufaellig existierender Anker trifft still das falsche Projekt -- deshalb
-bleibt der Header der Primaerweg und lange, wenig ratbare Anker sind vorzuziehen.
-
-Punkt 3 gilt fuer jedes Tool, das Modelldaten *routet* -- adressiert es ein bestehendes Projekt,
-loest es dessen Anker auf, ohne Ausnahme. Er gilt nicht fuer die beiden Tools des
-`arknet-project`-BC, die auf der Registry selbst arbeiten, statt ein Projekt anzusprechen:
-`project_list` (listet ausnahmslos alle registrierten Projekte samt ihrer Anker) und
-`project_export` in seinem Default-Scope, d.h. ohne `projectOnly=true` (exportiert ausnahmslos
-alle registrierten Projekte als vollstaendige `.trig`-Dumps -- ein Backup ist naturgemaess
-projektuebergreifend). Beide sind bewusst so gebaut, kein Versehen: sie sitzen auf dem
-reservierten System-Dataset, nicht auf einem Projekt-Dataset (Punkt 6), und machen ein Projekt
-ueberhaupt erst auffindbar -- ein `project_list` hinter einem Anker koennte nie das eine Projekt
-nennen, dessen Anker der Aufrufer noch nicht kennt. Mit `projectOnly=true` narrowt
-`project_export` dagegen auf das eine Projekt des Aufrufs und loest dessen Anker ueber denselben
-Weg auf wie jedes andere Tool (issue #414); ein fehlender oder unbekannter Anker ist in diesem
-Scope derselbe Fehler wie ueberall sonst. `project_add`/`project_adopt`/`project_attach_anchor`/
-`project_rename`/`project_update` sind von dieser Ausnahme unberuehrt: sie nehmen zwar denselben
-Anker-Mechanismus in Anspruch (Header oder expliziter Parameter), aber um eine Identitaet
-anzulegen oder das aufrufende Projekt zu bestimmen -- ein fehlender Anker ist dort derselbe
-Fehler wie bei jedem Modell-Tool, nur ohne Rueckgriff auf die Registry-Aufloesung selbst (die
-Registry kann sich nicht hinter ihrer eigenen Antwort verstecken, siehe Punkt 8).
-(Nachtrag 2026-09-05, issue #149.)
-
-Die Registry ist Zustand im Aufrufpfad: jede Aufloesung schlaegt in ihr nach, und ihr Dataset muss aus dem
+bleibt der Header der Primaerweg und lange, wenig ratbare Anker sind vorzuziehen. Die Registry
+ist Zustand im Aufrufpfad: jede Aufloesung schlaegt in ihr nach, und ihr Dataset muss aus dem
 generischen Lesepfad ausgeblendet werden, wie es der Provenance-Graph bereits ist. Ein eigener
 Bounded Context fuer den Projekt-Lebenszyklus ist mehr Flaeche als ein Resolver; das ist der
 Preis dafuer, dass Identitaet ein verwalteter Gegenstand mit eigenen Invarianten wird statt
