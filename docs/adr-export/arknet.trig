@@ -5790,12 +5790,72 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/5b35f75b-d668-48e5-afb7-33bf0c1f0f95>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T15:00:26.940438071Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/808ca0c6-b973-44c8-b13e-15b953f48d8b> .
+  
+  <https://w3id.org/arknet/id/d733c8e7-d129-4b2f-ae11-73d97f9e5759> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/efeb0258-ba12-42b0-9a28-9958cce45ef1> .
+  
+  <https://w3id.org/arknet/activity/54540ca1-0379-424f-8485-8cec6e57f271> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/33034aa2-fbcd-442a-9d1b-59a90836f158> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d733c8e7-d129-4b2f-ae11-73d97f9e5759>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/54540ca1-0379-424f-8485-8cec6e57f271>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T15:12:25.356939787Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/2d0805d6-f504-4a76-b42d-c42c2f7b42ce> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/95d9201f-27e6-44d2-aa5a-134eabc6cbaa> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d733c8e7-d129-4b2f-ae11-73d97f9e5759>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/2d0805d6-f504-4a76-b42d-c42c2f7b42ce>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T15:12:33.002034079Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/33034aa2-fbcd-442a-9d1b-59a90836f158> .
+  
+  <https://w3id.org/arknet/activity/df885d62-c9be-43b3-b1e8-6c94c60927ec> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/efeb0258-ba12-42b0-9a28-9958cce45ef1> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d733c8e7-d129-4b2f-ae11-73d97f9e5759>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/df885d62-c9be-43b3-b1e8-6c94c60927ec>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T15:12:43.088041653Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/95d9201f-27e6-44d2-aa5a-134eabc6cbaa> .
+}
+
+<https://w3id.org/arknet/model/requirements> {
+  <https://w3id.org/arknet/id/d733c8e7-d129-4b2f-ae11-73d97f9e5759> a <https://w3id.org/arknet/requirements#FunctionalRequirement>;
+    <http://purl.org/dc/terms/identifier> "FR-9";
+    <http://purl.org/dc/terms/title> "Bounded-Context-Audit schlägt Kontextgrenzen nur an Sprachbrüchen vor"@de,
+      "Bounded-context audit proposes context boundaries only at language breaks"@en;
+    <http://purl.org/dc/terms/description> "Das System muss beim Audit auf Bounded-Context-Kandidaten eine Kontextgrenze nur dort vorschlagen, wo ein Sprachbruch liegt: an einer Stelle, an der derselbe Sachverhalt beim Übergang andere Regeln bekommt. Jeder Vorschlag nennt den Sprachbruch als Beleg. Zuständigkeit, Modulschnitt und Datenmenge begründen für sich keine Kontextgrenze."@de,
+      "During the audit for bounded-context candidates, the system shall propose a context boundary only where a language break lies: a place where the same matter is subject to different rules once it crosses over. Every proposal names the language break as its evidence. Responsibility, module cut and data volume do not, on their own, justify a context boundary."@en;
+    <https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed>;
+    <https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#ShouldHave>;
+    <https://w3id.org/arknet/requirements#acceptanceCriterion> <https://w3id.org/arknet/id/ff74dcfe-2342-4296-9c0b-8dcfaec19ee8>,
+      <https://w3id.org/arknet/id/002a18de-d1c8-40ba-979e-a7aa5125205f>, <https://w3id.org/arknet/id/07459a1e-df9a-49b7-8b0b-62bae8877de7>;
+    <https://w3id.org/arknet/requirements#usesTerm> <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9>;
+    <https://w3id.org/arknet/requirements#rationale> "Ein Bounded Context ist eine Grenze, innerhalb derer ein Begriff einheitlich gilt. Wer sie nach Zuständigkeit, Modulschnitt oder Datenmenge zieht, zerschneidet ein einheitliches Modell oder lässt zwei verschiedene unter einem Begriff zusammen. Der Sprachbruch ist das einzige Kriterium, das sich aus dem erfassten Modell (Begriffe, Use Cases, Akteure) belegen lässt statt aus der Organisation."@de,
+      "A bounded context is a boundary within which a term has one uniform meaning. Drawing it by responsibility, module cut or data volume either cuts a uniform model in two or leaves two different models under one term. The language break is the only criterion that can be evidenced from the recorded model (terms, use cases, actors) rather than from the organisation."@en .
+  
+  <https://w3id.org/arknet/id/ff74dcfe-2342-4296-9c0b-8dcfaec19ee8> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 1;
+    <https://w3id.org/arknet/requirements#criterionText> "Jeder vorgeschlagene Kontextkandidat nennt den Sprachbruch, auf dem er beruht: den Sachverhalt und die Regeln, die er diesseits und jenseits der Grenze bekommt."@de,
+      "Every proposed context candidate names the language break it rests on: the matter and the rules it is subject to on either side of the boundary."@en .
+  
+  <https://w3id.org/arknet/id/002a18de-d1c8-40ba-979e-a7aa5125205f> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 2;
+    <https://w3id.org/arknet/requirements#criterionText> "Ein Kandidat, der sich allein aus Zuständigkeit, Modulschnitt oder Datenmenge ergibt, wird nicht vorgeschlagen; liegt eine solche Beobachtung vor, wird sie als Beobachtung ohne Kontextvorschlag gemeldet."@de,
+      "A candidate that follows solely from responsibility, module cut or data volume is not proposed; if such an observation exists, it is reported as an observation without a context proposal."@en .
+  
+  <https://w3id.org/arknet/id/07459a1e-df9a-49b7-8b0b-62bae8877de7> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 3;
+    <https://w3id.org/arknet/requirements#criterionText> "Die Beurteilung, ob ein Sprachbruch vorliegt, bleibt beim Nutzer; das Audit legt den Beleg vor und schreibt keinen Kontext ohne Bestätigung."@de,
+      "Judging whether a language break exists stays with the user; the audit presents the evidence and writes no context without confirmation."@en .
 }
 
 <https://w3id.org/arknet/model/export-metadata> {
-    <https://w3id.org/arknet/export/7532aed6-90d2-4e79-a125-e82c1840fa59>
+    <https://w3id.org/arknet/export/747f7010-54f2-479b-9ea8-3ae1e997ec18>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#Activity> ;
-        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-05T15:01:46Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
+        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-05T15:12:46Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
         <http://www.w3.org/ns/prov#wasAssociatedWith> <https://w3id.org/arknet/agent/arknet> ;
         <http://www.w3.org/ns/prov#used> <https://w3id.org/arknet/core> , <https://w3id.org/arknet/ddd> , <https://w3id.org/arknet/process> , <https://w3id.org/arknet/requirements> , <https://w3id.org/arknet/architecture> , <https://w3id.org/arknet/provenance> , <https://w3id.org/arknet/project> .
 

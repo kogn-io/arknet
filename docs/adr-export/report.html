@@ -176,11 +176,11 @@ footer.foot{margin-top:40px;color:var(--ink-faint);font-size:12px;font-family:va
   <header class="top">
     <h1>arknet Store Report</h1>
     <span class="ws">project: arknet (id: arknet)</span>
-    <span class="meta"><b>63</b> model elements &middot; <b>262</b> resources &middot; <b>1680</b> triples</span>
+    <span class="meta"><b>64</b> model elements &middot; <b>266</b> resources &middot; <b>1706</b> triples</span>
   </header>
   <details class="agent-panel">
     <summary>What the agent gets back <span class="hint">- compact digest as the tool return value (text)</span></summary>
-<pre># Project arknet (id: arknet) -- 262 resources, 1680 triples, 13 types
+<pre># Project arknet (id: arknet) -- 266 resources, 1706 triples, 13 types
 # Prefixes:
 #   rdf:     = http://www.w3.org/1999/02/22-rdf-syntax-ns#
 #   arkreq:  = https://w3id.org/arknet/requirements#
@@ -198,9 +198,9 @@ footer.foot{margin-top:40px;color:var(--ink-faint);font-size:12px;font-family:va
 66 arkarch:ConsideredOption
 3 arkproc:HumanActor
 1 arkproc:SystemActor
-35 arkreq:AcceptanceCriterion
+38 arkreq:AcceptanceCriterion
 2 arkreq:BusinessConstraint
-8 arkreq:FunctionalRequirement
+9 arkreq:FunctionalRequirement
 1 arkreq:NonFunctionalRequirement
 27 arkreq:Step
 4 arkreq:UseCase
@@ -404,8 +404,10 @@ ACTOR-1 [HumanActor]  -&gt; resource_get(&quot;ACTOR-1&quot;)
 ## arkproc:SystemActor (1)
 ACTOR-4 [SystemActor]  -&gt; resource_get(&quot;ACTOR-4&quot;)
 
-## arkreq:AcceptanceCriterion (35)
+## arkreq:AcceptanceCriterion (38)
+https://w3id.org/arknet/id/002a18de-d1c8-40ba-979e-a7aa5125205f [AcceptanceCriterion]  -&gt; resource_get(&quot;https://w3id.org/arknet/id/002a18de-d1c8-40ba-979e-a7aa5125205f&quot;)
 https://w3id.org/arknet/id/015bb8e2-ef31-4af3-be7b-8bcc0a28ee01 [AcceptanceCriterion]  -&gt; resource_get(&quot;https://w3id.org/arknet/id/015bb8e2-ef31-4af3-be7b-8bcc0a28ee01&quot;)
+https://w3id.org/arknet/id/07459a1e-df9a-49b7-8b0b-62bae8877de7 [AcceptanceCriterion]  -&gt; resource_get(&quot;https://w3id.org/arknet/id/07459a1e-df9a-49b7-8b0b-62bae8877de7&quot;)
 https://w3id.org/arknet/id/07ee80d1-580a-4b41-aec1-f572f698cde5 [AcceptanceCriterion]  -&gt; resource_get(&quot;https://w3id.org/arknet/id/07ee80d1-580a-4b41-aec1-f572f698cde5&quot;)
 https://w3id.org/arknet/id/091bff12-534b-4f23-a303-50bfd0911e44 [AcceptanceCriterion]  -&gt; resource_get(&quot;https://w3id.org/arknet/id/091bff12-534b-4f23-a303-50bfd0911e44&quot;)
 https://w3id.org/arknet/id/13c7ac33-71c7-4e36-8529-3e756d071545 [AcceptanceCriterion]  -&gt; resource_get(&quot;https://w3id.org/arknet/id/13c7ac33-71c7-4e36-8529-3e756d071545&quot;)
@@ -440,12 +442,13 @@ https://w3id.org/arknet/id/d496d4d1-09d2-4630-9118-4d8b9236b7d2 [AcceptanceCrite
 https://w3id.org/arknet/id/e1e5f219-5730-4b96-ad1c-6a43fb0cb4dc [AcceptanceCriterion]  -&gt; resource_get(&quot;https://w3id.org/arknet/id/e1e5f219-5730-4b96-ad1c-6a43fb0cb4dc&quot;)
 https://w3id.org/arknet/id/ef619ee1-fdec-40c6-a92d-c44b5a8f17f9 [AcceptanceCriterion]  -&gt; resource_get(&quot;https://w3id.org/arknet/id/ef619ee1-fdec-40c6-a92d-c44b5a8f17f9&quot;)
 https://w3id.org/arknet/id/fb53356a-97dd-438b-ac98-7a5c832b50df [AcceptanceCriterion]  -&gt; resource_get(&quot;https://w3id.org/arknet/id/fb53356a-97dd-438b-ac98-7a5c832b50df&quot;)
+https://w3id.org/arknet/id/ff74dcfe-2342-4296-9c0b-8dcfaec19ee8 [AcceptanceCriterion]  -&gt; resource_get(&quot;https://w3id.org/arknet/id/ff74dcfe-2342-4296-9c0b-8dcfaec19ee8&quot;)
 
 ## arkreq:BusinessConstraint (2)
 BCON-2 [BusinessConstraint] &quot;Ein Glossarbegriff trägt in jeder Sprache dasselbe Label&quot;  -&gt; resource_get(&quot;BCON-2&quot;)
 BCON-1 [BusinessConstraint] &quot;Scope-Rahmen: Zielschnitt über den Software-Engineering-Lifecycle&quot;  -&gt; resource_get(&quot;BCON-1&quot;)
 
-## arkreq:FunctionalRequirement (8)
+## arkreq:FunctionalRequirement (9)
 FR-2 [FunctionalRequirement] &quot;Requirement/Constraint bereitstellen&quot; Proposed MustHave  -&gt; resource_get(&quot;FR-2&quot;)
 FR-7 [FunctionalRequirement] &quot;Herkunft eines Requirements prüfbar machen&quot; Proposed ShouldHave  -&gt; resource_get(&quot;FR-7&quot;)
 FR-3 [FunctionalRequirement] &quot;Requirement nachträglich ändern&quot; Proposed ShouldHave  -&gt; resource_get(&quot;FR-3&quot;)
@@ -453,6 +456,7 @@ FR-8 [FunctionalRequirement] &quot;Entscheidungsbestand ohne laufenden Store les
 FR-4 [FunctionalRequirement] &quot;Requirement mit einem Term verknüpfen&quot; Proposed MustHave  -&gt; resource_get(&quot;FR-4&quot;)
 FR-6 [FunctionalRequirement] &quot;Gruppe ohne Rechtsform als Akteur erfassen&quot; Proposed ShouldHave  -&gt; resource_get(&quot;FR-6&quot;)
 FR-1 [FunctionalRequirement] &quot;Requirement anlegen&quot; Proposed MustHave  -&gt; resource_get(&quot;FR-1&quot;)
+FR-9 [FunctionalRequirement] &quot;Bounded-Context-Audit schlägt Kontextgrenzen nur an Sprachbrüchen vor&quot; Proposed ShouldHave  -&gt; resource_get(&quot;FR-9&quot;)
 FR-5 [FunctionalRequirement] &quot;Requirement-Status setzen&quot; Proposed CouldHave  -&gt; resource_get(&quot;FR-5&quot;)
 
 ## arkreq:NonFunctionalRequirement (1)
@@ -513,7 +517,7 @@ UC2 [UseCase] &quot;Requirement erfassen&quot;  -&gt; resource_get(&quot;UC2&quo
   <div class="layout">
     <nav class="index" aria-label="Section index">
       <p class="lbl">Model</p>
-      <a href="#sec-requirements"><span>Requirements</span><span class="cnt">9</span></a>
+      <a href="#sec-requirements"><span>Requirements</span><span class="cnt">10</span></a>
       <a href="#sec-constraints"><span>Constraints</span><span class="cnt">2</span></a>
       <a href="#sec-use-cases"><span>Use Cases</span><span class="cnt">4</span></a>
       <a href="#sec-architecture-decisions"><span>Architecture Decisions</span><span class="cnt">20</span></a>
@@ -523,7 +527,7 @@ UC2 [UseCase] &quot;Requirement erfassen&quot;  -&gt; resource_get(&quot;UC2&quo
     </nav>
     <main>
       <section class="group" id="sec-requirements">
-        <h2>Requirements <span class="of">9</span></h2>
+        <h2>Requirements <span class="of">10</span></h2>
         <p class="sub">what the system shall do, and what counts as done</p>
         <div class="cards">
           <article class="card" id="r-https-w3id-org-arknet-id-943d28d3-95aa-4ee3-b6db-55add7df5dd3-180ff0649c4b6556">
@@ -981,6 +985,55 @@ UC2 [UseCase] &quot;Requirement erfassen&quot;  -&gt; resource_get(&quot;UC2&quo
                 <tr><td class="pred">arkreq:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-ebdd226f-5b5d-46b6-a41a-53ec10c2090c-ce5b7cba02fd64f1">https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c</a></td></tr>
                 <tr><td class="pred">arkreq:rationale</td><td class="obj"><span class="lit str">"Der Store läuft nur dort, wo ihn jemand startet. Ein Besucher des Repositoriums, ein Beitragender vor dem ersten Setup und die Bauumgebung haben keinen. Ohne Lesefläche kostet store-first genau die Nachvollziehbarkeit, mit der das Werkzeug wirbt."</span><span class="dt">@de</span></td></tr>
                 <tr><td class="pred">arkreq:rationale</td><td class="obj"><span class="lit str">"The store only runs where someone starts it. A visitor of the repository, a contributor before their first setup and the build environment have none. Without a reading surface, store-first costs exactly the traceability the tool advertises."</span><span class="dt">@en</span></td></tr>
+              </table>
+            </details>
+            </details>
+          </article>
+          <article class="card" id="r-https-w3id-org-arknet-id-d733c8e7-d129-4b2f-ae11-73d97f9e5759-d60d2b48ad63bab8">
+            <details class="fold">
+              <summary class="head">
+                <span class="code">FR-9</span>
+                <h3><span class="lang-group" data-default-lang="de"><span class="lang-variant" data-lang="de">Bounded-Context-Audit schlägt Kontextgrenzen nur an Sprachbrüchen vor</span><span class="lang-variant" data-lang="en" hidden>Bounded-context audit proposes context boundaries only at language breaks</span></span></h3>
+                <span class="pill type v-fr">FR</span>
+                <span class="pill status v-proposed">Proposed</span>
+                <span class="pill priority v-should-have">Should have</span>
+                <a class="anchor" href="#r-https-w3id-org-arknet-id-d733c8e7-d129-4b2f-ae11-73d97f9e5759-d60d2b48ad63bab8">#</a>
+              </summary>
+              <div class="body">
+              <div class="block b-description">
+                <span class="blabel">Description</span>
+                <div class="lang-group" data-default-lang="de"><div class="lang-variant" data-lang="de"><div class="prose-body"><p class="prose">Das System muss beim Audit auf Bounded-Context-Kandidaten eine Kontextgrenze nur dort vorschlagen, wo ein Sprachbruch liegt: an einer Stelle, an der derselbe Sachverhalt beim Übergang andere Regeln bekommt. Jeder Vorschlag nennt den Sprachbruch als Beleg. Zuständigkeit, Modulschnitt und Datenmenge begründen für sich keine Kontextgrenze.</p></div></div><div class="lang-variant" data-lang="en" hidden><div class="prose-body"><p class="prose">During the audit for bounded-context candidates, the system shall propose a context boundary only where a language break lies: a place where the same matter is subject to different rules once it crosses over. Every proposal names the language break as its evidence. Responsibility, module cut and data volume do not, on their own, justify a context boundary.</p></div></div></div>
+              </div>
+              <div class="block b-rationale">
+                <span class="blabel">Rationale</span>
+                <div class="lang-group" data-default-lang="de"><div class="lang-variant" data-lang="de"><div class="prose-body"><p class="prose">Ein <a class="term" href="#r-https-w3id-org-arknet-id-7c1ae58a-a7db-4e10-b567-c333f14fb9c9-0a26b424cf9f433a" title="TERM-19">Bounded Context</a> ist eine Grenze, innerhalb derer ein Begriff einheitlich gilt. Wer sie nach Zuständigkeit, Modulschnitt oder Datenmenge zieht, zerschneidet ein einheitliches Modell oder lässt zwei verschiedene unter einem Begriff zusammen. Der Sprachbruch ist das einzige Kriterium, das sich aus dem erfassten Modell (Begriffe, Use Cases, Akteure) belegen lässt statt aus der Organisation.</p></div></div><div class="lang-variant" data-lang="en" hidden><div class="prose-body"><p class="prose">A bounded context is a boundary within which a term has one uniform meaning. Drawing it by responsibility, module cut or data volume either cuts a uniform model in two or leaves two different models under one term. The language break is the only criterion that can be evidenced from the recorded model (terms, use cases, actors) rather than from the organisation.</p></div></div></div>
+              </div>
+              <div class="block b-acceptance-criteria">
+                <span class="blabel">Acceptance criteria</span>
+                <ul class="bullets">
+                  <li><span class="lang-group" data-default-lang="de"><span class="lang-variant" data-lang="de">Jeder vorgeschlagene Kontextkandidat nennt den Sprachbruch, auf dem er beruht: den Sachverhalt und die Regeln, die er diesseits und jenseits der Grenze bekommt.</span><span class="lang-variant" data-lang="en" hidden>Every proposed context candidate names the language break it rests on: the matter and the rules it is subject to on either side of the boundary.</span></span></li>
+                  <li><span class="lang-group" data-default-lang="de"><span class="lang-variant" data-lang="de">Ein Kandidat, der sich allein aus Zuständigkeit, Modulschnitt oder Datenmenge ergibt, wird nicht vorgeschlagen; liegt eine solche Beobachtung vor, wird sie als Beobachtung ohne Kontextvorschlag gemeldet.</span><span class="lang-variant" data-lang="en" hidden>A candidate that follows solely from responsibility, module cut or data volume is not proposed; if such an observation exists, it is reported as an observation without a context proposal.</span></span></li>
+                  <li><span class="lang-group" data-default-lang="de"><span class="lang-variant" data-lang="de">Die Beurteilung, ob ein Sprachbruch vorliegt, bleibt beim Nutzer; das Audit legt den Beleg vor und schreibt keinen Kontext ohne Bestätigung.</span><span class="lang-variant" data-lang="en" hidden>Judging whether a language break exists stays with the user; the audit presents the evidence and writes no context without confirmation.</span></span></li>
+                </ul>
+              </div>
+              </div>
+            <details class="raw">
+              <summary>14 raw triples &middot; FR-9</summary>
+              <table class="props">
+                <tr><td class="pred">rdf:type</td><td class="obj"><span class="lit">arkreq:FunctionalRequirement</span></td></tr>
+                <tr><td class="pred">dcterms:identifier</td><td class="obj"><span class="lit str">"FR-9"</span></td></tr>
+                <tr><td class="pred">dcterms:title</td><td class="obj"><span class="lit str">"Bounded-Context-Audit schlägt Kontextgrenzen nur an Sprachbrüchen vor"</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">dcterms:title</td><td class="obj"><span class="lit str">"Bounded-context audit proposes context boundaries only at language breaks"</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">dcterms:description</td><td class="obj"><span class="lit str">"Das System muss beim Audit auf Bounded-Context-Kandidaten eine Kontextgrenze nur dort vorschlagen, wo ein Sprachbruch liegt: an einer Stelle, an der derselbe Sachverhalt beim Übergang andere Regeln bekommt. Jeder Vorschlag nennt den Sprachbruch als Beleg. Zuständigkeit, Modulschnitt und Datenmenge begründen für sich keine Kontextgrenze."</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">dcterms:description</td><td class="obj"><span class="lit str">"During the audit for bounded-context candidates, the system shall propose a context boundary only where a language break lies: a place where the same matter is subject to different rules once it crosses over. Every proposal names the language break as its evidence. Responsibility, module cut and data volume do not, on their own, justify a context boundary."</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">arkreq:status</td><td class="obj"><span class="lit">arkreq:Proposed</span></td></tr>
+                <tr><td class="pred">arkreq:priority</td><td class="obj"><span class="lit">arkreq:ShouldHave</span></td></tr>
+                <tr><td class="pred">arkreq:acceptanceCriterion</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-ff74dcfe-2342-4296-9c0b-8dcfaec19ee8-bb013fae66fa3bb2">https://w3id.org/arknet/id/ff74dcfe-2342-4296-9c0b-8dcfaec19ee8</a></td></tr>
+                <tr><td class="pred">arkreq:acceptanceCriterion</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-002a18de-d1c8-40ba-979e-a7aa5125205f-4095dfa161c9c313">https://w3id.org/arknet/id/002a18de-d1c8-40ba-979e-a7aa5125205f</a></td></tr>
+                <tr><td class="pred">arkreq:acceptanceCriterion</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-07459a1e-df9a-49b7-8b0b-62bae8877de7-946166e5aad3a08c">https://w3id.org/arknet/id/07459a1e-df9a-49b7-8b0b-62bae8877de7</a></td></tr>
+                <tr><td class="pred">arkreq:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-7c1ae58a-a7db-4e10-b567-c333f14fb9c9-0a26b424cf9f433a">https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9</a></td></tr>
+                <tr><td class="pred">arkreq:rationale</td><td class="obj"><span class="lit str">"Ein Bounded Context ist eine Grenze, innerhalb derer ein Begriff einheitlich gilt. Wer sie nach Zuständigkeit, Modulschnitt oder Datenmenge zieht, zerschneidet ein einheitliches Modell oder lässt zwei verschiedene unter einem Begriff zusammen. Der Sprachbruch ist das einzige Kriterium, das sich aus dem erfassten Modell (Begriffe, Use Cases, Akteure) belegen lässt statt aus der Organisation."</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">arkreq:rationale</td><td class="obj"><span class="lit str">"A bounded context is a boundary within which a term has one uniform meaning. Drawing it by responsibility, module cut or data volume either cuts a uniform model in two or leaves two different models under one term. The language break is the only criterion that can be evidenced from the recorded model (terms, use cases, actors) rather than from the organisation."</span><span class="dt">@en</span></td></tr>
               </table>
             </details>
             </details>
@@ -3415,7 +3468,7 @@ Der andere Weg ist ein Record als reiner Wert, der von RDF nichts weiß, mit ein
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 8</summary>
+              <summary>Referenced by 9</summary>
               <table class="props">
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-1b5ba6e9-4c93-4afd-b35a-86affc89d44c-0dbb674752c88643">ADR-4</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-53c40f6c-0af0-43f0-89d2-a88e32947331-910d219372ae1a3f">ADR-7</a></td></tr>
@@ -3425,6 +3478,7 @@ Der andere Weg ist ein Record als reiner Wert, der von RDF nichts weiß, mit ein
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-acf820e0-d3a5-4e84-95e5-948538994549-5c57b0b803b229b7">ADR-12</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-ca302edd-6844-406a-8b6e-8b5029114750-9a17fb038dea06b1">ADR-10</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-e2fd7f3a-3c3f-44c4-8d02-8c13567151fd-c3f1bb432ea9d88f">ADR-13</a></td></tr>
+                <tr><td class="pred">arkreq:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-d733c8e7-d129-4b2f-ae11-73d97f9e5759-d60d2b48ad63bab8" title="Bounded-Context-Audit schlägt Kontextgrenzen nur an Sprachbrüchen vor">FR-9</a></td></tr>
               </table>
             </details>
             <details class="raw">
