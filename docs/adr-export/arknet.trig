@@ -1418,7 +1418,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:04:19.404801113Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/1b5ba6e9-4c93-4afd-b35a-86affc89d44c> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/937b431a-0ef3-48ed-9981-afa343a24d58> .
+      <https://w3id.org/arknet/revision/bd853662-ae04-4b93-8706-0207dc350415> .
   
   <https://w3id.org/arknet/activity/2893367d-53bf-4397-b258-b40cd5c42759> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -1437,7 +1437,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:04:31.417960932Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/00b2a409-8b29-405e-895c-d593702817f2> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/f9a12726-ecf6-4f26-a3f6-8a9fa5e185c9> .
+      <https://w3id.org/arknet/revision/522f427a-eaec-4e9d-82fe-f5ea6ea51417> .
   
   <https://w3id.org/arknet/activity/c562a8ca-11de-422b-ac5b-1c1580203e93> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -1478,7 +1478,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:05:02.051723158Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/6c991026-6c7c-429b-8731-d4c01ef70992> .
+      <https://w3id.org/arknet/revision/f2a23e5b-d8ad-4967-9786-79a37dd9cc54> .
   
   <https://w3id.org/arknet/activity/2d8a83d6-acf1-495b-b5a4-03163c5169ab> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -1565,7 +1565,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:06:06.984549898Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/6aae6fb7-69c9-47b2-8568-3ab1273e189c> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/bf99cc86-e438-4405-aec2-fe2d9852d596> .
+      <https://w3id.org/arknet/revision/dec9b490-bb48-461b-bc88-0d6229cd4210> .
   
   <https://w3id.org/arknet/activity/da769952-97f0-4077-9e93-a7c43ef26573> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -1969,7 +1969,8 @@
   
   <https://w3id.org/arknet/activity/2628f39f-7a7c-4ce8-bd86-798f44ad1881> a <http://www.w3.org/ns/prov#Activity> .
   
-  <https://w3id.org/arknet/revision/032a6a69-8699-470b-9d54-a139884af7a8> a <http://www.w3.org/ns/prov#Entity> .
+  <https://w3id.org/arknet/revision/032a6a69-8699-470b-9d54-a139884af7a8> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision> .
 }
 
 <https://w3id.org/arknet/model/use-cases> {
@@ -2188,7 +2189,7 @@
   <https://w3id.org/arknet/id/1b5ba6e9-4c93-4afd-b35a-86affc89d44c> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
     <http://purl.org/dc/terms/identifier> "ADR-4";
     <https://w3id.org/arknet/core#name> "Ein benannter Lifecycle-Zielschnitt als Scope-Rahmen"@de;
-    <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Accepted>;
+    <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Superseded>;
     <https://w3id.org/arknet/architecture#adrContext> """arknet ist ein bestehendes, bereits gebautes Werkzeug -- sein Scope wurde bislang nie als eigener Zielschnitt benannt, sondern ergab sich implizit aus dem, was zu einem gegebenen Zeitpunkt schon gebaut war: was existiert, gilt als drin, alles daneben als draußen. Das hat zwei Folgen:
 
 - Jede Erweiterung muss sich rechtfertigen, als wäre sie ein Ausbruch, statt als nächster Schritt behandelt zu werden.
@@ -2198,18 +2199,16 @@ Was fehlt, ist ein Zielbild, das größer ist als das Gebaute und trotzdem benan
     <https://w3id.org/arknet/architecture#adrDecision> """Der Scope-Rahmen ist ein benannter Zielschnitt über den gesamten Software-Engineering-Lifecycle, der größer ist als das Gebaute. Welche fachlichen Kontexte er umfasst und was ausdrücklich außerhalb liegt, hält ein Constraint fest; welche davon zu einem gegebenen Zeitpunkt realisiert sind, ist Bauzustand und steht nicht in dieser Entscheidung.
 
 Der Kern dieser Entscheidung ist die Unterscheidung \"noch nicht gebaut\" gegen \"außerhalb\": eine Scope-Frage wird künftig damit beantwortet, wo im Zielschnitt etwas liegt und ob es an der Reihe ist -- nicht damit, ob es zum zuletzt gebauten Stand passt. Begriffe und Grenzen des Zielschnitts sind gegen etablierte Requirements-Engineering-, Architekturbeschreibungs-, Qualitäts- und Lifecycle-Normen sowie gegen die einschlägige domänengetriebene Entwurfs- und Use-Case-Literatur geprüft, keine Eigenerfindungen."""@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/5cb7c520-02cc-4909-9762-cd7636e719e2>,
-      <https://w3id.org/arknet/id/1c227b81-59cd-4780-a99e-74eee7c346ad>, <https://w3id.org/arknet/id/0bec732c-a360-4f4f-b503-052dc580bddf>,
-      <https://w3id.org/arknet/id/81be15bf-d4eb-48a3-8515-5d2df062213a>, <https://w3id.org/arknet/id/95f55e4a-6916-48b9-9746-236c8f0387c4>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/24fb5a1a-4c9d-4027-a024-497ccef41ba5>,
-      <https://w3id.org/arknet/id/bc055c52-5296-4b1a-b39d-7a51f60b62fa>, <https://w3id.org/arknet/id/542f6e6c-c09d-47cd-830b-ffbc8dea9273>,
-      <https://w3id.org/arknet/id/9de7ef2f-7cfc-422f-adf3-fd10727036dc>;
-    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/00b2a409-8b29-405e-895c-d593702817f2>,
-      <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750>, <https://w3id.org/arknet/id/6aae6fb7-69c9-47b2-8568-3ab1273e189c>,
-      <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/c4e6c926-d373-4c46-ae74-db73ce0002ed>,
+      <https://w3id.org/arknet/id/8694c4de-8da6-424f-af42-808a591ec2c8>, <https://w3id.org/arknet/id/d4f28cef-a5d5-444f-bf76-6eca034cfa11>,
+      <https://w3id.org/arknet/id/67a5b657-fd32-4e5e-b9c7-fc1bdc6afd6d>, <https://w3id.org/arknet/id/bd6629fe-e070-4c59-931f-408e83a008c6>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/ae111feb-3c9c-4e7f-b39f-a9d934d85ddd>,
+      <https://w3id.org/arknet/id/6ccbbb67-639f-41a4-b0c3-beaedab6b0b5>, <https://w3id.org/arknet/id/12deafac-0a34-49b9-ba82-5a142538d4b0>,
+      <https://w3id.org/arknet/id/fc21e0d5-9dbd-49cb-891a-96cd166a2546>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551>,
       <https://w3id.org/arknet/id/87ab2eca-efa7-4067-be38-103b0ab6f299>, <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9>;
-    <https://w3id.org/arknet/architecture#decisionDate> "2026-09-05"^^<http://www.w3.org/2001/XMLSchema#date> .
+    <https://w3id.org/arknet/architecture#decisionDate> "2026-09-05"^^<http://www.w3.org/2001/XMLSchema#date>;
+    <https://w3id.org/arknet/architecture#supersededBy> <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd> .
   
   <https://w3id.org/arknet/id/00b2a409-8b29-405e-895c-d593702817f2> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
     <http://purl.org/dc/terms/identifier> "ADR-6";
@@ -2217,12 +2216,12 @@ Der Kern dieser Entscheidung ist die Unterscheidung \"noch nicht gebaut\" gegen 
     <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Accepted>;
     <https://w3id.org/arknet/architecture#adrContext> "Das Werkzeug läuft auf dem Rechner eines einzelnen Autors und schreibt in einen lokalen Store. Die Frage ist, ob dieser Umstand bis in die Kontext-Cores durchschlägt -- ob dort also Nutzer, Mandant oder Team vorkommen. Das Zielbild sieht Teams aus Menschen und Agenten vor. Ein Team-Begriff, der heute in die Cores geschrieben wird, wäre Spekulation."@de;
     <https://w3id.org/arknet/architecture#adrDecision> "Das Werkzeug ist ein lokaler Single-User-Client. Die Kontext-Cores kennen keinen Auth-, Mandanten- oder Team-Begriff. Nutzeridentität und Zugriffskontrolle sind kein Belang des Werkzeugs, auch nicht als vorbereiteter Haken. Der Multi-User-Fall wird nicht vorbereitet. Sollte er kommen, trägt ihn das dann gewählte Backend, nicht die Cores."@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/20b4ec49-a12e-44d3-a30b-c2e37691cf1a>,
-      <https://w3id.org/arknet/id/cd32ba03-c799-4295-8e0b-be04c0e8f8ea>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/429ddd8b-623b-42f3-9129-97611e4558bc>,
-      <https://w3id.org/arknet/id/aa7e17a0-7aee-4266-9c9a-8dcbe02757eb>;
-    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/1b5ba6e9-4c93-4afd-b35a-86affc89d44c>,
-      <https://w3id.org/arknet/id/5c3aebd2-9297-4d40-b05f-43b4bf2accc7>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/c7e4c7c5-3638-4637-ad47-adfa6c9249c9>,
+      <https://w3id.org/arknet/id/f027da92-c93b-4023-9cda-c1e611867452>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/112eab58-9b23-48a2-98e7-dcdcba03aa90>,
+      <https://w3id.org/arknet/id/f00b72d9-559d-4b9f-80e4-d727715eb4d1>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/5c3aebd2-9297-4d40-b05f-43b4bf2accc7>,
+      <https://w3id.org/arknet/id/aa935fe9-4193-4cc6-bb7f-374cdf6659d8>, <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd>;
     <https://w3id.org/arknet/architecture#decisionDate> "2026-07-13"^^<http://www.w3.org/2001/XMLSchema#date> .
   
   <https://w3id.org/arknet/id/53c40f6c-0af0-43f0-89d2-a88e32947331> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
@@ -2280,15 +2279,15 @@ Der Zielschnitt legt anders:
 Die Liste benennt, wohin die bestehenden Kontexte umgeschnitten werden; sie ist kein geschlossener Katalog aller Modell-Kontexte. Ein Ressourcentyp, der erst später eigenständig wird, bekommt seinen Kontext in einer eigenen Entscheidung.
 
 Eine Kontextgrenze ist nicht dasselbe wie eine Modulgrenze -- ein Kontext darf mehrere Module halten; diese Entscheidung legt fest, wo Sprachgrenzen verlaufen, nicht wie viele Module es gibt."""@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/dfb7c49e-78ca-401d-a175-95b6cffdc2cc>,
-      <https://w3id.org/arknet/id/1b2188e8-5dd1-4797-ba1a-d0288f6f7a0f>, <https://w3id.org/arknet/id/46922b0a-1fdb-4489-b33a-e35b81b245cc>,
-      <https://w3id.org/arknet/id/43a22e71-eb92-43a4-a44c-64109a700fa1>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/b6be0274-be78-4300-9793-50660377acf7>,
-      <https://w3id.org/arknet/id/3770e83c-3be0-4c8e-89c0-b61cf5d324b8>, <https://w3id.org/arknet/id/d7b7467b-5d89-46f0-8799-e6a429d80900>,
-      <https://w3id.org/arknet/id/a5c72cb9-c482-404b-b74f-9a0ad1e39c53>;
-    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/1b5ba6e9-4c93-4afd-b35a-86affc89d44c>,
-      <https://w3id.org/arknet/id/53c40f6c-0af0-43f0-89d2-a88e32947331>, <https://w3id.org/arknet/id/acf820e0-d3a5-4e84-95e5-948538994549>,
-      <https://w3id.org/arknet/id/e2fd7f3a-3c3f-44c4-8d02-8c13567151fd>, <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/8b3c0f38-07bb-47ce-aabd-d01cb8eac3aa>,
+      <https://w3id.org/arknet/id/67952951-957c-4a06-8519-4b4448002d1b>, <https://w3id.org/arknet/id/07116694-6bcb-4a98-9f23-0cb8330b4562>,
+      <https://w3id.org/arknet/id/7e13192f-6cd4-4be0-bb4b-527e084b83f7>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/c4cf11ac-79f7-41df-8cbe-24731c2a655e>,
+      <https://w3id.org/arknet/id/2a97e1a6-154f-437c-a9d7-dbc4efc4e3ec>, <https://w3id.org/arknet/id/3e6e2575-5ea1-4b54-9dc1-a49e487ec3e7>,
+      <https://w3id.org/arknet/id/9144fd76-307e-48b6-8288-0dc058263e61>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/53c40f6c-0af0-43f0-89d2-a88e32947331>,
+      <https://w3id.org/arknet/id/acf820e0-d3a5-4e84-95e5-948538994549>, <https://w3id.org/arknet/id/e2fd7f3a-3c3f-44c4-8d02-8c13567151fd>,
+      <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>, <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551>,
       <https://w3id.org/arknet/id/0c5ff58a-96c6-4143-80e2-683586edf6e8>, <https://w3id.org/arknet/id/87ab2eca-efa7-4067-be38-103b0ab6f299>,
       <https://w3id.org/arknet/id/c2df3868-3a66-46ca-8621-677374d02aa6>, <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9>,
@@ -2372,11 +2371,12 @@ Gebraucht werden sie trotzdem: Delivery & Release muss wissen, welche Commits ei
 
 Die naheliegende Antwort wäre je ein eigener Bounded Context (etwa \"Codebasis\"), der das fremde System spiegelt. Dann führte arknet ein Modell, das es nicht besitzt, und müsste jede Änderung des fremden Systems nachziehen."""@de;
     <https://w3id.org/arknet/architecture#adrDecision> "Für ein Konzept, dessen Daten ein anderes System besitzt, entsteht kein eigener Bounded Context. Stattdessen liest der Kontext, der das Konzept fachlich braucht, es aus dem fremden System ein und übersetzt es an seiner Grenze in seine eigene Sprache -- das Muster heißt Anti-Corruption Layer. Er übernimmt nur die Felder, die er braucht, und behält seine eigenen Begriffe: er spricht von einem freigegebenen Stand, nicht von einem Git-Tag."@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/52d7fb37-7888-4d7e-987c-38dcb8745446>,
-      <https://w3id.org/arknet/id/f9af1d38-a447-42eb-b3a9-7f1d2fd7f301>, <https://w3id.org/arknet/id/07f5e6f4-0f6e-4490-a06a-f1d034ee2718>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/673fb8ca-0847-4385-8714-9ad020416ac5>,
-      <https://w3id.org/arknet/id/e6f1907a-55c8-4436-bffa-d3104ddc048d>, <https://w3id.org/arknet/id/f2e63325-4d85-4a70-a1d9-af7b4b87c161>;
-    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/1b5ba6e9-4c93-4afd-b35a-86affc89d44c>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/0213db77-8961-48aa-9ef9-85923d4581bc>,
+      <https://w3id.org/arknet/id/39072b13-cc3c-4d21-803a-2bd503d6b87d>, <https://w3id.org/arknet/id/a6e72ac9-851e-4b1a-a21c-eaae33258381>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/8eb5cd53-2f4f-44be-90d3-1ab775023151>,
+      <https://w3id.org/arknet/id/22c533be-0584-483e-8324-501462d3cd0e>, <https://w3id.org/arknet/id/bbcf60c6-8c62-4dc2-9753-564e25ab8cf3>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/50e2de0d-cbce-4f08-80fe-afb9f81628ae>,
+      <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9>,
       <https://w3id.org/arknet/id/e61c91ce-5a7b-44b1-af34-58cde80a5143>;
     <https://w3id.org/arknet/architecture#decisionDate> "2026-09-05"^^<http://www.w3.org/2001/XMLSchema#date> .
@@ -2495,8 +2495,8 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
 }
 
 <https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/revision/032a6a69-8699-470b-9d54-a139884af7a8> a <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d92fadcd-2213-4e54-a1fc-2ae5cc508466>;
+  <https://w3id.org/arknet/revision/032a6a69-8699-470b-9d54-a139884af7a8> <http://www.w3.org/ns/prov#specializationOf>
+      <https://w3id.org/arknet/id/d92fadcd-2213-4e54-a1fc-2ae5cc508466>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/2628f39f-7a7c-4ce8-bd86-798f44ad1881>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T09:14:59.833318811Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/f8545efd-5ed8-456d-b43d-14c3cf8ca0e1> .
@@ -2546,7 +2546,7 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T17:59:06.366017035Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/09c7df05-88b1-4d94-961a-41b82cb0bbba> .
+      <https://w3id.org/arknet/revision/dd8c88ac-8ae8-457f-9104-fdb34d0d557c> .
   
   <https://w3id.org/arknet/activity/79996432-0ddb-4e9f-a8ad-c16f3da9e03f> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -3410,9 +3410,6 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T06:36:40.951431031Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/c4f49fb9-63db-42cb-97b1-ef29c7f40f2d> .
   
-  <https://w3id.org/arknet/id/fe849c03-c2a2-4aa7-bb12-4c09a7e6472a> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/5b37caae-ad00-4521-b56e-bc7f31668564> .
-  
   <https://w3id.org/arknet/activity/ef12f987-3cb7-47c0-9c8a-127833057994> a <http://www.w3.org/ns/prov#Activity> .
   
   <https://w3id.org/arknet/revision/774d95d4-fa3e-493e-aaf6-012d4e0de98d> a <http://www.w3.org/ns/prov#Entity>,
@@ -3420,9 +3417,6 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
     <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/fe849c03-c2a2-4aa7-bb12-4c09a7e6472a>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/ef12f987-3cb7-47c0-9c8a-127833057994>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T09:02:31.959094430Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
-  
-  <https://w3id.org/arknet/id/39a7dbe1-e9b5-41be-a844-f7afc6669bc4> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/4d32eadc-2d18-463a-92cc-409eab2f3b68> .
   
   <https://w3id.org/arknet/activity/63787c60-dac7-4266-aa99-04684a048b31> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -3512,21 +3506,39 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
   
   <https://w3id.org/arknet/revision/5b37caae-ad00-4521-b56e-bc7f31668564> a <http://www.w3.org/ns/prov#Entity>,
       <https://w3id.org/arknet/provenance#Revision>;
+    <http://purl.org/dc/terms/identifier> "BCON-1";
     <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/fe849c03-c2a2-4aa7-bb12-4c09a7e6472a>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/30325a77-f18f-416a-b749-7535f34aa6dd>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T09:03:39.240443733Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/774d95d4-fa3e-493e-aaf6-012d4e0de98d> .
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/774d95d4-fa3e-493e-aaf6-012d4e0de98d>;
+    <http://www.w3.org/ns/prov#invalidatedAtTime> "2026-09-05T20:51:28.748433372Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/activity/c59e841c-5366-4f8e-bbed-fb9c9b181333> a <http://www.w3.org/ns/prov#Activity> .
   
   <https://w3id.org/arknet/revision/4d32eadc-2d18-463a-92cc-409eab2f3b68> a <http://www.w3.org/ns/prov#Entity>,
       <https://w3id.org/arknet/provenance#Revision>;
+    <http://purl.org/dc/terms/identifier> "BCON-2";
     <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/39a7dbe1-e9b5-41be-a844-f7afc6669bc4>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/c59e841c-5366-4f8e-bbed-fb9c9b181333>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T09:03:42.411015675Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/eaf465ee-fce2-482b-8beb-23bd9c40bc4f> .
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/eaf465ee-fce2-482b-8beb-23bd9c40bc4f>;
+    <http://www.w3.org/ns/prov#invalidatedAtTime> "2026-09-05T20:56:41.347058582Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/activity/07d5d8a4-92f6-45b3-b81c-0e1bb3532ed8> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/15dcbe7a-5316-45f8-9478-f500d713daf8> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/cf4d6031-907b-42b2-9a20-92952d86bd39>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/07d5d8a4-92f6-45b3-b81c-0e1bb3532ed8>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T09:03:44.223618357Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/f618afb6-138b-41f6-b49c-aa15264e01e6> .
+  
+  <https://w3id.org/arknet/activity/0f736d56-e220-4129-9944-8cae4383be65> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/60c21aa8-0116-4837-8746-bd8691a822a5> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/25e1b853-0ebf-44ce-92b1-c8bcc87f63e8>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/0f736d56-e220-4129-9944-8cae4383be65> .
 }
 
 <https://w3id.org/arknet/model/ubiquitous-language> {
@@ -3594,15 +3606,15 @@ Die Wahl entscheidet, ob die Projektgrenze zugleich die Datengrenze ist."""@de;
 
 Gegen einen eigenen Bounded Context steht der offene, mit Belegen unterlegte Verdacht, dass der bestehende Schnitt bereits zu fein ist. Dafür steht, dass Actor eine eigene Sprache und einen eigenen Lebenszyklus hat und von mehreren Seiten gebraucht wird: von den Use Cases, von den Requirements und -- sofern der vorbereitete Anschluss später eingelöst wird -- vom schreibenden Agenten."""@de;
     <https://w3id.org/arknet/architecture#adrDecision> "Actor wird ein eigener Bounded Context mit eigenem Lebenszyklus und eigener Tool-Oberfläche. Ein Actor darf zusätzlich Glossarbegriff sein, muss es aber nicht; die bisherige Facette am Glossarbegriff entfällt ersatzlos."@de;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/703d024d-3d3e-4aee-be20-6e12910352bf>,
-      <https://w3id.org/arknet/id/bc36586e-e362-4e97-a281-d3dd07fb5baf>, <https://w3id.org/arknet/id/6afa2b25-5a58-47e2-a41e-024a0f92692c>,
-      <https://w3id.org/arknet/id/1f77b28b-2a16-42ab-91d5-cf56f02b67b9>, <https://w3id.org/arknet/id/71a14096-9ab0-4a7f-a5da-f606c600f084>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/83ad097b-679a-44a2-8b56-b9801ab716ed>,
-      <https://w3id.org/arknet/id/bae288c0-b2ea-4e58-b4a5-1c8b81ea06a9>, <https://w3id.org/arknet/id/58b5bf6b-a977-4b9a-8c4a-e0954d464f58>,
-      <https://w3id.org/arknet/id/366d7c54-c89c-40c5-8c53-ba4a57c9453b>, <https://w3id.org/arknet/id/ef503160-0db6-4c4d-92db-293c4f7cb9de>,
-      <https://w3id.org/arknet/id/3ce6f0a0-ee74-4685-b4a3-1bea03eb7933>;
-    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/1b5ba6e9-4c93-4afd-b35a-86affc89d44c>,
-      <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750>, <https://w3id.org/arknet/id/7777a2c0-87ff-48fa-ba58-6d6e3e4c2834>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/f82021f1-7005-4528-b692-1056f5775cbd>,
+      <https://w3id.org/arknet/id/eb1ce3ca-3680-4c66-bf38-a2657de3eef7>, <https://w3id.org/arknet/id/9be9c412-2825-45cf-97c8-9bcb270dec7b>,
+      <https://w3id.org/arknet/id/bbab5e21-61ba-4ad0-82c4-e70b391bfe33>, <https://w3id.org/arknet/id/8fe6721b-30ca-4fe6-9139-2fba3477e1d5>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/96898e91-e2a6-4f60-9e43-3ce289f35335>,
+      <https://w3id.org/arknet/id/de458d8c-14f2-4ad0-9ff3-021923313059>, <https://w3id.org/arknet/id/b4d98ad4-d2df-4206-a63f-f68806045d55>,
+      <https://w3id.org/arknet/id/f1577584-28be-4849-9a21-b24626dba011>, <https://w3id.org/arknet/id/c5f15406-ee0f-4cd1-80a9-dd801d78938b>,
+      <https://w3id.org/arknet/id/29e84774-598e-4ed0-b59e-b3408b1032ea>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750>,
+      <https://w3id.org/arknet/id/7777a2c0-87ff-48fa-ba58-6d6e3e4c2834>, <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/0a6971c4-4c22-43a2-9e91-a8a56f3bf379>,
       <https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551>, <https://w3id.org/arknet/id/c2df3868-3a66-46ca-8621-677374d02aa6>,
       <https://w3id.org/arknet/id/e4942ed2-d1f7-4a1e-9322-9c5f323d767d>, <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>,
@@ -3661,48 +3673,6 @@ Der andere Weg ist ein Record als reiner Wert, der von RDF nichts weiß, mit ein
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/5c3aebd2-9297-4d40-b05f-43b4bf2accc7>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4>;
     <https://w3id.org/arknet/architecture#decisionDate> "2026-07-27"^^<http://www.w3.org/2001/XMLSchema#date> .
-}
-
-<https://w3id.org/arknet/model/constraints> {
-  <https://w3id.org/arknet/id/fe849c03-c2a2-4aa7-bb12-4c09a7e6472a> a <https://w3id.org/arknet/requirements#BusinessConstraint>;
-    <http://purl.org/dc/terms/identifier> "BCON-1";
-    <http://purl.org/dc/terms/title> "Scope-Rahmen: Zielschnitt über den Software-Engineering-Lifecycle"@de,
-      "Scope frame: target cut across the software-engineering lifecycle"@en;
-    <https://w3id.org/arknet/requirements#constraintStatement> """Der Zielschnitt von arknet umfasst acht fachliche Kontexte über den gesamten Software-Engineering-Lifecycle plus die Akteursidentität, die mehrere davon brauchen:
-
-- Product & Requirements
-- Domänenmodellierung (Ubiquitous Language, Kontexte, Kontextkarte)
-- Architektur & Entscheidungen
-- Planung & Kapazität
-- Vorgangsverwaltung
-- Verifikation & Qualität
-- Delivery & Release
-- Betrieb & Observability
-
-Außerhalb des Zielschnitts bleiben die Begriffe der gebauten Software selbst (Komponenten, Schnittstellen, Laufzeitbausteine): das Werkzeug beschreibt den Prozess, nicht das Erzeugnis. Ebenfalls außerhalb bleiben die Rituale eines konkreten Vorgehensmodells; Iteration und Arbeitsvorrat werden methodenneutral abgebildet. Welche Kontexte zu einem gegebenen Zeitpunkt realisiert sind, ist Bauzustand und nicht Teil dieses Rahmens."""@de,
-      """arknet's target cut comprises eight domain contexts across the whole software-engineering lifecycle plus the actor identity several of them need:
-
-- Product & Requirements
-- Domain modelling (ubiquitous language, contexts, context map)
-- Architecture & Decisions
-- Planning & Capacity
-- Issue tracking
-- Verification & Quality
-- Delivery & Release
-- Operations & Observability
-
-Outside the target cut stay the terms of the built software itself (components, interfaces, runtime building blocks): the tool describes the process, not the product. Also outside stay the rituals of any particular development method; iteration and backlog are represented method-neutrally. Which contexts are realised at a given time is build state and not part of this frame."""@en .
-  
-  <https://w3id.org/arknet/id/39a7dbe1-e9b5-41be-a844-f7afc6669bc4> a <https://w3id.org/arknet/requirements#BusinessConstraint>;
-    <http://purl.org/dc/terms/identifier> "BCON-2";
-    <http://purl.org/dc/terms/title> "Ein Glossarbegriff trägt in jeder Sprache dasselbe Label"@de,
-      "A glossary term carries the same label in every language"@en;
-    <https://w3id.org/arknet/requirements#constraintStatement> """Das Label eines Glossarbegriffs ist unter jedem geführten Sprachtag dasselbe Wort; übersetzt wird allein die Definition. Welches Wort das ist, entscheidet die Sprache, in der die Fachgemeinschaft den Begriff führt, nicht die Default-Sprache des Projekts.
-
-Grund: Ein Glossar besteht, damit es je Begriff ein Wort gibt. Ein übersetztes Label erzeugt zwei Wörter für denselben Begriff, und ein Leser kann nicht erkennen, ob das ein Begriff ist oder zwei. Die Erkennung von Erwähnungen in Prosa löst einen Begriff über ein Label zur Zeit auf; ein einziges Wort trifft in jeder Sprachfassung, ein übersetztes nur in seiner eigenen. Preis: Ein Leser, dessen Sprache das Label nicht ist, erschließt den Namen erst aus der Definition."""@de,
-      """The label of a glossary term is the same word under every language tag it carries; only the definition is translated. Which word that is, is decided by the language in which the domain community uses the term, not by the project's default language.
-
-Reason: a glossary exists so that there is one word per concept. A translated label creates two words for the same concept, and a reader cannot tell whether that is one term or two. Mention detection in prose resolves a term through one label at a time; a single word matches in every language version, a translated one only in its own. Price: a reader whose language the label is not in has to work the name out from the definition."""@en .
 }
 
 <https://w3id.org/arknet/model/requirements> {
@@ -3809,20 +3779,8 @@ Reason: a glossary exists so that there is one word per concept. A translated la
 }
 
 <https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/revision/15dcbe7a-5316-45f8-9478-f500d713daf8> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/cf4d6031-907b-42b2-9a20-92952d86bd39>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/07d5d8a4-92f6-45b3-b81c-0e1bb3532ed8>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T09:03:44.223618357Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/f618afb6-138b-41f6-b49c-aa15264e01e6> .
-  
-  <https://w3id.org/arknet/activity/0f736d56-e220-4129-9944-8cae4383be65> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/60c21aa8-0116-4837-8746-bd8691a822a5> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/25e1b853-0ebf-44ce-92b1-c8bcc87f63e8>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/0f736d56-e220-4129-9944-8cae4383be65>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T09:03:47.368777828Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+  <https://w3id.org/arknet/revision/60c21aa8-0116-4837-8746-bd8691a822a5> <http://www.w3.org/ns/prov#generatedAtTime>
+      "2026-09-05T09:03:47.368777828Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/43d2f4da-65e2-40fe-bf7c-8c8d202791a9> .
   
   <https://w3id.org/arknet/activity/aca42e88-736c-4267-b1f6-d208484bcb7e> a <http://www.w3.org/ns/prov#Activity> .
@@ -4810,6 +4768,15 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/84516873-7a05-4dfc-a832-a968a8b76774>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T15:00:06.199738915Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/8a434eb0-29f2-4ae8-935e-05e7f8127255> .
+  
+  <https://w3id.org/arknet/activity/84bace5d-1e19-48c9-8c24-e1be7ba03940> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/81eea6bc-7092-44cd-b410-35104c4d734c> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/84bace5d-1e19-48c9-8c24-e1be7ba03940>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T15:00:07.561925302Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/61a3a524-433d-4605-9bfc-04b4fd0da20c> .
 }
 
 <https://w3id.org/arknet/model/requirements> {
@@ -4950,28 +4917,6 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/architecture#optionRationale> "Garantiert die Atomarität an einer einzigen Stelle statt an vielen."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
   
-  <https://w3id.org/arknet/id/20b4ec49-a12e-44d3-a30b-c2e37691cf1a> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Cores bleiben klein und frei von Infrastrukturbegriffen."@de .
-  
-  <https://w3id.org/arknet/id/cd32ba03-c799-4295-8e0b-be04c0e8f8ea> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Wenn Mehrbenutzerbetrieb je kommt, ist er ein echter Umbau, kein Einschalten."@de .
-  
-  <https://w3id.org/arknet/id/429ddd8b-623b-42f3-9129-97611e4558bc> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Team-/Auth-Begriffe schon jetzt in den Cores vorsehen"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Ein Modell für einen Betrieb, den es nicht gibt."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/aa7e17a0-7aee-4266-9c9a-8dcbe02757eb> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Single-User-Client ohne Auth-/Team-Begriff in den Cores"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Hält die Cores klein und frei von Spekulation über einen Betrieb, der nicht existiert."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
   <https://w3id.org/arknet/id/50d2952b-50dd-407e-a307-ebdcfc844c18> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 1;
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
@@ -5051,31 +4996,8 @@ Reason: a glossary exists so that there is one word per concept. A translated la
   <https://w3id.org/arknet/id/349d3bdf-78a3-4a14-84a1-6786f2c034c4> a <https://w3id.org/arknet/architecture#ConsideredOption>;
     <https://w3id.org/arknet/core#name> "Pro Modul entscheiden"@de;
     <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Führt zu zwei MCP-Stacks im selben Reaktor."@de .
-}
-
-<https://w3id.org/arknet/model/ubiquitous-language> {
-  <https://w3id.org/arknet/id/2334e63d-bcf6-4923-9ce3-ea70d6f3b72e> a <http://www.w3.org/2004/02/skos/core#Concept>;
-    <http://purl.org/dc/terms/identifier> "TERM-23";
-    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Dataset"@de, "Dataset"@en;
-    <http://www.w3.org/2004/02/skos/core#definition> "Ein Dataset ist die Speichereinheit, in der die Ressourcen und Revisionen genau eines Projekts liegen; seine Grenze ist die Grenze, an der eine Abfrage endet. Daneben gibt es genau ein reserviertes Dataset, das kein Projekt hält, sondern die Projekt-Registry."@de,
-      "A dataset is the unit of storage that holds the resources and revisions of exactly one project; its boundary is the boundary at which a query ends. Besides these there is exactly one reserved dataset that holds no project but the project registry."@en;
-    <http://www.w3.org/2004/02/skos/core#related> <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4>,
-      <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>, <https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f> .
-  
-  <https://w3id.org/arknet/id/e61c91ce-5a7b-44b1-af34-58cde80a5143> a <http://www.w3.org/2004/02/skos/core#Concept>;
-    <http://purl.org/dc/terms/identifier> "TERM-24";
-    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Commit"@de, "Commit"@en;
-    <http://www.w3.org/2004/02/skos/core#definition> "Ein Commit ist in arknet ein Stellvertreter für eine in der Versionsverwaltung festgehaltene Code-Änderung: er führt nur deren Kennung und die Verknüpfung zu den Revisionen, die im Zusammenhang mit ihr entstanden sind. Die Code-Änderung selbst besitzt und beschreibt arknet nicht."@de,
-      "In arknet, a commit is a stand-in for a code change recorded in the version control system: it carries only that change's identifier and the link to the revisions that arose in connection with it. The code change itself is neither owned nor described by arknet."@en;
-    <http://www.w3.org/2004/02/skos/core#related> <https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f> .
-}
-
-<https://w3id.org/arknet/model/adr> {
-  <https://w3id.org/arknet/id/349d3bdf-78a3-4a14-84a1-6786f2c034c4> <https://w3id.org/arknet/architecture#optionOutcome>
-      <https://w3id.org/arknet/architecture#OptionRejected> .
+    <https://w3id.org/arknet/architecture#optionRationale> "Führt zu zwei MCP-Stacks im selben Reaktor."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
   
   <https://w3id.org/arknet/id/4ae6dfa8-1df2-4655-88ae-e5f59ae8a1c5> a <https://w3id.org/arknet/architecture#ConsideredOption>;
     <https://w3id.org/arknet/core#name> "Rahmenbibliothek mit Annotation-basierter Tool-Deklaration"@de;
@@ -5102,7 +5024,28 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/core#position> 4;
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
     <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Absturz trifft alle Projekte gleichzeitig statt nur eines."@de .
+}
+
+<https://w3id.org/arknet/model/ubiquitous-language> {
+  <https://w3id.org/arknet/id/2334e63d-bcf6-4923-9ce3-ea70d6f3b72e> a <http://www.w3.org/2004/02/skos/core#Concept>;
+    <http://purl.org/dc/terms/identifier> "TERM-23";
+    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Dataset"@de, "Dataset"@en;
+    <http://www.w3.org/2004/02/skos/core#definition> "Ein Dataset ist die Speichereinheit, in der die Ressourcen und Revisionen genau eines Projekts liegen; seine Grenze ist die Grenze, an der eine Abfrage endet. Daneben gibt es genau ein reserviertes Dataset, das kein Projekt hält, sondern die Projekt-Registry."@de,
+      "A dataset is the unit of storage that holds the resources and revisions of exactly one project; its boundary is the boundary at which a query ends. Besides these there is exactly one reserved dataset that holds no project but the project registry."@en;
+    <http://www.w3.org/2004/02/skos/core#related> <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4>,
+      <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>, <https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f> .
   
+  <https://w3id.org/arknet/id/e61c91ce-5a7b-44b1-af34-58cde80a5143> a <http://www.w3.org/2004/02/skos/core#Concept>;
+    <http://purl.org/dc/terms/identifier> "TERM-24";
+    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Commit"@de, "Commit"@en;
+    <http://www.w3.org/2004/02/skos/core#definition> "Ein Commit ist in arknet ein Stellvertreter für eine in der Versionsverwaltung festgehaltene Code-Änderung: er führt nur deren Kennung und die Verknüpfung zu den Revisionen, die im Zusammenhang mit ihr entstanden sind. Die Code-Änderung selbst besitzt und beschreibt arknet nicht."@de,
+      "In arknet, a commit is a stand-in for a code change recorded in the version control system: it carries only that change's identifier and the link to the revisions that arose in connection with it. The code change itself is neither owned nor described by arknet."@en;
+    <http://www.w3.org/2004/02/skos/core#related> <https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f> .
+}
+
+<https://w3id.org/arknet/model/adr> {
   <https://w3id.org/arknet/id/df4ecbf8-7b02-4ac4-a748-9c5712a7c272> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 5;
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
@@ -5357,67 +5300,6 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/architecture#optionRationale> "Hält die Invarianten an einer unumgehbaren Stelle und den Core frei vom Substrat. Der Preis, die Bewahrung nicht geführter Tripel im Adapter, ist lokal und benennbar."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
   
-  <https://w3id.org/arknet/id/703d024d-3d3e-4aee-be20-6e12910352bf> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die drei Folgen der Einbahnstraße verschwinden: ein Actor braucht keine Glossardefinition, er kollidiert nicht mehr mit einem gleichnamigen Fachbegriff, und ein Begriff, der eine Klasse erklärt, ist kein Actor mehr."@de .
-  
-  <https://w3id.org/arknet/id/bc36586e-e362-4e97-a281-d3dd07fb5baf> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Bestehende Kanten von Use Cases zu Actors halten den Trägerwechsel aus, weil sie seit jeher nur die opake Ressourcen-Identität halten und keinen glossarspezifischen Typ."@de .
-  
-  <https://w3id.org/arknet/id/6afa2b25-5a58-47e2-a41e-024a0f92692c> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Schnitt fügt einen weiteren Bounded Context hinzu, obwohl offen ist, ob der bestehende schon zu fein ist -- die Frage wird damit nicht beantwortet, sondern um einen Fall erweitert."@de .
-  
-  <https://w3id.org/arknet/id/1f77b28b-2a16-42ab-91d5-cf56f02b67b9> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Das Entfernen der Facette ist ein Breaking Change auf der Tool-Oberfläche und trifft die Dokumentation, die sie beschreibt."@de .
-  
-  <https://w3id.org/arknet/id/71a14096-9ab0-4a7f-a5da-f606c600f084> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 5;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Bestehende Modelle tragen Glossarbegriffe mit Actor-Typ, die bereinigt werden müssen; die Entscheidung erzwingt damit eine Löschfähigkeit für Ressourcen."@de .
-  
-  <https://w3id.org/arknet/id/83ad097b-679a-44a2-8b56-b9801ab716ed> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Actor als eigener Bounded Context mit eigenem Lebenszyklus"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Beseitigt alle drei Folgen der Einbahnstraße, ohne eine fremde Frage vorwegzunehmen."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/bae288c0-b2ea-4e58-b4a5-1c8b81ea06a9> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Facette am Glossarbegriff behalten, nur den Begriff breiter fassen"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Löst die Doppelexistenz, lässt aber alle drei Folgen der Einbahnstraße bestehen; jeder Interessenträger wäre weiterhin in das Sprachmodell des Glossars gezwungen."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/58b5bf6b-a977-4b9a-8c4a-e0954d464f58> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Actor als weiterer Ressourcentyp im Requirements-Kontext"@de;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Die Use Cases brauchen den Actor als Pflichtangabe und hängen damit am stärkeren Bedarf; die Kante wäre nur verschoben, nicht reduziert."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/366d7c54-c89c-40c5-8c53-ba4a57c9453b> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Actor als weiterer Ressourcentyp im Ubiquitous-Language-Kontext"@de;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#optionRationale> "Erhält zwar die bestehende Kanten-Topologie, aber der Kontext trüge dann zur Hälfte etwas, das seine Ubiquitous Language nicht ist."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/ef503160-0db6-4c4d-92db-293c4f7cb9de> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Einen übergreifenden Identitäts-Kontext mit dem schreibenden Agenten zusammen einführen"@de;
-    <https://w3id.org/arknet/core#position> 5;
-    <https://w3id.org/arknet/architecture#optionRationale> "Der Begriff ist bereits durch die Projekt-Identität belegt, und der Name würde die offen gelassene Frage beantworten, ob modellierter Actor und schreibender Agent dasselbe sind."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/3ce6f0a0-ee74-4685-b4a3-1bea03eb7933> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Actor als Querschnitt ohne eigenen Kontext"@de;
-    <https://w3id.org/arknet/core#position> 6;
-    <https://w3id.org/arknet/architecture#optionRationale> "Ein Querschnitt begrenzt den Actor auf Identität, Typ und Bezeichnung und gibt ihm bewusst keinen eigenen Lebenszyklus. Genau der eigene Lebenszyklus mit eigener Anlage ist aber das, was die drei Folgen der Einbahnstraße beseitigt -- ein Querschnitt ohne ihn ließe den Actor weiter am Glossarbegriff entstehen und löste keine der drei. Hinzu kommt, dass ein Querschnitt die teuerste Beziehungsform ist: jede Änderung trifft alle Konsumenten."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
   <https://w3id.org/arknet/id/3eed5c9d-8e4d-4ba3-9208-5645e388f193> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 1;
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
@@ -5489,99 +5371,6 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/architecture#optionRationale> "Mit der Herkunftskante brauchen auch die Requirements sie; wo immer sie läge, wäre der andere Konsument zu Gast. Dasselbe Argument stand bereits beim Actor gegen den Requirements-Kontext."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
   
-  <https://w3id.org/arknet/id/5cb7c520-02cc-4909-9762-cd7636e719e2> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Scope-Fragen haben ein benanntes Zielbild statt einer Momentaufnahme."@de .
-  
-  <https://w3id.org/arknet/id/1c227b81-59cd-4780-a99e-74eee7c346ad> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Jede Erweiterung hat einen vorgesehenen Ort, und ihre Nachbarn sind bekannt."@de .
-  
-  <https://w3id.org/arknet/id/0bec732c-a360-4f4f-b503-052dc580bddf> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der wiederkehrende Streit, ob etwas noch zum Werkzeug gehört, wird zur Reihenfolgefrage."@de .
-  
-  <https://w3id.org/arknet/id/81be15bf-d4eb-48a3-8515-5d2df062213a> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Das Zielbild ist um ein Vielfaches größer als das Gebaute, was die Versuchung erhöht, Ungebautes nach außen als vorhanden oder zugesagt darzustellen -- Dokumentation und Produktbeschreibung müssen den Ausschnitt benennen, nicht das Zielbild."@de .
-  
-  <https://w3id.org/arknet/id/95f55e4a-6916-48b9-9746-236c8f0387c4> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 5;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Teil der Kontexte ist unbelegt in dem Sinne, dass für sie weder ein Nutzer noch ein Anwendungsfall spricht; sie sind eine Absicht, keine Zusage."@de .
-  
-  <https://w3id.org/arknet/id/24fb5a1a-4c9d-4027-a024-497ccef41ba5> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Scope weiter am Bauzustand messen"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Erklärt eine Momentaufnahme zur Grenze und macht jede Erweiterung zum Rechtfertigungsfall."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/bc055c52-5296-4b1a-b39d-7a51f60b62fa> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Nur die tatsächlich gebauten Kontexte benennen"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Dann fehlt genau die Information, die eine Reihenfolge ermöglicht."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/542f6e6c-c09d-47cd-830b-ffbc8dea9273> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Zielschnitt an eine einzelne Norm binden"@de;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Keine einzelne Norm deckt Domänenmodellierung und Entscheidungsrecords zugleich ab; eine davon zum alleinigen Ziel zu erklären, hieße andere Kontexte aufzugeben."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/9de7ef2f-7cfc-422f-adf3-fd10727036dc> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Benannter Zielschnitt über den ganzen Lifecycle, gegen mehrere Normen und Literatur geprüft"@de;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#optionRationale> "Liefert ein Kriterium für Reihenfolge und Zugehörigkeit, ohne sich einer einzelnen Norm unterzuordnen."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/dfb7c49e-78ca-401d-a175-95b6cffdc2cc> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die dichtesten Cross-Kontext-Kanten werden zu kontextinternen Kanten und brauchen keine Gateway-Konstruktion mehr."@de .
-  
-  <https://w3id.org/arknet/id/1b2188e8-5dd1-4797-ba1a-d0288f6f7a0f> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Schnitt läuft auf das Zielbild zu, statt quer dazu zu liegen -- künftige Kontexte werden angebaut, nicht eingepasst."@de .
-  
-  <https://w3id.org/arknet/id/46922b0a-1fdb-4489-b33a-e35b81b245cc> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Umbau an Modulgrenzen und Verdrahtung, ohne dass ein Nutzer davon etwas sieht."@de .
-  
-  <https://w3id.org/arknet/id/43a22e71-eb92-43a4-a44c-64109a700fa1> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Entlastung ist nur teilweise: mehrere Kanten bleiben über eine Kontextgrenze hinweg bestehen, das Gateway-Muster wird seltener gebraucht, aber nicht überflüssig."@de .
-  
-  <https://w3id.org/arknet/id/b6be0274-be78-4300-9793-50660377acf7> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Schnitt lassen wie er ist"@de;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Er ist nicht klein, sondern fein, und läuft nicht auf das Zielbild zu."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/3770e83c-3be0-4c8e-89c0-b61cf5d324b8> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Ein einziger Kontext für alles"@de;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Zwischen der Sprache der Requirements, der Sprache des Glossars und der Sprache der Entscheidungen verlaufen echte Sprachbrüche."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/d7b7467b-5d89-46f0-8799-e6a429d80900> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Erst die Module umschneiden, Kontextgrenzen später"@de;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Dann entscheidet wieder der Bauzustand über die Grenze statt umgekehrt."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/a5c72cb9-c482-404b-b74f-9a0ad1e39c53> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Modell-Kontexte entlang des Zielschnitts schneiden"@de;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#optionRationale> "Reduziert die dichtesten Cross-Kontext-Kanten auf kontextinterne Kanten und läuft auf das Zielbild zu."@de;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
   <https://w3id.org/arknet/id/f6ef5136-262c-4382-86a1-c6c19c56121a> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 1;
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
@@ -5621,50 +5410,356 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/architecture#optionRationale> "Löst den schwersten Fehlstand ohne jede IRI-Änderung und hält den Migrationspreis für den Rest bewusst gering."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
   
-  <https://w3id.org/arknet/id/52d7fb37-7888-4d7e-987c-38dcb8745446> a <https://w3id.org/arknet/architecture#Consequence>;
+  <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
+    <http://purl.org/dc/terms/identifier> "ADR-46";
+    <https://w3id.org/arknet/core#name> "Ein benannter Lifecycle-Zielschnitt aus acht Kontexten als Scope-Rahmen"@de,
+      "A named lifecycle target cut of eight contexts as scope frame"@en;
+    <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Accepted>;
+    <https://w3id.org/arknet/architecture#adrContext> """arknet ist ein bestehendes, bereits gebautes Werkzeug -- sein Scope wurde lange nie als eigener Zielschnitt benannt, sondern ergab sich implizit aus dem, was zu einem gegebenen Zeitpunkt schon gebaut war: was existiert, gilt als drin, alles daneben als draußen. Das hat zwei Folgen:
+
+- Jede Erweiterung muss sich rechtfertigen, als wäre sie ein Ausbruch, statt als nächster Schritt behandelt zu werden.
+- Es gibt kein Kriterium für die Reihenfolge -- ob etwas als nächstes kommt oder gar nicht, sieht gleich aus.
+
+Was fehlt, ist ein Zielbild, das größer ist als das Gebaute und trotzdem benannt ist.
+
+Die erste Fassung dieser Entscheidung lagerte die Liste der Kontexte in einen Constraint aus. Das war eine Fehlklassifikation: ein Constraint ist eine von außen auferlegte, im Projekt nicht verhandelbare Randbedingung mit benannter Quelle. Der Zielschnitt ist dagegen selbst gewählt und revidierbar -- er ist der Inhalt dieser Entscheidung, nicht ihr Rahmen. Darum trägt diese Fassung die Liste selbst."""@de,
+      """arknet is an existing tool, already built -- for a long time its scope was never named as its own target cut, but arose implicitly from whatever was already built at a given point in time: what exists counts as in, everything else as out. This has two consequences:
+
+- Every extension has to justify itself as if it were a breakout, instead of being treated as the next step.
+- There is no criterion for sequencing -- whether something comes next or not at all looks the same.
+
+What is missing is a target picture that is larger than what has been built and is still named.
+
+The first version of this decision outsourced the list of contexts into a Constraint. That was a misclassification: a Constraint is a boundary condition imposed from outside, non-negotiable within the project, with a named source. The target cut, by contrast, is self-chosen and revisable -- it is the content of this decision, not its frame. That is why this version carries the list itself."""@en;
+    <https://w3id.org/arknet/architecture#adrDecision> """Der Scope-Rahmen ist ein benannter Zielschnitt über den gesamten Software-Engineering-Lifecycle, der größer ist als das Gebaute. Er umfasst acht fachliche Kontexte plus die Akteursidentität, die mehrere davon brauchen:
+
+- Product & Requirements
+- Domänenmodellierung (Ubiquitous Language, Kontexte, Kontextkarte)
+- Architektur & Entscheidungen
+- Planung & Kapazität
+- Vorgangsverwaltung
+- Verifikation & Qualität
+- Delivery & Release
+- Betrieb & Observability
+
+Außerhalb des Zielschnitts bleiben die Begriffe der gebauten Software selbst (Komponenten, Schnittstellen, Laufzeitbausteine): das Werkzeug beschreibt den Prozess, nicht das Erzeugnis. Ebenfalls außerhalb bleiben die Rituale eines konkreten Vorgehensmodells; Iteration und Arbeitsvorrat werden methodenneutral abgebildet. Welche Kontexte zu einem gegebenen Zeitpunkt realisiert sind, ist Bauzustand und steht nicht in dieser Entscheidung.
+
+Der Kern dieser Entscheidung ist die Unterscheidung \"ungebaut\" gegen \"außerhalb\": eine Scope-Frage wird damit beantwortet, wo im Zielschnitt etwas liegt und ob es an der Reihe ist -- nicht damit, ob es zum zuletzt gebauten Stand passt. Begriffe und Grenzen des Zielschnitts sind gegen etablierte Requirements-Engineering-, Architekturbeschreibungs-, Qualitäts- und Lifecycle-Normen sowie gegen die einschlägige domänengetriebene Entwurfs- und Use-Case-Literatur geprüft, keine Eigenerfindungen."""@de,
+      """The scope frame is a named target cut across the entire software engineering lifecycle that is larger than what has been built. It comprises eight subject-matter contexts plus the actor identity that several of them need:
+
+- Product & Requirements
+- Domain Modelling (Ubiquitous Language, Contexts, Context Map)
+- Architecture & Decisions
+- Planning & Capacity
+- Issue Tracking
+- Verification & Quality
+- Delivery & Release
+- Operations & Observability
+
+The concepts of the built software itself (components, interfaces, runtime building blocks) remain outside the target cut: the tool describes the process, not the product. The rituals of any particular process model likewise remain outside; iteration and backlog are represented in a method-neutral way. Which contexts are realised at a given point in time is build state and is not part of this decision.
+
+The core of this decision is the distinction between \"unbuilt\" and \"outside\": a scope question is answered by where something sits within the target cut and whether it is due -- not by whether it fits the most recently built state. The concepts and boundaries of the target cut have been checked against established requirements-engineering, architecture-description, quality and lifecycle standards, as well as against the relevant domain-driven design and use-case literature; they are not inventions of our own."""@en;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/c93aeb96-6461-4eea-b454-858ca49654fa>,
+      <https://w3id.org/arknet/id/f3feacb3-cc47-4dc1-8d28-3385d4d207c4>, <https://w3id.org/arknet/id/ae146171-f7ee-4dfa-99ca-32288fee6449>,
+      <https://w3id.org/arknet/id/2fae3c3a-e234-46c0-8d52-a8b338216d37>, <https://w3id.org/arknet/id/7dd85c12-6ecd-40e9-8233-80f35878f0de>,
+      <https://w3id.org/arknet/id/24d21e57-f108-4b65-bf74-62a5b016a745>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/b7aacd65-7871-4de8-ad51-52fec48a0f99>,
+      <https://w3id.org/arknet/id/03b8cddb-a1f0-4da0-beeb-094ed71d5154>, <https://w3id.org/arknet/id/341ad41c-5761-4602-85bc-650a6daef22d>,
+      <https://w3id.org/arknet/id/e8e501a4-0fa4-4d4a-bab2-eba17cf057f0>, <https://w3id.org/arknet/id/4a309d34-39de-4992-a280-808c2561f9e7>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/00b2a409-8b29-405e-895c-d593702817f2>,
+      <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750>, <https://w3id.org/arknet/id/6aae6fb7-69c9-47b2-8568-3ab1273e189c>,
+      <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>;
+    <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551>,
+      <https://w3id.org/arknet/id/87ab2eca-efa7-4067-be38-103b0ab6f299>, <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>,
+      <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9>;
+    <https://w3id.org/arknet/architecture#decisionDate> "2026-09-05"^^<http://www.w3.org/2001/XMLSchema#date> .
+  
+  <https://w3id.org/arknet/id/c93aeb96-6461-4eea-b454-858ca49654fa> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Scope-Fragen haben ein benanntes Zielbild statt einer Momentaufnahme."@de,
+      "Scope questions have a named target picture instead of a snapshot."@en .
+  
+  <https://w3id.org/arknet/id/f3feacb3-cc47-4dc1-8d28-3385d4d207c4> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Jede Erweiterung hat einen vorgesehenen Ort, und ihre Nachbarn sind bekannt."@de,
+      "Every extension has an intended place, and its neighbours are known."@en .
+  
+  <https://w3id.org/arknet/id/ae146171-f7ee-4dfa-99ca-32288fee6449> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der wiederkehrende Streit, ob etwas noch zum Werkzeug gehört, wird zur Reihenfolgefrage."@de,
+      "The recurring dispute over whether something still belongs to the tool becomes a question of sequencing."@en .
+  
+  <https://w3id.org/arknet/id/2fae3c3a-e234-46c0-8d52-a8b338216d37> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Das Zielbild ist um ein Vielfaches größer als das Gebaute, was die Versuchung erhöht, Ungebautes nach außen als vorhanden oder zugesagt darzustellen -- Dokumentation und Produktbeschreibung müssen den Ausschnitt benennen, nicht das Zielbild."@de,
+      "The target picture is many times larger than what has been built, which increases the temptation to present what has not been built to the outside world as present or promised -- documentation and product description must name the excerpt, not the target picture."@en .
+  
+  <https://w3id.org/arknet/id/7dd85c12-6ecd-40e9-8233-80f35878f0de> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Kontext, für den weder ein Nutzer noch ein Anwendungsfall spricht, ist eine Absicht, keine Zusage."@de,
+      "A context supported by neither a user nor a use case is an intention, not a promise."@en .
+  
+  <https://w3id.org/arknet/id/24d21e57-f108-4b65-bf74-62a5b016a745> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 6;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Liste der Kontexte ist Teil der Entscheidung und ändert sich nur durch eine Nachfolgeentscheidung, nicht durch Korrektur einer Randbedingung."@de,
+      "The list of contexts is part of the decision and changes only through a successor decision, not through the correction of a constraint."@en .
+  
+  <https://w3id.org/arknet/id/b7aacd65-7871-4de8-ad51-52fec48a0f99> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Scope weiter am Bauzustand messen"@de, "Continue to measure scope against build state"@en;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Erklärt eine Momentaufnahme zur Grenze und macht jede Erweiterung zum Rechtfertigungsfall."@de,
+      "Declares a snapshot to be the boundary and turns every extension into a case requiring justification."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/03b8cddb-a1f0-4da0-beeb-094ed71d5154> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Nur die tatsächlich gebauten Kontexte benennen"@de,
+      "Name only the contexts actually built"@en;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Dann fehlt genau die Information, die eine Reihenfolge ermöglicht."@de,
+      "Then exactly the information that would enable a sequencing is missing."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/341ad41c-5761-4602-85bc-650a6daef22d> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Zielschnitt an eine einzelne Norm binden"@de,
+      "Tie the target cut to a single standard"@en;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Keine einzelne Norm deckt Domänenmodellierung und Entscheidungsrecords zugleich ab; eine davon zum alleinigen Ziel zu erklären, hieße andere Kontexte aufzugeben."@de,
+      "No single standard covers domain modelling and decision records at the same time; declaring one of them the sole target would mean abandoning the other contexts."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/e8e501a4-0fa4-4d4a-bab2-eba17cf057f0> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Liste der Kontexte als Constraint neben der Entscheidung führen"@de,
+      "Keep the list of contexts as a Constraint alongside the decision"@en;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Ein Constraint ist von außen auferlegt und nicht verhandelbar; der Zielschnitt ist selbst gewählt. Die Aufteilung trennt die Entscheidung von ihrem Inhalt und benennt ihn falsch."@de,
+      "A Constraint is imposed from outside and not negotiable; the target cut is self-chosen. Splitting it this way separates the decision from its content and misnames it."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/4a309d34-39de-4992-a280-808c2561f9e7> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Benannter Zielschnitt über den ganzen Lifecycle, gegen mehrere Normen und Literatur geprüft, mit der Kontextliste in der Entscheidung selbst"@de,
+      "A named target cut across the whole lifecycle, checked against several standards and literature, with the list of contexts in the decision itself"@en;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#optionRationale> "Liefert ein Kriterium für Reihenfolge und Zugehörigkeit, ohne sich einer einzelnen Norm unterzuordnen, und hält Entscheidung und Inhalt zusammen."@de,
+      "Provides a criterion for sequencing and belonging without subordinating itself to a single standard, and keeps decision and content together."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/c7e4c7c5-3638-4637-ad47-adfa6c9249c9> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Cores bleiben klein und frei von Infrastrukturbegriffen."@de .
+  
+  <https://w3id.org/arknet/id/f027da92-c93b-4023-9cda-c1e611867452> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Wenn Mehrbenutzerbetrieb je kommt, ist er ein echter Umbau, kein Einschalten."@de .
+  
+  <https://w3id.org/arknet/id/112eab58-9b23-48a2-98e7-dcdcba03aa90> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Team-/Auth-Begriffe schon jetzt in den Cores vorsehen"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Ein Modell für einen Betrieb, den es nicht gibt."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/f00b72d9-559d-4b9f-80e4-d727715eb4d1> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Single-User-Client ohne Auth-/Team-Begriff in den Cores"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Hält die Cores klein und frei von Spekulation über einen Betrieb, der nicht existiert."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/8b3c0f38-07bb-47ce-aabd-d01cb8eac3aa> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die dichtesten Cross-Kontext-Kanten werden zu kontextinternen Kanten und brauchen keine Gateway-Konstruktion mehr."@de .
+  
+  <https://w3id.org/arknet/id/67952951-957c-4a06-8519-4b4448002d1b> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Schnitt läuft auf das Zielbild zu, statt quer dazu zu liegen -- künftige Kontexte werden angebaut, nicht eingepasst."@de .
+  
+  <https://w3id.org/arknet/id/07116694-6bcb-4a98-9f23-0cb8330b4562> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Umbau an Modulgrenzen und Verdrahtung, ohne dass ein Nutzer davon etwas sieht."@de .
+  
+  <https://w3id.org/arknet/id/7e13192f-6cd4-4be0-bb4b-527e084b83f7> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Entlastung ist nur teilweise: mehrere Kanten bleiben über eine Kontextgrenze hinweg bestehen, das Gateway-Muster wird seltener gebraucht, aber nicht überflüssig."@de .
+  
+  <https://w3id.org/arknet/id/c4cf11ac-79f7-41df-8cbe-24731c2a655e> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Schnitt lassen wie er ist"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Er ist nicht klein, sondern fein, und läuft nicht auf das Zielbild zu."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/2a97e1a6-154f-437c-a9d7-dbc4efc4e3ec> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein einziger Kontext für alles"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Zwischen der Sprache der Requirements, der Sprache des Glossars und der Sprache der Entscheidungen verlaufen echte Sprachbrüche."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/3e6e2575-5ea1-4b54-9dc1-a49e487ec3e7> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Erst die Module umschneiden, Kontextgrenzen später"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Dann entscheidet wieder der Bauzustand über die Grenze statt umgekehrt."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/9144fd76-307e-48b6-8288-0dc058263e61> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Modell-Kontexte entlang des Zielschnitts schneiden"@de;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Reduziert die dichtesten Cross-Kontext-Kanten auf kontextinterne Kanten und läuft auf das Zielbild zu."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/0213db77-8961-48aa-9ef9-85923d4581bc> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 1;
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
     <https://w3id.org/arknet/architecture#consequenceStatement> "Ändert das Versionskontroll-, CI- oder Monitoring-System sein Modell, ist nur die Übersetzung am Rand des betroffenen Kontexts anzupassen, kein eigener Kontext im Zielschnitt."@de .
   
-  <https://w3id.org/arknet/id/f9af1d38-a447-42eb-b3a9-7f1d2fd7f301> a <https://w3id.org/arknet/architecture#Consequence>;
+  <https://w3id.org/arknet/id/39072b13-cc3c-4d21-803a-2bd503d6b87d> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 2;
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
     <https://w3id.org/arknet/architecture#consequenceStatement> "Jeder Kontext behält seine eigene Sprache, statt die Begriffe des Versionskontroll- oder Monitoring-Systems zu übernehmen."@de .
   
-  <https://w3id.org/arknet/id/07f5e6f4-0f6e-4490-a06a-f1d034ee2718> a <https://w3id.org/arknet/architecture#Consequence>;
+  <https://w3id.org/arknet/id/a6e72ac9-851e-4b1a-a21c-eaae33258381> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 3;
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
     <https://w3id.org/arknet/architecture#consequenceStatement> "Brauchen zwei Kontexte dasselbe fremde Konzept (Verifikation & Qualität und Delivery & Release lesen beide vom CI-System), übersetzt jeder für sich. Diese Duplikation ist der Preis dafür, dass die beiden Kontexte nicht aneinander hängen."@de .
   
-  <https://w3id.org/arknet/id/673fb8ca-0847-4385-8714-9ad020416ac5> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+  <https://w3id.org/arknet/id/8eb5cd53-2f4f-44be-90d3-1ab775023151> a <https://w3id.org/arknet/architecture#ConsideredOption>;
     <https://w3id.org/arknet/core#name> "Eigener Bounded Context je fremdem System"@de;
     <https://w3id.org/arknet/core#position> 1;
     <https://w3id.org/arknet/architecture#optionRationale> "arknet führte eine Kopie eines Modells (etwa \"Codebasis\"), das es nicht besitzt und dessen Änderungen es nicht kontrolliert."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
   
-  <https://w3id.org/arknet/id/e6f1907a-55c8-4436-bffa-d3104ddc048d> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+  <https://w3id.org/arknet/id/22c533be-0584-483e-8324-501462d3cd0e> a <https://w3id.org/arknet/architecture#ConsideredOption>;
     <https://w3id.org/arknet/core#name> "Fremde Konzepte unübersetzt übernehmen"@de;
     <https://w3id.org/arknet/core#position> 2;
     <https://w3id.org/arknet/architecture#optionRationale> "Die Begriffe des Versionskontroll-, CI- oder Monitoring-Systems stünden direkt in arknets Kontexten und verdrängten deren eigene Sprache."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
   
-  <https://w3id.org/arknet/id/f2e63325-4d85-4a70-a1d9-af7b4b87c161> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+  <https://w3id.org/arknet/id/bbcf60c6-8c62-4dc2-9753-564e25ab8cf3> a <https://w3id.org/arknet/architecture#ConsideredOption>;
     <https://w3id.org/arknet/core#name> "Übersetzung im konsumierenden Kontext (Anti-Corruption Layer)"@de;
     <https://w3id.org/arknet/core#position> 3;
     <https://w3id.org/arknet/architecture#optionRationale> "Hält das fremde Modell draußen und die Sprache des Kontexts intakt; die Duplikation bei mehreren Konsumenten wird in Kauf genommen."@de;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/f82021f1-7005-4528-b692-1056f5775cbd> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die drei Folgen der Einbahnstraße verschwinden: ein Actor braucht keine Glossardefinition, er kollidiert nicht mehr mit einem gleichnamigen Fachbegriff, und ein Begriff, der eine Klasse erklärt, ist kein Actor mehr."@de .
+  
+  <https://w3id.org/arknet/id/eb1ce3ca-3680-4c66-bf38-a2657de3eef7> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Bestehende Kanten von Use Cases zu Actors halten den Trägerwechsel aus, weil sie seit jeher nur die opake Ressourcen-Identität halten und keinen glossarspezifischen Typ."@de .
+  
+  <https://w3id.org/arknet/id/9be9c412-2825-45cf-97c8-9bcb270dec7b> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Schnitt fügt einen weiteren Bounded Context hinzu, obwohl offen ist, ob der bestehende schon zu fein ist -- die Frage wird damit nicht beantwortet, sondern um einen Fall erweitert."@de .
+  
+  <https://w3id.org/arknet/id/bbab5e21-61ba-4ad0-82c4-e70b391bfe33> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Das Entfernen der Facette ist ein Breaking Change auf der Tool-Oberfläche und trifft die Dokumentation, die sie beschreibt."@de .
+  
+  <https://w3id.org/arknet/id/8fe6721b-30ca-4fe6-9139-2fba3477e1d5> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Bestehende Modelle tragen Glossarbegriffe mit Actor-Typ, die bereinigt werden müssen; die Entscheidung erzwingt damit eine Löschfähigkeit für Ressourcen."@de .
+  
+  <https://w3id.org/arknet/id/96898e91-e2a6-4f60-9e43-3ce289f35335> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Actor als eigener Bounded Context mit eigenem Lebenszyklus"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Beseitigt alle drei Folgen der Einbahnstraße, ohne eine fremde Frage vorwegzunehmen."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/de458d8c-14f2-4ad0-9ff3-021923313059> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Facette am Glossarbegriff behalten, nur den Begriff breiter fassen"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Löst die Doppelexistenz, lässt aber alle drei Folgen der Einbahnstraße bestehen; jeder Interessenträger wäre weiterhin in das Sprachmodell des Glossars gezwungen."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/b4d98ad4-d2df-4206-a63f-f68806045d55> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Actor als weiterer Ressourcentyp im Requirements-Kontext"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Die Use Cases brauchen den Actor als Pflichtangabe und hängen damit am stärkeren Bedarf; die Kante wäre nur verschoben, nicht reduziert."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/f1577584-28be-4849-9a21-b24626dba011> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Actor als weiterer Ressourcentyp im Ubiquitous-Language-Kontext"@de;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Erhält zwar die bestehende Kanten-Topologie, aber der Kontext trüge dann zur Hälfte etwas, das seine Ubiquitous Language nicht ist."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/c5f15406-ee0f-4cd1-80a9-dd801d78938b> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Einen übergreifenden Identitäts-Kontext mit dem schreibenden Agenten zusammen einführen"@de;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#optionRationale> "Der Begriff ist bereits durch die Projekt-Identität belegt, und der Name würde die offen gelassene Frage beantworten, ob modellierter Actor und schreibender Agent dasselbe sind."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/29e84774-598e-4ed0-b59e-b3408b1032ea> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Actor als Querschnitt ohne eigenen Kontext"@de;
+    <https://w3id.org/arknet/core#position> 6;
+    <https://w3id.org/arknet/architecture#optionRationale> "Ein Querschnitt begrenzt den Actor auf Identität, Typ und Bezeichnung und gibt ihm bewusst keinen eigenen Lebenszyklus. Genau der eigene Lebenszyklus mit eigener Anlage ist aber das, was die drei Folgen der Einbahnstraße beseitigt -- ein Querschnitt ohne ihn ließe den Actor weiter am Glossarbegriff entstehen und löste keine der drei. Hinzu kommt, dass ein Querschnitt die teuerste Beziehungsform ist: jede Änderung trifft alle Konsumenten."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/c4e6c926-d373-4c46-ae74-db73ce0002ed> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Scope-Fragen haben ein benanntes Zielbild statt einer Momentaufnahme."@de .
+  
+  <https://w3id.org/arknet/id/8694c4de-8da6-424f-af42-808a591ec2c8> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Jede Erweiterung hat einen vorgesehenen Ort, und ihre Nachbarn sind bekannt."@de .
+  
+  <https://w3id.org/arknet/id/d4f28cef-a5d5-444f-bf76-6eca034cfa11> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der wiederkehrende Streit, ob etwas noch zum Werkzeug gehört, wird zur Reihenfolgefrage."@de .
+  
+  <https://w3id.org/arknet/id/67a5b657-fd32-4e5e-b9c7-fc1bdc6afd6d> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Das Zielbild ist um ein Vielfaches größer als das Gebaute, was die Versuchung erhöht, Ungebautes nach außen als vorhanden oder zugesagt darzustellen -- Dokumentation und Produktbeschreibung müssen den Ausschnitt benennen, nicht das Zielbild."@de .
+  
+  <https://w3id.org/arknet/id/bd6629fe-e070-4c59-931f-408e83a008c6> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Teil der Kontexte ist unbelegt in dem Sinne, dass für sie weder ein Nutzer noch ein Anwendungsfall spricht; sie sind eine Absicht, keine Zusage."@de .
+  
+  <https://w3id.org/arknet/id/ae111feb-3c9c-4e7f-b39f-a9d934d85ddd> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Scope weiter am Bauzustand messen"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Erklärt eine Momentaufnahme zur Grenze und macht jede Erweiterung zum Rechtfertigungsfall."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/6ccbbb67-639f-41a4-b0c3-beaedab6b0b5> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Nur die tatsächlich gebauten Kontexte benennen"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Dann fehlt genau die Information, die eine Reihenfolge ermöglicht."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/12deafac-0a34-49b9-ba82-5a142538d4b0> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Zielschnitt an eine einzelne Norm binden"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Keine einzelne Norm deckt Domänenmodellierung und Entscheidungsrecords zugleich ab; eine davon zum alleinigen Ziel zu erklären, hieße andere Kontexte aufzugeben."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/fc21e0d5-9dbd-49cb-891a-96cd166a2546> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Benannter Zielschnitt über den ganzen Lifecycle, gegen mehrere Normen und Literatur geprüft"@de;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Liefert ein Kriterium für Reihenfolge und Zugehörigkeit, ohne sich einer einzelnen Norm unterzuordnen."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
 }
 
 <https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/activity/84bace5d-1e19-48c9-8c24-e1be7ba03940> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/81eea6bc-7092-44cd-b410-35104c4d734c> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/84bace5d-1e19-48c9-8c24-e1be7ba03940>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T15:00:07.561925302Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/61a3a524-433d-4605-9bfc-04b4fd0da20c> .
-  
   <https://w3id.org/arknet/activity/c16b8b87-84f1-44fa-a6cd-ac21de47afe2> a <http://www.w3.org/ns/prov#Activity> .
   
   <https://w3id.org/arknet/revision/94c71c1a-64b0-4dbd-8fd0-6d2493cdbede> a <http://www.w3.org/ns/prov#Entity>,
@@ -5819,6 +5914,127 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/df885d62-c9be-43b3-b1e8-6c94c60927ec>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T15:12:43.088041653Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/95d9201f-27e6-44d2-aa5a-134eabc6cbaa> .
+  
+  <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/ead91a4c-12ae-4a6a-beb3-e2e5638c6e93> .
+  
+  <https://w3id.org/arknet/activity/217ee04a-62a3-407b-8115-73578570d460> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/564eac14-f0e8-4c32-985e-7dce47b10ecb> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/217ee04a-62a3-407b-8115-73578570d460>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:51:01.031923790Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/3e58d5d4-4bc7-457e-b9df-0c29c6d5178e> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/c8eb4a17-7d06-4315-b1d0-97f4e0678c3e> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/3e58d5d4-4bc7-457e-b9df-0c29c6d5178e>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:51:30.771599282Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/564eac14-f0e8-4c32-985e-7dce47b10ecb> .
+  
+  <https://w3id.org/arknet/activity/8d66e969-8818-4fe2-9b3b-365e19e4decf> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/c33bd4ba-7459-4baa-91d9-dd05bcd36583> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/8d66e969-8818-4fe2-9b3b-365e19e4decf>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:52:40.959532719Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/c8eb4a17-7d06-4315-b1d0-97f4e0678c3e> .
+  
+  <https://w3id.org/arknet/activity/f7ef96a4-85d4-406d-a5cf-76c4c257a195> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/ead91a4c-12ae-4a6a-beb3-e2e5638c6e93> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/f7ef96a4-85d4-406d-a5cf-76c4c257a195>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:54:52.780044587Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/c33bd4ba-7459-4baa-91d9-dd05bcd36583> .
+  
+  <https://w3id.org/arknet/activity/51ad021a-c9c2-46ef-919a-09924c8e4cca> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/9034f743-0cc5-42d6-aa7a-ff6620370377> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/1b5ba6e9-4c93-4afd-b35a-86affc89d44c>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/51ad021a-c9c2-46ef-919a-09924c8e4cca>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:54:59.814781463Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/937b431a-0ef3-48ed-9981-afa343a24d58> .
+  
+  <https://w3id.org/arknet/activity/d684b57b-7875-4e6c-87b2-7839efd82097> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/522f427a-eaec-4e9d-82fe-f5ea6ea51417> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/00b2a409-8b29-405e-895c-d593702817f2>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/d684b57b-7875-4e6c-87b2-7839efd82097>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:55:12.071213961Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/f9a12726-ecf6-4f26-a3f6-8a9fa5e185c9> .
+  
+  <https://w3id.org/arknet/activity/9de2cd40-dfb2-4893-9173-a83cdc562636> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/f2a23e5b-d8ad-4967-9786-79a37dd9cc54> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/9de2cd40-dfb2-4893-9173-a83cdc562636>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:55:13.921028254Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/6c991026-6c7c-429b-8731-d4c01ef70992> .
+  
+  <https://w3id.org/arknet/activity/82edcd5a-41c0-4bfc-bb6e-666a985fe011> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/dec9b490-bb48-461b-bc88-0d6229cd4210> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/6aae6fb7-69c9-47b2-8568-3ab1273e189c>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/82edcd5a-41c0-4bfc-bb6e-666a985fe011>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:55:15.922367048Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/bf99cc86-e438-4405-aec2-fe2d9852d596> .
+  
+  <https://w3id.org/arknet/activity/a9ced384-f9c2-4313-bc3a-781b5519a23b> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/dd8c88ac-8ae8-457f-9104-fdb34d0d557c> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/a9ced384-f9c2-4313-bc3a-781b5519a23b>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:55:17.756075764Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/09c7df05-88b1-4d94-961a-41b82cb0bbba> .
+  
+  <https://w3id.org/arknet/activity/92f76069-adb9-460e-97c0-913c315d4ce9> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/bd853662-ae04-4b93-8706-0207dc350415> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/1b5ba6e9-4c93-4afd-b35a-86affc89d44c>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/92f76069-adb9-460e-97c0-913c315d4ce9>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:55:41.281667034Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/9034f743-0cc5-42d6-aa7a-ff6620370377> .
+  
+  <https://w3id.org/arknet/id/e3168f4d-6994-463c-8acf-732a873ec354> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/a069bc8b-d1b0-42ea-ab2b-cc390f696871> .
+  
+  <https://w3id.org/arknet/activity/5d78da52-1df3-4985-9be9-f743198960ed> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/cc216c09-a179-4211-9b64-55de9c3c9573> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/e3168f4d-6994-463c-8acf-732a873ec354>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/5d78da52-1df3-4985-9be9-f743198960ed>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:57:44.015302773Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/68a88841-cf1c-4fac-9478-d5282053c757> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/b28cb8f1-8419-4a1d-89ac-4494c07a615e> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/e3168f4d-6994-463c-8acf-732a873ec354>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/68a88841-cf1c-4fac-9478-d5282053c757>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:57:59.234734982Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/cc216c09-a179-4211-9b64-55de9c3c9573> .
+  
+  <https://w3id.org/arknet/activity/210df172-130a-4086-8fe8-eb6fa08912ff> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/a069bc8b-d1b0-42ea-ab2b-cc390f696871> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/e3168f4d-6994-463c-8acf-732a873ec354>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/210df172-130a-4086-8fe8-eb6fa08912ff>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-05T20:58:00.811672092Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/b28cb8f1-8419-4a1d-89ac-4494c07a615e> .
 }
 
 <https://w3id.org/arknet/model/requirements> {
@@ -5850,19 +6066,58 @@ Reason: a glossary exists so that there is one word per concept. A translated la
     <https://w3id.org/arknet/requirements#position> 3;
     <https://w3id.org/arknet/requirements#criterionText> "Die Beurteilung, ob ein Sprachbruch vorliegt, bleibt beim Nutzer; das Audit legt den Beleg vor und schreibt keinen Kontext ohne Bestätigung."@de,
       "Judging whether a language break exists stays with the user; the audit presents the evidence and writes no context without confirmation."@en .
+  
+  <https://w3id.org/arknet/id/e3168f4d-6994-463c-8acf-732a873ec354> a <https://w3id.org/arknet/requirements#FunctionalRequirement>;
+    <http://purl.org/dc/terms/identifier> "FR-10";
+    <http://purl.org/dc/terms/title> "Term trägt in jeder Sprache dasselbe Label"@de,
+      "A term carries the same label in every language"@en;
+    <http://purl.org/dc/terms/description> "Das System muss das Label eines Terms unter jedem geführten Sprachtag mit demselben Wort führen; übersetzt wird allein die Definition. Welches Wort das ist, entscheidet die Sprache, in der die Fachgemeinschaft den Begriff führt, nicht die Standardsprache des Projekts."@de,
+      "The system shall keep the label of a term the same word under every language tag it carries; only the definition is translated. Which word that is, is decided by the language in which the domain community uses the term, not by the project's default language."@en;
+    <https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed>;
+    <https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#ShouldHave>;
+    <https://w3id.org/arknet/requirements#acceptanceCriterion> <https://w3id.org/arknet/id/0e75b0d1-42aa-466c-890e-81088f74ef20>,
+      <https://w3id.org/arknet/id/01384c50-5b32-421d-98d0-e74b1101367f>, <https://w3id.org/arknet/id/9c88423d-8ab2-406b-b2ab-189ea54b9899>,
+      <https://w3id.org/arknet/id/e66e3cf5-77b9-43b6-b3ff-982fde80f9e2>;
+    <https://w3id.org/arknet/requirements#usesTerm> <https://w3id.org/arknet/id/c2df3868-3a66-46ca-8621-677374d02aa6>;
+    <https://w3id.org/arknet/requirements#rationale> """Ein Glossar besteht, damit es je Begriff ein Wort gibt. Ein übersetztes Label erzeugt zwei Wörter für denselben Begriff, und ein Leser kann nicht erkennen, ob das ein Begriff ist oder zwei. Die Erkennung von Erwähnungen in Prosa löst einen Begriff über ein Label zur Zeit auf; ein einziges Wort trifft in jeder Sprachfassung, ein übersetztes nur in seiner eigenen. Preis: Ein Leser, dessen Sprache das Label nicht ist, erschließt den Namen erst aus der Definition.
+
+Die Regel ist eine selbst gewählte Modellierungsregel dieses Werkzeugs, keine von außen auferlegte Randbedingung; sie war zuvor als Constraint erfasst und ist darum in ein Requirement überführt."""@de,
+      """A glossary exists so that there is one word per concept. A translated label produces two words for the same concept, and a reader cannot tell whether that is one concept or two. Mention detection in prose resolves a concept through one label at a time; a single word matches in every language version, a translated one only in its own. Price: a reader whose language the label is not in learns the name only from the definition.
+
+The rule is a modelling rule this tool chose for itself, not a boundary condition imposed from outside; it was previously recorded as a constraint and has therefore been moved into a requirement."""@en .
+  
+  <https://w3id.org/arknet/id/0e75b0d1-42aa-466c-890e-81088f74ef20> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 1;
+    <https://w3id.org/arknet/requirements#criterionText> "Das Anlegen oder Korrigieren einer Definition in einer weiteren Sprache lässt das Label unverändert und erzeugt kein zweites, abweichendes Label."@de,
+      "Adding or correcting a definition in a further language leaves the label unchanged and creates no second, differing label."@en .
+  
+  <https://w3id.org/arknet/id/01384c50-5b32-421d-98d0-e74b1101367f> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 2;
+    <https://w3id.org/arknet/requirements#criterionText> "Ein Schreibaufruf, der unter einem Sprachtag ein Label mitgibt, das vom bestehenden Label des Terms abweicht, wird mit einer erklärenden Meldung abgelehnt, die das bestehende Label nennt."@de,
+      "A write call that supplies, under some language tag, a label differing from the term's existing label is rejected with an explanatory message that names the existing label."@en .
+  
+  <https://w3id.org/arknet/id/9c88423d-8ab2-406b-b2ab-189ea54b9899> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 3;
+    <https://w3id.org/arknet/requirements#criterionText> "Eine Korrektur des Labels gilt für jeden geführten Sprachtag des Terms zugleich; nach ihr trägt der Term unter jedem Sprachtag das neue Wort."@de,
+      "A correction of the label applies to every language tag the term carries at once; afterwards the term carries the new word under every language tag."@en .
+  
+  <https://w3id.org/arknet/id/e66e3cf5-77b9-43b6-b3ff-982fde80f9e2> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 4;
+    <https://w3id.org/arknet/requirements#criterionText> "Das gezielte Nachschlagen eines Terms liefert unabhängig von der angeforderten Anzeigesprache dasselbe Label."@de,
+      "Looking up a term returns the same label regardless of the requested display language."@en .
 }
 
 <https://w3id.org/arknet/model/export-metadata> {
-    <https://w3id.org/arknet/export/747f7010-54f2-479b-9ea8-3ae1e997ec18>
+    <https://w3id.org/arknet/export/2f81a008-647e-455d-95f7-92f17bbf9f70>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#Activity> ;
-        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-05T15:12:46Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
+        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-05T20:58:22Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
         <http://www.w3.org/ns/prov#wasAssociatedWith> <https://w3id.org/arknet/agent/arknet> ;
         <http://www.w3.org/ns/prov#used> <https://w3id.org/arknet/core> , <https://w3id.org/arknet/ddd> , <https://w3id.org/arknet/process> , <https://w3id.org/arknet/requirements> , <https://w3id.org/arknet/architecture> , <https://w3id.org/arknet/provenance> , <https://w3id.org/arknet/project> .
 
     <https://w3id.org/arknet/agent/arknet>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#SoftwareAgent> ;
-        <http://www.w3.org/2002/07/owl#versionInfo> "d5d26189d946b988d127c9954eb4110691d2ebe9" ;
-        <http://purl.org/dc/terms/created> "2026-09-05T13:15:46Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+        <http://www.w3.org/2002/07/owl#versionInfo> "56a91a2ceff42f23d07b74784160712460afa3e8" ;
+        <http://purl.org/dc/terms/created> "2026-09-05T20:42:12Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
 
     <https://w3id.org/arknet/core>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ;
