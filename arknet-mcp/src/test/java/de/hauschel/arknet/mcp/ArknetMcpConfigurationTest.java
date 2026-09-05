@@ -127,7 +127,7 @@ class ArknetMcpConfigurationTest {
 
                     ProjectService service = context.getBean(ProjectService.class);
                     Anchor anchor = new Anchor("/home/somebody/DEV/arknet", AnchorType.PATH);
-                    Project registered = service.register("arknet", anchor, null, null, null);
+                    Project registered = service.register("arknet", anchor, null, null, null, null);
 
                     assertThat(service.list()).containsExactly(registered);
                 });
@@ -148,7 +148,7 @@ class ArknetMcpConfigurationTest {
 
                     ProjectService service = context.getBean(ProjectService.class);
                     Anchor anchor = new Anchor("/home/somebody/DEV/arknet", AnchorType.PATH);
-                    service.register("arknet", anchor, null, null, null);
+                    service.register("arknet", anchor, null, null, null, null);
 
                     DatasetLifecycle lifecycle = context.getBean(DatasetLifecycle.class);
                     assertThat(graphSize(lifecycle, ProjectId.RESERVED_SYSTEM_DATASET,
@@ -176,7 +176,7 @@ class ArknetMcpConfigurationTest {
 
                     ProjectService service = context.getBean(ProjectService.class);
                     Anchor anchor = new Anchor("/home/somebody/DEV/arknet", AnchorType.PATH);
-                    Project registered = service.register("arknet", anchor, null, null, null);
+                    Project registered = service.register("arknet", anchor, null, null, null, null);
 
                     DatasetLifecycle lifecycle = context.getBean(DatasetLifecycle.class);
                     assertThat(graphSize(lifecycle, registered.id().value(),
@@ -199,7 +199,7 @@ class ArknetMcpConfigurationTest {
 
                     ProjectService service = context.getBean(ProjectService.class);
                     Anchor anchor = new Anchor("/home/somebody/DEV/arknet", AnchorType.PATH);
-                    Project registered = service.register("arknet", anchor, null, null, null);
+                    Project registered = service.register("arknet", anchor, null, null, null, null);
 
                     DatasetLifecycle lifecycle = context.getBean(DatasetLifecycle.class);
                     assertThat(graphSize(lifecycle, registered.id().value(),
@@ -294,7 +294,7 @@ class ArknetMcpConfigurationTest {
                     assertThat(context).hasNotFailed();
                     ProjectService projects = context.getBean(ProjectService.class);
                     Project registered = projects.register(
-                            "arknet", new Anchor("/home/a/DEV/arknet", AnchorType.PATH), null, null, null);
+                            "arknet", new Anchor("/home/a/DEV/arknet", AnchorType.PATH), null, null, null, null);
 
                     ProjectResolver resolver = context.getBean(ProjectResolver.class);
 

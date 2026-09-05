@@ -72,7 +72,8 @@ final class RegisteredAnchorProjectResolver implements ProjectResolver {
         }
         try {
             final Project project = projects.resolve(new Anchor(anchor, AnchorType.PATH));
-            return new ResolvedProject(project.id(), project.defaultLanguage());
+            return new ResolvedProject(project.id(), project.defaultLanguage(),
+                    project.maintainedLanguages());
         } catch (final UnknownAnchorException e) {
             // Translated at the port boundary rather than propagated: the four model bounded
             // contexts see only the kernel's port, and an exception from arknet-project's domain

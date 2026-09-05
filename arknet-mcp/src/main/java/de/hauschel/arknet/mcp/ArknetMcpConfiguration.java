@@ -34,6 +34,7 @@ import de.hauschel.arknet.mcp.report.RequirementCards;
 import de.hauschel.arknet.mcp.report.TermCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.mcp.store.ExportMetadata;
+import de.hauschel.arknet.mcp.check.StoreCheckMcpTools;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.version.OntologyVersions;
 import de.hauschel.arknet.mcp.version.ServerVersion;
@@ -1017,6 +1018,21 @@ public class ArknetMcpConfiguration {
      * {@link #storeReportTools} instead of building a second {@link StoreReader} - one generic
      * read path, two presentations over it (a full-snapshot digest vs. a graph traversal).
      */
+    /**
+     * The one checking tool ({@code store_check}, kogn-io/arknet#412). Wired here rather than into
+     * any hexagon for the same reason {@link #storeReportTools} and {@link #traceabilityMcpTools}
+     * are: it reads whatever the seven bounded contexts wrote, through the very same
+     * {@link #storeReader}/{@link #storeReportPrefixes} beans, and has no domain of its own. It
+     * takes no {@link DisplayLocale}: a language check that resolved each field to one display
+     * language would only ever see the language it resolved to, which is precisely the language it
+     * must not assume.
+     */
+    @Bean
+    StoreCheckMcpTools storeCheckMcpTools(
+            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projectResolver) {
+        return new StoreCheckMcpTools(storeReader, prefixes, projectResolver);
+    }
+
     @Bean
     TraceabilityMcpTools traceabilityMcpTools(
             final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projectResolver,

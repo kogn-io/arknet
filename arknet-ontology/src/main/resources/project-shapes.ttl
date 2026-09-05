@@ -31,7 +31,8 @@ prjshapes:ProjectShape
     sh:property prjshapes:Project-identifier ;
     sh:property prjshapes:Project-anchor ;
     sh:property prjshapes:Project-description ;
-    sh:property prjshapes:Project-defaultLanguage .
+    sh:property prjshapes:Project-defaultLanguage ;
+    sh:property prjshapes:Project-maintainedLanguage .
 
 prjshapes:Project-identifier
     a sh:PropertyShape ;
@@ -61,6 +62,13 @@ prjshapes:Project-defaultLanguage
     sh:path     arkprj:defaultLanguage ;
     sh:maxCount 1 ;
     sh:message  "At most one arkprj:defaultLanguage - a project has a single default display/write language, not several. arkprj:defaultLanguage itself is optional."@en , "Hoechstens ein arkprj:defaultLanguage - ein Projekt hat eine einzelne Standard-Anzeige-/Schreibsprache, nicht mehrere. arkprj:defaultLanguage selbst ist optional."@de ;
+    sh:severity sh:Violation .
+
+prjshapes:Project-maintainedLanguage
+    a sh:PropertyShape ;
+    sh:path     arkprj:maintainedLanguage ;
+    sh:pattern  "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$" ;
+    sh:message  "Every arkprj:maintainedLanguage must be a well-formed BCP-47 language tag (e.g. 'de', 'en', 'pt-BR'). The property is multi-valued and optional: a project may maintain several languages, or none at all - deliberately no sh:maxCount and no sh:minCount, unlike the single-valued arkprj:defaultLanguage."@en , "Jedes arkprj:maintainedLanguage muss ein wohlgeformtes BCP-47-Sprach-Tag sein (z.B. 'de', 'en', 'pt-BR'). Die Property ist mehrwertig und optional: ein Projekt darf mehrere Sprachen fuehren oder gar keine - bewusst kein sh:maxCount und kein sh:minCount, anders als beim einwertigen arkprj:defaultLanguage."@de ;
     sh:severity sh:Violation .
 
 

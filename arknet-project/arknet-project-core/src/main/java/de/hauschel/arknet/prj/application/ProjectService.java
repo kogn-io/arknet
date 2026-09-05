@@ -67,6 +67,15 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
  * ({@link ProjectSelfDescription#describe}), in that order: the registry is
  * where a duplicate anchor or label is caught, so it must run first.</p>
  *
+ * <p><strong>The two language fields are a pair, and this service is where the pair is kept
+ * consistent.</strong> {@code arkprj:defaultLanguage} (a fallback) and {@code
+ * arkprj:maintainedLanguage} (a commitment) are written through two different out-port methods and
+ * can each move on its own, so neither the domain record nor the out-adapter is in a position to
+ * see both sides of the resulting state. {@link #register} and {@link #update} therefore evaluate
+ * {@link Project#requireDefaultLanguageMaintained} against the state the call would leave behind -
+ * for {@link #update} that means after merging the omitted arguments with what was just read, and
+ * re-evaluated on every optimistic retry.</p>
+ *
  * <p><strong>Concurrency.</strong> {@link #attach} and {@link #rename} both read-modify-write via
  * {@link ProjectRegistry#findCurrentById}/{@link ProjectRegistry#compareAndUpdate} and retry the
  * whole round trip against a fresh read whenever a concurrent writer commits in between - see
@@ -142,9 +151,11 @@ public class ProjectService
 
     @Override
     public Project register(String label, Anchor anchor, String description, String descriptionLanguage,
-            String defaultLanguage) {
+            String defaultLanguage, List<String> maintainedLanguages) {
         Objects.requireNonNull(label, "label");
         Objects.requireNonNull(anchor, "anchor");
+        List<String> languages = Project.canonicalLanguages(maintainedLanguages);
+        Project.requireDefaultLanguageMaintained(defaultLanguage, languages);
         // Checked before minting anything: an anchor that already belongs to a project must
         // reject the write without spending a fresh identity, and the registry - not this
         // client-side check - remains the final authority against a race with a concurrent
@@ -155,13 +166,16 @@ public class ProjectService
         }
         ProjectId id = new ProjectId(UUID.randomUUID().toString());
         Project project = new Project(id, label, List.of(anchor));
-        // The registry write below carries description/descriptionLanguage/defaultLanguage as
-        // their own parameters (see registerRetryingOnUnattributedConflict), not through
-        // `project` itself - but the caller-visible result should reflect what was actually
-        // written, so it is built with them included here.
-        Project resultingProject = new Project(id, label, List.of(anchor), description, defaultLanguage);
+        // The registry write below carries description/descriptionLanguage/defaultLanguage/
+        // maintainedLanguages as their own parameters (see
+        // registerRetryingOnUnattributedConflict), not through `project` itself - but the
+        // caller-visible result should reflect what was actually written, so it is built with
+        // them included here.
+        Project resultingProject =
+                new Project(id, label, List.of(anchor), description, defaultLanguage, languages);
         return withProjectLock(id, () -> {
-            registerRetryingOnUnattributedConflict(project, description, descriptionLanguage, defaultLanguage);
+            registerRetryingOnUnattributedConflict(project, description, descriptionLanguage, defaultLanguage,
+                    languages);
             selfDescription.describe(resultingProject);
             return resultingProject;
         });
@@ -209,7 +223,7 @@ public class ProjectService
         }
         Project project = new Project(datasetId, label, List.of(anchor));
         return withProjectLock(datasetId, () -> {
-            registerRetryingOnUnattributedConflict(project, null, null, null);
+            registerRetryingOnUnattributedConflict(project, null, null, null, List.of());
             selfDescription.describe(project);
             return project;
         });
@@ -238,12 +252,12 @@ public class ProjectService
             }
             List<Anchor> extended = new ArrayList<>(current.anchors());
             extended.add(anchor);
-            // description/defaultLanguage carried forward unchanged: attach() never touches them,
-            // and the registry's compareAndUpdate write never re-serialises them either way (see
-            // KognioRdfProjectRegistry) - explicit here so equals()-based no-op detection and the
-            // returned Project both still reflect them faithfully.
+            // description/defaultLanguage/maintainedLanguages carried forward unchanged: attach()
+            // never touches them, and the registry's compareAndUpdate write never re-serialises
+            // them either way (see KognioRdfProjectRegistry) - explicit here so equals()-based
+            // no-op detection and the returned Project both still reflect them faithfully.
             return new Project(current.id(), current.label(), extended, current.description(),
-                    current.defaultLanguage());
+                    current.defaultLanguage(), current.maintainedLanguages());
         });
     }
 
@@ -255,7 +269,7 @@ public class ProjectService
                 current -> current.label().equals(newLabel)
                         ? current
                         : new Project(current.id(), newLabel, current.anchors(), current.description(),
-                                current.defaultLanguage()));
+                                current.defaultLanguage(), current.maintainedLanguages()));
     }
 
     @Override
@@ -293,19 +307,32 @@ public class ProjectService
      */
     @Override
     public Project update(ProjectId projectId, String description, String descriptionLanguage,
-            String defaultLanguage) {
+            String defaultLanguage, List<String> maintainedLanguages) {
         Objects.requireNonNull(projectId, "projectId");
+        // null means "leave the set alone"; an empty list means "remove it" - the one argument
+        // here whose empty value is a change rather than an omission (see UpdateProject).
+        List<String> languages =
+                maintainedLanguages == null ? null : Project.canonicalLanguages(maintainedLanguages);
         return withProjectLock(projectId, () -> {
-            if (description == null && defaultLanguage == null) {
+            if (description == null && defaultLanguage == null && languages == null) {
                 return registry.findById(projectId).orElseThrow(() -> new ProjectNotFoundException(projectId));
             }
             StaleProjectException lastConflict = null;
             for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
                 ProjectRegistry.CurrentProject current = registry.findCurrentById(projectId)
                         .orElseThrow(() -> new ProjectNotFoundException(projectId));
+                // The invariant is checked against the state this call would LEAVE BEHIND, not
+                // against either argument on its own: an omitted argument keeps the current value,
+                // so a default language moving out of an untouched set and a set moving out from
+                // under an untouched default language are the very same violation, and both have
+                // to be caught here. Re-evaluated on every retry, because the state it is checked
+                // against was just re-read.
+                Project.requireDefaultLanguageMaintained(
+                        defaultLanguage != null ? defaultLanguage : current.project().defaultLanguage(),
+                        languages != null ? languages : current.project().maintainedLanguages());
                 try {
                     Project updated = registry.updateAttributes(projectId, current.head(), description,
-                            descriptionLanguage, defaultLanguage);
+                            descriptionLanguage, defaultLanguage, languages);
                     selfDescription.describe(updated);
                     return updated;
                 } catch (StaleProjectException e) {
@@ -344,11 +371,12 @@ public class ProjectService
      *                                         unattributable conflict across every retry attempt
      */
     private void registerRetryingOnUnattributedConflict(Project project, String description,
-            String descriptionLanguage, String defaultLanguage) {
+            String descriptionLanguage, String defaultLanguage, List<String> maintainedLanguages) {
         UnattributedRegistrationConflictException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             try {
-                registry.register(project, description, descriptionLanguage, defaultLanguage);
+                registry.register(project, description, descriptionLanguage, defaultLanguage,
+                        maintainedLanguages);
                 return;
             } catch (UnattributedRegistrationConflictException e) {
                 lastConflict = e;

@@ -58,6 +58,8 @@ public interface ProjectRegistry {
      *                            {@code description} is {@code null}
      * @param defaultLanguage     the project's optional default display/write language, or
      *                            {@code null} for none
+     * @param maintainedLanguages the BCP-47 tags of the languages this project undertakes to
+     *                            maintain (kogn-io/arknet#412), or {@code null}/empty for none
      * @throws ResourceAlreadyExistsException  if a project with this identity already exists
      * @throws DuplicateProjectLabelException  if another project already carries this project's
      *                                         label
@@ -73,7 +75,8 @@ public interface ProjectRegistry {
      *                          lives in {@code arknet-persistence-support}, a module
      *                          {@code arknet-project-core} must not depend on.
      */
-    void register(Project project, String description, String descriptionLanguage, String defaultLanguage);
+    void register(Project project, String description, String descriptionLanguage, String defaultLanguage,
+            List<String> maintainedLanguages);
 
     /**
      * Finds the project a given anchor currently resolves to.
@@ -154,8 +157,8 @@ public interface ProjectRegistry {
     void compareAndUpdate(RevisionToken expectedHead, Project project);
 
     /**
-     * Corrects a project's optional {@code dcterms:description} and/or {@code
-     * arkprj:defaultLanguage}, but only if its current concurrency token still equals {@code
+     * Corrects a project's optional {@code dcterms:description}, {@code arkprj:defaultLanguage}
+     * and/or {@code arkprj:maintainedLanguage}, but only if its current concurrency token still equals {@code
      * expectedHead} - the same compare-and-set guard {@link #compareAndUpdate} runs, sharing its
      * token: {@code arkprov:head} is per-<em>resource</em>, not per-predicate, exactly like {@code
      * TermRepository#update}'s CAS shares one head across {@code prefLabel}/{@code definition}.
@@ -164,7 +167,9 @@ public interface ProjectRegistry {
      * #compareAndUpdate}, this method never touches {@code dcterms:identifier}/{@code
      * arkprj:anchor} at all, and deletes only the existing {@code dcterms:description} literal
      * carrying the same language tag as {@code description} - every other language variant of the
-     * description, and the project's label and anchors, survive completely untouched. See {@link
+     * description, and the project's label and anchors, survive completely untouched.
+     * {@code maintainedLanguages} is the one field replaced wholesale rather than scoped: it is a
+     * set, and a set is corrected by stating it, not by amending one member of it. See {@link
      * de.hauschel.arknet.prj.application.port.in.UpdateProject}'s javadoc for why this could not
      * simply be a third field folded into {@link #compareAndUpdate}'s {@link Project} argument.</p>
      *
@@ -179,11 +184,18 @@ public interface ProjectRegistry {
      *                            {@code description} is {@code null}
      * @param defaultLanguage     the new default language, or {@code null} to leave the existing
      *                            {@code arkprj:defaultLanguage} untouched
+     * @param maintainedLanguages the maintained language set to store in place of the current one,
+     *                            or {@code null} to leave every existing {@code
+     *                            arkprj:maintainedLanguage} triple untouched. An empty list is not
+     *                            "unchanged" but "remove them all" - unlike {@code description},
+     *                            a set has an explicit empty state a caller must be able to reach.
+     *                            The pair invariant against {@code arkprj:defaultLanguage} is
+     *                            policy and is enforced above this port, not here
      * @return the project's up-to-date state after the correction
      * @throws ProjectNotFoundException if no project with {@code projectId} is registered at all
      * @throws StaleProjectException    if {@code expectedHead} no longer matches the registered
      *                                  project's current token - a concurrent write raced ahead
      */
     Project updateAttributes(ProjectId projectId, RevisionToken expectedHead, String description,
-            String descriptionLanguage, String defaultLanguage);
+            String descriptionLanguage, String defaultLanguage, List<String> maintainedLanguages);
 }

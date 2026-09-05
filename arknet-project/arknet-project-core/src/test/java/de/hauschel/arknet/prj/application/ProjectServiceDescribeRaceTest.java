@@ -72,7 +72,7 @@ class ProjectServiceDescribeRaceTest {
         ProjectService setup = new ProjectService(registry, recordedDescriptions, new InMemoryDatasetInventory());
         service = new ProjectService(registry, new DelayedSelfDescription(recordedDescriptions),
                 new InMemoryDatasetInventory());
-        seedProject = setup.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        seedProject = setup.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
     }
 
     @Test

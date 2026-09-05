@@ -92,7 +92,7 @@ class KognioRdfProjectRegistryTest {
         Anchor anchor = pathAnchor("/home/dev/arknet");
         Project project = new Project(freshId(), "arknet", List.of(anchor));
 
-        registry.register(project, null, null, null);
+        registry.register(project, null, null, null, null);
 
         assertEquals(Optional.of(project), registry.findById(project.id()));
         assertEquals(Optional.of(project), registry.findByAnchor(anchor));
@@ -104,7 +104,7 @@ class KognioRdfProjectRegistryTest {
         Anchor anchor = new Anchor("https://example.org/repo", AnchorType.URL);
         Project project = new Project(freshId(), "remote-project", List.of(anchor));
 
-        registry.register(project, null, null, null);
+        registry.register(project, null, null, null, null);
 
         Project found = registry.findById(project.id()).orElseThrow();
         assertEquals(1, found.anchors().size());
@@ -118,7 +118,7 @@ class KognioRdfProjectRegistryTest {
         Anchor worktree = pathAnchor("/home/dev/arknet-worktree");
         Project project = new Project(freshId(), "arknet", List.of(mainCheckout, worktree));
 
-        registry.register(project, null, null, null);
+        registry.register(project, null, null, null, null);
 
         assertEquals(Optional.of(project), registry.findByAnchor(mainCheckout));
         assertEquals(Optional.of(project), registry.findByAnchor(worktree));
@@ -138,12 +138,12 @@ class KognioRdfProjectRegistryTest {
     void registerRejectsAnAnchorAlreadyOwnedByAnotherProjectAndNamesTheOwner() {
         Anchor sharedAnchor = pathAnchor("/home/dev/arknet");
         Project first = new Project(freshId(), "arknet", List.of(sharedAnchor));
-        registry.register(first, null, null, null);
+        registry.register(first, null, null, null, null);
 
         Project second = new Project(freshId(), "arknet-copy", List.of(sharedAnchor));
 
         AnchorAlreadyRegisteredException thrown = assertThrows(AnchorAlreadyRegisteredException.class,
-                () -> registry.register(second, null, null, null));
+                () -> registry.register(second, null, null, null, null));
         assertEquals(first.id(), thrown.owner());
         assertEquals(sharedAnchor, thrown.anchor());
 
@@ -157,11 +157,11 @@ class KognioRdfProjectRegistryTest {
     void compareAndUpdateRejectsAttachingAnAnchorAlreadyOwnedByAnotherProject() {
         Anchor foreignAnchor = pathAnchor("/home/dev/other-project");
         Project owner = new Project(freshId(), "other-project", List.of(foreignAnchor));
-        registry.register(owner, null, null, null);
+        registry.register(owner, null, null, null, null);
 
         Anchor ownAnchor = pathAnchor("/home/dev/mine");
         Project mine = new Project(freshId(), "mine", List.of(ownAnchor));
-        registry.register(mine, null, null, null);
+        registry.register(mine, null, null, null, null);
         RevisionToken head = registry.findCurrentById(mine.id()).orElseThrow().head();
 
         Project attemptsToStealAnchor = new Project(mine.id(), "mine", List.of(ownAnchor, foreignAnchor));
@@ -185,30 +185,30 @@ class KognioRdfProjectRegistryTest {
     void registerRejectsTheSameAnchorValueUnderADifferentTypeAsAlreadyOwnedByAnotherProject() {
         Anchor sharedValueAsPath = pathAnchor("/home/dev/arknet");
         Project first = new Project(freshId(), "arknet", List.of(sharedValueAsPath));
-        registry.register(first, null, null, null);
+        registry.register(first, null, null, null, null);
 
         Anchor sameValueAsUrl = new Anchor("/home/dev/arknet", AnchorType.URL);
         Project second = new Project(freshId(), "arknet-copy", List.of(sameValueAsUrl));
 
         AnchorAlreadyRegisteredException thrown = assertThrows(AnchorAlreadyRegisteredException.class,
-                () -> registry.register(second, null, null, null));
+                () -> registry.register(second, null, null, null, null));
         assertEquals(first.id(), thrown.owner());
     }
 
     @Test
     void registerRejectsADuplicateLabelOnADifferentIdentity() {
-        registry.register(new Project(freshId(), "arknet", List.of(pathAnchor("/a"))), null, null, null);
+        registry.register(new Project(freshId(), "arknet", List.of(pathAnchor("/a"))), null, null, null, null);
 
         assertThrows(DuplicateProjectLabelException.class,
-                () -> registry.register(new Project(freshId(), "arknet", List.of(pathAnchor("/b"))), null, null, null));
+                () -> registry.register(new Project(freshId(), "arknet", List.of(pathAnchor("/b"))), null, null, null, null));
     }
 
     @Test
     void compareAndUpdateRejectsRenamingToALabelAlreadyUsedByAnotherProject() {
-        registry.register(new Project(freshId(), "taken", List.of(pathAnchor("/a"))), null, null, null);
+        registry.register(new Project(freshId(), "taken", List.of(pathAnchor("/a"))), null, null, null, null);
 
         Project mine = new Project(freshId(), "mine", List.of(pathAnchor("/b")));
-        registry.register(mine, null, null, null);
+        registry.register(mine, null, null, null, null);
         RevisionToken head = registry.findCurrentById(mine.id()).orElseThrow().head();
 
         Project renamed = new Project(mine.id(), "taken", mine.anchors());
@@ -225,7 +225,7 @@ class KognioRdfProjectRegistryTest {
     void replaceByIdentitySwitchingAnchorsLeavesNoOrphanedAnchorNode() {
         Anchor oldAnchor = pathAnchor("/home/dev/old-checkout");
         Project project = new Project(freshId(), "arknet", List.of(oldAnchor));
-        registry.register(project, null, null, null);
+        registry.register(project, null, null, null, null);
         RevisionToken head = registry.findCurrentById(project.id()).orElseThrow().head();
 
         Anchor newAnchor = pathAnchor("/home/dev/new-checkout");
@@ -244,12 +244,103 @@ class KognioRdfProjectRegistryTest {
         }
     }
 
+    // ---- maintained language set (kogn-io/arknet#412) --------------------------------------
+
+    @Test
+    void registerStoresTheMaintainedLanguageSetCanonicalizedAndReadsItBackSorted() {
+        ProjectId id = freshId();
+        Project project = new Project(id, "arknet-langs", List.of(pathAnchor("/home/dev/arknet-langs")));
+
+        registry.register(project, null, null, "de", List.of("EN", "de"));
+
+        assertEquals(List.of("de", "en"), registry.findById(id).orElseThrow().maintainedLanguages(),
+                "stored canonicalized, read back in a deterministic order - RDF gives none");
+        assertEquals(List.of("de", "en"),
+                registry.findCurrentById(id).orElseThrow().project().maintainedLanguages());
+        assertEquals(List.of("de", "en"), registry.findAll().stream()
+                .filter(candidate -> candidate.id().equals(id)).findFirst().orElseThrow()
+                .maintainedLanguages(),
+                "findAll's bulk read must agree with the single-project reads");
+    }
+
+    @Test
+    void updateAttributesReplacesTheWholeMaintainedSetRatherThanAddingToIt() {
+        ProjectId id = freshId();
+        registry.register(new Project(id, "arknet-langs-2", List.of(pathAnchor("/home/dev/arknet-langs-2"))),
+                null, null, "de", List.of("de", "en"));
+
+        RevisionToken head = registry.findCurrentById(id).orElseThrow().head();
+        Project updated = registry.updateAttributes(id, head, null, null, null, List.of("de", "fr"));
+
+        assertEquals(List.of("de", "fr"), updated.maintainedLanguages());
+        assertEquals(List.of("de", "fr"), registry.findById(id).orElseThrow().maintainedLanguages(),
+                "the old 'en' triple must be gone, not merged with the new set");
+    }
+
+    @Test
+    void updateAttributesWithAnEmptyListRemovesTheSetAndWithNullLeavesItAlone() {
+        ProjectId id = freshId();
+        registry.register(new Project(id, "arknet-langs-3", List.of(pathAnchor("/home/dev/arknet-langs-3"))),
+                null, null, "de", List.of("de", "en"));
+
+        RevisionToken head = registry.findCurrentById(id).orElseThrow().head();
+        registry.updateAttributes(id, head, "eine Beschreibung", "de", null, null);
+        assertEquals(List.of("de", "en"), registry.findById(id).orElseThrow().maintainedLanguages(),
+                "null means unchanged, the same as for every other argument of this patch");
+
+        RevisionToken nextHead = registry.findCurrentById(id).orElseThrow().head();
+        registry.updateAttributes(id, nextHead, null, null, null, List.of());
+        assertEquals(List.of(), registry.findById(id).orElseThrow().maintainedLanguages(),
+                "an empty list is the deliberate way back to no commitment");
+    }
+
+    /**
+     * The regression the description field already has a test for: {@code compareAndUpdate} is a
+     * replace-by-identity write, so anything it neither excludes from its delete nor re-adds is
+     * silently wiped by the next rename or attached anchor.
+     */
+    @Test
+    void aRenameLeavesTheMaintainedLanguageSetUntouched() {
+        ProjectId id = freshId();
+        registry.register(new Project(id, "arknet-langs-4", List.of(pathAnchor("/home/dev/arknet-langs-4"))),
+                null, null, "de", List.of("de", "en"));
+
+        RevisionToken head = registry.findCurrentById(id).orElseThrow().head();
+        registry.compareAndUpdate(head,
+                new Project(id, "arknet-langs-renamed", List.of(pathAnchor("/home/dev/arknet-langs-4"))));
+
+        assertEquals(List.of("de", "en"), registry.findById(id).orElseThrow().maintainedLanguages(),
+                "a rename must not collapse a project's declared language set");
+    }
+
+    /** A malformed tag has to be refused by the shipped shape, not only by the Java write path. */
+    @Test
+    void theShaclGateRejectsAMalformedMaintainedLanguageTag() {
+        RDF rdf = new SimpleRdf();
+        ProjectId id = freshId();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/project/" + id.value());
+        IRI anchor = rdf.createIRI("https://w3id.org/arknet/anchor/" + UUID.randomUUID());
+        Graph candidate = rdf.createGraph();
+        candidate.add(subject, VocabRdf.TYPE, rdf.createIRI(ArkprjVocabulary.PROJECT_TYPE));
+        candidate.add(subject, VocabDct.IDENTIFIER, rdf.createLiteral("arknet-bad-tag"));
+        candidate.add(subject, rdf.createIRI(ArkprjVocabulary.ANCHOR), anchor);
+        candidate.add(anchor, VocabRdf.TYPE, rdf.createIRI(ArkprjVocabulary.ANCHOR_CLASS));
+        candidate.add(anchor, rdf.createIRI(ArkprjVocabulary.ANCHOR_VALUE), rdf.createLiteral("/home/dev/bad"));
+        candidate.add(anchor, rdf.createIRI(ArkprjVocabulary.ANCHOR_TYPE),
+                rdf.createIRI(ArkprjVocabulary.PATH_ANCHOR));
+        candidate.add(subject, rdf.createIRI(ArkprjVocabulary.MAINTAINED_LANGUAGE),
+                rdf.createLiteral("de_DE"));
+
+        assertThrows(WriteConstraintViolationException.class,
+                () -> KognioRdfProjectRepositoryFactory.buildGate(DisplayLocale.DEFAULT).enforce(candidate));
+    }
+
     // ---- concurrency (CAS) ---------------------------------------------------------------
 
     @Test
     void findCurrentByIdReturnsAHeadAfterRegistration() {
         Project project = new Project(freshId(), "arknet", List.of(pathAnchor("/a")));
-        registry.register(project, null, null, null);
+        registry.register(project, null, null, null, null);
 
         ProjectRegistry.CurrentProject current = registry.findCurrentById(project.id()).orElseThrow();
         assertEquals(project, current.project());
@@ -259,7 +350,7 @@ class KognioRdfProjectRegistryTest {
     @Test
     void compareAndUpdateSucceedsWithTheCurrentHead() {
         Project project = new Project(freshId(), "arknet", List.of(pathAnchor("/a")));
-        registry.register(project, null, null, null);
+        registry.register(project, null, null, null, null);
         RevisionToken head = registry.findCurrentById(project.id()).orElseThrow().head();
 
         Project renamed = new Project(project.id(), "renamed", project.anchors());
@@ -271,7 +362,7 @@ class KognioRdfProjectRegistryTest {
     @Test
     void compareAndUpdateRejectsAStaleHead() {
         Project project = new Project(freshId(), "arknet", List.of(pathAnchor("/a")));
-        registry.register(project, null, null, null);
+        registry.register(project, null, null, null, null);
         RevisionToken staleHead = registry.findCurrentById(project.id()).orElseThrow().head();
 
         Project firstRename = new Project(project.id(), "renamed-once", project.anchors());
@@ -340,11 +431,11 @@ class KognioRdfProjectRegistryTest {
     void updateAttributesWithADifferentlyCasedLanguageTagReplacesTheSameStoredVariantInsteadOfDuplicatingIt() {
         ProjectId id = freshId();
         Project project = new Project(id, "arknet", List.of(pathAnchor("/home/dev/arknet")));
-        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", null);
+        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", null, null);
 
         ProjectRegistry.CurrentProject current = registry.findCurrentById(id).orElseThrow();
         Project updated = registry.updateAttributes(id, current.head(),
-                "Architecture models machines understand.", "DE", null);
+                "Architecture models machines understand.", "DE", null, null);
 
         assertEquals("Architecture models machines understand.", updated.description());
         assertTrue(subjectHasDescriptionTaggedAs(id, "Architecture models machines understand.", "de"));
@@ -395,9 +486,9 @@ class KognioRdfProjectRegistryTest {
     void findByIdSelectsTheDescriptionInTheProjectsOwnDefaultLanguageNotTheProcessWideLocale() {
         ProjectId id = freshId();
         Project project = new Project(id, "arknet-de-default", List.of(pathAnchor("/home/dev/arknet-de-default")));
-        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", "de");
+        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", "de", null);
         ProjectRegistry.CurrentProject current = registry.findCurrentById(id).orElseThrow();
-        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null);
+        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null, null);
 
         Project found = registry.findById(id).orElseThrow();
 
@@ -409,9 +500,9 @@ class KognioRdfProjectRegistryTest {
     void findAllSelectsEachProjectsDescriptionInItsOwnDefaultLanguage() {
         ProjectId id = freshId();
         Project project = new Project(id, "arknet-de-default-2", List.of(pathAnchor("/home/dev/arknet-de-default-2")));
-        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", "de");
+        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", "de", null);
         ProjectRegistry.CurrentProject current = registry.findCurrentById(id).orElseThrow();
-        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null);
+        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null, null);
 
         Project found = registry.findAll().stream()
                 .filter(candidate -> candidate.id().equals(id)).findFirst().orElseThrow();
@@ -424,9 +515,9 @@ class KognioRdfProjectRegistryTest {
     void findCurrentByIdSelectsTheDescriptionInTheProjectsOwnDefaultLanguage() {
         ProjectId id = freshId();
         Project project = new Project(id, "arknet-de-default-3", List.of(pathAnchor("/home/dev/arknet-de-default-3")));
-        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", "de");
+        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", "de", null);
         ProjectRegistry.CurrentProject current = registry.findCurrentById(id).orElseThrow();
-        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null);
+        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null, null);
 
         ProjectRegistry.CurrentProject reread = registry.findCurrentById(id).orElseThrow();
 
@@ -442,9 +533,9 @@ class KognioRdfProjectRegistryTest {
     void findByIdFallsBackToTheProcessWideLocaleWhenTheProjectHasNoDefaultLanguage() {
         ProjectId id = freshId();
         Project project = new Project(id, "arknet-no-default", List.of(pathAnchor("/home/dev/arknet-no-default")));
-        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", null);
+        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", null, null);
         ProjectRegistry.CurrentProject current = registry.findCurrentById(id).orElseThrow();
-        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null);
+        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null, null);
 
         Project found = registry.findById(id).orElseThrow();
 

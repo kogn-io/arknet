@@ -150,7 +150,7 @@ class ProjectMcpToolsTest {
     @Test
     void addPassesLabelAndTheContextAnchorAsPathThrough() {
         final String rendered =
-                adapter.add(contextWithOrigin("/home/f/DEV/arknet"), "arknet", null, null, null, null, null);
+                adapter.add(contextWithOrigin("/home/f/DEV/arknet"), "arknet", null, null, null, null, null, null);
 
         assertEquals("arknet", registerProject.lastLabel);
         assertEquals(new Anchor("/home/f/DEV/arknet", AnchorType.PATH), registerProject.lastAnchor);
@@ -160,7 +160,7 @@ class ProjectMcpToolsTest {
     @Test
     void addWithAnExplicitAnchorParameterUsesItInsteadOfTheContextAnchor() {
         adapter.add(contextWithOrigin("/home/f/DEV/arknet"), "arknet", "https://example.org/arknet", "url",
-                null, null, null);
+                null, null, null, null);
 
         assertEquals(new Anchor("https://example.org/arknet", AnchorType.URL), registerProject.lastAnchor);
     }
@@ -168,7 +168,7 @@ class ProjectMcpToolsTest {
     @Test
     void addWithoutAContextAnchorAndWithoutAnExplicitAnchorParameterFailsInsteadOfDefaulting() {
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "arknet", null, null, null, null, null));
+                () -> adapter.add(null, "arknet", null, null, null, null, null, null));
 
         assertTrue(ex.getMessage().contains("project_add"), ex.getMessage());
     }
@@ -177,11 +177,13 @@ class ProjectMcpToolsTest {
     @Test
     void addPassesDescriptionLanguageAndDefaultLanguageThrough() {
         adapter.add(contextWithOrigin("/home/f/DEV/arknet"), "arknet", null, null,
-                "Ein Beispielprojekt.", "de", "de");
+                "Ein Beispielprojekt.", "de", "de", List.of("de", "en"));
 
         assertEquals("Ein Beispielprojekt.", registerProject.lastDescription);
         assertEquals("de", registerProject.lastDescriptionLanguage);
         assertEquals("de", registerProject.lastDefaultLanguage);
+        assertEquals(List.of("de", "en"), registerProject.lastMaintainedLanguages,
+                "the maintained set travels through the same tool call, not through a second one");
     }
 
     @Test
@@ -279,12 +281,14 @@ class ProjectMcpToolsTest {
                 "Ein Beispielprojekt.", "de");
 
         final String rendered = adapter.update(
-                contextWithOrigin("/home/f/DEV/arknet"), "Ein Beispielprojekt.", "de", "de", null);
+                contextWithOrigin("/home/f/DEV/arknet"), "Ein Beispielprojekt.", "de", "de",
+                List.of("de", "en"), null);
 
         assertEquals(target.id(), updateProject.lastProjectId);
         assertEquals("Ein Beispielprojekt.", updateProject.lastDescription);
         assertEquals("de", updateProject.lastDescriptionLanguage);
         assertEquals("de", updateProject.lastDefaultLanguage);
+        assertEquals(List.of("de", "en"), updateProject.lastMaintainedLanguages);
         assertTrue(rendered.contains("Ein Beispielprojekt."), rendered);
     }
 
@@ -325,7 +329,7 @@ class ProjectMcpToolsTest {
     @Test
     void unknownAnchorTypeFailsWithAMessageNamingTheThreeAllowedValues() {
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "arknet", "some-anchor", "nonsense", null, null, null));
+                () -> adapter.add(null, "arknet", "some-anchor", "nonsense", null, null, null, null));
 
         assertTrue(ex.getMessage().contains("path"), ex.getMessage());
         assertTrue(ex.getMessage().contains("url"), ex.getMessage());
@@ -349,16 +353,20 @@ class ProjectMcpToolsTest {
         private String lastDescription;
         private String lastDescriptionLanguage;
         private String lastDefaultLanguage;
+        private List<String> lastMaintainedLanguages;
 
         @Override
         public Project register(final String label, final Anchor anchor, final String description,
-                final String descriptionLanguage, final String defaultLanguage) {
+                final String descriptionLanguage, final String defaultLanguage,
+                final List<String> maintainedLanguages) {
             lastLabel = label;
             lastAnchor = anchor;
             lastDescription = description;
             lastDescriptionLanguage = descriptionLanguage;
             lastDefaultLanguage = defaultLanguage;
-            return new Project(new ProjectId("test-project"), label, List.of(anchor), description, defaultLanguage);
+            lastMaintainedLanguages = maintainedLanguages;
+            return new Project(new ProjectId("test-project"), label, List.of(anchor), description, defaultLanguage,
+                    maintainedLanguages);
         }
     }
 
@@ -368,15 +376,18 @@ class ProjectMcpToolsTest {
         private String lastDescription;
         private String lastDescriptionLanguage;
         private String lastDefaultLanguage;
+        private List<String> lastMaintainedLanguages;
         private Project result;
 
         @Override
         public Project update(final ProjectId projectId, final String description,
-                final String descriptionLanguage, final String defaultLanguage) {
+                final String descriptionLanguage, final String defaultLanguage,
+                final List<String> maintainedLanguages) {
             lastProjectId = projectId;
             lastDescription = description;
             lastDescriptionLanguage = descriptionLanguage;
             lastDefaultLanguage = defaultLanguage;
+            lastMaintainedLanguages = maintainedLanguages;
             return result;
         }
     }

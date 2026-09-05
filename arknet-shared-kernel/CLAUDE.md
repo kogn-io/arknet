@@ -26,7 +26,7 @@ einladen wuerde. Shared-Kernel-Grund derselbe wie bei `ProjectId` selbst: mehrer
 es aufzuloesen, statt jeder seinen eigenen zu erfinden.
 
 Das Ergebnis ist `ResolvedProject` (Record `id: ProjectId`/`defaultLanguage: String`, Letzteres
-nullable): der Port liefert seit der Mehrsprachigkeit von Term/Project (arknet-ubiquitous-language,
+nullable, dazu `maintainedLanguages: List<String>`, nie null aber moeglicherweise leer): der Port liefert seit der Mehrsprachigkeit von Term/Project (arknet-ubiquitous-language,
 arknet-project) nicht mehr nur die `ProjectId`, sondern buendelt das konfigurierte
 Standard-Anzeige-Language-Tag des aufgeloesten Projekts gleich mit -- derselbe Registry-Read, den
 jeder Tool-Aufruf ohnehin fuer das Routing macht, beantwortet die Sprachfrage "for free" mit,
@@ -44,6 +44,17 @@ ab, statt still ungetaggt zu schreiben. `arknet-project`s eigener Beschreibungs-
 weiterhin nur mit `LanguageTag#canonicalize` und schreibt ohne eins ungetaggt, da ein Projekt kein
 Konzept einer eigenen Default-Sprache-fuer-sich-selbst hat (es *ist* die Quelle von `defaultLanguage`
 fuer die anderen BCs).
+
+`maintainedLanguages` traegt die zweite, andere Aussage desselben Registry-Reads (kogn-io/arknet#412):
+`defaultLanguage` ist ein **Rueckfall** (unter welcher Sprache ein Aufruf ohne eigene landet),
+`maintainedLanguages` eine **Zusage** (welche Sprachen das Projekt zu fuehren erklaert).
+Erst die Zusage macht Unvollstaendigkeit definierbar -- ein Feld mit nur einer Sprache ist gegen
+einen Rueckfall nicht falsch, nur unvollstaendig, und nichts konnte das vorher benennen.
+Einziger Leser ist heute `store_check` (arknet-mcp), das den Satz aus derselben Anker-Aufloesung
+mitnimmt, statt den Project-BC ein zweites Mal ueber einen eigenen Borrowed In-Port zu fragen --
+dieselbe Begruendung, aus der `defaultLanguage` hier liegt.
+Ein zweiter, nicht-kanonischer Konstruktor `(id, defaultLanguage)` setzt den Satz auf leer, damit
+Aufrufstellen ohne Interesse daran unveraendert bleiben.
 
 Der pure Helfer `LanguageTag` (`canonicalize(String)`) kanonisiert jeden von aussen kommenden
 `language`-Wert (Term/Project) auf seine normalisierte BCP-47-Form (`"DE"` -> `"de"`), bevor ein

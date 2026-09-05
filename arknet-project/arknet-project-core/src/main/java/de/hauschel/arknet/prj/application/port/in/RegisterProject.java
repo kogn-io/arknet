@@ -3,8 +3,11 @@
 
 package de.hauschel.arknet.prj.application.port.in;
 
+import java.util.List;
+
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
+import de.hauschel.arknet.prj.domain.DefaultLanguageNotMaintainedException;
 import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
@@ -31,11 +34,18 @@ public interface RegisterProject {
      *                           {@code "de"}), or {@code null} for a plain, untagged literal.
      *                           Ignored if {@code description} is {@code null}
      * @param defaultLanguage    the project's optional default display/write language, as a
-     *                           BCP-47 tag, or {@code null} for none
+     *                           BCP-47 tag, or {@code null} for none - the fallback a later call
+     *                           that names no language is written and read under
+     * @param maintainedLanguages the BCP-47 tags of the languages this project undertakes to
+     *                           maintain its model in (kogn-io/arknet#412), or {@code null}/empty
+     *                           to declare no such set. A commitment, not a fallback - see
+     *                           {@link Project#maintainedLanguages()}
      * @return the newly registered project, including its minted identity
      * @throws AnchorAlreadyRegisteredException if {@code anchor} already belongs to a project
      * @throws DuplicateProjectLabelException   if {@code label} already labels a different
      *                                          project
+     * @throws DefaultLanguageNotMaintainedException if {@code defaultLanguage} is not one of a
+     *                                          non-empty {@code maintainedLanguages}
      * @throws UnattributedRegistrationConflictException if the write keeps losing a real store
      *                                          commit conflict that neither guard above explains,
      *                                          across every retry attempt (see that exception's
@@ -43,5 +53,5 @@ public interface RegisterProject {
      *                                          programming error)
      */
     Project register(String label, Anchor anchor, String description, String descriptionLanguage,
-            String defaultLanguage);
+            String defaultLanguage, List<String> maintainedLanguages);
 }
