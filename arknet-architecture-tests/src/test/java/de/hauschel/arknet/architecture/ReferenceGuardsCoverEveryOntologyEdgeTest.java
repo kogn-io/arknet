@@ -21,7 +21,9 @@ import java.util.stream.Collectors;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.Resource;
 import org.eclipse.rdf4j.model.Statement;
+import org.eclipse.rdf4j.model.Value;
 import org.eclipse.rdf4j.model.vocabulary.RDFS;
+import org.eclipse.rdf4j.model.vocabulary.SHACL;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepository;
@@ -50,7 +52,11 @@ import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepository;
  * This test closes the loop the module cut cannot: the shipped ontologies already say which
  * properties point at a term ({@code rdfs:range skos:Concept}) and which point at an actor
  * ({@code rdfs:range arkproc:Actor}), so the maps can be held against them rather than against
- * reviewer attention.</p>
+ * reviewer attention. The constraint edge is derived from the shipped shapes instead
+ * ({@code sh:path oslc_rm:constrainedBy} with {@code sh:class arkreq:Constraint}): the property
+ * is borrowed from OSLC RM, and an {@code rdfs:range} axiom on it would be a global claim about
+ * the foreign vocabulary, not a statement about arknet's use of it - the shapes are where
+ * arknet's local rule lives.</p>
  *
  * <p><strong>Why reflection.</strong> Both maps are private implementation detail of their
  * adapter, and widening them to public just so a test can read them would turn an internal into
@@ -66,8 +72,8 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
     private static final String ACTOR_CLASS = ArkprocVocabulary.ACTOR_TYPE;
 
     /**
-     * The constraint class every constraint-referencing property declares as its range
-     * (kogn-io/arknet#481).
+     * The constraint class every constraint-referencing property shape constrains its target to
+     * via {@code sh:class} (kogn-io/arknet#481).
      */
     private static final String CONSTRAINT_CLASS = ArkreqVocabulary.CONSTRAINT_TYPE;
 
@@ -105,13 +111,17 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
                         + " - add them to KognioRdfActorRepository.REFERENCING_PREDICATES");
     }
 
-    /** The constraint-side counterpart, guarding {@code constraint_delete} the same way (kogn-io/arknet#481). */
+    /**
+     * The constraint-side counterpart, guarding {@code constraint_delete} the same way
+     * (kogn-io/arknet#481) - read off the shapes rather than an {@code rdfs:range} axiom, see the
+     * class comment.
+     */
     @Test
-    void everyPropertyRangingOverAConstraintBlocksTheConstraintsDeletion() {
-        Set<String> pointingAtConstraints = propertiesRangingOver(CONSTRAINT_CLASS);
+    void everyPropertyShapedToAConstraintBlocksTheConstraintsDeletion() {
+        Set<String> pointingAtConstraints = propertiesShapedTo(CONSTRAINT_CLASS);
 
         assertFalse(pointingAtConstraints.isEmpty(),
-                "no property with rdfs:range arkreq:Constraint found - the ontologies were not loaded");
+                "no property shape with sh:class arkreq:Constraint found - the shapes were not loaded");
         assertTrue(referencingPredicatesOf(KognioRdfConstraintRepository.class).keySet()
                         .containsAll(pointingAtConstraints),
                 () -> "constraint_delete would not notice these edges: "
@@ -148,6 +158,18 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
         return ontologies.filter(null, RDFS.RANGE, iri(rangeClass)).stream()
                 .map(Statement::getSubject)
                 .map(Resource::stringValue)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * The {@code sh:path} of every property shape in the shipped shapes that constrains its
+     * target to {@code sh:class <targetClass>} - the derivation for edges over a borrowed
+     * property, where no arknet-owned {@code rdfs:range} axiom exists to read.
+     */
+    private Set<String> propertiesShapedTo(String targetClass) {
+        return ontologies.filter(null, SHACL.CLASS, iri(targetClass)).subjects().stream()
+                .flatMap(shape -> ontologies.filter(shape, SHACL.PATH, null).objects().stream())
+                .map(Value::stringValue)
                 .collect(Collectors.toSet());
     }
 

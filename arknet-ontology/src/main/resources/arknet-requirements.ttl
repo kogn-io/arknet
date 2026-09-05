@@ -195,12 +195,6 @@ arkreq:Constraint a owl:Class ;
     rdfs:comment "A boundary on the solution space that is imposed on the project from outside - by law, contract, customer, platform, budget or organisation - and that the project cannot change by itself (ISO 29148, IREB). Not negotiable within the project. The test is 'could we decide otherwise?': if yes, it is a decision (arkarch:ArchitectureDecisionRecord) or a requirement, not a constraint - a self-chosen scope, convention or modelling rule never is. The statement names who or what imposes it. Attached to requirements or use cases via oslc_rm:constrainedBy (issue #329)."@en ,
                  "Eine von aussen auferlegte Einschraenkung des Loesungsraums - durch Gesetz, Vertrag, Kunde, Plattform, Budget oder Organisation -, die das Projekt nicht selbst aendern kann (ISO 29148, IREB). Im Projekt nicht verhandelbar. Die Testfrage lautet 'koennten wir anders entscheiden?': wenn ja, ist es eine Entscheidung (arkarch:ArchitectureDecisionRecord) oder eine Anforderung, keine Randbedingung - ein selbst gewaehlter Scope, eine Konvention oder eine Modellierungsregel ist es nie. Das Statement benennt, wer oder was sie auferlegt. Wird ueber oslc_rm:constrainedBy an Requirements oder UseCases gehaengt (Issue #329)."@de .
 
-# oslc_rm:constrainedBy is reused, not redefined (see file header) - but its range is asserted
-# here, mirroring arkreq:primaryActor/arkproc:Actor above, so a delete-guard architecture test
-# can discover every property pointing at a Constraint via rdfs:range the same way it already
-# does for arkproc:Actor and skos:Concept (kogn-io/arknet#481).
-oslc_rm:constrainedBy rdfs:range arkreq:Constraint .
-
 arkreq:TechnicalConstraint a owl:Class ;
     rdfs:subClassOf arkreq:Constraint ;
     rdfs:label   "Technical Constraint"@en , "Technische Randbedingung"@de ;

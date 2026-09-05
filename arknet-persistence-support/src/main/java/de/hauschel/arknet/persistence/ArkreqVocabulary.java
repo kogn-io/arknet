@@ -34,8 +34,8 @@ package de.hauschel.arknet.persistence;
  * constant (plus the {@code .ttl}).</p>
  *
  * <p>Scope is deliberately narrow: only the predicates and type IRIs an {@code arknet-mcp} read
- * path traverses, reads or tests - whether traversed as an edge or merely read as a literal -
- * live here. Single-adapter predicates ({@code arkreq:status}, {@code arkreq:priority}, ...) are not
+ * path or an {@code arknet-architecture-tests} check traverses, reads or tests - whether
+ * traversed as an edge or merely read as a literal - live here. Single-adapter predicates ({@code arkreq:status}, {@code arkreq:priority}, ...) are not
  * cross-module-duplicated in the same way and stay with their one owner.</p>
  */
 public final class ArkreqVocabulary {
@@ -171,9 +171,10 @@ public final class ArkreqVocabulary {
 
     /**
      * {@code arkreq:Constraint} - the abstract superclass every constraint subtype specializes;
-     * the class {@code oslc_rm:constrainedBy} declares as its {@code rdfs:range}
-     * (kogn-io/arknet#481), read by the delete-guard architecture test the same way it already
-     * reads {@link #CONCEPT_TYPE}/{@link ArkprocVocabulary#ACTOR_TYPE}.
+     * the {@code sh:class} the {@code oslc_rm:constrainedBy} property shapes constrain their
+     * target to (kogn-io/arknet#481), read by the delete-guard architecture test the same way it
+     * already reads {@link #CONCEPT_TYPE}/{@link ArkprocVocabulary#ACTOR_TYPE} - only
+     * {@code arknet-architecture-tests} reads it, no {@code arknet-mcp} path does.
      */
     public static final String CONSTRAINT_TYPE = NAMESPACE + "Constraint";
 
