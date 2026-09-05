@@ -721,7 +721,7 @@ class StoreReportToolsTest {
     void resourceHistoryReflectsAFurtherWriteThroughTheFunnelAndMovesTheCurrentMarker() {
         RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         RequirementRepository.CurrentRequirement current =
-                requirements.findCurrentByCode(PROJECT, fr1.code()).orElseThrow();
+                requirements.findCurrentByCode(PROJECT, fr1.code(), null).orElseThrow();
         Requirement updated = new Requirement(
                 fr1.id(), fr1.code(), "Login v2", fr1.description(), null, fr1.type(), fr1.status(), fr1.priority(),
                 null, null, null, fr1.acceptanceCriteria(), List.of());
