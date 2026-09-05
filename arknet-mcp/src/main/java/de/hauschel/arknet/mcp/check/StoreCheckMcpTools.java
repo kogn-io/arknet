@@ -23,7 +23,7 @@ import de.hauschel.arknet.mcp.store.StoreReader;
  * (kogn-io/arknet#412).
  *
  * <p><strong>One tool with a selector, not one tool per rule.</strong> Same shape and same reason
- * as {@code store_overview}/{@code resource_get} (ADR-006): a check reads whatever the seven
+ * as {@code store_overview}/{@code resource_get}: a check reads whatever the seven
  * bounded contexts wrote, over the very same generic {@link StoreReader} snapshot, and is not a
  * bounded context of its own - so it belongs here rather than in any hexagon, and its rules belong
  * behind one {@code checks} parameter rather than behind one tool name each. Every additional tool

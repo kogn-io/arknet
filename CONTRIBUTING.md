@@ -24,8 +24,8 @@ time.
 
 arknet's own decisions about its own build -- Bounded Context cuts, storage
 choices, persistence mechanics and so on -- are recorded exclusively in
-arknet's own store, via the `adr_*` MCP tools, not as Markdown files under
-`docs/adr/`.
+arknet's own store, via the `adr_*` MCP tools, not as Markdown files in
+this repository.
 
 - **`docs/adr-export/`** is a generated snapshot of that store, not a second
   source of truth -- see its own [README](docs/adr-export/README.md) for what

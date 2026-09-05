@@ -9,7 +9,7 @@ import java.util.Locale;
 /**
  * The checks {@code store_check} can run. One tool with a selector rather than one tool per check
  * (kogn-io/arknet#412), for the same reason {@code store_overview}/{@code resource_get} are two
- * generic tools rather than one per bounded context (ADR-006): a check is a way of reading the
+ * generic tools rather than one per bounded context: a check is a way of reading the
  * store, not a bounded context of its own, and a tool per check would grow the tool surface every
  * agent pays for on every call by one entry per rule.
  *
