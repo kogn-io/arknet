@@ -271,8 +271,8 @@ class AdrServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code) {
-            return delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code, String defaultLanguage) {
+            return delegate.findCurrentByCode(projectId, code, defaultLanguage);
         }
 
         @Override
@@ -372,8 +372,8 @@ class AdrServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code) {
-            Optional<CurrentAdr> result = delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code, String defaultLanguage) {
+            Optional<CurrentAdr> result = delegate.findCurrentByCode(projectId, code, defaultLanguage);
             if (!injected) {
                 injected = true;
                 injection.run();

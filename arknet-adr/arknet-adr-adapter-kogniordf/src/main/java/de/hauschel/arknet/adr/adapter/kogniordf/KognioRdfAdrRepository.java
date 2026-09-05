@@ -773,9 +773,17 @@ public class KognioRdfAdrRepository implements AdrRepository {
     }
 
     @Override
-    public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code) {
+    public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        // The project's own default language decides which variant this read-modify-write round
+        // trip sees, not the reading process's (issue #456) - the very tag findByCode is handed
+        // for an adr_get without a displayLocale argument. This read's values are echoed back for
+        // a field adr_update leaves alone and compared against a correction, and its tags decide
+        // what such a field is written back under. Lenient canonicalization, and
+        // withRequestedOverride's own null/blank no-op, degrade a project without a (well-formed)
+        // default language to the configured preference unchanged.
+        DisplayLocale effective = withRequestedOverride(canonicalizeLenient(defaultLanguage));
 
         String query = "SELECT ?s ?head WHERE { GRAPH <" + ADR_GRAPH + "> { "
                 + "?s a <" + ADR_TYPE + "> . "
@@ -793,7 +801,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
             // Never applies the legacy-literal fallback (see class javadoc "Legacy fallback never
             // reaches the read-modify-write path") - findCurrentByCode's structured lists stay
             // truthfully empty when nothing structured exists.
-            Adr adr = assembleAdr(handle, subjectIriString, code, displayLocale, false);
+            Adr adr = assembleAdr(handle, subjectIriString, code, effective, false);
             if (adr == null) {
                 return Optional.empty();
             }
@@ -810,15 +818,17 @@ public class KognioRdfAdrRepository implements AdrRepository {
             nameContextDecisionTags.addAll(contextTags);
             nameContextDecisionTags.addAll(decisionTags);
             return Optional.of(new CurrentAdr(adr, head,
-                    displayLocale.select(readNameContextDecision(handle, subject).name())
+                    effective.select(readNameContextDecision(handle, subject).name())
                             .map(LocalizedLiteral::languageTag).orElse(null),
-                    displayLocale.select(readNameContextDecision(handle, subject).context())
+                    effective.select(readNameContextDecision(handle, subject).context())
                             .map(LocalizedLiteral::languageTag).orElse(null),
-                    displayLocale.select(readNameContextDecision(handle, subject).decision())
+                    effective.select(readNameContextDecision(handle, subject).decision())
                             .map(LocalizedLiteral::languageTag).orElse(null),
                     nameContextDecisionTags,
-                    childLanguageByPosition(handle, subject, CONSEQUENCE_PROPERTY, CONSEQUENCE_STATEMENT_PROPERTY),
-                    childLanguageByPosition(handle, subject, CONSIDERED_OPTION_PROPERTY, OPTION_RATIONALE_PROPERTY),
+                    childLanguageByPosition(handle, subject, CONSEQUENCE_PROPERTY, CONSEQUENCE_STATEMENT_PROPERTY,
+                            effective),
+                    childLanguageByPosition(handle, subject, CONSIDERED_OPTION_PROPERTY, OPTION_RATIONALE_PROPERTY,
+                            effective),
                     allLanguageTagsByPosition(handle, subject, CONSEQUENCE_PROPERTY, CONSEQUENCE_STATEMENT_PROPERTY),
                     allLanguageTagsByPosition(
                             handle, subject, CONSIDERED_OPTION_PROPERTY, OPTION_RATIONALE_PROPERTY)));
@@ -847,13 +857,13 @@ public class KognioRdfAdrRepository implements AdrRepository {
     }
 
     /**
-     * The BCP-47 tag currently selected (by {@link #displayLocale}) for each existing child position
-     * on {@code textPredicate}, for {@link #findCurrentByCode}'s touched/pass-through language
-     * resolution - mirrors {@code KognioRdfRequirementRepository}'s
-     * {@code acceptanceCriteriaLanguageByPosition}.
+     * The BCP-47 tag currently selected (by {@code locale}, the calling project's own display
+     * resolution - see {@link #findCurrentByCode}) for each existing child position on
+     * {@code textPredicate}, for that method's touched/pass-through language resolution - mirrors
+     * {@code KognioRdfRequirementRepository}'s {@code acceptanceCriteriaLanguageByPosition}.
      */
     private Map<Integer, String> childLanguageByPosition(DatasetHandle handle, String subject,
-            String childEdgePredicate, String textPredicate) {
+            String childEdgePredicate, String textPredicate, DisplayLocale locale) {
         String query = "SELECT ?position ?text WHERE { GRAPH <" + ADR_GRAPH + "> { "
                 + subject + " <" + childEdgePredicate + "> ?child . "
                 + "?child <" + POSITION_PROPERTY + "> ?position ; <" + textPredicate + "> ?text } }";
@@ -864,15 +874,15 @@ public class KognioRdfAdrRepository implements AdrRepository {
                     .add(localizedLiteralOf(row, "text"));
         });
         Map<Integer, String> result = new LinkedHashMap<>();
-        candidatesByPosition.forEach((position, candidates) -> displayLocale.select(candidates)
+        candidatesByPosition.forEach((position, candidates) -> locale.select(candidates)
                 .ifPresent(selected -> result.put(position, selected.languageTag())));
         return result;
     }
 
     /**
      * {@link #allLanguageTags} grouped by {@code arknet:position} instead of collected flat - every
-     * <em>tagged</em> language a position's {@code textPredicate} currently carries (not just the one
-     * {@link #displayLocale} would select), for
+     * <em>tagged</em> language a position's {@code textPredicate} currently carries (not just the
+     * displayed one {@link #childLanguageByPosition} selects), for
      * {@link AdrRepository.CurrentAdr#consequenceLanguagesByPosition()}/{@code optionLanguagesByPosition()}'s
      * per-position new-variant check (kogn-io/arknet#357's follow-up to {@code Adr#withConsequenceCorrections}/
      * {@code #withConsideredOptionCorrections}). Runs the same query {@link #childLanguageByPosition}

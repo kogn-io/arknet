@@ -700,7 +700,13 @@ public class AdrService
             Function<AdrRepository.CurrentAdr, Adr> mutation) {
         AdrConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-            AdrRepository.CurrentAdr current = repository.findCurrentByCode(projectId, code)
+            // The project's own default language, not the reading process's, decides which
+            // language variant this read-modify-write round trip sees (issue #456): its values are
+            // what an untouched field is echoed back as and compared against, its tags what such a
+            // field is written back under. A lifecycle call (accept/reject/deprecate/supersede/
+            // unsupersede) passes null here for the same reason it passes a null write language -
+            // it never touches a multilingual field.
+            AdrRepository.CurrentAdr current = repository.findCurrentByCode(projectId, code, defaultLanguage)
                     .orElseThrow(() -> new AdrNotFoundException(projectId, code));
             Adr updated = mutation.apply(current);
             if (updated.equals(current.value())) {
