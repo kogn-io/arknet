@@ -60,6 +60,15 @@
 #  ACTORS
 ##############################################################################
 
+# Actor is anchored under prov:Agent so that a writing agent (the one a
+# revision names in the provenance graph) can later attach to the same
+# concept. Whether the writing agent and the modelled actor are the same
+# instances is deliberately NOT decided here; the anchoring only keeps that
+# door open. If that question is never answered in the affirmative, this
+# superclass carries nothing -- taking it out is one triple, no data migration.
+# (DE: Actor haengt unter prov:Agent, damit der schreibende Agent aus der
+# Provenance spaeter am selben Begriff andocken kann; ob beide dieselben
+# Instanzen sind, ist damit nicht entschieden.)
 arkproc:Actor a owl:Class ;
     rdfs:subClassOf prov:Agent ;
     rdfs:label "Actor"@en , "Akteur"@de ;

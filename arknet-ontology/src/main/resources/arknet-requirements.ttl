@@ -426,6 +426,16 @@ arkreq:Deprecated a owl:NamedIndividual , arkreq:RequirementStatus ;
     rdfs:label "Deprecated"@en ;
     rdfs:comment "War gueltig, ist aber nicht mehr relevant."@de .
 
+# The status is a non-binding maturity signal for the human reader and
+# enforces nothing: no validation rule, no coupling to fulfilment or
+# decomposition edges, no ordering between a requirement's status and that of
+# its neighbours, settable in both directions. An enforced status would need a
+# model of what "fulfilled" means, which does not exist and would be a process
+# decision imposed on other teams (see FR-5 in arknet's own store). Real
+# consequences later are a new decision, not an extension of this one.
+# (DE: Der Status ist ein unverbindliches Reifegrad-Signal ohne Durchsetzung,
+# in beide Richtungen setzbar; ein durchgesetzter Status braeuchte ein
+# Erfuellungsmodell, das es nicht gibt.)
 arkreq:status a owl:ObjectProperty ;
     rdfs:domain arkreq:Requirement ;
     rdfs:range  arkreq:RequirementStatus ;

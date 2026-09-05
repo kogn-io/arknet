@@ -153,7 +153,14 @@ mehrere sprachgetaggte RDF-Literale je Ressource, ueber ein optionales
 `DisplayLocale`-Fallback-Kette aufgeloest. Ausgenommen von der Uebersetzung
 ist das `prefLabel` eines Glossarbegriffs: es traegt unter jedem Sprachtag
 dasselbe Wort, uebersetzt wird allein die Definition -- zwei Woerter fuer
-denselben Begriff heben auf, wozu ein Glossar da ist. Andere Freitext-Felder
+denselben Begriff heben auf, wozu ein Glossar da ist. Arknets **eigenes**
+Modell in diesem Store -- Glossar, Requirements, Constraints, Use Cases und
+die eigenen ADRs -- wird in **beiden** Sprachen gefuehrt, Deutsch und Englisch
+gleichrangig: eine inhaltliche Aenderung an einem mehrsprachigen Feld ist erst
+vollstaendig, wenn beide Sprachen sie tragen (ein Schreibaufruf traegt genau
+eine Sprache, also zwei Aufrufe je Aenderung). Das ist eine Projektregel fuer
+diesen Bestand, keine Werkzeugregel -- andere Projekte im selben Store duerfen
+einsprachig bleiben. Andere Freitext-Felder
 (z.B. BoundedContext-`name`/`description`) bleiben einfache, ungetaggte
 Literale ohne diesen Mechanismus. Quer dazu akzeptiert **jedes**
 Prosa-Feld ein enges Markdown-Subset (`**fett**`, `*kursiv*`, `` `code` ``,
