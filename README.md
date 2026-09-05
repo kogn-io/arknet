@@ -439,7 +439,7 @@ Active modules (consumed by a BC, published under `w3id.org/arknet/`):
 | Module | Prefix | Concepts |
 |--------|--------|----------|
 | `arknet-core.ttl` | `arknet:` | Generic utility vocabulary (name, description, ...), reusable across every module |
-| `arknet-ddd.ttl` | `arkddd:` | BoundedContext, Domain, Subdomain -- the strategic-DDD concepts `arknet-bounded-context` actually writes. Namespace shared with the parked `arknet-ddd_parked.ttl` below (Context Mapping, tactical DDD) |
+| `arknet-ddd.ttl` | `arkddd:` | BoundedContext, Domain, Subdomain, ContextRelationship, RelationshipType -- the strategic-DDD concepts `arknet-bounded-context` actually writes. Namespace shared with the parked `arknet-ddd_parked.ttl` below (ContextMap, tactical DDD) |
 | `arknet-actor.ttl` | `arkproc:` | Actor (a `prov:Agent` subclass), HumanActor, SystemActor, LegalActor, GroupActor, actorRole -- split out of `parked/arknet-process.ttl`; the only slice of that module a BC touches. `arknet-actor` persists it; `arknet-use-cases` only reads it (resolving `primaryActor`/`supportingActor`), never writes |
 | `arknet-requirements.ttl` | `arkreq:` | Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release |
 | `arknet-provenance.ttl` | `arkprov:` | Revision, head -- PROV-O-based revision trail written by the shared write funnel |
@@ -450,7 +450,7 @@ Parked modules (`arknet-ontology/src/main/resources/parked/`, no BC consumes the
 
 | Module | Prefix | Concepts |
 |--------|--------|----------|
-| `arknet-ddd_parked.ttl` | `arkddd:` | ContextMap, ContextRelationship, RelationshipType, plus the full tactical-DDD layer (Aggregate, Entity, ValueObject, DomainEvent, Command, Query, DomainService, Repository, Factory, Policy, Saga, Invariant); no BC, no Java reference. Shares its namespace with the active `arknet-ddd.ttl` above (BoundedContext, Domain, Subdomain) |
+| `arknet-ddd_parked.ttl` | `arkddd:` | ContextMap, plus the full tactical-DDD layer (Aggregate, Entity, ValueObject, DomainEvent, Command, Query, DomainService, Repository, Factory, Policy, Saga, Invariant); no BC, no Java reference. Shares its namespace with the active `arknet-ddd.ttl` above (BoundedContext, Domain, Subdomain) |
 | `arknet-process.ttl` | `arkproc:` | Process, Step, State, StateTransition, BusinessRule, Outcome -- `Actor` moved to `arknet-actor.ttl` above; the rest is unconsumed and `arkproc:Step` predates/duplicates the live `arkreq:Step` (different properties entirely) -- reconcile before reviving |
 | `arknet-architecture_parked.ttl` | `arkarch:` | Architecture, ArchitectureDescription, Stakeholder, Concern, Viewpoint, View -- the rest of the ISO-42010 architecture description; no BC, no Java reference. Shares its namespace with the active `arknet-architecture.ttl` above (ADR) |
 | `arknet-privacy.ttl` | `arkpriv:` | DataCategory, LegalBasis, ProcessingPurpose, DataSubjectRight, TechnicalMeasure, PrivacyImpactAssessment |
