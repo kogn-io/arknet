@@ -36,7 +36,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 
 /**
- * Scaffold-level check that the adapter declares exactly the five project tools, resolves the
+ * Scaffold-level check that the adapter declares exactly the six project tools, resolves the
  * caller's own project from its transport-context anchor rather than from any derived {@link
  * ProjectResolver} workspace, and never turns an unknown-anchor situation into a silent default.
  */

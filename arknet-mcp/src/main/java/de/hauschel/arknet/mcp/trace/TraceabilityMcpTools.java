@@ -50,10 +50,10 @@ public final class TraceabilityMcpTools {
      * @param displayLocale the process-wide display-language fallback, shared with {@code
      *                      store_overview}'s read path (issue #141) - this class merges the
      *                      resolved project's own default language into it per call before
-     *                      reading labels ({@link #readGraph}, issue #274), so the two no longer
-     *                      necessarily agree on a term's label for a project whose configured
-     *                      default differs from this daemon's; {@code store_overview} does not yet
-     *                      apply the same per-project merge
+     *                      reading labels ({@link #readGraph}, issue #274), the same merge {@code
+     *                      store_overview}/{@code resource_get} apply since issue #276, so the two
+     *                      no longer disagree on a term's label for a project whose configured
+     *                      default differs from this daemon's
      */
     public TraceabilityMcpTools(
             final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projects,

@@ -24,18 +24,4 @@ public class DatasetLockConflictException extends RuntimeException {
     public DatasetLockConflictException(String message) {
         super(message);
     }
-
-    /**
-     * Unused within this codebase - {@link LockConflictReportingDatasetLifecycle} only ever calls
-     * {@link #DatasetLockConflictException(String)}. Careful with a {@code cause} here: it is
-     * exactly the issue #137 antipattern - a caller that walks the cause chain for a message would
-     * surface the wrapped {@code RepositoryLockedException}'s own opaque message instead of this
-     * class's didactic {@code message}, defeating the whole point of the translation.
-     *
-     * @param message the didactic explanation of the lock conflict and its remedy
-     * @param cause   the original failure thrown by the wrapped {@code DatasetLifecycle}
-     */
-    public DatasetLockConflictException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }
