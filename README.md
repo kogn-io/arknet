@@ -13,6 +13,7 @@ validate and write to.
 - [Repository](#repository)
 - [MCP Server](#mcp-server)
   - [Prerequisite: start the MCP server daemon](#prerequisite-start-the-mcp-server-daemon)
+  - [Which build is running?](#which-build-is-running)
   - [Register your project](#register-your-project)
   - [MCP tools](#mcp-tools)
   - [Storage model (store-first)](#storage-model-store-first)
@@ -198,6 +199,26 @@ yourself: point it at the one running daemon's HTTP endpoint
 (`http://127.0.0.1:47331/mcp`), never at an inline/stdio server definition of
 its own.
 
+### Which build is running?
+
+One daemon serves every project and nobody restarts it on a schedule, so a
+stale daemon looks exactly like a current one until it answers with a tool
+schema, a field or a status it should no longer have. The running build
+therefore says its own version in three places, from one source:
+
+- the MCP `initialize` handshake -- `serverInfo.version`, which every client
+  sees on connect;
+- every `project_export` dump, in its own `export-metadata` graph (server
+  version, build time, export time, and each shipped ontology module's
+  `owl:versionInfo`);
+- every **failed** tool call, as a ` [arknet <version>]` suffix on the error
+  message.
+
+The version is the release tag or commit sha baked into the image
+(`ARKNET_VERSION`), falling back to the Maven version of the jar being run.
+A daemon that answers `unknown` was started from a source tree that was never
+packaged.
+
 ### Register your project
 
 Which project a call hits is decided by an **anchor**: an opaque string your
@@ -371,7 +392,7 @@ Backup -- every registered project in one call, or only the one this call addres
 
 | Tool | Description |
 |------|-------------|
-| `project_export` | Export a complete RDF store (every named graph, including provenance and project self-description -- unlike `store_overview`, this hides nothing) as a `.trig` file into a timestamped subdirectory of a configurable export directory. Exports every registered project by default; pass `projectOnly=true` to export only the project the call addresses through its anchor. There is no matching import/restore tool yet -- a dataset restored by hand is claimed back into the registry with `project_adopt` |
+| `project_export` | Export a complete RDF store (every named graph, including provenance and project self-description -- unlike `store_overview`, this hides nothing) as a `.trig` file into a timestamped subdirectory of a configurable export directory. Each dump ends with an `export-metadata` graph of its own naming the server version, its build time, the export time and the `owl:versionInfo` of every shipped ontology module -- output only, never written into the store, so dropping that one graph leaves exactly the dataset. Exports every registered project by default; pass `projectOnly=true` to export only the project the call addresses through its anchor. There is no matching import/restore tool yet -- a dataset restored by hand is claimed back into the registry with `project_adopt` |
 
 ### Storage model (store-first)
 

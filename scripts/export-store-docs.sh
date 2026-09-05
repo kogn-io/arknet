@@ -26,7 +26,10 @@ mkdir -p "$OUT_DIR"
 
 # Strip the project-identity graph: it carries this machine's local anchor
 # value (e.g. a filesystem path with a username) and has no place in a
-# public repository. Every other graph in the backup dump is safe as-is.
+# public repository. Every other graph in the backup dump is safe as-is --
+# including the trailing export-metadata graph (issue #194: arknet version,
+# build time, export time, ontology module versions), which names the server
+# rather than the machine and is exactly what dates the committed dump.
 # Aware of triple-quoted """...""" literals (used for multi-paragraph prose
 # fields) so a stray "}" inside such a literal cannot end the skip early.
 awk '
