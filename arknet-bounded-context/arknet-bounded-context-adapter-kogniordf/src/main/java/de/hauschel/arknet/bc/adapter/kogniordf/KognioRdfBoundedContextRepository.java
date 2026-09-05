@@ -143,23 +143,22 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private static final Logger LOG = LoggerFactory.getLogger(KognioRdfBoundedContextRepository.class);
 
     private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
-    private static final String ARKDDD_NAMESPACE = "https://w3id.org/arknet/ddd#";
     private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
 
-    private static final String BOUNDED_CONTEXT_TYPE = ARKDDD_NAMESPACE + "BoundedContext";
+    private static final String BOUNDED_CONTEXT_TYPE = ArkdddVocabulary.BOUNDED_CONTEXT_TYPE;
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
     private static final String NAME_PROPERTY = ARKNET_NAMESPACE + "name";
     private static final String DOMAIN_VISION_PROPERTY = ArkdddVocabulary.DOMAIN_VISION;
-    private static final String PART_OF_PROPERTY = ARKDDD_NAMESPACE + "partOf";
-    private static final String SUBDOMAIN_TYPE_PROPERTY = ARKDDD_NAMESPACE + "subdomainType";
-    private static final String SUBDOMAIN_CLASS = ARKDDD_NAMESPACE + "Subdomain";
-    private static final String OWNED_BY_PROPERTY = ARKDDD_NAMESPACE + "ownedBy";
+    private static final String PART_OF_PROPERTY = ArkdddVocabulary.PART_OF_PROPERTY;
+    private static final String SUBDOMAIN_TYPE_PROPERTY = ArkdddVocabulary.SUBDOMAIN_TYPE_PROPERTY;
+    private static final String SUBDOMAIN_CLASS = ArkdddVocabulary.SUBDOMAIN_CLASS;
+    private static final String OWNED_BY_PROPERTY = ArkdddVocabulary.OWNED_BY_PROPERTY;
     private static final String UBIQUITOUS_LANGUAGE_TERM_PROPERTY = ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM;
-    private static final String HAS_AGGREGATE_PROPERTY = ARKDDD_NAMESPACE + "hasAggregate";
+    private static final String HAS_AGGREGATE_PROPERTY = ArkdddVocabulary.HAS_AGGREGATE_PROPERTY;
 
-    private static final String CORE_DOMAIN = ARKDDD_NAMESPACE + "CoreDomain";
-    private static final String SUPPORTING_DOMAIN = ARKDDD_NAMESPACE + "SupportingDomain";
-    private static final String GENERIC_DOMAIN = ARKDDD_NAMESPACE + "GenericDomain";
+    private static final String CORE_DOMAIN = ArkdddVocabulary.CORE_DOMAIN;
+    private static final String SUPPORTING_DOMAIN = ArkdddVocabulary.SUPPORTING_DOMAIN;
+    private static final String GENERIC_DOMAIN = ArkdddVocabulary.GENERIC_DOMAIN;
 
     private final DatasetLifecycle lifecycle;
     private final ResourceIdFactory resourceIdFactory;

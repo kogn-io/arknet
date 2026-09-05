@@ -76,14 +76,18 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   kernel must not depend on that module (RDF-free core rule). Verify the two character sets still
   match rather than filing the duplication itself as a finding — the module's `CLAUDE.md` already
   documents why it exists and won't be resolved.
-  **Counter-example found in `arknet-mcp` (2026-08-01, issue #148):** the same-looking pattern is
-  NOT always intentional — `arkddd:ubiquitousLanguageTerm`/`arkddd:BoundedContext` are duplicated
-  between the bc-adapter and `TraceabilityGraph` with a comment claiming `ArkdddVocabulary`'s
-  scope is "deliberately limited" to predicates *not* duplicated elsewhere — the comment is
-  simply wrong, and no architecture test guards it (the existing `arknet-architecture-tests`
-  vocabulary abgleich covers `arkprov`/`arkprj`/`arkarch`, not `arkddd`/`arkproc`). Always verify
-  the "intentional" claim against `arknet-architecture-tests` before accepting it — don't take a
-  comment's word for it.
+  **Counter-example found in `arknet-mcp` (2026-08-01, issue #148, fixed kogn-io/arknet#148):** the
+  same-looking pattern is NOT always intentional -- `arkddd:ubiquitousLanguageTerm`/
+  `arkddd:BoundedContext` were duplicated between the bc-adapter and `TraceabilityGraph` with a
+  comment claiming `ArkdddVocabulary`'s scope was "deliberately limited" to predicates *not*
+  duplicated elsewhere -- the comment was simply wrong, and no architecture test guarded it. The fix
+  widened `ArkdddVocabulary` to mirror the whole active `arknet-ddd.ttl` module (the same "whole
+  module" pattern `ArkprovVocabulary`/`ArkprjVocabulary`/`ArkarchVocabulary` already followed),
+  added the sibling `ArkprocVocabulary` for the same drift on `arkproc:`, and both now have a
+  bidirectional architecture test (`DddVocabularyMatchesOntologyTest`/
+  `ActorVocabularyMatchesOntologyTest`). The lesson stands regardless: always verify an
+  "intentional"/"deliberately limited" scope claim against `arknet-architecture-tests` before
+  accepting it -- don't take a comment's word for it.
 - **Anchor/Project routing is the one recurring hot spot.** `ProjectId`,
   `ProjectResolver`, `UnresolvedProjectAnchorException` (kernel) plus `RegisteredAnchorProjectResolver`
   (`arknet-mcp`) together implement "no default, no fallback, registry lookup only". Any future

@@ -31,6 +31,7 @@ import org.eclipse.rdf4j.model.vocabulary.RDFS;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepository;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepository;
 
@@ -73,13 +74,8 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
     /** The glossary term class every term-referencing property declares as its range. */
     private static final String TERM_CLASS = ArkreqVocabulary.CONCEPT_TYPE;
 
-    /**
-     * The actor class, spelled out rather than taken from a vocabulary constant: no module owns an
-     * {@code arkproc:} vocabulary class today ({@code arknet-actor}'s adapter builds the IRIs from
-     * its own local namespace constant), and inventing one for a test would put the vocabulary in
-     * the wrong place.
-     */
-    private static final String ACTOR_CLASS = "https://w3id.org/arknet/process#Actor";
+    /** The actor class every actor-referencing property declares as its range (kogn-io/arknet#148). */
+    private static final String ACTOR_CLASS = ArkprocVocabulary.ACTOR_TYPE;
 
     private final Model ontologies = parseShippedOntologies();
 

@@ -41,6 +41,7 @@ import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.actor.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
@@ -116,13 +117,15 @@ public class KognioRdfActorRepository implements ActorRepository {
     private static final Logger LOG = LoggerFactory.getLogger(KognioRdfActorRepository.class);
 
     private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
-    private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
     private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
 
-    private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
-    private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
-    private static final String LEGAL_ACTOR_TYPE = ARKPROC_NAMESPACE + "LegalActor";
-    private static final String GROUP_ACTOR_TYPE = ARKPROC_NAMESPACE + "GroupActor";
+    // Shared via ArkprocVocabulary (kogn-io/arknet#148): this class used to declare its own private
+    // copy of these four IRI literals, duplicated with TraceabilityGraph's and
+    // KognioRdfActorLookup's own private copies.
+    private static final String HUMAN_ACTOR_TYPE = ArkprocVocabulary.HUMAN_ACTOR_TYPE;
+    private static final String SYSTEM_ACTOR_TYPE = ArkprocVocabulary.SYSTEM_ACTOR_TYPE;
+    private static final String LEGAL_ACTOR_TYPE = ArkprocVocabulary.LEGAL_ACTOR_TYPE;
+    private static final String GROUP_ACTOR_TYPE = ArkprocVocabulary.GROUP_ACTOR_TYPE;
 
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
     private static final String NAME_PROPERTY = ARKNET_NAMESPACE + "name";
