@@ -77,10 +77,16 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * {@code UseCaseService} do to tell whether a language-tagged field is actually changing - it uses
  * the simpler, equivalent test available here instead: {@code prefLabel}/{@code definition} are the
  * only two language-tagged fields, so "the caller supplied at least one of them" is exactly "this
- * call is changing a language-tagged field". Only then is a {@code null} {@code language} resolved
+ * call is changing a language-tagged field". Only then is a {@code null} {@code language} checked
  * against {@code defaultLanguage} (or rejected, see {@link
  * de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}) - a call that touches neither field
- * never reaches the resolver and can never throw for a missing default.</p>
+ * never reaches the resolver and can never throw for a missing default. The resolved tag itself
+ * is <em>not</em> what the repository receives: it gets {@code language} as the caller named it,
+ * plus {@code defaultLanguage}, and derives the written tag itself - because whether the caller
+ * named a language at all is what decides what a supplied {@code prefLabel} means (a rename under
+ * every tag without one, a same-word translation write with one; kogn-io/arknet#502, FR-10), and
+ * only the repository, which reads the term's current labels for its compare-and-set anyway, can
+ * enforce that without a second, racy read here.</p>
  *
  * <p><strong>Symmetry (kogn-io/arknet#420).</strong> {@code skos:related} is an
  * {@code owl:SymmetricProperty} whose stored direction carries no meaning, and only that one
@@ -202,10 +208,13 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         // language-tagged field", the same condition that would gate the resolveWriteLanguage call
         // if this method did read-then-compare. A no-op call (both null) never reaches the
         // resolver, so it can never throw MissingDefaultLanguageException.
-        String effectiveLanguage = (prefLabel != null || definition != null)
-                ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
-                : language;
-        Term updated = repository.update(projectId, code, prefLabel, definition, effectiveLanguage,
+        if (prefLabel != null || definition != null) {
+            // Rejection only - the resolved tag is discarded. The repository must see language as
+            // the caller named it (null = named none): that is what tells a rename of prefLabel
+            // apart from a translation write of it (see the class-level "Language" note).
+            LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+        }
+        Term updated = repository.update(projectId, code, prefLabel, definition, language,
                 defaultLanguage, broader, related);
         return mergeRelated(projectId, updated);
     }

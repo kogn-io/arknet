@@ -63,6 +63,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermCycleException;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermLabelMismatchException;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 import de.hauschel.arknet.ul.domain.TermReferencedException;
 
@@ -226,36 +227,35 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * Bug 3 (the fix this PR ships, issue #228): {@code update()}'s delete used to be a blind
-     * {@code DELETE WHERE} over the whole predicate, regardless of language - every write that
-     * corrected a term without stating a {@code language} (the untagged case, still the common
-     * one) therefore deleted every language-tagged variant a store-first term legally carried,
-     * even though the caller supplied - and meant to write - only a plain, untagged value. The
-     * delete is now scoped to the same tag as what is being written (untagged here, since no
-     * {@code language} was given), so a variant this call was never asked to touch survives.
+     * FR-10 (kogn-io/arknet#502): a {@code prefLabel} supplied without a {@code language} is a
+     * rename, not a scoped correction - it replaces the word under EVERY language tag the term
+     * already carries at once, not just an untagged slot. Renaming "Kunde"@de/"Customer"@en
+     * therefore writes "Bestandskunde" under BOTH tags, leaves no untagged literal behind, and
+     * leaves neither original word in the store.
      */
     @Test
-    void updateGivenAPrefLabelWithoutLanguageOnlyReplacesTheUntaggedVariant() {
+    void updateGivenAPrefLabelWithoutLanguageRenamesEveryLanguageTagAtOnce() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"@de, \"Customer\"@en");
 
-        repository.update(PROJECT_A, code, "Bestandskunde", null, null, null, null, null);
+        Term result = repository.update(PROJECT_A, code, "Bestandskunde", null, null, null, null, null);
 
-        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"),
-                "an untagged correction must not delete an unrelated language-tagged variant");
-        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Customer", "en"),
-                "an untagged correction must not delete an unrelated language-tagged variant");
-        assertTrue(subjectHasUntaggedPrefLabel(PROJECT_A, id, "Bestandskunde"));
+        assertEquals("Bestandskunde", result.prefLabel());
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Bestandskunde", "de"));
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Bestandskunde", "en"));
+        assertFalse(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
+        assertFalse(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Customer", "en"));
+        assertFalse(subjectHasUntaggedPrefLabel(PROJECT_A, id, "Bestandskunde"));
     }
 
     /**
-     * A second, later untagged correction replaces only the first untagged correction's own
-     * value - it does not accumulate untagged duplicates, and still leaves every language-tagged
-     * variant alone.
+     * A second rename without a {@code language} replaces the first rename's word under every tag
+     * again - it does not accumulate anything, and the term still carries exactly one
+     * {@code prefLabel} literal per language tag it started with.
      */
     @Test
-    void updateGivenAPrefLabelWithoutLanguageTwiceReplacesTheUntaggedVariantEachTime() {
+    void updateGivenAPrefLabelWithoutLanguageTwiceRenamesToTheLatestWordEachTime() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"@de, \"Customer\"@en");
@@ -263,36 +263,117 @@ class KognioRdfTermRepositoryTest {
         repository.update(PROJECT_A, code, "Bestandskunde", null, null, null, null, null);
         repository.update(PROJECT_A, code, "Stammkunde", null, null, null, null, null);
 
-        assertFalse(subjectHasUntaggedPrefLabel(PROJECT_A, id, "Bestandskunde"));
-        assertTrue(subjectHasUntaggedPrefLabel(PROJECT_A, id, "Stammkunde"));
-        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
-        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Customer", "en"));
+        assertFalse(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Bestandskunde", "de"));
+        assertFalse(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Bestandskunde", "en"));
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Stammkunde", "de"));
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Stammkunde", "en"));
+        assertFalse(subjectHasUntaggedPrefLabel(PROJECT_A, id, "Stammkunde"));
     }
 
     /**
-     * Replacing {@code prefLabel} with an explicit {@code language} argument only replaces the
-     * variant carrying that same tag - every other language variant, including an untagged one,
-     * survives untouched. This is the counterpart write path to {@code term_add}'s own
-     * {@code language} argument (see {@link #createWritesALanguageTaggedPrefLabelAndDefinition()}).
+     * FR-10: a {@code prefLabel} supplied WITH an explicit {@code language} is a
+     * translation-scoped write, not a rename - it must equal every word the term already carries.
+     * "Stammkunde"@de is therefore rejected against a term whose existing label is
+     * "Kunde"/"Customer" (both named in the exception), and the store is left completely
+     * untouched.
      */
     @Test
-    void updateGivenAPrefLabelWithLanguageReplacesOnlyThatLanguageVariant() {
+    void updateGivenAPrefLabelWithLanguageThatDiffersFromTheExistingLabelIsRejected() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"@de, \"Customer\"@en");
 
-        Term result = repository.update(PROJECT_A, code, "Stammkunde", null, "de", null, null, null);
+        TermLabelMismatchException ex = assertThrows(TermLabelMismatchException.class, () -> repository.update(
+                PROJECT_A, code, "Stammkunde", null, "de", null, null, null));
 
-        assertEquals("Stammkunde", result.prefLabel());
-        assertFalse(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
-        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Stammkunde", "de"));
+        assertTrue(ex.getMessage().contains("Kunde"));
+        assertTrue(ex.getMessage().contains("Customer"));
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
         assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Customer", "en"));
+        assertFalse(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Stammkunde", "de"));
     }
 
     /**
-     * Issue #258, decision 3: an {@code update} that writes {@code prefLabel} under the tag equal
-     * to {@code defaultLanguage} sweeps away a stale untagged sibling of the same predicate
-     * instead of preserving it as a spurious "other" language variant.
+     * A rejected translation-scoped write never reaches the funnel at all - no revision is
+     * recorded and the head does not move, exactly like the field-less no-op guarded by
+     * {@link #updateWithNoFieldsIsANoOpThatRecordsNoRevision()}.
+     */
+    @Test
+    void updateGivenAPrefLabelMismatchRecordsNoRevisionAndDoesNotMoveTheHead() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Kunde", "Erste Definition.", null), "de");
+        List<String> headAfterCreate = headsOf(id);
+
+        assertThrows(TermLabelMismatchException.class, () -> repository.update(
+                PROJECT_A, code, "Customer", null, "en", null, null, null));
+
+        assertEquals(1, revisionsOf(id).size(), "a rejected mismatch must record no further revision");
+        assertEquals(headAfterCreate, headsOf(id), "a rejected mismatch must not move the head");
+    }
+
+    /**
+     * A translation-scoped write (explicit {@code language}) of the SAME word the term already
+     * carries is not a mismatch: it adds that tag alongside the existing one(s) instead of
+     * replacing anything (FR-10) - "Kunde"@de plus an explicit "en" write of the identical word
+     * ends up as "Kunde" under both @de and @en.
+     */
+    @Test
+    void updateGivenAPrefLabelWithLanguageAndTheSameWordAddsTheTag() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"@de");
+
+        Term result = repository.update(PROJECT_A, code, "Kunde", null, "en", null, null, null);
+
+        assertEquals("Kunde", result.prefLabel());
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "en"));
+    }
+
+    /**
+     * A rename also adds the project's own default language tag alongside whatever tags the term
+     * already carries (FR-10): renaming a term that so far carries only "Kunde"@de, in a project
+     * whose default language is "en", writes the new word under BOTH @de and @en - not just the
+     * tag(s) already present.
+     */
+    @Test
+    void updateGivenAPrefLabelWithoutLanguageAlsoWritesTheProjectDefaultTag() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"@de");
+
+        Term result = repository.update(PROJECT_A, code, "Client", null, null, "en", null, null);
+
+        assertEquals("Client", result.prefLabel());
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Client", "de"));
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Client", "en"));
+        assertFalse(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
+    }
+
+    /**
+     * A rename of a term that carries no tagged label at all, in a project with no default
+     * language either, has nothing to write the new word under except the untagged slot - it
+     * stays untagged, same as before FR-10.
+     */
+    @Test
+    void updateGivenAPrefLabelWithoutLanguageOnAnUntaggedTermWithNoDefaultStaysUntagged() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Kunde", "def a", null), null);
+
+        Term result = repository.update(PROJECT_A, code, "Stammkunde", null, null, null, null, null);
+
+        assertEquals("Stammkunde", result.prefLabel());
+        assertTrue(subjectHasUntaggedPrefLabel(PROJECT_A, id, "Stammkunde"));
+        assertFalse(subjectHasUntaggedPrefLabel(PROJECT_A, id, "Kunde"));
+    }
+
+    /**
+     * Issue #258, decision 3, still valid for a same-word translation write (FR-10): writing
+     * {@code prefLabel} under the tag equal to {@code defaultLanguage} sweeps away a stale
+     * untagged sibling of the same predicate instead of preserving it as a spurious "other"
+     * language variant.
      */
     @Test
     void updateSweepsAnUntaggedPrefLabelWhenTheWrittenTagEqualsTheProjectDefault() {
@@ -300,17 +381,19 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-1");
         givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"");
 
-        Term result = repository.update(PROJECT_A, code, "Bestandskunde", null, "de", "de", null, null);
+        Term result = repository.update(PROJECT_A, code, "Kunde", null, "de", "de", null, null);
 
-        assertEquals("Bestandskunde", result.prefLabel());
-        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Bestandskunde", "de"));
+        assertEquals("Kunde", result.prefLabel());
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
         assertFalse(subjectHasUntaggedPrefLabel(PROJECT_A, id, "Kunde"));
     }
 
     /**
      * Regression guard for the same sweep (issue #258): writing {@code prefLabel} under an
      * <em>explicit</em>, non-default language must leave an existing untagged variant alone - the
-     * sweep only ever fires when the written tag equals the project's default.
+     * sweep only ever fires when the written tag equals the project's default. Same word as the
+     * existing untagged label (FR-10): this is a translation-scoped write, adding the @fr tag
+     * alongside the untagged one.
      */
     @Test
     void updateKeepsAnUntaggedPrefLabelWhenTheWrittenTagDiffersFromTheProjectDefault() {
@@ -318,22 +401,24 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-1");
         givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"");
 
-        Term result = repository.update(PROJECT_A, code, "Client", null, "fr", "de", null, null);
+        Term result = repository.update(PROJECT_A, code, "Kunde", null, "fr", "de", null, null);
 
-        assertEquals("Client", result.prefLabel());
-        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Client", "fr"));
+        assertEquals("Kunde", result.prefLabel());
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "fr"));
         assertTrue(subjectHasUntaggedPrefLabel(PROJECT_A, id, "Kunde"));
     }
 
     /**
      * P0 regression (PR #230 review comment): {@code deleteTriplesOfLanguage}'s
      * {@code FILTER(lang(?o) = "tag")} compared the raw, unnormalized BCP-47 tag
-     * case-sensitively - a later correction spelling the same language with a different case
+     * case-sensitively - a later write spelling the same language with a different case
      * (e.g. {@code "DE"} where the term was originally written with {@code "de"}) missed the
      * existing literal and inserted a second, differently-cased one instead of replacing it,
      * defeating {@code sh:uniqueLang}. Fixed by canonicalizing every tag through
      * {@code canonicalLanguageTag} before both writing a literal and building the delete filter,
-     * so the two calls always agree on one case.
+     * so the two calls always agree on one case. Same word as the existing label (FR-10): a
+     * translation-scoped write of "Kunde" under "DE" must land as a single, canonicalized @de
+     * literal, not a second, differently-cased one.
      */
     @Test
     void updateWithADifferentlyCasedLanguageTagReplacesTheSameStoredVariantInsteadOfDuplicatingIt() {
@@ -342,10 +427,10 @@ class KognioRdfTermRepositoryTest {
         Term term = new Term(id, code, "Kunde", "Person, die eine Bestellung aufgibt.", null);
         repository.create(PROJECT_A, term, "de");
 
-        Term result = repository.update(PROJECT_A, code, "Stammkunde", null, "DE", null, null, null);
+        Term result = repository.update(PROJECT_A, code, "Kunde", null, "DE", null, null, null);
 
-        assertEquals("Stammkunde", result.prefLabel());
-        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Stammkunde", "de"));
+        assertEquals("Kunde", result.prefLabel());
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
         assertFalse(subjectHasPrefLabelWithRawLanguageTag(PROJECT_A, id, "DE"),
                 "a case-differing language argument must not leave a duplicate, differently-cased literal behind");
     }

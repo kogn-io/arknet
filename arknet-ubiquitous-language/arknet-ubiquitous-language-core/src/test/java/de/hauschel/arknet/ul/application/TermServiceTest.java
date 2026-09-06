@@ -164,16 +164,24 @@ class TermServiceTest {
         assertEquals(List.of(), service.list(WS, null));
     }
 
-    /** Mirrors {@link #addWithoutLanguageFallsBackToTheProjectsDefaultLanguage}, for {@code update}. */
+    /**
+     * Unlike {@code add} (which resolves and passes the resolved tag on), {@code update} passes
+     * {@code language} through raw - {@code null} stays {@code null} when the caller names none -
+     * together with {@code defaultLanguage}, so the out-adapter's own compare-and-set read can tell
+     * a rename (no language) apart from a same-word translation write (kogn-io/arknet#502, FR-10;
+     * see the class-level "Language" note on {@link TermService}). Only the rejection itself
+     * ({@link #updateWithoutLanguageAndWithoutAProjectDefaultIsRejected}) still happens here.
+     */
     @Test
-    void updateWithoutLanguageFallsBackToTheProjectsDefaultLanguage() {
+    void updateWithoutLanguagePassesNullThroughAndTheProjectDefaultAlongside() {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null), DEFAULT_LANGUAGE);
         SpyTermRepository spy = new SpyTermRepository(repository);
         TermService serviceUnderTest = new TermService(spy, new UuidResourceIdFactory());
 
         serviceUnderTest.update(WS, added.code(), "Erstattung", null, null, "de", null, null);
 
-        assertEquals("de", spy.lastUpdateLanguage);
+        assertNull(spy.lastUpdateLanguage);
+        assertEquals("de", spy.lastUpdateDefaultLanguage);
     }
 
     /** Mirrors {@link #addWithoutLanguageAndWithoutAProjectDefaultIsRejected}, for {@code update}. */
@@ -453,6 +461,7 @@ class TermServiceTest {
         private int findAllCalls;
         private String lastCreateLanguage;
         private String lastUpdateLanguage;
+        private String lastUpdateDefaultLanguage;
 
         SpyTermRepository(TermRepository delegate) {
             this.delegate = delegate;
@@ -468,6 +477,7 @@ class TermServiceTest {
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
                 String language, String defaultLanguage, Optional<TermCode> broader, List<TermCode> related) {
             lastUpdateLanguage = language;
+            lastUpdateDefaultLanguage = defaultLanguage;
             return delegate.update(projectId, code, prefLabel, definition, language, defaultLanguage, broader,
                     related);
         }

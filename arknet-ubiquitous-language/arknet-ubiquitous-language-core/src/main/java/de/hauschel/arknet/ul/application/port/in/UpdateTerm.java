@@ -58,17 +58,25 @@ public interface UpdateTerm {
      *
      * @param projectId       the project (architecture model) the term lives in
      * @param code            the term code, e.g. {@code TERM-1}
-     * @param prefLabel       the new preferred label, or {@code null} to leave it unchanged
+     * @param prefLabel       the new preferred label, or {@code null} to leave it unchanged. A
+     *                        glossary term is the same word under every language - only its
+     *                        definition is translated (kogn-io/arknet#502, FR-10) - so this has
+     *                        two meanings, told apart by {@code language}: without one it renames
+     *                        the term under every language tag it carries at once; with one it is
+     *                        a language-scoped write that must equal the existing label (it then
+     *                        adds/refreshes that one tag) and is otherwise rejected
      * @param definition      the new definition, or {@code null} to leave it unchanged
-     * @param language        the BCP-47 language tag the new {@code prefLabel}/{@code definition}
-     *                        is written in (e.g. {@code "de"}), or {@code null} to fall back to
-     *                        {@code defaultLanguage} if either field is actually being corrected
-     *                        (issue #258). Only the existing literal carrying the tag actually
-     *                        written is replaced - every other language-tagged variant of a field
-     *                        being corrected survives untouched, exactly like every field this
-     *                        method does not touch at all, except an existing untagged one that a
-     *                        fallback to {@code defaultLanguage} sweeps away (see {@code
-     *                        TermRepository#update}'s own {@code defaultLanguage} parameter)
+     * @param language        the BCP-47 language tag the new {@code definition} (and a same-word
+     *                        {@code prefLabel}) is written in (e.g. {@code "de"}), or {@code null}
+     *                        to fall back to {@code defaultLanguage} if either field is actually
+     *                        being corrected (issue #258). Only the existing literal carrying the
+     *                        tag actually written is replaced - every other language-tagged
+     *                        variant of a field being corrected survives untouched, exactly like
+     *                        every field this method does not touch at all, except an existing
+     *                        untagged one that a fallback to {@code defaultLanguage} sweeps away
+     *                        (see {@code TermRepository#update}'s own {@code defaultLanguage}
+     *                        parameter); a rename ({@code prefLabel} without {@code language}) is
+     *                        the one write that touches every tag of its field
      * @param defaultLanguage the target project's configured default language (see
      *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - only consulted when {@code
@@ -93,6 +101,9 @@ public interface UpdateTerm {
      *                        term in the target project
      * @throws de.hauschel.arknet.ul.domain.TermCycleException if setting {@code broader} would
      *                        make {@code code} its own (direct or transitive) broader term
+     * @throws de.hauschel.arknet.ul.domain.TermLabelMismatchException if {@code prefLabel} is
+     *                        given together with {@code language} and differs from the label the
+     *                        term already carries - the message names that label
      */
     Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
             String language, String defaultLanguage, Optional<TermCode> broader, List<TermCode> related);

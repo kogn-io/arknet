@@ -314,6 +314,13 @@ class TraceabilityMcpToolsTest {
      * {@code orphan_check} before this fix: the requirement's german prose names the term under
      * its german label, which only matches if the project's own default is honoured rather than
      * the daemon's.
+     *
+     * <p>The {@code @en} variant is seeded store-first, straight into the graph, rather than
+     * through {@code TermService#update}: since kogn-io/arknet#502 (FR-10) a glossary term is the
+     * same word under every language tag, so {@code term_update} itself refuses to write "Business
+     * Code" under an existing "Business-Code" - this test still needs the pre-existing,
+     * two-different-words shape to pin the regression, which a store-first term written before the
+     * rule held can still legally carry.</p>
      */
     @Test
     void orphanCheckMatchesUnlinkedMentionsAgainstTheProjectsOwnDefaultLanguageNotTheDaemons() {
@@ -326,8 +333,16 @@ class TraceabilityMcpToolsTest {
 
             Term term = terms.add(project,
                     new NewTerm("Business-Code", "Ein Business-Code ist eine kurze Kennung.", null), "de");
-            terms.update(project, term.code(), "Business Code", "A business code is a short identifier.",
-                    "en", "de", null, null);
+            try (io.kogn.rdf.dataset.hosting.DatasetHandle handle = context
+                    .getBean(io.kogn.rdf.dataset.hosting.DatasetLifecycle.class)
+                    .acquire(new io.kogn.rdf.dataset.hosting.DatasetId(project.value()))) {
+                handle.transactor().inTransaction(tx -> {
+                    tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { <"
+                            + term.id().value().value() + "> "
+                            + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Business Code\"@en } }");
+                    return null;
+                });
+            }
 
             requirements.add(project, new NewRequirement("Requirement anlegen",
                     "Nach dem Anlegen liefert das System einen eindeutigen Business-Code fuer das Requirement.", null,

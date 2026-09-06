@@ -155,7 +155,10 @@ mehrere sprachgetaggte RDF-Literale je Ressource, ueber ein optionales
 `DisplayLocale`-Fallback-Kette aufgeloest. Ausgenommen von der Uebersetzung
 ist das `prefLabel` eines Glossarbegriffs: es traegt unter jedem Sprachtag
 dasselbe Wort, uebersetzt wird allein die Definition -- zwei Woerter fuer
-denselben Begriff heben auf, wozu ein Glossar da ist. Arknets **eigenes**
+denselben Begriff heben auf, wozu ein Glossar da ist. `term_update` erzwingt
+das: ein abweichendes `label` unter explizitem `language` wird abgelehnt,
+ein `label` ohne `language` benennt den Begriff dagegen unter allen bereits
+vorhandenen Sprachtags gleichzeitig um. Arknets **eigenes**
 Modell in diesem Store -- Glossar, Requirements, Constraints, Use Cases und
 die eigenen ADRs -- wird in **beiden** Sprachen gefuehrt, Deutsch und Englisch
 gleichrangig: eine inhaltliche Aenderung an einem mehrsprachigen Feld ist erst

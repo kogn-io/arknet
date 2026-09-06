@@ -542,6 +542,13 @@ class StoreReportToolsTest {
      * carries both a german and an english {@code skos:prefLabel}; a project configured with
      * {@code defaultLanguage} {@code "de"} must see the german one, even though every collaborator
      * below is otherwise built against {@link DisplayLocale#DEFAULT} (english).
+     *
+     * <p>The two words are seeded store-first, straight into the graph, rather than through
+     * {@code TermService#update}: since kogn-io/arknet#502 (FR-10) a glossary term is the same
+     * word under every language tag, so {@code term_update} itself refuses to write "Login" under
+     * an existing "Anmeldung" - this test still needs the pre-existing, two-different-words shape
+     * to pin the HTML's per-language span markup, which a store-first term written before the rule
+     * held can still legally carry.</p>
      */
     @Test
     void storeOverviewGlossaryHonorsTheProjectsOwnDefaultLanguageNotTheDaemons() throws Exception {
@@ -549,8 +556,14 @@ class StoreReportToolsTest {
         final TermService termService = new TermService(termRepository, new UuidResourceIdFactory());
         final Term deTerm = termService.add(PROJECT,
                 new NewTerm("Anmeldung", "Der Nachweis der eigenen Identitaet.", null, null), "de");
-        termService.update(PROJECT, deTerm.code(), "Login", "The act of proving one's identity.",
-                "en", "de", null, null);
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { <"
+                        + deTerm.id().value().value() + "> "
+                        + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Login\"@en } }");
+                return null;
+            });
+        }
 
         final Prefixes prefixes = Prefixes.defaults();
         final StoreReader reader = new StoreReader(lifecycle);
