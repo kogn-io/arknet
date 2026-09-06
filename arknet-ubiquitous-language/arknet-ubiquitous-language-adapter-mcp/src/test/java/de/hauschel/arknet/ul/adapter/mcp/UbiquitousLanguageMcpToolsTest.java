@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -21,11 +22,13 @@ import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
+import de.hauschel.arknet.ul.application.port.in.DescribeTermDisplayFallback;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermDisplayFallback;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**
@@ -50,7 +53,7 @@ class UbiquitousLanguageMcpToolsTest {
 
     private final Stub stub = new Stub();
     private final UbiquitousLanguageMcpTools adapter =
-            new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, PROJECTS);
+            new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS);
 
     @Test
     void declaresTheFiveTermTools() {
@@ -68,17 +71,19 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(null, stub, stub, stub, stub, PROJECTS));
+                () -> new UbiquitousLanguageMcpTools(null, stub, stub, stub, stub, stub, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, null, stub, PROJECTS));
+                () -> new UbiquitousLanguageMcpTools(stub, stub, null, stub, stub, stub, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, null, PROJECTS));
+                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, null, stub, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, null, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, null));
+                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, null));
     }
 
     /** {@code term_delete} passes the parsed code straight through to the in-port. */
@@ -235,7 +240,7 @@ class UbiquitousLanguageMcpToolsTest {
     void listRendersNoTermsFallbackWhenEmpty() {
         stub.termsForList = List.of();
 
-        String rendered = adapter.list(null, null);
+        String rendered = adapter.list(null, null, null);
 
         assertEquals("(no terms)", rendered);
     }
@@ -248,7 +253,7 @@ class UbiquitousLanguageMcpToolsTest {
                 new TermCode("TERM-2"), "Bestellung", "def b", null);
         stub.termsForList = List.of(first, second);
 
-        String rendered = adapter.list(null, null);
+        String rendered = adapter.list(null, null, null);
 
         assertEquals("TERM-1 Gutschrift - def a\nTERM-2 Bestellung - def b", rendered);
     }
@@ -284,27 +289,77 @@ class UbiquitousLanguageMcpToolsTest {
     }
 
     /**
-     * {@code term_list} exposes no explicit {@code displayLocale} tool argument of its own
-     * (unlike {@code term_get}) - issue #274 asks only that it fall back to the resolved
-     * project's own configured default language automatically, the same value {@code
-     * term_add}/{@code term_update} already pass to their in-ports. Before this fix, {@code
-     * UbiquitousLanguageMcpTools#list} called {@code listTerms.list(project.id())} without any
-     * locale at all, so every listed term's label was read under whichever language the
-     * process-wide, per-daemon default happened to be - never the calling project's own, even
-     * for a project (like this test's) whose configured default differs from it.
+     * {@code term_list} falls back to the resolved project's own configured default language
+     * automatically when its own {@code displayLocale} argument is omitted (issue #274) - the
+     * same value {@code term_add}/{@code term_update} already pass to their in-ports. Before
+     * issue #274's fix, {@code UbiquitousLanguageMcpTools#list} called {@code
+     * listTerms.list(project.id())} without any locale at all, so every listed term's label was
+     * read under whichever language the process-wide, per-daemon default happened to be - never
+     * the calling project's own, even for a project (like this test's) whose configured default
+     * differs from it.
      */
     @Test
     void listPassesTheProjectsDefaultLanguageThrough() {
         UbiquitousLanguageMcpTools adapterWithGermanDefault =
-                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT);
+                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT);
 
-        adapterWithGermanDefault.list(null, null);
+        adapterWithGermanDefault.list(null, null, null);
 
         assertEquals("de", stub.lastListDisplayLocale);
     }
 
-    /** Structural stub implementing the five driving in-ports. */
-    private static final class Stub implements AddTerm, ListTerms, GetTerm, UpdateTerm, DeleteTerm {
+    /**
+     * {@code term_list}'s own explicit {@code displayLocale} argument wins over the project's
+     * configured default (kogn-io/arknet#475) - the same explicit-wins-otherwise-fall-back
+     * merge {@link #getPassesTheDisplayLocaleArgumentThrough} already proves for {@code
+     * term_get}.
+     */
+    @Test
+    void listPassesAnExplicitDisplayLocaleArgumentThrough() {
+        UbiquitousLanguageMcpTools adapterWithGermanDefault =
+                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT);
+
+        adapterWithGermanDefault.list(null, "fr", null);
+
+        assertEquals("fr", stub.lastListDisplayLocale);
+    }
+
+    /**
+     * The core of issue #475: a term shown under a fallen-back language (its gegensprache is
+     * missing) carries a visible {@code [fallback: ...]} tag naming the language actually shown.
+     */
+    @Test
+    void listMarksATermWhoseDisplayedLanguageFellBack() {
+        Term term = new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-1"), "Customer", "def en", null);
+        stub.termsForList = List.of(term);
+        stub.fallbacksForList = Map.of(term.code(), new TermDisplayFallback("en", null));
+
+        String rendered = adapter.list(null, null, null);
+
+        assertEquals("TERM-1 Customer - def en [fallback: prefLabel=en]", rendered);
+    }
+
+    /**
+     * The counterpart to {@link #listMarksATermWhoseDisplayedLanguageFellBack}: a term whose
+     * gegensprache is present carries no fallback tag at all - the normal case stays free of
+     * noise.
+     */
+    @Test
+    void listLeavesATermWithNoFallbackUnmarked() {
+        Term term = new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-1"), "Kunde", "def de", null);
+        stub.termsForList = List.of(term);
+        stub.fallbacksForList = Map.of();
+
+        String rendered = adapter.list(null, "de", null);
+
+        assertEquals("TERM-1 Kunde - def de", rendered);
+    }
+
+    /** Structural stub implementing the six driving in-ports. */
+    private static final class Stub implements AddTerm, ListTerms, DescribeTermDisplayFallback, GetTerm,
+            UpdateTerm, DeleteTerm {
 
         private NewTerm lastCommand;
         private TermCode lastUpdatedTerm;
@@ -317,6 +372,7 @@ class UbiquitousLanguageMcpToolsTest {
         private String lastGetDisplayLocale;
         private String lastListDisplayLocale;
         private List<Term> termsForList = List.of();
+        private Map<TermCode, TermDisplayFallback> fallbacksForList = Map.of();
         private Optional<Term> termForGet = Optional.empty();
 
         @Override
@@ -334,6 +390,11 @@ class UbiquitousLanguageMcpToolsTest {
         public List<Term> list(ProjectId projectId, String displayLocale) {
             lastListDisplayLocale = displayLocale;
             return termsForList;
+        }
+
+        @Override
+        public Map<TermCode, TermDisplayFallback> describe(ProjectId projectId, String displayLocale) {
+            return fallbacksForList;
         }
 
         @Override

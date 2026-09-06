@@ -6,6 +6,7 @@ package de.hauschel.arknet.req.adapter.kogniordf;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -43,6 +44,7 @@ import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintConcurrentlyModifiedException;
+import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.ConstraintId;
 import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
 import de.hauschel.arknet.req.domain.ConstraintReferencedException;
@@ -548,6 +550,59 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
                     .filter(Objects::nonNull)
                     .toList();
         }
+    }
+
+    /**
+     * Companion to {@link #findAll}: not the displayed {@code title}/{@code statement}, but
+     * whether displaying it required falling back past the requested/project-default language
+     * tier (kogn-io/arknet#475). Shares the same {@code literalsBySubject} bulk reads with
+     * {@link #findAll} - the very candidates it already selects among - rather than re-deriving
+     * them.
+     */
+    @Override
+    public Map<ConstraintCode, ConstraintDisplayFallback> findAllDisplayFallback(
+            ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        DisplayLocale effective = this.displayLocale.withRequestedOverride(displayLocale);
+
+        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
+                + constraintWhereClause("?s <" + IDENTIFIER_PROPERTY + "> ?identifier . ")
+                + "FILTER(isIRI(?s)) } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            SparqlQuery sparql = handle.sparqlQuery();
+            Map<String, List<LocalizedLiteral>> titlesBySubject = literalsBySubject(sparql, TITLE_PROPERTY);
+            Map<String, List<LocalizedLiteral>> statementsBySubject = literalsBySubject(sparql, STATEMENT_PROPERTY);
+            Map<ConstraintCode, ConstraintDisplayFallback> result = new LinkedHashMap<>();
+            sparql.select(query).forEach(row -> {
+                String subject = iriOf(row, "s").getIRIString();
+                ConstraintCode code = new ConstraintCode(literalOf(row, "identifier").getLexicalForm());
+                ConstraintDisplayFallback fallback = new ConstraintDisplayFallback(
+                        fallbackTag(titlesBySubject.getOrDefault(subject, List.of()), effective),
+                        fallbackTag(statementsBySubject.getOrDefault(subject, List.of()), effective));
+                if (!fallback.isEmpty()) {
+                    result.put(code, fallback);
+                }
+            });
+            return result;
+        }
+    }
+
+    /**
+     * {@code null} if the candidate matching {@code displayLocale}'s requested language was
+     * shown (the requested tier of {@link DisplayLocale#select} succeeded, so nothing fell
+     * back); otherwise the tag of whatever was shown instead - a BCP-47 tag, or {@code ""} for
+     * an untagged literal.
+     */
+    private static String fallbackTag(List<LocalizedLiteral> candidates, DisplayLocale displayLocale) {
+        LocalizedLiteral selected = displayLocale.select(candidates)
+                .orElseThrow(() -> new IllegalStateException(
+                        "a required join, so at least one candidate must exist"));
+        String tag = selected.languageTag();
+        String requestedLanguage = displayLocale.requested().getLanguage();
+        boolean matchesRequested = tag != null
+                && Locale.forLanguageTag(tag).getLanguage().equalsIgnoreCase(requestedLanguage);
+        return matchesRequested ? null : (tag == null ? "" : tag);
     }
 
     /**

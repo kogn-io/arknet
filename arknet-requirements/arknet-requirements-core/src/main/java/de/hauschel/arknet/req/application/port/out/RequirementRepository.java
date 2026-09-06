@@ -14,6 +14,7 @@ import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
+import de.hauschel.arknet.req.domain.RequirementDisplayFallback;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementReadConflictException;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
@@ -341,6 +342,22 @@ public interface RequirementRepository {
      *                                            (a pathological, sustained contention case)
      */
     List<Requirement> findAll(ProjectId projectId, String displayLocale);
+
+    /**
+     * Companion to {@link #findAll}, read the same way but reporting the opposite thing: not the
+     * displayed value, but whether displaying it required falling back past the requested/
+     * project-default language tier of {@link de.hauschel.arknet.kernel.DisplayLocale#select}
+     * (kogn-io/arknet#475). {@link #findAll} itself cannot answer this - it hands back a plain
+     * {@code String}, which looks identical whether the requested language was found or the chain
+     * degraded past it.
+     *
+     * @param projectId     the project (architecture model) to list requirements from
+     * @param displayLocale the same override {@link #findAll} accepts
+     * @return see {@link
+     *         de.hauschel.arknet.req.application.port.in.DescribeRequirementDisplayFallback#describe}
+     */
+    Map<RequirementCode, RequirementDisplayFallback> findAllDisplayFallback(
+            ProjectId projectId, String displayLocale);
 
     /**
      * Returns the business code of every requirement recorded in a project, whether or not that

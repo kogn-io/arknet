@@ -25,6 +25,7 @@ import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
+import de.hauschel.arknet.req.application.port.in.DescribeRequirementDisplayFallback;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkConstraint;
@@ -41,6 +42,7 @@ import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementDisplayFallback;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
 import de.hauschel.arknet.req.domain.RequirementStatus;
@@ -75,7 +77,7 @@ class RequirementMcpToolsTest {
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RecordingResolveConstraints resolveConstraints = new RecordingResolveConstraints();
     private final RequirementMcpTools adapter = new RequirementMcpTools(
-            stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS);
+            stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS);
 
     @Test
     void declaresTheEightRequirementTools() {
@@ -95,53 +97,58 @@ class RequirementMcpToolsTest {
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        null, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        null, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
                         PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, null, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        stub, null, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
                         PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, null, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        stub, stub, null, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
                         PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, null, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        stub, stub, stub, null, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
                         PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, null, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        stub, stub, stub, stub, null, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
                         PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, null, stub, stub, stub, resolveTerms, resolveConstraints,
+                        stub, stub, stub, stub, stub, null, stub, stub, stub, stub, resolveTerms, resolveConstraints,
                         PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, null, stub, stub, resolveTerms, resolveConstraints,
+                        stub, stub, stub, stub, stub, stub, null, stub, stub, stub, resolveTerms, resolveConstraints,
                         PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, stub, null, stub, resolveTerms, resolveConstraints,
+                        stub, stub, stub, stub, stub, stub, stub, null, stub, stub, resolveTerms, resolveConstraints,
                         PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, stub, stub, null, resolveTerms, resolveConstraints,
+                        stub, stub, stub, stub, stub, stub, stub, stub, null, stub, resolveTerms, resolveConstraints,
                         PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, stub, stub, stub, null, resolveConstraints, PROJECTS));
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, null, resolveTerms, resolveConstraints,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, null, PROJECTS));
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null, resolveConstraints,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, null, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
                         null));
     }
 
@@ -284,7 +291,7 @@ class RequirementMcpToolsTest {
     @Test
     void getPassesAnExplicitDisplayLocaleThrough() {
         RequirementMcpTools adapterWithDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithDefault.get(null, "FR-1", "en", null);
 
@@ -295,7 +302,7 @@ class RequirementMcpToolsTest {
     @Test
     void getFallsBackToTheProjectsDefaultLanguageWhenDisplayLocaleIsOmitted() {
         RequirementMcpTools adapterWithDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithDefault.get(null, "FR-1", null, null);
 
@@ -303,23 +310,73 @@ class RequirementMcpToolsTest {
     }
 
     /**
-     * {@code req_list} exposes no explicit {@code displayLocale} tool argument of its own (unlike
-     * {@code req_get}) - issue #281 asks only that it fall back to the resolved project's own
-     * configured default language automatically, the same value {@code req_add}/{@code req_update}
-     * already pass to their in-ports. Before this fix, {@code RequirementMcpTools#list} called
-     * {@code listRequirements.list(projectId)} without any locale at all, so every listed
-     * requirement's title/description was read under whichever language the process-wide,
-     * per-daemon default happened to be - never the calling project's own, even for a project
-     * (like this test's) whose configured default differs from it.
+     * {@code req_list} falls back to the resolved project's own configured default language
+     * automatically when its own {@code displayLocale} argument is omitted (issue #281) - the
+     * same value {@code req_add}/{@code req_update} already pass to their in-ports. Before issue
+     * #281's fix, {@code RequirementMcpTools#list} called {@code listRequirements.list(projectId)}
+     * without any locale at all, so every listed requirement's title/description was read under
+     * whichever language the process-wide, per-daemon default happened to be - never the calling
+     * project's own, even for a project (like this test's) whose configured default differs from
+     * it.
      */
     @Test
     void listPassesTheProjectsDefaultLanguageThrough() {
         RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
-                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
-        adapterWithGermanDefault.list(null, null);
+        adapterWithGermanDefault.list(null, null, null);
 
         assertEquals("de", stub.lastListDisplayLocale);
+    }
+
+    /**
+     * {@code req_list}'s own explicit {@code displayLocale} argument wins over the project's
+     * configured default (kogn-io/arknet#475).
+     */
+    @Test
+    void listPassesAnExplicitDisplayLocaleArgumentThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
+                stub, stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithGermanDefault.list(null, "fr", null);
+
+        assertEquals("fr", stub.lastListDisplayLocale);
+    }
+
+    /**
+     * The core of issue #475: a requirement shown under a fallen-back language (its gegensprache
+     * is missing) carries a visible {@code [fallback: ...]} tag naming the language actually
+     * shown.
+     */
+    @Test
+    void listMarksARequirementWhoseDisplayedLanguageFellBack() {
+        Requirement requirement = new Requirement(ID, new RequirementCode("FR-1"), "t", "d", null,
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, List.of(),
+                DEFAULT_CRITERIA, List.of());
+        stub.allRequirements = List.of(requirement);
+        stub.fallbacksForList = Map.of(requirement.code(), new RequirementDisplayFallback("en", null));
+
+        String rendered = adapter.list(null, null, null);
+
+        assertTrue(rendered.contains("[fallback: title=en]"), rendered);
+    }
+
+    /**
+     * The counterpart to {@link #listMarksARequirementWhoseDisplayedLanguageFellBack}: a
+     * requirement whose gegensprache is present carries no fallback tag at all - the normal case
+     * stays free of noise.
+     */
+    @Test
+    void listLeavesARequirementWithNoFallbackUnmarked() {
+        Requirement requirement = new Requirement(ID, new RequirementCode("FR-1"), "t", "d", null,
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, List.of(),
+                DEFAULT_CRITERIA, List.of());
+        stub.allRequirements = List.of(requirement);
+        stub.fallbacksForList = Map.of();
+
+        String rendered = adapter.list(null, "de", null);
+
+        assertFalse(rendered.contains("[fallback:"), rendered);
     }
 
     /** One of the two legal transitions: {@code ACCEPTED} reaches {@link AcceptRequirement}. */
@@ -397,7 +454,7 @@ class RequirementMcpToolsTest {
     @Test
     void acceptPassesTheProjectsDefaultLanguageThrough() {
         RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
-                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithGermanDefault.accept(null, "FR-1", "ACCEPTED", null);
 
@@ -407,7 +464,7 @@ class RequirementMcpToolsTest {
     @Test
     void proposePassesTheProjectsDefaultLanguageThrough() {
         RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
-                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithGermanDefault.accept(null, "FR-1", "PROPOSED", null);
 
@@ -417,7 +474,7 @@ class RequirementMcpToolsTest {
     @Test
     void linkTermPassesTheProjectsDefaultLanguageThrough() {
         RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
-                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithGermanDefault.linkTerm(null, "FR-1", "TERM-1", null);
 
@@ -427,7 +484,7 @@ class RequirementMcpToolsTest {
     @Test
     void linkConstraintPassesTheProjectsDefaultLanguageThrough() {
         RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
-                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithGermanDefault.linkConstraint(null, "FR-1", "TCON-1", null);
 
@@ -611,7 +668,7 @@ class RequirementMcpToolsTest {
                 requirementWithTerms("FR-1", termA),
                 requirementWithTerms("FR-2", termB));
 
-        String rendered = adapter.list(null, null);
+        String rendered = adapter.list(null, null, null);
 
         assertEquals(1, resolveTerms.callCount());
         assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
@@ -622,7 +679,7 @@ class RequirementMcpToolsTest {
     void listOfRequirementsWithoutAnyLinkedTermsDoesNotCallResolveTerms() {
         stub.allRequirements = List.of(requirementWithTerms("FR-1"));
 
-        adapter.list(null, null);
+        adapter.list(null, null, null);
 
         assertEquals(0, resolveTerms.callCount());
     }
@@ -636,10 +693,11 @@ class RequirementMcpToolsTest {
                 RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, terms, DEFAULT_CRITERIA, List.of());
     }
 
-    /** Structural stub implementing the nine driving in-ports. */
+    /** Structural stub implementing the ten driving in-ports. */
     private static final class Stub
-            implements AddRequirement, ListRequirements, GetRequirement, AcceptRequirement, ProposeRequirement,
-            LinkTerm, LinkConstraint, UpdateRequirement, GetRequirementSchema {
+            implements AddRequirement, ListRequirements, DescribeRequirementDisplayFallback, GetRequirement,
+            AcceptRequirement, ProposeRequirement, LinkTerm, LinkConstraint, UpdateRequirement,
+            GetRequirementSchema {
 
         private RequirementCode lastAcceptedRequirement;
         private RequirementCode lastProposedRequirement;
@@ -651,6 +709,7 @@ class RequirementMcpToolsTest {
         private String lastLinkedConstraintCode;
         private ResourceId nextLinkedConstraintResourceId;
         private List<Requirement> allRequirements = List.of();
+        private Map<RequirementCode, RequirementDisplayFallback> fallbacksForList = Map.of();
         private NewRequirement lastAddCommand;
         private RequirementCode lastUpdatedRequirement;
         private String lastUpdateTitle;
@@ -679,6 +738,11 @@ class RequirementMcpToolsTest {
         public List<Requirement> list(ProjectId projectId, String displayLocale) {
             lastListDisplayLocale = displayLocale;
             return allRequirements;
+        }
+
+        @Override
+        public Map<RequirementCode, RequirementDisplayFallback> describe(ProjectId projectId, String displayLocale) {
+            return fallbacksForList;
         }
 
         private String lastGetDisplayLocale;

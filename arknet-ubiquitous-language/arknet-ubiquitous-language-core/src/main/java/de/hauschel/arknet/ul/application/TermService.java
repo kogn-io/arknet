@@ -21,6 +21,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
+import de.hauschel.arknet.ul.application.port.in.DescribeTermDisplayFallback;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
@@ -29,6 +30,7 @@ import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermDisplayFallback;
 import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
@@ -98,7 +100,8 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * memory. {@link #add} pays none either, for a stronger reason: nothing can already point at an
  * identity minted moments ago.</p>
  */
-public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, UpdateTerm, DeleteTerm {
+public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, UpdateTerm, DeleteTerm,
+        DescribeTermDisplayFallback {
 
     private static final String ID_PREFIX = "TERM";
 
@@ -174,6 +177,12 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         return all.stream()
                 .map(term -> withRelated(term, mergedRelated(term.related(), relatedFrom.get(term.code()))))
                 .toList();
+    }
+
+    @Override
+    public Map<TermCode, TermDisplayFallback> describe(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        return repository.findAllDisplayFallback(projectId, displayLocale);
     }
 
     @Override

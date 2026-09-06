@@ -4,6 +4,7 @@
 package de.hauschel.arknet.req.application.port.out;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import de.hauschel.arknet.kernel.ResourceId;
@@ -12,6 +13,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintConcurrentlyModifiedException;
+import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
 import de.hauschel.arknet.req.domain.ConstraintReferencedException;
 import de.hauschel.arknet.req.domain.DuplicateConstraintCodeException;
@@ -208,6 +210,21 @@ public interface ConstraintRepository {
      * @return all constraints, never {@code null}
      */
     List<Constraint> findAll(ProjectId projectId, String displayLocale);
+
+    /**
+     * Companion to {@link #findAll}, read the same way but reporting the opposite thing: not the
+     * displayed value, but whether displaying it required falling back past the requested/
+     * project-default language tier of {@link de.hauschel.arknet.kernel.DisplayLocale#select}
+     * (kogn-io/arknet#475). {@link #findAll} itself cannot answer this - it hands back a plain
+     * {@code String}, which looks identical whether the requested language was found or the chain
+     * degraded past it.
+     *
+     * @param projectId     the project (architecture model) to list constraints from
+     * @param displayLocale the same override {@link #findAll} accepts
+     * @return see {@link
+     *         de.hauschel.arknet.req.application.port.in.DescribeConstraintDisplayFallback#describe}
+     */
+    Map<ConstraintCode, ConstraintDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale);
 
     /**
      * Returns the business code of every constraint recorded in a project, whether or not that

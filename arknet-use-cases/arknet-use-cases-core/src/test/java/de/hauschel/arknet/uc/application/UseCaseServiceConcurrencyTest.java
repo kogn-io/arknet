@@ -27,6 +27,7 @@ import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
+import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
 /**
@@ -237,6 +238,11 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
+        public Map<UseCaseCode, UseCaseDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+            return delegate.findAllDisplayFallback(projectId, displayLocale);
+        }
+
+        @Override
         public List<UseCaseCode> findAllCodes(ProjectId projectId) {
             List<UseCaseCode> result = delegate.findAllCodes(projectId);
             if (!injected) {
@@ -304,6 +310,11 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
+        public Map<UseCaseCode, UseCaseDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+            return delegate.findAllDisplayFallback(projectId, displayLocale);
+        }
+
+        @Override
         public List<UseCaseCode> findAllCodes(ProjectId projectId) {
             return delegate.findAllCodes(projectId);
         }
@@ -355,6 +366,11 @@ class UseCaseServiceConcurrencyTest {
         @Override
         public List<UseCase> findAll(ProjectId projectId, String displayLocale) {
             return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public Map<UseCaseCode, UseCaseDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+            return delegate.findAllDisplayFallback(projectId, displayLocale);
         }
 
         @Override

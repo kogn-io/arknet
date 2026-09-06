@@ -25,6 +25,7 @@ import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
 import de.hauschel.arknet.adr.application.port.in.CountSkippedAdrs;
 import de.hauschel.arknet.adr.application.port.in.DeleteAdr;
+import de.hauschel.arknet.adr.application.port.in.DescribeAdrDisplayFallback;
 import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
@@ -39,6 +40,7 @@ import de.hauschel.arknet.adr.application.port.out.TermLookup;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
+import de.hauschel.arknet.adr.domain.AdrDisplayFallback;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
@@ -184,8 +186,8 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * it explicitly permits.</p>
  */
 public class AdrService
-        implements AddAdr, ListAdrs, CountSkippedAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr,
-        UnsupersedeAdr, UpdateAdr, DeleteAdr {
+        implements AddAdr, ListAdrs, CountSkippedAdrs, DescribeAdrDisplayFallback, GetAdr, AcceptAdr, RejectAdr,
+        DeprecateAdr, SupersedeAdr, UnsupersedeAdr, UpdateAdr, DeleteAdr {
 
     private static final String CODE_PREFIX = "ADR";
 
@@ -374,6 +376,12 @@ public class AdrService
     /** Adds {@code value} to the {@link TreeSet} bucket keyed by {@code key}, creating it if absent. */
     private static void addCode(Map<String, TreeSet<String>> bucket, String key, String value) {
         bucket.computeIfAbsent(key, ignored -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)).add(value);
+    }
+
+    @Override
+    public Map<AdrCode, AdrDisplayFallback> describe(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        return repository.findAllDisplayFallback(projectId, displayLocale);
     }
 
     @Override

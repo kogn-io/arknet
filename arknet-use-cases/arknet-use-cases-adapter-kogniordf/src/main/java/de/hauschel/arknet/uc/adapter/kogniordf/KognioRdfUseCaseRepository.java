@@ -53,6 +53,7 @@ import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
+import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
@@ -749,6 +750,64 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             }
             return List.copyOf(result);
         }
+    }
+
+    /**
+     * Companion to {@link #findAll}: not the displayed {@code title}/{@code goal} - the two
+     * fields {@code uc_list}'s compact line shows - but whether displaying either required
+     * falling back past the requested/project-default language tier of {@link
+     * DisplayLocale#select} (kogn-io/arknet#475). Mirrors {@link #findAll}'s own
+     * per-use-case reads ({@link #readTitles}/{@link #readGoals}) rather than a single bulk
+     * query, the same N+1 shape {@link #findAll} already has.
+     */
+    @Override
+    public Map<UseCaseCode, UseCaseDisplayFallback> findAllDisplayFallback(
+            ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        DisplayLocale effective = withRequestedOverride(displayLocale);
+        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> ?identifier . "
+                + "FILTER(isIRI(?s)) } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            List<UseCaseRow> rows = handle.sparqlQuery().select(query)
+                    .map(row -> new UseCaseRow(iriOf(row, "s").getIRIString(),
+                            new UseCaseCode(literalOf(row, "identifier").getLexicalForm())))
+                    .toList();
+            Map<UseCaseCode, UseCaseDisplayFallback> result = new LinkedHashMap<>();
+            for (UseCaseRow useCaseRow : rows) {
+                String subject = SparqlTerms.iriRef(useCaseRow.subjectIri());
+                List<LocalizedLiteral> titles = readTitles(handle, subject);
+                List<LocalizedLiteral> goals = readGoals(handle, subject);
+                if (titles.isEmpty() || goals.isEmpty()) {
+                    // The store-first anomaly findAll itself skips this use case for - nothing
+                    // to report a fallback about.
+                    continue;
+                }
+                UseCaseDisplayFallback fallback = new UseCaseDisplayFallback(
+                        fallbackTag(titles, effective), fallbackTag(goals, effective));
+                if (!fallback.isEmpty()) {
+                    result.put(useCaseRow.code(), fallback);
+                }
+            }
+            return result;
+        }
+    }
+
+    /**
+     * {@code null} if the candidate matching {@code displayLocale}'s requested language was
+     * shown (the requested tier of {@link DisplayLocale#select} succeeded, so nothing fell
+     * back); otherwise the tag of whatever was shown instead - a BCP-47 tag, or {@code ""} for
+     * an untagged literal.
+     */
+    private static String fallbackTag(List<LocalizedLiteral> candidates, DisplayLocale displayLocale) {
+        LocalizedLiteral selected = displayLocale.select(candidates)
+                .orElseThrow(() -> new IllegalStateException(
+                        "a required join, so at least one candidate must exist"));
+        String tag = selected.languageTag();
+        String requestedLanguage = displayLocale.requested().getLanguage();
+        boolean matchesRequested = tag != null
+                && Locale.forLanguageTag(tag).getLanguage().equalsIgnoreCase(requestedLanguage);
+        return matchesRequested ? null : (tag == null ? "" : tag);
     }
 
     /**

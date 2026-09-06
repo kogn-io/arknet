@@ -6,7 +6,9 @@ package de.hauschel.arknet.req.adapter.mcp;
 import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.blankToNull;
 import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.effectiveDisplayLocale;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.springframework.ai.mcp.annotation.McpTool;
@@ -21,11 +23,13 @@ import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.req.application.port.in.AddConstraint;
 import de.hauschel.arknet.req.application.port.in.AddConstraint.NewConstraint;
 import de.hauschel.arknet.req.application.port.in.DeleteConstraint;
+import de.hauschel.arknet.req.application.port.in.DescribeConstraintDisplayFallback;
 import de.hauschel.arknet.req.application.port.in.GetConstraint;
 import de.hauschel.arknet.req.application.port.in.ListConstraints;
 import de.hauschel.arknet.req.application.port.in.UpdateConstraint;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
+import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.ConstraintType;
 
 /**
@@ -67,6 +71,7 @@ public final class ConstraintMcpTools {
 
     private final AddConstraint addConstraint;
     private final ListConstraints listConstraints;
+    private final DescribeConstraintDisplayFallback describeConstraintDisplayFallback;
     private final GetConstraint getConstraint;
     private final UpdateConstraint updateConstraint;
     private final DeleteConstraint deleteConstraint;
@@ -74,11 +79,13 @@ public final class ConstraintMcpTools {
     private final ConstraintPresenter presenter = new ConstraintPresenter();
 
     /**
-     * Creates the adapter with its five driving in-ports and the resolver that maps each call's
+     * Creates the adapter with its six driving in-ports and the resolver that maps each call's
      * origin directory to a project.
      *
      * @param addConstraint    in-port backing {@code constraint_add}
      * @param listConstraints  in-port backing {@code constraint_list}
+     * @param describeConstraintDisplayFallback in-port backing {@code constraint_list}'s
+     *                         fallback-visibility line (kogn-io/arknet#475)
      * @param getConstraint    in-port backing {@code constraint_get}
      * @param updateConstraint in-port backing {@code constraint_update}
      * @param deleteConstraint in-port backing {@code constraint_delete}
@@ -87,12 +94,15 @@ public final class ConstraintMcpTools {
     public ConstraintMcpTools(
             final AddConstraint addConstraint,
             final ListConstraints listConstraints,
+            final DescribeConstraintDisplayFallback describeConstraintDisplayFallback,
             final GetConstraint getConstraint,
             final UpdateConstraint updateConstraint,
             final DeleteConstraint deleteConstraint,
             final ProjectResolver projects) {
         this.addConstraint = Objects.requireNonNull(addConstraint, "addConstraint");
         this.listConstraints = Objects.requireNonNull(listConstraints, "listConstraints");
+        this.describeConstraintDisplayFallback =
+                Objects.requireNonNull(describeConstraintDisplayFallback, "describeConstraintDisplayFallback");
         this.getConstraint = Objects.requireNonNull(getConstraint, "getConstraint");
         this.updateConstraint = Objects.requireNonNull(updateConstraint, "updateConstraint");
         this.deleteConstraint = Objects.requireNonNull(deleteConstraint, "deleteConstraint");
@@ -153,10 +163,21 @@ public final class ConstraintMcpTools {
         return presenter.format(created);
     }
 
-    @McpTool(name = "constraint_list", description = "List all managed constraints.",
+    @McpTool(name = "constraint_list", description = "List all managed constraints. A constraint shown under "
+            + "a fallen-back language (its title/statement is missing in the requested/project-default "
+            + "language) carries an inline [fallback: ...] tag naming the language actually shown - see "
+            + "displayLocale.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display every "
+                    + "constraint's title and statement in, overriding the project's own configured default "
+                    + "language for this one call (kogn-io/arknet#475). Falls back to the project default, "
+                    + "then to the server's own default, then to an untagged literal, then deterministically "
+                    + "to any literal a constraint carries - a constraint whose shown variant is not this "
+                    + "call's requested/project-default language is marked with an inline [fallback: ...] "
+                    + "tag.", required = false)
+            final String displayLocale,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -166,15 +187,16 @@ public final class ConstraintMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
-        // No explicit displayLocale tool argument to merge against here, unlike constraint_get -
-        // every listed constraint's title/statement is read straight under the resolved project's
-        // own configured default language, the same value constraint_add/constraint_update already
-        // pass through for the write side (mirrors req_list, issue #281).
-        final List<Constraint> all = listConstraints.list(projectId, project.defaultLanguage());
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        final List<Constraint> all = listConstraints.list(projectId, effective);
         if (all.isEmpty()) {
             return "(no constraints)";
         }
-        return all.stream().map(presenter::format).reduce((a, b) -> a + "\n" + b).orElse("(no constraints)");
+        final Map<ConstraintCode, ConstraintDisplayFallback> fallbacks =
+                describeConstraintDisplayFallback.describe(projectId, effective);
+        return all.stream()
+                .map(c -> presenter.format(c) + fallbackSuffix(fallbacks.get(c.code())))
+                .reduce((a, b) -> a + "\n" + b).orElse("(no constraints)");
     }
 
     @McpTool(name = "constraint_get",
@@ -268,5 +290,30 @@ public final class ConstraintMcpTools {
         final ConstraintCode code = new ConstraintCode(id);
         deleteConstraint.delete(project.id(), code);
         return "Deleted: " + code.value();
+    }
+
+    /**
+     * The {@code [fallback: ...]} suffix {@code constraint_list} appends to a line whenever
+     * {@code fallback} names at least one field that had to degrade past the requested/
+     * project-default language (kogn-io/arknet#475) - empty string (no visible change) when
+     * {@code fallback} is {@code null} or carries no fallen-back field, matching the requirement
+     * that the normal case stays noise-free.
+     */
+    private static String fallbackSuffix(final ConstraintDisplayFallback fallback) {
+        if (fallback == null || fallback.isEmpty()) {
+            return "";
+        }
+        final List<String> parts = new ArrayList<>();
+        if (fallback.titleTag() != null) {
+            parts.add("title=" + displayTag(fallback.titleTag()));
+        }
+        if (fallback.statementTag() != null) {
+            parts.add("statement=" + displayTag(fallback.statementTag()));
+        }
+        return " [fallback: " + String.join(", ", parts) + "]";
+    }
+
+    private static String displayTag(final String tag) {
+        return tag.isEmpty() ? "untagged" : tag;
     }
 }

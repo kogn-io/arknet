@@ -6,6 +6,7 @@ package de.hauschel.arknet.req.adapter.mcp;
 import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.blankToNull;
 import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.effectiveDisplayLocale;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,6 +25,7 @@ import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
+import de.hauschel.arknet.req.application.port.in.DescribeRequirementDisplayFallback;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkConstraint;
@@ -36,6 +38,7 @@ import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementDisplayFallback;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
@@ -103,6 +106,7 @@ public final class RequirementMcpTools {
 
     private final AddRequirement addRequirement;
     private final ListRequirements listRequirements;
+    private final DescribeRequirementDisplayFallback describeRequirementDisplayFallback;
     private final GetRequirement getRequirement;
     private final AcceptRequirement acceptRequirement;
     private final ProposeRequirement proposeRequirement;
@@ -114,12 +118,14 @@ public final class RequirementMcpTools {
     private final RequirementPresenter presenter;
 
     /**
-     * Creates the adapter with its nine driving in-ports, the borrowed ubiquitous-language and
+     * Creates the adapter with its ten driving in-ports, the borrowed ubiquitous-language and
      * (same-module) constraint display ports, and the resolver that maps each call's origin
      * directory to a project.
      *
      * @param addRequirement        in-port backing {@code req_add}
      * @param listRequirements      in-port backing {@code req_list}
+     * @param describeRequirementDisplayFallback in-port backing {@code req_list}'s
+     *                              fallback-visibility line (kogn-io/arknet#475)
      * @param getRequirement        in-port backing {@code req_get}
      * @param acceptRequirement     in-port backing {@code req_set_status}'s {@code ACCEPTED} target
      * @param proposeRequirement    in-port backing {@code req_set_status}'s {@code PROPOSED} target
@@ -136,6 +142,7 @@ public final class RequirementMcpTools {
     public RequirementMcpTools(
             final AddRequirement addRequirement,
             final ListRequirements listRequirements,
+            final DescribeRequirementDisplayFallback describeRequirementDisplayFallback,
             final GetRequirement getRequirement,
             final AcceptRequirement acceptRequirement,
             final ProposeRequirement proposeRequirement,
@@ -148,6 +155,8 @@ public final class RequirementMcpTools {
             final ProjectResolver projects) {
         this.addRequirement = Objects.requireNonNull(addRequirement, "addRequirement");
         this.listRequirements = Objects.requireNonNull(listRequirements, "listRequirements");
+        this.describeRequirementDisplayFallback =
+                Objects.requireNonNull(describeRequirementDisplayFallback, "describeRequirementDisplayFallback");
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
         this.acceptRequirement = Objects.requireNonNull(acceptRequirement, "acceptRequirement");
         this.proposeRequirement = Objects.requireNonNull(proposeRequirement, "proposeRequirement");
@@ -181,19 +190,15 @@ public final class RequirementMcpTools {
      * fallback to a server-side working directory.
      *
      * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
-     * needs the resolved project's configured default language for three, independent purposes -
-     * {@link ToolArguments#effectiveDisplayLocale} merges it into the read tool's
-     * ({@code req_get}'s)
+     * needs the resolved project's configured default language for two, independent purposes -
+     * {@link ToolArguments#effectiveDisplayLocale} merges it into the read tools'
+     * ({@code req_get}'s and, since kogn-io/arknet#475, {@code req_list}'s own)
      * {@code displayLocale} default; {@code req_add}/{@code req_update} instead pass
      * {@link ResolvedProject#defaultLanguage()} straight through to their in-port as the
      * {@code defaultLanguage} a write falls back to when the caller omits {@code language}
      * (issue #258) - and, for {@code req_update} alone, as the language its read-modify-write
      * round trip reads the current state in, so a field this call leaves alone is echoed back and
-     * rewritten in the project's own language rather than the daemon's (issue #456); and
-     * {@code req_list} - which, unlike {@code req_get}, exposes no explicit
-     * {@code displayLocale} tool argument to merge against - likewise passes it straight through
-     * as the display language every listed requirement's title/description is read in (issue
-     * #281). Three different consumers of the very same field, not one the other two skip.</p>
+     * rewritten in the project's own language rather than the daemon's (issue #456).</p>
      */
     private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
@@ -251,10 +256,21 @@ public final class RequirementMcpTools {
         return presenter.format(project.id(), created);
     }
 
-    @McpTool(name = "req_list", description = "List all managed requirements.",
+    @McpTool(name = "req_list", description = "List all managed requirements. A requirement shown under a "
+            + "fallen-back language (its title/description is missing in the requested/project-default "
+            + "language) carries an inline [fallback: ...] tag naming the language actually shown - see "
+            + "displayLocale.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display every "
+                    + "requirement's title and description in, overriding the project's own configured "
+                    + "default language for this one call (kogn-io/arknet#475). Falls back to the project "
+                    + "default, then to the server's own default, then to an untagged literal, then "
+                    + "deterministically to any literal a requirement carries - a requirement whose shown "
+                    + "variant is not this call's requested/project-default language is marked with an "
+                    + "inline [fallback: ...] tag.", required = false)
+            final String displayLocale,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -264,11 +280,8 @@ public final class RequirementMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
-        // No explicit displayLocale tool argument to merge against here, unlike req_get - every
-        // listed requirement's title/description is read straight under the resolved project's
-        // own configured default language (issue #281), the same value req_add/req_update already
-        // pass through for the write side.
-        final List<Requirement> all = listRequirements.list(projectId, project.defaultLanguage());
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        final List<Requirement> all = listRequirements.list(projectId, effective);
         if (all.isEmpty()) {
             return "(no requirements)";
         }
@@ -277,7 +290,10 @@ public final class RequirementMcpTools {
         final Map<ResourceId, ResolvedTerm> termsById = presenter.resolveTermsFor(projectId, all);
         final Map<ResourceId, ResolveConstraints.ResolvedConstraint> constraintsById =
                 presenter.resolveConstraintsFor(projectId, all);
-        return all.stream().map(r -> presenter.format(r, termsById, constraintsById))
+        final Map<RequirementCode, RequirementDisplayFallback> fallbacks =
+                describeRequirementDisplayFallback.describe(projectId, effective);
+        return all.stream()
+                .map(r -> presenter.format(r, termsById, constraintsById) + fallbackSuffix(fallbacks.get(r.code())))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no requirements)");
     }
 
@@ -499,5 +515,30 @@ public final class RequirementMcpTools {
                 .map(presenter::formatSchemaTerm)
                 .reduce((a, b) -> a + "\n" + b)
                 .orElse("");
+    }
+
+    /**
+     * The {@code [fallback: ...]} suffix {@code req_list} appends to a line whenever {@code
+     * fallback} names at least one field that had to degrade past the requested/project-default
+     * language (kogn-io/arknet#475) - empty string (no visible change) when {@code fallback} is
+     * {@code null} or carries no fallen-back field, matching the requirement that the normal case
+     * stays noise-free.
+     */
+    private static String fallbackSuffix(final RequirementDisplayFallback fallback) {
+        if (fallback == null || fallback.isEmpty()) {
+            return "";
+        }
+        final List<String> parts = new ArrayList<>();
+        if (fallback.titleTag() != null) {
+            parts.add("title=" + displayTag(fallback.titleTag()));
+        }
+        if (fallback.descriptionTag() != null) {
+            parts.add("description=" + displayTag(fallback.descriptionTag()));
+        }
+        return " [fallback: " + String.join(", ", parts) + "]";
+    }
+
+    private static String displayTag(final String tag) {
+        return tag.isEmpty() ? "untagged" : tag;
     }
 }

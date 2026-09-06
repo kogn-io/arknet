@@ -56,6 +56,7 @@ import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermCycleException;
+import de.hauschel.arknet.ul.domain.TermDisplayFallback;
 import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermLabelMismatchException;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
@@ -1103,13 +1104,13 @@ public class KognioRdfTermRepository implements TermRepository {
 
     /**
      * Overrides this repository's own configured {@link #displayLocale}'s {@code requested} tier
-     * for one call - shared by {@link #findByCode} and {@link #findAll}, e.g. an explicit
-     * {@code term_get} {@code displayLocale} argument or a project's own default language merged
-     * in by the caller (the ubiquitous-language MCP adapter combines an
-     * explicit override with {@code ResolvedProject#defaultLanguage()} before {@link #findByCode}
-     * ever sees it, and passes {@code ResolvedProject#defaultLanguage()} straight through - {@code
-     * term_list} has no explicit {@code displayLocale} tool argument of its own to merge against -
-     * before {@link #findAll} sees it, issue #274). The configured {@code systemDefault} tier -
+     * for one call - shared by {@link #findByCode}, {@link #findAll} and
+     * {@link #findAllDisplayFallback}, e.g. an explicit {@code term_get}/{@code term_list}
+     * {@code displayLocale} argument or a project's own default language merged in by the caller
+     * (the ubiquitous-language MCP adapter combines an explicit override with {@code
+     * ResolvedProject#defaultLanguage()} before any of the three ever sees it - issue #274, and
+     * since kogn-io/arknet#475 {@code term_list} merges its own explicit argument the same way
+     * {@code term_get} always has). The configured {@code systemDefault} tier -
      * and the rest of {@link DisplayLocale#select}'s fallback chain - is unaffected, so an
      * override that matches nothing still degrades exactly the way the process-wide default
      * already does.
@@ -1275,6 +1276,18 @@ public class KognioRdfTermRepository implements TermRepository {
         Objects.requireNonNull(projectId, "projectId");
 
         DisplayLocale effective = withRequestedOverride(displayLocale);
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return queryAllAssemblies(handle).values().stream().map(assembly -> assembly.toTerm(effective)).toList();
+        }
+    }
+
+    /**
+     * The query {@link #findAll} and {@link #findAllDisplayFallback} share, kept in one place so
+     * both read exactly the same candidate set - a term visible to one must be visible to the
+     * other, and a {@link TermDisplayFallback} must be computed from the very same {@code
+     * prefLabel}/{@code definition} candidates {@link #findAll} chose among.
+     */
+    private Map<String, TermAssembly> queryAllAssemblies(DatasetHandle handle) {
         String query = "SELECT ?s ?identifier ?prefLabel ?definition "
                 + "?broaderSubject ?broaderCode ?relatedSubject ?relatedCode "
                 + "WHERE { GRAPH <" + TERMS_GRAPH + "> { "
@@ -1287,14 +1300,29 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "OPTIONAL { ?broaderSubject <" + IDENTIFIER_PROPERTY + "> ?broaderCode } } "
                 + relatedWhereClause() + "} }";
 
+        Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
+        handle.sparqlQuery().select(query).forEach(row -> {
+            TermAssembly assembly = assemblyFor(bySubject, row, null);
+            assembly.addPrefLabel(literalOf(row, "prefLabel"));
+            assembly.addDefinition(literalOf(row, "definition"));
+        });
+        return bySubject;
+    }
+
+    @Override
+    public Map<TermCode, TermDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        DisplayLocale effective = withRequestedOverride(displayLocale);
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
-            handle.sparqlQuery().select(query).forEach(row -> {
-                TermAssembly assembly = assemblyFor(bySubject, row, null);
-                assembly.addPrefLabel(literalOf(row, "prefLabel"));
-                assembly.addDefinition(literalOf(row, "definition"));
-            });
-            return bySubject.values().stream().map(assembly -> assembly.toTerm(effective)).toList();
+            Map<TermCode, TermDisplayFallback> result = new LinkedHashMap<>();
+            for (TermAssembly assembly : queryAllAssemblies(handle).values()) {
+                TermDisplayFallback fallback = assembly.displayFallback(effective);
+                if (!fallback.isEmpty()) {
+                    result.put(assembly.code(), fallback);
+                }
+            }
+            return result;
         }
     }
 
@@ -1452,6 +1480,41 @@ public class KognioRdfTermRepository implements TermRepository {
                     .orElseThrow(() -> new IllegalStateException(
                             "definition is a required join, so at least one candidate must exist"));
             return new Term(id, code, prefLabel, definition, broaderCode, relatedCodes());
+        }
+
+        private TermCode code() {
+            return code;
+        }
+
+        /**
+         * The {@link TermDisplayFallback} counterpart to {@link #toTerm}: same two candidate
+         * lists, same {@link DisplayLocale}, but reporting whether the chain had to fall back
+         * rather than the value it fell back to (kogn-io/arknet#475).
+         */
+        private TermDisplayFallback displayFallback(DisplayLocale displayLocale) {
+            return new TermDisplayFallback(
+                    fallbackTag(prefLabels, displayLocale),
+                    fallbackTag(definitions, displayLocale));
+        }
+
+        /**
+         * {@code null} if the candidate matching {@code displayLocale}'s requested language was
+         * shown (the requested tier of {@link DisplayLocale#select} succeeded, so nothing fell
+         * back); otherwise the tag of whatever was shown instead - a BCP-47 tag, or {@code ""} for
+         * an untagged literal.
+         */
+        private static String fallbackTag(List<LocalizedLiteral> candidates, DisplayLocale displayLocale) {
+            LocalizedLiteral selected = displayLocale.select(candidates)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "a required join, so at least one candidate must exist"));
+            String tag = selected.languageTag();
+            String requestedLanguage = displayLocale.requested().getLanguage();
+            boolean matchesRequested = tag != null
+                    && Locale.forLanguageTag(tag).getLanguage().equalsIgnoreCase(requestedLanguage);
+            if (matchesRequested) {
+                return null;
+            }
+            return tag == null ? "" : tag;
         }
 
         /**

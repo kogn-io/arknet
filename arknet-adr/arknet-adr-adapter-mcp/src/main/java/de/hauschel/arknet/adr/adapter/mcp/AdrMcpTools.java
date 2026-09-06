@@ -30,6 +30,7 @@ import de.hauschel.arknet.adr.application.port.in.CheckAdrs.Rule;
 import de.hauschel.arknet.adr.application.port.in.CountSkippedAdrs;
 import de.hauschel.arknet.adr.application.port.in.DeleteAdr;
 import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
+import de.hauschel.arknet.adr.application.port.in.DescribeAdrDisplayFallback;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
 import de.hauschel.arknet.adr.application.port.in.RejectAdr;
@@ -39,6 +40,7 @@ import de.hauschel.arknet.adr.application.port.in.UpdateAdr;
 import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
+import de.hauschel.arknet.adr.domain.AdrDisplayFallback;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.Consequence;
@@ -136,6 +138,7 @@ public final class AdrMcpTools {
     private final AddAdr addAdr;
     private final ListAdrs listAdrs;
     private final CountSkippedAdrs countSkippedAdrs;
+    private final DescribeAdrDisplayFallback describeAdrDisplayFallback;
     private final GetAdr getAdr;
     private final UpdateAdr updateAdr;
     private final AcceptAdr acceptAdr;
@@ -157,6 +160,8 @@ public final class AdrMcpTools {
      * @param listAdrs               in-port backing {@code adr_list}
      * @param countSkippedAdrs       in-port backing the skipped-decision note {@code adr_list} appends
      *                               to its own output (kogn-io/arknet#359)
+     * @param describeAdrDisplayFallback in-port backing {@code adr_list}'s fallback-visibility
+     *                               line (kogn-io/arknet#475)
      * @param getAdr                 in-port backing {@code adr_get}
      * @param updateAdr              in-port backing {@code adr_update}
      * @param acceptAdr              in-port backing {@code adr_set_status}'s {@code ACCEPTED} target
@@ -178,6 +183,7 @@ public final class AdrMcpTools {
             final AddAdr addAdr,
             final ListAdrs listAdrs,
             final CountSkippedAdrs countSkippedAdrs,
+            final DescribeAdrDisplayFallback describeAdrDisplayFallback,
             final GetAdr getAdr,
             final UpdateAdr updateAdr,
             final AcceptAdr acceptAdr,
@@ -193,6 +199,8 @@ public final class AdrMcpTools {
         this.addAdr = Objects.requireNonNull(addAdr, "addAdr");
         this.listAdrs = Objects.requireNonNull(listAdrs, "listAdrs");
         this.countSkippedAdrs = Objects.requireNonNull(countSkippedAdrs, "countSkippedAdrs");
+        this.describeAdrDisplayFallback =
+                Objects.requireNonNull(describeAdrDisplayFallback, "describeAdrDisplayFallback");
         this.getAdr = Objects.requireNonNull(getAdr, "getAdr");
         this.updateAdr = Objects.requireNonNull(updateAdr, "updateAdr");
         this.acceptAdr = Objects.requireNonNull(acceptAdr, "acceptAdr");
@@ -391,7 +399,9 @@ public final class AdrMcpTools {
 
     @McpTool(name = "adr_list", description = "List all recorded architecture decisions, one compact "
             + "line each (code, status, title, and the codes it addresses/affects/supersedes/is "
-            + "superseded by/is related to). Use adr_get for a decision's full text.",
+            + "superseded by/is related to). Use adr_get for a decision's full text. A decision shown "
+            + "under a fallen-back language (its title is missing in the requested/project-default "
+            + "language) carries an inline [fallback: ...] tag naming the language actually shown.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
@@ -402,7 +412,8 @@ public final class AdrMcpTools {
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        final List<AdrDetail> all = listAdrs.list(project.id(), effectiveDisplayLocale(project, displayLocale));
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        final List<AdrDetail> all = listAdrs.list(project.id(), effective);
         // all.size() is the materialised subset this call already holds - handed over so the count
         // does not re-read the whole decision graph behind adr_list's back (kogn-io/arknet#359).
         final int skipped = countSkippedAdrs.skippedCount(project.id(), all.size());
@@ -413,8 +424,11 @@ public final class AdrMcpTools {
         final Map<ResourceId, ResolvedRequirement> requirements = resolveRequirementsFor(project.id(), all);
         final Map<ResourceId, ResolvedBoundedContext> contexts = resolveContextsFor(project.id(), all);
         final Map<ResourceId, ResolvedTerm> terms = resolveTermsFor(project.id(), all);
+        final Map<AdrCode, AdrDisplayFallback> fallbacks =
+                describeAdrDisplayFallback.describe(project.id(), effective);
         final String lines = all.stream()
-                .map(detail -> summaryLine(detail, requirements, contexts, terms))
+                .map(detail -> summaryLine(detail, requirements, contexts, terms)
+                        + fallbackSuffix(fallbacks.get(detail.adr().code())))
                 .collect(Collectors.joining("\n"));
         return skipped == 0 ? lines : lines + "\n" + skippedNote(skipped);
     }
@@ -428,6 +442,24 @@ public final class AdrMcpTools {
     static String skippedNote(final int skipped) {
         return "(" + skipped + (skipped == 1 ? " decision" : " decisions")
                 + " skipped: unresolvable store-first status or supersededBy data - see server logs)";
+    }
+
+    /**
+     * The {@code [fallback: ...]} suffix {@code adr_list} appends to a line whenever {@code
+     * fallback} names its {@code name} field as having degraded past the requested/
+     * project-default language (kogn-io/arknet#475) - empty string (no visible change) when
+     * {@code fallback} is {@code null} or empty, matching the requirement that the normal case
+     * stays noise-free.
+     */
+    private static String fallbackSuffix(final AdrDisplayFallback fallback) {
+        if (fallback == null || fallback.isEmpty()) {
+            return "";
+        }
+        return " [fallback: name=" + displayTag(fallback.nameTag()) + "]";
+    }
+
+    private static String displayTag(final String tag) {
+        return tag.isEmpty() ? "untagged" : tag;
     }
 
     /**

@@ -19,6 +19,7 @@ import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
+import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
@@ -167,6 +168,16 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
         // Nothing multi-valued to select a language variant from in this plain in-memory fake -
         // displayLocale is accepted and ignored.
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Nothing multi-valued to fall back among in this plain in-memory fake - always empty,
+     * mirroring how {@link #findAll} ignores {@code displayLocale} altogether.
+     */
+    @Override
+    public Map<UseCaseCode, UseCaseDisplayFallback> findAllDisplayFallback(
+            ProjectId projectId, String displayLocale) {
+        return Map.of();
     }
 
     /**

@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,7 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools.StepInput;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
+import de.hauschel.arknet.uc.application.port.in.DescribeUseCaseDisplayFallback;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
 import de.hauschel.arknet.uc.application.port.in.LinkTerm;
@@ -48,6 +50,7 @@ import de.hauschel.arknet.uc.domain.StepTextPatch;
 import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
+import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
@@ -82,8 +85,8 @@ class UseCaseMcpToolsTest {
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RecordingResolveRequirements resolveRequirements = new RecordingResolveRequirements();
     private final RecordingResolveConstraints resolveConstraints = new RecordingResolveConstraints();
-    private final UseCaseMcpTools adapter = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, resolveActors,
-            resolveTerms, resolveRequirements, resolveConstraints, PROJECTS);
+    private final UseCaseMcpTools adapter = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
+            resolveActors, resolveTerms, resolveRequirements, resolveConstraints, PROJECTS);
 
     @Test
     void declaresTheSixUseCaseTools() {
@@ -111,29 +114,32 @@ class UseCaseMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(null, stub, stub, stub, stub, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(null, stub, stub, stub, stub, stub, stub, resolveActors, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, null, stub, stub, stub, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, null, stub, stub, stub, stub, stub, resolveActors, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, null, stub, stub, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, stub, null, stub, stub, stub, stub, resolveActors, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, null, stub, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, stub, stub, null, stub, stub, stub, resolveActors, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, stub, null, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, null, stub, stub, resolveActors, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, null, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, null, stub, resolveActors, resolveTerms,
+                        resolveRequirements, resolveConstraints, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, null, resolveActors, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveActors, resolveTerms,
                         resolveRequirements, resolveConstraints, null));
     }
 
@@ -199,7 +205,7 @@ class UseCaseMcpToolsTest {
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order", "goal",
                 null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(),
                 null, null, List.of(new Step(1, "select items", List.of())), List.of(), List.of(), List.of()));
-        UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub,
+        UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
                 resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"));
 
@@ -214,7 +220,7 @@ class UseCaseMcpToolsTest {
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order", "goal",
                 null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(),
                 null, null, List.of(new Step(1, "select items", List.of())), List.of(), List.of(), List.of()));
-        UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub,
+        UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
                 resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"));
 
@@ -224,24 +230,74 @@ class UseCaseMcpToolsTest {
     }
 
     /**
-     * {@code uc_list} exposes no explicit {@code displayLocale} tool argument of its own (unlike
-     * {@code uc_get}) - issue #281 asks only that it fall back to the resolved project's own
-     * configured default language automatically, the same value {@code uc_add}/{@code uc_update}
-     * already pass to their in-ports. Before this fix, {@code UseCaseMcpTools#list} called {@code
-     * listUseCases.list(projectId)} without any locale at all, so every listed use case's text
-     * fields were read under whichever language the process-wide, per-daemon default happened to
-     * be - never the calling project's own, even for a project (like this test's) whose configured
-     * default differs from it.
+     * {@code uc_list} falls back to the resolved project's own configured default language
+     * automatically when its own {@code displayLocale} argument is omitted (issue #281) - the
+     * same value {@code uc_add}/{@code uc_update} already pass to their in-ports. Before issue
+     * #281's fix, {@code UseCaseMcpTools#list} called {@code listUseCases.list(projectId)}
+     * without any locale at all, so every listed use case's text fields were read under
+     * whichever language the process-wide, per-daemon default happened to be - never the calling
+     * project's own, even for a project (like this test's) whose configured default differs from
+     * it.
      */
     @Test
     void listPassesTheProjectsDefaultLanguageThrough() {
-        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub,
+        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
                 resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"));
 
-        adapterWithGermanDefault.list(null, null);
+        adapterWithGermanDefault.list(null, null, null);
 
         assertEquals("de", stub.lastListDisplayLocale);
+    }
+
+    /**
+     * {@code uc_list}'s own explicit {@code displayLocale} argument wins over the project's
+     * configured default (kogn-io/arknet#475).
+     */
+    @Test
+    void listPassesAnExplicitDisplayLocaleArgumentThrough() {
+        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
+                resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
+                anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithGermanDefault.list(null, "fr", null);
+
+        assertEquals("fr", stub.lastListDisplayLocale);
+    }
+
+    /**
+     * The core of issue #475: a use case shown under a fallen-back language (its gegensprache is
+     * missing) carries a visible {@code [fallback: ...]} tag naming the language actually shown.
+     */
+    @Test
+    void listMarksAUseCaseWhoseDisplayedLanguageFellBack() {
+        UseCase uc = new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order", "goal", null, null,
+                new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(), null, null,
+                List.of(new Step(1, "select items", List.of())), List.of(), List.of(), List.of());
+        stub.listResult = List.of(uc);
+        stub.fallbacksForList = Map.of(uc.code(), new UseCaseDisplayFallback("en", null));
+
+        String rendered = adapter.list(null, null, null);
+
+        assertTrue(rendered.contains("[fallback: title=en]"), rendered);
+    }
+
+    /**
+     * The counterpart to {@link #listMarksAUseCaseWhoseDisplayedLanguageFellBack}: a use case
+     * whose gegensprache is present carries no fallback tag at all - the normal case stays free
+     * of noise.
+     */
+    @Test
+    void listLeavesAUseCaseWithNoFallbackUnmarked() {
+        UseCase uc = new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Bestellung aufgeben", "Ziel", null, null,
+                new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(), null, null,
+                List.of(new Step(1, "Artikel auswaehlen", List.of())), List.of(), List.of(), List.of());
+        stub.listResult = List.of(uc);
+        stub.fallbacksForList = Map.of();
+
+        String rendered = adapter.list(null, "de", null);
+
+        assertFalse(rendered.contains("[fallback:"), rendered);
     }
 
     /** {@code uc_update}'s {@code language} argument reaches {@link UpdateUseCase} unchanged. */
@@ -315,7 +371,7 @@ class UseCaseMcpToolsTest {
      */
     @Test
     void ucLinkTermPassesTheProjectsDefaultLanguageThrough() {
-        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub,
+        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
                 resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"));
 
@@ -326,7 +382,7 @@ class UseCaseMcpToolsTest {
 
     @Test
     void ucLinkConstraintPassesTheProjectsDefaultLanguageThrough() {
-        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub,
+        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
                 resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"));
 
@@ -377,7 +433,7 @@ class UseCaseMcpToolsTest {
                         customer, List.of(), null, null,
                         List.of(new Step(1, "request link", List.of())), List.of(), List.of(), List.of()));
 
-        String rendered = adapter.list(null, null);
+        String rendered = adapter.list(null, null, null);
 
         assertEquals("UC1 | Place order | Customer places an order\n"
                 + "UC2 | Reset password | User resets password", rendered);
@@ -386,7 +442,7 @@ class UseCaseMcpToolsTest {
     @Test
     void ucListReturnsPlaceholderWhenEmpty() {
         stub.listResult = List.of();
-        assertEquals("(no use cases)", adapter.list(null, null));
+        assertEquals("(no use cases)", adapter.list(null, null, null));
     }
 
     @Test
@@ -545,11 +601,13 @@ class UseCaseMcpToolsTest {
 
     /** Structural stub implementing the six driving in-ports. */
     private static final class Stub
-            implements AddUseCase, ListUseCases, GetUseCase, UpdateUseCase, LinkTerm, LinkConstraint {
+            implements AddUseCase, ListUseCases, DescribeUseCaseDisplayFallback, GetUseCase, UpdateUseCase, LinkTerm,
+            LinkConstraint {
 
         private AddUseCase.NewUseCase lastCommand;
         private RuntimeException addFailure;
         private List<UseCase> listResult = List.of();
+        private Map<UseCaseCode, UseCaseDisplayFallback> fallbacksForList = Map.of();
         private Optional<UseCase> getResult = Optional.empty();
         private UseCaseCode lastUpdatedUseCase;
         private UseCaseCode lastLinkTermUseCase;
@@ -600,6 +658,11 @@ class UseCaseMcpToolsTest {
         public List<UseCase> list(ProjectId projectId, String displayLocale) {
             lastListDisplayLocale = displayLocale;
             return listResult;
+        }
+
+        @Override
+        public Map<UseCaseCode, UseCaseDisplayFallback> describe(ProjectId projectId, String displayLocale) {
+            return fallbacksForList;
         }
 
         private String lastGetDisplayLocale;

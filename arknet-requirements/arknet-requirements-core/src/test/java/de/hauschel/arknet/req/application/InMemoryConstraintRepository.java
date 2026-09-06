@@ -20,6 +20,7 @@ import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintConcurrentlyModifiedException;
+import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.ConstraintId;
 import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
 import de.hauschel.arknet.req.domain.DuplicateConstraintCodeException;
@@ -118,6 +119,16 @@ public final class InMemoryConstraintRepository implements ConstraintRepository 
     @Override
     public List<Constraint> findAll(ProjectId projectId, String displayLocale) {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Nothing multi-valued to fall back among in this plain in-memory fake - always empty,
+     * mirroring how {@link #findAll} ignores {@code displayLocale} altogether.
+     */
+    @Override
+    public Map<ConstraintCode, ConstraintDisplayFallback> findAllDisplayFallback(
+            ProjectId projectId, String displayLocale) {
+        return Map.of();
     }
 
     /**

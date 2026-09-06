@@ -22,6 +22,7 @@ import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
+import de.hauschel.arknet.req.domain.RequirementDisplayFallback;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
@@ -179,6 +180,16 @@ final class InMemoryRequirementRepository implements RequirementRepository {
         // Nothing multi-valued to select a language variant from in this plain in-memory fake -
         // displayLocale is accepted and ignored.
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Nothing multi-valued to fall back among in this plain in-memory fake - always empty,
+     * mirroring how {@link #findAll} ignores {@code displayLocale} altogether.
+     */
+    @Override
+    public Map<RequirementCode, RequirementDisplayFallback> findAllDisplayFallback(
+            ProjectId projectId, String displayLocale) {
+        return Map.of();
     }
 
     /**

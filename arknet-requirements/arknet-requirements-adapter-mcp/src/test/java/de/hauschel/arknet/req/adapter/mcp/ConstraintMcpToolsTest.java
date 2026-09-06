@@ -4,12 +4,14 @@
 package de.hauschel.arknet.req.adapter.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -22,11 +24,13 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.req.application.port.in.AddConstraint;
 import de.hauschel.arknet.req.application.port.in.AddConstraint.NewConstraint;
 import de.hauschel.arknet.req.application.port.in.DeleteConstraint;
+import de.hauschel.arknet.req.application.port.in.DescribeConstraintDisplayFallback;
 import de.hauschel.arknet.req.application.port.in.GetConstraint;
 import de.hauschel.arknet.req.application.port.in.ListConstraints;
 import de.hauschel.arknet.req.application.port.in.UpdateConstraint;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
+import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.ConstraintId;
 import de.hauschel.arknet.req.domain.ConstraintType;
 
@@ -50,7 +54,8 @@ class ConstraintMcpToolsTest {
             anchor -> new ResolvedProject(PROJECT, "de");
 
     private final Stub stub = new Stub();
-    private final ConstraintMcpTools adapter = new ConstraintMcpTools(stub, stub, stub, stub, stub, PROJECTS);
+    private final ConstraintMcpTools adapter =
+            new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS);
 
     @Test
     void declaresTheFiveConstraintTools() {
@@ -68,20 +73,23 @@ class ConstraintMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(null, stub, stub, stub, stub, PROJECTS));
+                () -> new ConstraintMcpTools(null, stub, stub, stub, stub, stub, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, null, stub, stub, stub, PROJECTS));
+                () -> new ConstraintMcpTools(stub, null, stub, stub, stub, stub, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, stub, null, stub, stub, PROJECTS));
+                () -> new ConstraintMcpTools(stub, stub, null, stub, stub, stub, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, stub, stub, null, stub, PROJECTS));
+                () -> new ConstraintMcpTools(stub, stub, stub, null, stub, stub, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, stub, stub, stub, null, PROJECTS));
+                () -> new ConstraintMcpTools(stub, stub, stub, stub, null, stub, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new ConstraintMcpTools(stub, stub, stub, stub, stub, null, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
-        assertThrows(NullPointerException.class, () -> new ConstraintMcpTools(stub, stub, stub, stub, stub, null));
+        assertThrows(NullPointerException.class,
+                () -> new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, null));
     }
 
     /** {@code constraint_add} passes title/statement/type through and renders the created constraint. */
@@ -105,7 +113,7 @@ class ConstraintMcpToolsTest {
      */
     @Test
     void addPassesABlankLanguageAsNullAndForwardsTheProjectDefault() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
 
         withDefault.add(null, "t", "s", "TECHNICAL", "  ", null);
 
@@ -127,24 +135,68 @@ class ConstraintMcpToolsTest {
                 constraint("TCON-1", ConstraintType.TECHNICAL, "a", "statement a"),
                 constraint("BCON-1", ConstraintType.BUSINESS, "b", "statement b"));
 
-        String rendered = adapter.list(null, null);
+        String rendered = adapter.list(null, null, null);
 
         assertTrue(rendered.contains("TCON-1"), rendered);
         assertTrue(rendered.contains("BCON-1"), rendered);
     }
 
     /**
-     * {@code constraint_list} has no {@code displayLocale} argument of its own, so it reads every
-     * constraint under the resolved project's configured default language (mirrors {@code
-     * req_list}, issue #281).
+     * An omitted {@code constraint_list} {@code displayLocale} falls back to the resolved
+     * project's configured default language (mirrors {@code req_list}, issue #281).
      */
     @Test
     void listReadsUnderTheProjectsDefaultLanguage() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
 
-        withDefault.list(null, null);
+        withDefault.list(null, null, null);
 
         assertEquals("de", stub.lastListDisplayLocale);
+    }
+
+    /**
+     * {@code constraint_list}'s own explicit {@code displayLocale} argument wins over the
+     * project's configured default (kogn-io/arknet#475).
+     */
+    @Test
+    void listPassesAnExplicitDisplayLocaleArgumentThrough() {
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+
+        withDefault.list(null, "fr", null);
+
+        assertEquals("fr", stub.lastListDisplayLocale);
+    }
+
+    /**
+     * The core of issue #475: a constraint shown under a fallen-back language (its gegensprache
+     * is missing) carries a visible {@code [fallback: ...]} tag naming the language actually
+     * shown.
+     */
+    @Test
+    void listMarksAConstraintWhoseDisplayedLanguageFellBack() {
+        Constraint c = constraint("TCON-1", ConstraintType.TECHNICAL, "JVM baseline", "Must run on the JVM");
+        stub.allConstraints = List.of(c);
+        stub.fallbacksForList = Map.of(c.code(), new ConstraintDisplayFallback("en", null));
+
+        String rendered = adapter.list(null, null, null);
+
+        assertTrue(rendered.contains("[fallback: title=en]"), rendered);
+    }
+
+    /**
+     * The counterpart to {@link #listMarksAConstraintWhoseDisplayedLanguageFellBack}: a
+     * constraint whose gegensprache is present carries no fallback tag at all - the normal case
+     * stays free of noise.
+     */
+    @Test
+    void listLeavesAConstraintWithNoFallbackUnmarked() {
+        Constraint c = constraint("TCON-1", ConstraintType.TECHNICAL, "JVM-Basis", "Muss auf der JVM laufen");
+        stub.allConstraints = List.of(c);
+        stub.fallbacksForList = Map.of();
+
+        String rendered = adapter.list(null, "de", null);
+
+        assertFalse(rendered.contains("[fallback:"), rendered);
     }
 
     /** The documented empty-project rendering: {@code constraint_list} must not return a blank string. */
@@ -152,7 +204,7 @@ class ConstraintMcpToolsTest {
     void listRendersAPlaceholderWhenTheProjectHasNoConstraints() {
         stub.allConstraints = List.of();
 
-        String rendered = adapter.list(null, null);
+        String rendered = adapter.list(null, null, null);
 
         assertEquals("(no constraints)", rendered);
     }
@@ -171,7 +223,7 @@ class ConstraintMcpToolsTest {
     /** An explicit {@code displayLocale} wins over the project's configured default. */
     @Test
     void getPrefersAnExplicitDisplayLocaleOverTheProjectDefault() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
         stub.nextGetResult = Optional.of(constraint("TCON-1", ConstraintType.TECHNICAL, "a", "statement a"));
 
         withDefault.get(null, "TCON-1", "en", null);
@@ -182,7 +234,7 @@ class ConstraintMcpToolsTest {
     /** ... and an omitted one falls back to it. */
     @Test
     void getFallsBackToTheProjectDefaultDisplayLocale() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
         stub.nextGetResult = Optional.of(constraint("TCON-1", ConstraintType.TECHNICAL, "a", "statement a"));
 
         withDefault.get(null, "TCON-1", null, null);
@@ -237,11 +289,13 @@ class ConstraintMcpToolsTest {
 
     /** Structural stub implementing the five driving in-ports. */
     private static final class Stub
-            implements AddConstraint, ListConstraints, GetConstraint, UpdateConstraint, DeleteConstraint {
+            implements AddConstraint, ListConstraints, DescribeConstraintDisplayFallback, GetConstraint,
+            UpdateConstraint, DeleteConstraint {
 
         private NewConstraint lastAddCommand;
         private String lastAddDefaultLanguage;
         private List<Constraint> allConstraints = List.of();
+        private Map<ConstraintCode, ConstraintDisplayFallback> fallbacksForList = Map.of();
         private String lastListDisplayLocale;
         private ConstraintCode lastGetCode;
         private String lastGetDisplayLocale;
@@ -264,6 +318,11 @@ class ConstraintMcpToolsTest {
         public List<Constraint> list(ProjectId projectId, String displayLocale) {
             lastListDisplayLocale = displayLocale;
             return allConstraints;
+        }
+
+        @Override
+        public Map<ConstraintCode, ConstraintDisplayFallback> describe(ProjectId projectId, String displayLocale) {
+            return fallbacksForList;
         }
 
         @Override

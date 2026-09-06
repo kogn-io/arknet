@@ -4,6 +4,7 @@
 package de.hauschel.arknet.ul.application.port.out;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import de.hauschel.arknet.kernel.ResourceId;
@@ -14,6 +15,7 @@ import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermCycleException;
+import de.hauschel.arknet.ul.domain.TermDisplayFallback;
 import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermLabelMismatchException;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
@@ -226,6 +228,20 @@ public interface TermRepository {
      * @return all terms, never {@code null}
      */
     List<Term> findAll(ProjectId projectId, String displayLocale);
+
+    /**
+     * Companion to {@link #findAll}, read the same way but reporting the opposite thing: not the
+     * displayed value, but whether displaying it required falling back past the requested/
+     * project-default language tier of {@link de.hauschel.arknet.kernel.DisplayLocale#select}
+     * (kogn-io/arknet#475). {@link #findAll} itself cannot answer this - it hands back a plain
+     * {@code String}, which looks identical whether the requested language was found or the chain
+     * degraded past it.
+     *
+     * @param projectId     the project (architecture model) to list terms from
+     * @param displayLocale the same override {@link #findAll} accepts
+     * @return see {@link de.hauschel.arknet.ul.application.port.in.DescribeTermDisplayFallback#describe}
+     */
+    Map<TermCode, TermDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale);
 
     /**
      * Returns the business code of every term recorded in a project glossary, read independently of

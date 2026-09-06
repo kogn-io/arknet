@@ -56,6 +56,7 @@ import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
+import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementType;
@@ -148,6 +149,12 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
 
         @Override
         public List<Constraint> findAll(ProjectId projectId, String displayLocale) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public Map<ConstraintCode, ConstraintDisplayFallback> findAllDisplayFallback(
+                ProjectId projectId, String displayLocale) {
             throw new UnsupportedOperationException("not exercised by this test");
         }
 
