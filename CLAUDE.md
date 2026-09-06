@@ -90,6 +90,7 @@ Details: `arknet-adr/CLAUDE.md`
 - **arknet-actor**: siebte hexagonale BC -- Actor-Lifecycle (`actor_*`-Tools), `ACTOR-N`-Codes aus einem Zaehler fuer alle vier Typen (`HUMAN`/`SYSTEM`/`LEGAL`/`GROUP`; Typ und Code stehen mit der Anlage fest, Name und Beschreibung sind korrigierbar), opake Identitaet.
 Macht `arkproc:Actor` zu einer eigenstaendigen Ressource statt zu einer Facette am Glossarbegriff: ein Akteur braucht weder Definition noch `TERM-N`-Code, darf aber zusaetzlich Glossarbegriff sein.
 Name und Beschreibung sind bewusst ungetaggte Literale ohne Mehrsprachigkeits-Mechanismus, und der Hexagon traegt keine Cross-BC-Kante. Seit Issue #336 loest arknet-use-cases Akteurnamen gegen dieses Register auf (`ActorLookup`/`ResolveActors`) statt gegen die entfernte ubiquitous-language-Actor-Facette.
+Seit ADR-37/kogn-io/arknet#405 (Teil B) traegt derselbe Hexagon einen zweiten Ressourcentyp, `arkproc:Role` (`role_*`-Tools, `ROLE-N`-Codes aus einem eigenen, von `ACTOR-N` unabhaengigen Zaehler, eigener Named Graph `.../model/roles`) -- anti-rigide gegenueber dem rigiden Actor, darum keine Unterklasse; die Besetzung laeuft ueber den optionalen, mehrwertigen Parameter `filledBy` (Actor-Codes) an `role_add`/`role_update`, mit demselben Tri-State wie `adr_update`s Referenzlisten. Anders als Actor sind Rollenname und -beschreibung mehrsprachig (`language`/`displayLocale`, wie bei Constraint) -- eine Rolle ist eine Funktionsbezeichnung, kein Eigenname.
 Details: `arknet-actor/CLAUDE.md`
 
 ## Ontologie-Namespaces

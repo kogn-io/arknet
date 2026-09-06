@@ -27,6 +27,7 @@ import org.eclipse.rdf4j.model.vocabulary.SHACL;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepository;
+import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfRoleRepository;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepository;
@@ -72,6 +73,16 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
     private static final String ACTOR_CLASS = ArkprocVocabulary.ACTOR_TYPE;
 
     /**
+     * The role class a future property would declare as its range once one exists
+     * (ADR-37/kogn-io/arknet#405 Part C: {@code arkreq:primaryActor}/{@code supportingActor} are
+     * planned to be repointed here). Nothing ranges over it today, so
+     * {@link #everyPropertyRangingOverARoleBlocksTheRolesDeletion} carries no non-empty assertion -
+     * it exists so the day one ships without updating {@code KognioRdfRoleRepository
+     * #REFERENCING_PREDICATES}, this test - not a later audit - is what turns red.
+     */
+    private static final String ROLE_CLASS = ArkprocVocabulary.ROLE_TYPE;
+
+    /**
      * The constraint class every constraint-referencing property shape constrains its target to
      * via {@code sh:class} (kogn-io/arknet#481).
      */
@@ -112,6 +123,21 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
     }
 
     /**
+     * The role-side counterpart, guarding {@code role_delete} the same way - vacuously true today
+     * (no property ranges over {@code arkproc:Role} yet), unlike its sibling tests, which is exactly
+     * the point: see {@link #ROLE_CLASS}'s own javadoc.
+     */
+    @Test
+    void everyPropertyRangingOverARoleBlocksTheRolesDeletion() {
+        Set<String> pointingAtRoles = propertiesRangingOver(ROLE_CLASS);
+
+        assertTrue(referencingPredicatesOf(KognioRdfRoleRepository.class).keySet().containsAll(pointingAtRoles),
+                () -> "role_delete would not notice these edges: "
+                        + new TreeSet<>(missing(pointingAtRoles, KognioRdfRoleRepository.class))
+                        + " - add them to KognioRdfRoleRepository.REFERENCING_PREDICATES");
+    }
+
+    /**
      * The constraint-side counterpart, guarding {@code constraint_delete} the same way
      * (kogn-io/arknet#481) - read off the shapes rather than an {@code rdfs:range} axiom, see the
      * class comment.
@@ -139,7 +165,8 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
     @Test
     void noTwoBlockingPredicatesAnswerToTheSameShorthand() {
         for (Class<?> repository : Set.of(
-                KognioRdfTermRepository.class, KognioRdfActorRepository.class, KognioRdfConstraintRepository.class)) {
+                KognioRdfTermRepository.class, KognioRdfActorRepository.class, KognioRdfConstraintRepository.class,
+                KognioRdfRoleRepository.class)) {
             Collection<String> shorthands = referencingPredicatesOf(repository).values();
             assertEquals(shorthands.size(), Set.copyOf(shorthands).size(),
                     repository.getSimpleName() + ": two predicates share one shorthand, so the "

@@ -215,6 +215,11 @@ class ActorServiceConcurrencyTest {
                 ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
         }
+
+        @Override
+        public List<Actor> findAllByIds(ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
+            return delegate.findAllByIds(projectId, ids);
+        }
     }
 
     /**
@@ -285,6 +290,11 @@ class ActorServiceConcurrencyTest {
                 ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
         }
+
+        @Override
+        public List<Actor> findAllByIds(ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
+            return delegate.findAllByIds(projectId, ids);
+        }
     }
 
     /** A repository whose {@code compareAndUpdate} always reports a conflict, never applying. */
@@ -343,6 +353,11 @@ class ActorServiceConcurrencyTest {
         public List<de.hauschel.arknet.actor.application.port.in.ResolveActors.ResolvedActor> findByIds(
                 ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
+        }
+
+        @Override
+        public List<Actor> findAllByIds(ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
+            return delegate.findAllByIds(projectId, ids);
         }
     }
 }

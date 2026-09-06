@@ -49,6 +49,9 @@ import de.hauschel.arknet.actor.domain.ActorReferencedException;
 import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.actor.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.actor.domain.Role;
+import de.hauschel.arknet.actor.domain.RoleCode;
+import de.hauschel.arknet.actor.domain.RoleId;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -704,6 +707,32 @@ class KognioRdfActorRepositoryTest {
                 return null;
             });
         }
+
+        assertThrows(ActorReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
+        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isPresent(),
+                "a rejected delete must leave the actor untouched");
+    }
+
+    /**
+     * {@link ActorReferencedException} blocks the delete while a role's {@code arkproc:filledBy}
+     * still points at the actor - real as of ADR-37/kogn-io/arknet#405 Part B, unlike
+     * {@link #deleteRejectsAnActorStillReferencedAsPrimaryActor}'s hand-inserted triple: this test
+     * writes the referencing role through {@link KognioRdfRoleRepository} itself, sharing this
+     * test's own {@link WriteFunnel}, exactly the way a real {@code role_add} would. Pins
+     * {@code REFERENCING_PREDICATES}' {@code arkproc:filledBy} entry (added in Part A, ahead of a
+     * real writer) now that one exists.
+     */
+    @Test
+    void deleteRejectsAnActorStillReferencedByARolesFilledBy() {
+        Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
+        repository.create(PROJECT_A, stored);
+        WriteFunnel funnel = new WriteFunnel(lifecycle, KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT),
+                WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        KognioRdfRoleRepository roles = new KognioRdfRoleRepository(lifecycle, DisplayLocale.DEFAULT, funnel);
+        roles.create(PROJECT_A, new Role(
+                new RoleId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID())),
+                new RoleCode("ROLE-1"), "Sachbearbeiter", null,
+                List.of(stored.id())), "de");
 
         assertThrows(ActorReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
         assertTrue(repository.findByCode(PROJECT_A, stored.code()).isPresent(),

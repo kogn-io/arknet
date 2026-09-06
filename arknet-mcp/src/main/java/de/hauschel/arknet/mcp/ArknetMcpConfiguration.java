@@ -31,6 +31,7 @@ import de.hauschel.arknet.mcp.report.ConstraintCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcp.report.RequirementCards;
+import de.hauschel.arknet.mcp.report.RoleCards;
 import de.hauschel.arknet.mcp.report.TermCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.mcp.store.ExportMetadata;
@@ -40,9 +41,13 @@ import de.hauschel.arknet.mcp.version.OntologyVersions;
 import de.hauschel.arknet.mcp.version.ServerVersion;
 import de.hauschel.arknet.mcp.version.ToolErrorVersionStamp;
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepositoryFactory;
+import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfRoleRepositoryFactory;
 import de.hauschel.arknet.actor.adapter.mcp.ActorMcpTools;
+import de.hauschel.arknet.actor.adapter.mcp.RoleMcpTools;
 import de.hauschel.arknet.actor.application.ActorService;
+import de.hauschel.arknet.actor.application.RoleService;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
+import de.hauschel.arknet.actor.application.port.out.RoleRepository;
 import de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepositoryFactory;
 import de.hauschel.arknet.adr.adapter.mcp.AdrCheckMcpTools;
 import de.hauschel.arknet.adr.adapter.mcp.AdrMcpTools;
@@ -730,23 +735,29 @@ public class ArknetMcpConfiguration {
     // --- Actor hexagon -----------------------------------------------------------
 
     /**
+     * The shared {@link WriteFunnel} every write path of the actor hexagon runs through - both
+     * {@link #actorRepository} and {@link #roleRepository} (ADR-37/kogn-io/arknet#405 Part B): a
+     * {@code Role} shares {@code actor-shapes.ttl}/{@code arknet-actor.ttl} with {@code Actor}, so
+     * this bean is built once and handed to both repositories rather than each building its own,
+     * functionally identical one - mirrors {@link #requirementsWriteFunnel} exactly. Its gate
+     * reasons over its axioms - {@code actshapes:ActorShape} targets the abstract
+     * {@code arkproc:Actor} while an instance is typed as one of the four concrete subclasses.
+     */
+    @Bean
+    WriteFunnel actorWriteFunnel(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfActorRepositoryFactory.buildFunnel(datasetLifecycle, displayLocale);
+    }
+
+    /**
      * Persists {@code arkproc:Actor} resources of their own - not the actor facet the
      * ubiquitous-language hexagon sets on a {@code skos:Concept}, which is untouched by this
      * hexagon and keeps running as before. Acquires datasets from the same shared
      * {@link DatasetLifecycle} as every other model hexagon, so an actor lands in the same project
      * dataset as the requirements and use cases that will eventually refer to it.
-     *
-     * <p>Unlike {@link #constraintRepository}, this factory builds its own SHACL gate and
-     * {@link WriteFunnel} internally rather than taking one: {@code actor-shapes.ttl} and
-     * {@code arknet-actor.ttl} belong to this hexagon alone, so there is no sibling repository to
-     * share a gate with. Its gate is the second in this composition (after the requirements one)
-     * to reason over its axioms - {@code actshapes:ActorShape} targets the abstract
-     * {@code arkproc:Actor} while an instance is typed as one of the four concrete subclasses.</p>
      */
     @Bean
-    ActorRepository actorRepository(
-            final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
-        return KognioRdfActorRepositoryFactory.over(datasetLifecycle, displayLocale);
+    ActorRepository actorRepository(final DatasetLifecycle datasetLifecycle, final WriteFunnel actorWriteFunnel) {
+        return KognioRdfActorRepositoryFactory.over(datasetLifecycle, actorWriteFunnel);
     }
 
     @Bean
@@ -763,6 +774,36 @@ public class ArknetMcpConfiguration {
     @Bean
     ActorMcpTools actorMcpTools(final ActorService service, final ProjectResolver projectResolver) {
         return new ActorMcpTools(service, service, service, service, service, projectResolver);
+    }
+
+    /**
+     * Persists {@code arkproc:Role} resources - the second resource type of this hexagon
+     * (ADR-37/kogn-io/arknet#405 Part B), sharing {@link #actorWriteFunnel} with
+     * {@link #actorRepository} rather than getting a SHACL write-gate/write-funnel pair of its own
+     * (see {@code KognioRdfRoleRepositoryFactory}'s javadoc).
+     */
+    @Bean
+    RoleRepository roleRepository(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale,
+            final WriteFunnel actorWriteFunnel) {
+        return KognioRdfRoleRepositoryFactory.over(datasetLifecycle, displayLocale, actorWriteFunnel);
+    }
+
+    /**
+     * {@code RoleService} depends on {@link ActorRepository} directly, not on a
+     * {@code ActorLookup}-style driven port: {@code Role} and {@code Actor} are two resource types
+     * of one Bounded Context, not two contexts, so ADR-008's gateway rule does not bind here (see
+     * {@code RoleService}'s own class-level javadoc).
+     */
+    @Bean
+    RoleService roleService(final RoleRepository repository, final ActorRepository actorRepository,
+            final ResourceIdFactory resourceIdFactory) {
+        return new RoleService(repository, actorRepository, resourceIdFactory);
+    }
+
+    /** No borrowed neighbour port here either - mirrors {@link #actorMcpTools}'s own note. */
+    @Bean
+    RoleMcpTools roleMcpTools(final RoleService service, final ProjectResolver projectResolver) {
+        return new RoleMcpTools(service, service, service, service, service, service, projectResolver);
     }
 
     // --- Project hexagon (the registry) -------------------------------
@@ -873,13 +914,17 @@ public class ArknetMcpConfiguration {
      * <p>{@link ConstraintCards} (issue #390) reuses {@code constraintService} the same way:
      * {@link ConstraintService} already implements {@code ListConstraints} for
      * {@link #constraintMcpTools}, so reading it a second time here needs no new bean either.</p>
+     *
+     * <p>{@link RoleCards} (ADR-37/kogn-io/arknet#405) mirrors {@link ActorCards} exactly:
+     * {@code roleService} was already wired for {@link #roleMcpTools}, and {@link RoleService}
+     * implements {@code ListRoles} too, so no new bean is needed to read it a second time here.</p>
      */
     @Bean
     ModelViews modelViews(
             final UseCaseService useCases, final RequirementService requirements,
             final ConstraintService constraintService, final TermService terms,
             final BoundedContextService boundedContexts, final AdrService adrs, final ActorService actorService,
-            final ResolveRequirements resolveRequirements) {
+            final RoleService roleService, final ResolveRequirements resolveRequirements) {
         return new ModelViews(
                 terms,
                 new UseCaseCards(useCases, resolveRequirements),
@@ -887,7 +932,8 @@ public class ArknetMcpConfiguration {
                 new ConstraintCards(constraintService),
                 new BoundedContextCards(boundedContexts),
                 new AdrCards(adrs, resolveRequirements, boundedContexts, adrs),
-                new ActorCards(actorService));
+                new ActorCards(actorService),
+                new RoleCards(roleService));
     }
 
     /**
