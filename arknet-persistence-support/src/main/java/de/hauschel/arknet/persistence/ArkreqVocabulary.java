@@ -47,11 +47,19 @@ public final class ArkreqVocabulary {
     /** {@code arkreq:usesTerm} - Requirement/UseCase -&gt; glossary Term (issue #329). */
     public static final String USES_TERM = NAMESPACE + "usesTerm";
 
-    /** {@code arkreq:primaryActor} - UseCase -&gt; its primary actor (an {@code arkproc:Actor}). */
-    public static final String PRIMARY_ACTOR = NAMESPACE + "primaryActor";
+    /**
+     * {@code arkreq:primaryRole} - UseCase -&gt; the role whose goal it fulfils (an
+     * {@code arkproc:Role}; ADR-37/kogn-io/arknet#405 Part C - formerly {@code arkreq:primaryActor}
+     * targeting an {@code arkproc:Actor}, ersatzlos renamed, no compatibility read path).
+     */
+    public static final String PRIMARY_ROLE = NAMESPACE + "primaryRole";
 
-    /** {@code arkreq:supportingActor} - UseCase -&gt; a supporting actor (an {@code arkproc:Actor}). */
-    public static final String SUPPORTING_ACTOR = NAMESPACE + "supportingActor";
+    /**
+     * {@code arkreq:supportingRole} - UseCase -&gt; a supporting role the system calls upon (an
+     * {@code arkproc:Role}; ADR-37/kogn-io/arknet#405 Part C - formerly {@code arkreq:supportingActor}
+     * targeting an {@code arkproc:Actor}, ersatzlos renamed, no compatibility read path).
+     */
+    public static final String SUPPORTING_ROLE = NAMESPACE + "supportingRole";
 
     /** {@code arkreq:mainStep} - UseCase -&gt; a main-flow Step. */
     public static final String MAIN_STEP = NAMESPACE + "mainStep";

@@ -8,11 +8,10 @@ package de.hauschel.arknet.persistence;
  * the single source of truth shared by the code that <em>writes</em> them (the actor out-adapter,
  * {@code de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepository}) and the code that
  * <em>reads</em> them: {@code arknet-mcp}'s traceability read path
- * ({@code de.hauschel.arknet.mcp.trace.TraceabilityGraph#actorIris()}), the use-cases component's
- * name-based cross-BC resolution
- * ({@code de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfActorLookup}), and
- * {@code KognioRdfUseCaseRepository}'s validation-only assertion of {@link #ACTOR_TYPE} for
- * {@code arkreq:primaryActor}/{@code supportingActor}'s {@code sh:class} constraint.
+ * ({@code de.hauschel.arknet.mcp.trace.TraceabilityGraph#actorIris()}) and the architecture tests
+ * that hold the Actor taxonomy and its {@code arkproc:filledBy} delete-guard against the shipped
+ * ontology ({@code ActorVocabularyMatchesOntologyTest},
+ * {@code ReferenceGuardsCoverEveryOntologyEdgeTest}).
  *
  * <p>Same rationale as {@link ArkdddVocabulary}: these are RDF serialization constants, the
  * literal IRI form of ontology classes and a datatype property. The actor core deliberately never
@@ -45,10 +44,13 @@ public final class ArkprocVocabulary {
      * {@code arkproc:Actor} - someone or something that can act on the system under description,
      * or hold an interest in it, or both; {@code rdfs:subClassOf prov:Agent}. The abstract
      * superclass of the four concrete types below - no adapter ever asserts this type itself, only
-     * one of its subclasses, but {@code arkreq:primaryActor}/{@code supportingActor}'s
-     * {@code sh:class} constraint targets exactly this class, so
-     * {@code KognioRdfUseCaseRepository} asserts it as validation-only context for a referenced
-     * actor.
+     * one of its subclasses. Read by the actor out-adapter's SHACL gate, which reasons over the
+     * {@code rdfs:subClassOf} chain so {@code actshapes:ActorShape} fires against a
+     * concretely-typed actor, and by the architecture tests that hold the taxonomy and its
+     * {@code arkproc:filledBy} delete-guard against the shipped ontology. Since ADR-37/
+     * kogn-io/arknet#405 Part C, {@code arkreq:primaryRole}/{@code supportingRole}'s
+     * {@code sh:class} constraint targets {@link #ROLE_TYPE} instead - this class is no longer a
+     * validation-only context asserted for a use case's referenced actor.
      */
     public static final String ACTOR_TYPE = NAMESPACE + "Actor";
 
@@ -74,7 +76,10 @@ public final class ArkprocVocabulary {
      * {@code arkproc:Role} - a named function in which someone or something acts or holds an
      * interest, named independently of who fills it (ADR-37). A second, independent resource type
      * in this module, not a subclass of {@link #ACTOR_TYPE}: an actor is rigid, a role is
-     * anti-rigid, and an anti-rigid type may not subclass a rigid one.
+     * anti-rigid, and an anti-rigid type may not subclass a rigid one. Since ADR-37/
+     * kogn-io/arknet#405 Part C, this is also the {@code sh:class} target of
+     * {@code arkreq:primaryRole}/{@code supportingRole} - the use case's edges to the role whose
+     * (respectively a supporting) goal it fulfils, formerly targeting {@link #ACTOR_TYPE}.
      */
     public static final String ROLE_TYPE = NAMESPACE + "Role";
 

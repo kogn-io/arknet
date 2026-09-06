@@ -47,11 +47,13 @@ import de.hauschel.arknet.actor.domain.RoleCode;
 import de.hauschel.arknet.actor.domain.RoleConcurrentlyModifiedException;
 import de.hauschel.arknet.actor.domain.RoleId;
 import de.hauschel.arknet.actor.domain.RoleNotFoundException;
+import de.hauschel.arknet.actor.domain.RoleReferencedException;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
@@ -489,6 +491,55 @@ class KognioRdfRoleRepositoryTest {
     @Test
     void deleteRejectsAnUnknownCode() {
         assertThrows(RoleNotFoundException.class, () -> repository.delete(PROJECT_A, new RoleCode("ROLE-99")));
+    }
+
+    /**
+     * {@link RoleReferencedException} blocks the delete while a use case still points at the role
+     * via {@code arkreq:primaryRole} - {@link KognioRdfRoleRepository#rejectIfReferenced} searches
+     * across every named graph, so a reference living outside {@link #ROLE_GRAPH} (as a use-case
+     * edge would) must still be found. Real as of ADR-37/kogn-io/arknet#405 Part C: before this
+     * part {@code REFERENCING_PREDICATES} was empty and this exception unreachable (see its own
+     * javadoc) - mutation check performed by temporarily reverting
+     * {@code KognioRdfRoleRepository.REFERENCING_PREDICATES} to {@code Map.of()}, which turns this
+     * test red with no exception thrown instead of the expected {@link RoleReferencedException}.
+     */
+    @Test
+    void deleteRejectsARoleStillReferencedAsPrimaryRole() {
+        Role stored = role(new RoleCode("ROLE-1"), null, List.of());
+        repository.create(PROJECT_A, stored, "en");
+        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
+                + ArkreqVocabulary.PRIMARY_ROLE + "> <" + stored.id().value().value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(reference);
+                return null;
+            });
+        }
+
+        assertThrows(RoleReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), "en").isPresent(),
+                "a rejected delete must leave the role untouched");
+    }
+
+    /**
+     * Same guard, the other referencing predicate: a use case's {@code arkreq:supportingRole}.
+     */
+    @Test
+    void deleteRejectsARoleStillReferencedAsSupportingRole() {
+        Role stored = role(new RoleCode("ROLE-1"), null, List.of());
+        repository.create(PROJECT_A, stored, "en");
+        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
+                + ArkreqVocabulary.SUPPORTING_ROLE + "> <" + stored.id().value().value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(reference);
+                return null;
+            });
+        }
+
+        assertThrows(RoleReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), "en").isPresent(),
+                "a rejected delete must leave the role untouched");
     }
 
     @Test

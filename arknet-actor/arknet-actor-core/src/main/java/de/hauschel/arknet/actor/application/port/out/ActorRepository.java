@@ -6,7 +6,6 @@ package de.hauschel.arknet.actor.application.port.out;
 import java.util.List;
 import java.util.Optional;
 
-import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorConcurrentlyModifiedException;
@@ -194,29 +193,46 @@ public interface ActorRepository {
 
     /**
      * Finds every actor in a project whose identity is among {@code ids}, in one store
-     * round-trip - backs {@link ResolveActors}. This is a batch lookup, not a per-id existence
-     * check: an id absent from the project is simply absent from the result, never an error.
+     * round-trip. This is a batch lookup, not a per-id existence check: an id absent from the
+     * project is simply absent from the result, never an error.
      *
-     * <p>Returns the slim {@link ResolveActors.ResolvedActor} projection, not the full
-     * {@link Actor} aggregate: the only consumer of this method is {@link ResolveActors}, which
-     * exists purely to answer "what code names this identity" for display.</p>
+     * <p>Returns the slim {@link ActorProjection}, not the full {@link Actor} aggregate: this
+     * method answers "what code names this identity" for display, nothing more. Until ADR-37/
+     * kogn-io/arknet#405 Part C it backed the driving port {@code ResolveActors}, published for
+     * {@code arknet-use-cases}' driving adapter to resolve a use case's {@code primaryActor}/
+     * {@code supportingActor} - Part C repointed those edges at {@code arkproc:Role} instead, so
+     * that port is gone and {@link ActorProjection} moved here from its nested {@code
+     * ResolvedActor} record. This method itself stays: it remains a plain, directly tested
+     * out-adapter capability, the same way {@link #findAllByIds} is.</p>
      *
      * @param projectId the project (architecture model) to look up actors in
      * @param ids       the opaque identities to resolve; an empty list yields an empty result
      * @return the resolved actors found, in no particular order, never {@code null}
      */
-    List<ResolveActors.ResolvedActor> findByIds(ProjectId projectId, List<ResourceId> ids);
+    List<ActorProjection> findByIds(ProjectId projectId, List<ResourceId> ids);
+
+    /**
+     * The slim projection {@link #findByIds} resolves an identity to: just enough for a caller to
+     * render a referenced actor's business code - not the full {@link Actor} aggregate, which
+     * would force every backing query to join fields (e.g. {@code type}, {@code description}) a
+     * display-only caller never reads. Formerly the nested record {@code
+     * ResolveActors.ResolvedActor}, moved here when ADR-37/kogn-io/arknet#405 Part C deleted that
+     * driving port along with its last external consumer.
+     *
+     * @param id   the resolved subject identity
+     * @param code the resolved business code (e.g. {@code ACTOR-1})
+     */
+    record ActorProjection(ResourceId id, ActorCode code) {
+    }
 
     /**
      * Finds every actor in a project whose identity is among {@code ids}, in one store
      * round-trip, returning the full {@link Actor} aggregate rather than {@link #findByIds}'
-     * slim {@link ResolveActors.ResolvedActor} projection - added for {@code RoleService}
-     * (ADR-37/kogn-io/arknet#405), which resolves a role's {@code arkproc:filledBy} occupants to
-     * their current <em>name</em> for display, not just their code. Kept separate from
-     * {@link #findByIds} rather than widening that method's return shape: {@link ResolveActors} is
-     * a published contract another bounded context's driving adapter consumes
-     * ({@code arknet-use-cases}, see that port's own javadoc), and widening it would hand every
-     * such caller fields it never asked for.
+     * slim {@link ActorProjection} - added for {@code RoleService} (ADR-37/kogn-io/arknet#405),
+     * which resolves a role's {@code arkproc:filledBy} occupants to their current <em>name</em>
+     * for display, not just their code. Kept separate from {@link #findByIds} rather than
+     * widening that method's return shape, so a caller that only ever needed the code is never
+     * handed fields it never asked for.
      *
      * <p>Not a per-id existence check: an id absent from the project (or not an actor at all) is
      * simply absent from the result, never an error.</p>

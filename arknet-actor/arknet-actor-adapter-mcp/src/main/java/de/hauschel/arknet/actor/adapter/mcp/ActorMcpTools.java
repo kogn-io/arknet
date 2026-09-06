@@ -233,9 +233,10 @@ public final class ActorMcpTools {
 
     @McpTool(name = "actor_delete",
             description = "Delete an already-created actor and every triple it carries - not just a "
-                    + "correction, the whole resource goes away. Rejected if a use case still references it "
-                    + "as its primaryActor/supportingActor. A resource that is also a glossary term (term_add) "
-                    + "keeps its glossary entry - this only removes the actor resource itself.")
+                    + "correction, the whole resource goes away. Rejected if a role still lists it in its "
+                    + "filledBy occupants (role_add/role_update) - remove it there first. A resource that is "
+                    + "also a glossary term (term_add) keeps its glossary entry - this only removes the actor "
+                    + "resource itself.")
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Actor identity, e.g. ACTOR-1") final String id,

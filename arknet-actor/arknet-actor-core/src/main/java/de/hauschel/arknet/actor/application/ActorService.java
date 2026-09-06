@@ -11,7 +11,6 @@ import de.hauschel.arknet.actor.application.port.in.AddActor;
 import de.hauschel.arknet.actor.application.port.in.DeleteActor;
 import de.hauschel.arknet.actor.application.port.in.GetActor;
 import de.hauschel.arknet.actor.application.port.in.ListActors;
-import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.actor.application.port.in.UpdateActor;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.domain.Actor;
@@ -51,7 +50,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * very same actor surfaces as {@link ActorConcurrentlyModifiedException}. Parallel sessions of one
  * user against one local store are the normal case, not a remote/multi-writer concern.</p>
  */
-public class ActorService implements AddActor, ListActors, GetActor, UpdateActor, DeleteActor, ResolveActors {
+public class ActorService implements AddActor, ListActors, GetActor, UpdateActor, DeleteActor {
 
     private static final String CODE_PREFIX = "ACTOR";
 
@@ -110,8 +109,22 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
         return repository.findByCode(projectId, code);
     }
 
-    @Override
-    public List<ResolvedActor> resolveExisting(ProjectId projectId, ResourceId... ids) {
+    /**
+     * Batch-resolves opaque actor identities back to their identity and business code, in a
+     * single store round-trip - a plain, directly usable capability of this service rather than
+     * an implementation of a driving port. Until ADR-37/kogn-io/arknet#405 Part C this method
+     * implemented the driving port {@code ResolveActors}, published for {@code arknet-use-cases}'
+     * driving adapter to render a use case's {@code primaryActor}/{@code supportingActor} as their
+     * business code; Part C repointed those edges at {@code arkproc:Role}, so that port and its
+     * last external consumer are both gone. Never rejects: an id that resolves to nothing in the
+     * project is simply absent from the result.
+     *
+     * @param projectId the project (architecture model) to resolve actors in
+     * @param ids       the opaque identities to resolve; may be empty
+     * @return the resolved actors found; an id absent from the project is simply absent here too,
+     *         never {@code null}
+     */
+    public List<ActorRepository.ActorProjection> resolveExisting(ProjectId projectId, ResourceId... ids) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(ids, "ids");
         if (ids.length == 0) {
