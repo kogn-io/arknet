@@ -6,8 +6,9 @@
 #  License    : CC-BY-4.0
 #
 #  Scope: the Actor taxonomy - HumanActor, SystemActor, LegalActor,
-#  GroupActor and actorRole - used to identify who or what acts in, or holds
-#  an interest in, the system under description.
+#  GroupActor - used to identify who or what acts in, or holds an interest
+#  in, the system under description; plus Role, a named function that an
+#  Actor may (optionally, and possibly more than one) fill via filledBy.
 #
 #  An Actor is a resource of its own: minted store-first through the
 #  arknet-actor bounded context (actor_add/actor_get/actor_list/
@@ -16,8 +17,7 @@
 #  glossary obligations, required. A resource may still separately be
 #  registered as a glossary term (term_add) - the two identities are
 #  independent since issue #336, when the glossary's own actor facet
-#  (arkproc:*Actor set on a skos:Concept, term_add/term_update's former
-#  actorKind/actorRole) was removed without replacement.
+#  (arkproc:*Actor set on a skos:Concept) was removed without replacement.
 #
 #  Namespace note: this module lives under process#, not actor#, because
 #  arkproc:HumanActor/arkproc:SystemActor were originally introduced as
@@ -103,11 +103,27 @@ arkproc:GroupActor a owl:Class ;
                  "Eine Gruppe ohne eigene Rechtsform - ein Fachbereich, ein Gremium, ein Team -, die gemeinsam handelt oder ein Interesse hat, statt durch eine einzelne benennbare natuerliche oder juristische Person."@de ;
     skos:example "Fachbereich Vertrieb, Betriebsrat, Architektur-Gremium" .
 
-arkproc:actorRole a owl:DatatypeProperty ;
-    rdfs:domain arkproc:Actor ;
-    rdfs:range  xsd:string ;
-    rdfs:label  "actor role"@en , "Akteursrolle"@de ;
-    rdfs:comment "A short free-text note about the actor - NOT role modelling. Roles are expressed as edges once they exist; this property carries whatever an author wants to add in passing and nothing may be derived from it."@en ,
-                 "Kurze freitextliche Zusatzangabe zum Akteur - KEINE Rollenmodellierung. Rollen werden ueber Kanten ausgedrueckt, sobald es sie gibt; diese Property traegt, was ein Autor nebenbei ergaenzen will, und aus ihr darf nichts abgeleitet werden."@de .
+##############################################################################
+#  ROLES
+##############################################################################
+
+# Role is a second, independent resource type in this same module (ADR-37):
+# an Actor is rigid (a person does not stop being a person), a Role is
+# anti-rigid (an architect stops being an architect once nobody plays that
+# part), and an anti-rigid type may not be a subclass of a rigid one. Role
+# therefore does not subclass arkproc:Actor, and carries no filler of its
+# own identity - only filledBy, an optional, multivalued edge to whichever
+# Actors currently occupy it.
+arkproc:Role a owl:Class ;
+    rdfs:label "Role"@en , "Rolle"@de ;
+    rdfs:comment "A named function in which someone or something acts or holds an interest - named independently of who fills it. A role may remain unfilled, and who fills it can change without the role becoming a different one."@en ,
+                 "Eine benannte Funktion, in der gehandelt oder ein Interesse vertreten wird - benannt unabhaengig davon, wer sie ausfuellt. Eine Rolle darf unbesetzt bleiben, und wer sie ausfuellt, kann wechseln, ohne dass die Rolle eine andere wird."@de .
+
+arkproc:filledBy a owl:ObjectProperty ;
+    rdfs:domain arkproc:Role ;
+    rdfs:range  arkproc:Actor ;
+    rdfs:label  "filled by"@en , "besetzt durch"@de ;
+    rdfs:comment "The specification never reads who fills a role; only evaluating views (such as the actor/use-case matrix) display the current occupancy."@en ,
+                 "Die Spezifikation liest die Besetzung einer Rolle nie; nur auswertende Sichten (etwa die Actor/Use-Case-Matrix) zeigen die aktuelle Besetzung an."@de .
 
 # END OF ACTOR ONTOLOGY
