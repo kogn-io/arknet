@@ -13,6 +13,7 @@ import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
+import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
 /**
@@ -265,6 +266,20 @@ public interface UseCaseRepository {
      * @return all use cases, never {@code null}
      */
     List<UseCase> findAll(ProjectId projectId, String displayLocale);
+
+    /**
+     * Companion to {@link #findAll}: not the displayed {@code title}/{@code goal}, but whether
+     * displaying it required falling back past the requested/project-default language tier of
+     * {@link de.hauschel.arknet.kernel.DisplayLocale#select} (kogn-io/arknet#475). {@link
+     * #findAll} itself cannot answer this - it hands back a plain {@code String}, which looks
+     * identical whether the requested language was found or the chain degraded past it.
+     *
+     * @param projectId     the project (architecture model) to list use cases from
+     * @param displayLocale the same override {@link #findAll} accepts
+     * @return see {@link
+     *         de.hauschel.arknet.uc.application.port.in.DescribeUseCaseDisplayFallback#describe}
+     */
+    Map<UseCaseCode, UseCaseDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale);
 
     /**
      * Returns the business code of every use case recorded in a project, read independently of

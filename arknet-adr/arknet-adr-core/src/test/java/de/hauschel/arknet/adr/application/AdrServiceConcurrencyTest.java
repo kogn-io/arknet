@@ -22,6 +22,7 @@ import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
+import de.hauschel.arknet.adr.domain.AdrDisplayFallback;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
@@ -287,6 +288,11 @@ class AdrServiceConcurrencyTest {
         @Override
         public List<Adr> findAll(ProjectId projectId, String displayLocale) {
             return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public Map<AdrCode, AdrDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+            return delegate.findAllDisplayFallback(projectId, displayLocale);
         }
 
         @Override

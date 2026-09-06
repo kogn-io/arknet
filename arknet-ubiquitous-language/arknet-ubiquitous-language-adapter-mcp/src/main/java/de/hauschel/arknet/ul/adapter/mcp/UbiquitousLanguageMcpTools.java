@@ -3,7 +3,9 @@
 
 package de.hauschel.arknet.ul.adapter.mcp;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -19,11 +21,13 @@ import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
+import de.hauschel.arknet.ul.application.port.in.DescribeTermDisplayFallback;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermDisplayFallback;
 
 /**
  * Driving (in) adapter of the ubiquitous-language component: exposes the glossary
@@ -82,17 +86,20 @@ public final class UbiquitousLanguageMcpTools {
 
     private final AddTerm addTerm;
     private final ListTerms listTerms;
+    private final DescribeTermDisplayFallback describeTermDisplayFallback;
     private final GetTerm getTerm;
     private final UpdateTerm updateTerm;
     private final DeleteTerm deleteTerm;
     private final ProjectResolver projects;
 
     /**
-     * Creates the adapter with its five driving in-ports and the resolver that maps each
+     * Creates the adapter with its six driving in-ports and the resolver that maps each
      * call's origin directory to a project.
      *
      * @param addTerm     in-port backing {@code term_add}
      * @param listTerms   in-port backing {@code term_list}
+     * @param describeTermDisplayFallback in-port backing {@code term_list}'s fallback-visibility
+     *                    line (kogn-io/arknet#475)
      * @param getTerm     in-port backing {@code term_get}
      * @param updateTerm  in-port backing {@code term_update}
      * @param deleteTerm  in-port backing {@code term_delete}
@@ -101,12 +108,15 @@ public final class UbiquitousLanguageMcpTools {
     public UbiquitousLanguageMcpTools(
             final AddTerm addTerm,
             final ListTerms listTerms,
+            final DescribeTermDisplayFallback describeTermDisplayFallback,
             final GetTerm getTerm,
             final UpdateTerm updateTerm,
             final DeleteTerm deleteTerm,
             final ProjectResolver projects) {
         this.addTerm = Objects.requireNonNull(addTerm, "addTerm");
         this.listTerms = Objects.requireNonNull(listTerms, "listTerms");
+        this.describeTermDisplayFallback =
+                Objects.requireNonNull(describeTermDisplayFallback, "describeTermDisplayFallback");
         this.getTerm = Objects.requireNonNull(getTerm, "getTerm");
         this.updateTerm = Objects.requireNonNull(updateTerm, "updateTerm");
         this.deleteTerm = Objects.requireNonNull(deleteTerm, "deleteTerm");
@@ -135,15 +145,13 @@ public final class UbiquitousLanguageMcpTools {
      * fallback to a server-side working directory.
      *
      * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
-     * needs the resolved project's configured default language for three, independent purposes -
-     * {@link #effectiveDisplayLocale} merges it into the read tool's ({@code term_get}'s)
-     * {@code displayLocale} default; {@code term_add}/{@code term_update} instead pass
-     * {@link ResolvedProject#defaultLanguage()} straight through to their in-port as the {@code
-     * defaultLanguage} a write falls back to when the caller omits {@code language} (issue #258);
-     * and {@code term_list} - which, unlike {@code term_get}, exposes no explicit
-     * {@code displayLocale} tool argument to merge against - likewise passes it straight through
-     * as the display language every listed term's label is read in (issue #274). Three different
-     * consumers of the very same field, not one the other two skip.</p>
+     * needs the resolved project's configured default language for two, independent purposes -
+     * {@link #effectiveDisplayLocale} merges it into the read tools' ({@code term_get}'s and,
+     * since kogn-io/arknet#475, {@code term_list}'s own) {@code displayLocale} default;
+     * {@code term_add}/{@code term_update} instead pass {@link ResolvedProject#defaultLanguage()}
+     * straight through to their in-port as the {@code defaultLanguage} a write falls back to when
+     * the caller omits {@code language} (issue #258). Two different consumers of the very same
+     * field.</p>
      */
     private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
@@ -152,8 +160,9 @@ public final class UbiquitousLanguageMcpTools {
 
     /**
      * Merges an explicit, caller-supplied {@code displayLocale} argument with {@code project}'s
-     * own configured default language for {@code term_get}: the explicit value wins if the
-     * caller gave a non-blank one, otherwise the project's default is used (or {@code null} if it
+     * own configured default language for {@code term_get}/{@code term_list} (the latter since
+     * kogn-io/arknet#475): the explicit value wins if the caller gave a non-blank one, otherwise
+     * the project's default is used (or {@code null} if it
      * has none, leaving the decision to {@link de.hauschel.arknet.kernel.DisplayLocale#select}'s
      * own remaining fallback chain).
      *
@@ -213,19 +222,31 @@ public final class UbiquitousLanguageMcpTools {
         return format(created);
     }
 
-    @McpTool(name = "term_list", description = "List all glossary terms.",
+    @McpTool(name = "term_list", description = "List all glossary terms. A term shown under a fallen-back "
+            + "language (its label/definition is missing in the requested/project-default language) carries "
+            + "an inline [fallback: ...] tag naming the language actually shown - see displayLocale.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display every term's "
+                    + "label and definition in, overriding the project's own configured default language for "
+                    + "this one call (kogn-io/arknet#475). Falls back to the project default, then to the "
+                    + "server's own default, then to an untagged literal, then deterministically to any "
+                    + "literal a term carries - a term whose shown variant is not this call's requested/"
+                    + "project-default language is marked with an inline [fallback: ...] tag.",
+                    required = false)
+            final String displayLocale,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        // No explicit displayLocale tool argument to merge against here, unlike term_get - every
-        // listed term's label is read straight under the resolved project's own configured
-        // default language (issue #274), the same value term_add/term_update already pass through
-        // for the write side.
-        final List<Term> all = listTerms.list(project.id(), project.defaultLanguage());
-        return all.stream().map(UbiquitousLanguageMcpTools::format)
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        final List<Term> all = listTerms.list(project.id(), effective);
+        if (all.isEmpty()) {
+            return "(no terms)";
+        }
+        final Map<TermCode, TermDisplayFallback> fallbacks =
+                describeTermDisplayFallback.describe(project.id(), effective);
+        return all.stream().map(t -> format(t) + fallbackSuffix(fallbacks.get(t.code())))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no terms)");
     }
 
@@ -362,6 +383,31 @@ public final class UbiquitousLanguageMcpTools {
         final String related = t.related().isEmpty() ? "" : " [related:%s]".formatted(
                 t.related().stream().map(TermCode::value).reduce((a, b) -> a + "," + b).orElseThrow());
         return "%s %s - %s%s%s".formatted(t.code().value(), t.prefLabel(), t.definition(), broader, related);
+    }
+
+    /**
+     * The {@code [fallback: ...]} suffix {@code term_list} appends to a line whenever {@code
+     * fallback} names at least one field that had to degrade past the requested/project-default
+     * language (kogn-io/arknet#475) - empty string (no visible change) when {@code fallback} is
+     * {@code null} or carries no fallen-back field, matching the requirement that the normal case
+     * stays noise-free.
+     */
+    private static String fallbackSuffix(final TermDisplayFallback fallback) {
+        if (fallback == null || fallback.isEmpty()) {
+            return "";
+        }
+        final List<String> parts = new ArrayList<>();
+        if (fallback.prefLabelTag() != null) {
+            parts.add("prefLabel=" + displayTag(fallback.prefLabelTag()));
+        }
+        if (fallback.definitionTag() != null) {
+            parts.add("definition=" + displayTag(fallback.definitionTag()));
+        }
+        return " [fallback: " + String.join(", ", parts) + "]";
+    }
+
+    private static String displayTag(final String tag) {
+        return tag.isEmpty() ? "untagged" : tag;
     }
 
     private static String blankToNull(final String value) {

@@ -18,6 +18,7 @@ import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermDisplayFallback;
 import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
@@ -119,6 +120,15 @@ final class InMemoryTermRepository implements TermRepository {
         // Nothing multi-valued to select a language variant from in this plain in-memory fake
         // either (see class-level note) - displayLocale is accepted and ignored.
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Nothing multi-valued to fall back among in this plain in-memory fake (see class-level note)
+     * - always empty, mirroring how {@link #findAll} ignores {@code displayLocale} altogether.
+     */
+    @Override
+    public Map<TermCode, TermDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+        return Map.of();
     }
 
     /**

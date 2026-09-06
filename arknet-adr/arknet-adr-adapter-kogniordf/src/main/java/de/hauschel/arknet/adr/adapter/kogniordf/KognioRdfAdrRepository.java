@@ -43,6 +43,7 @@ import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
+import de.hauschel.arknet.adr.domain.AdrDisplayFallback;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
@@ -957,6 +958,66 @@ public class KognioRdfAdrRepository implements AdrRepository {
             }
             return List.copyOf(result);
         }
+    }
+
+    /**
+     * Companion to {@link #findAll}: not the displayed {@code name} - the only multilingual
+     * field {@code adr_list}'s compact line shows - but whether displaying it required falling
+     * back past the requested/project-default language tier of {@link DisplayLocale#select}
+     * (kogn-io/arknet#475). Mirrors {@link #findAll}'s own per-decision reads ({@link
+     * #readLiterals} for {@link #NAME_PROPERTY}) rather than a single bulk query, the same N+1
+     * shape {@link #findAll} already has.
+     */
+    @Override
+    public Map<AdrCode, AdrDisplayFallback> findAllDisplayFallback(ProjectId projectId, String requestedDisplayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        DisplayLocale effective = withRequestedOverride(requestedDisplayLocale);
+
+        String query = "SELECT ?s WHERE { GRAPH <" + ADR_GRAPH + "> { ?s a <" + ADR_TYPE + "> . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . FILTER(isIRI(?s)) } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            List<String> subjects = handle.sparqlQuery().select(query)
+                    .map(row -> iriOf(row, "s").getIRIString())
+                    .distinct()
+                    .toList();
+            Map<AdrCode, AdrDisplayFallback> result = new LinkedHashMap<>();
+            for (String subjectIriString : subjects) {
+                AdrCode code = codeFor(handle, subjectIriString);
+                if (code == null) {
+                    continue;
+                }
+                String subject = SparqlTerms.iriRef(subjectIriString);
+                List<LocalizedLiteral> names = readLiterals(handle, subject, NAME_PROPERTY);
+                if (names.isEmpty()) {
+                    // The store-first anomaly findAll itself skips this decision for - nothing to
+                    // report a fallback about.
+                    continue;
+                }
+                AdrDisplayFallback fallback = new AdrDisplayFallback(fallbackTag(names, effective));
+                if (!fallback.isEmpty()) {
+                    result.put(code, fallback);
+                }
+            }
+            return result;
+        }
+    }
+
+    /**
+     * {@code null} if the candidate matching {@code displayLocale}'s requested language was
+     * shown (the requested tier of {@link DisplayLocale#select} succeeded, so nothing fell
+     * back); otherwise the tag of whatever was shown instead - a BCP-47 tag, or {@code ""} for
+     * an untagged literal.
+     */
+    private static String fallbackTag(List<LocalizedLiteral> candidates, DisplayLocale displayLocale) {
+        LocalizedLiteral selected = displayLocale.select(candidates)
+                .orElseThrow(() -> new IllegalStateException(
+                        "a required join, so at least one candidate must exist"));
+        String tag = selected.languageTag();
+        String requestedLanguage = displayLocale.requested().getLanguage();
+        boolean matchesRequested = tag != null
+                && Locale.forLanguageTag(tag).getLanguage().equalsIgnoreCase(requestedLanguage);
+        return matchesRequested ? null : (tag == null ? "" : tag);
     }
 
     /**

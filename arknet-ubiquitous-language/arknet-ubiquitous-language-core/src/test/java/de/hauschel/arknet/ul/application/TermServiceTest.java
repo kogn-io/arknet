@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +26,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermDisplayFallback;
 import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
@@ -497,6 +499,11 @@ class TermServiceTest {
         public List<Term> findAll(ProjectId projectId, String displayLocale) {
             findAllCalls++;
             return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public Map<TermCode, TermDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+            return delegate.findAllDisplayFallback(projectId, displayLocale);
         }
 
         @Override

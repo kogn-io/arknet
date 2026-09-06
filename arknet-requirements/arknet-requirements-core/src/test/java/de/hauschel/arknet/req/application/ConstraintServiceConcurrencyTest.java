@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -24,6 +25,7 @@ import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintConcurrentlyModifiedException;
+import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
 import de.hauschel.arknet.req.domain.ConstraintType;
 
@@ -202,6 +204,11 @@ class ConstraintServiceConcurrencyTest {
         }
 
         @Override
+        public Map<ConstraintCode, ConstraintDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+            return delegate.findAllDisplayFallback(projectId, displayLocale);
+        }
+
+        @Override
         public List<ConstraintCode> findAllCodes(ProjectId projectId) {
             return delegate.findAllCodes(projectId);
         }
@@ -266,6 +273,11 @@ class ConstraintServiceConcurrencyTest {
         @Override
         public List<Constraint> findAll(ProjectId projectId, String displayLocale) {
             return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public Map<ConstraintCode, ConstraintDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+            return delegate.findAllDisplayFallback(projectId, displayLocale);
         }
 
         @Override
@@ -337,6 +349,11 @@ class ConstraintServiceConcurrencyTest {
         @Override
         public List<Constraint> findAll(ProjectId projectId, String displayLocale) {
             return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public Map<ConstraintCode, ConstraintDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+            return delegate.findAllDisplayFallback(projectId, displayLocale);
         }
 
         @Override

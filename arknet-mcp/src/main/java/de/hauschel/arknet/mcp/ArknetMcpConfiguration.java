@@ -400,8 +400,8 @@ public class ArknetMcpConfiguration {
             final RequirementService service, final ResolveTerms resolveTerms,
             final ConstraintService constraintService, final ProjectResolver projectResolver) {
         return new RequirementMcpTools(
-                service, service, service, service, service, service, service, service, service, resolveTerms,
-                constraintService, projectResolver);
+                service, service, service, service, service, service, service, service, service, service,
+                resolveTerms, constraintService, projectResolver);
     }
 
     /**
@@ -413,7 +413,7 @@ public class ArknetMcpConfiguration {
     @Bean
     ConstraintMcpTools constraintMcpTools(
             final ConstraintService service, final ProjectResolver projectResolver) {
-        return new ConstraintMcpTools(service, service, service, service, service, projectResolver);
+        return new ConstraintMcpTools(service, service, service, service, service, service, projectResolver);
     }
 
     // --- Ubiquitous-language hexagon -------------------------------------------
@@ -452,7 +452,7 @@ public class ArknetMcpConfiguration {
     @Bean
     UbiquitousLanguageMcpTools ubiquitousLanguageMcpTools(
             final TermService service, final ProjectResolver projectResolver) {
-        return new UbiquitousLanguageMcpTools(service, service, service, service, service, projectResolver);
+        return new UbiquitousLanguageMcpTools(service, service, service, service, service, service, projectResolver);
     }
 
     // --- Use-cases hexagon -----------------------------------------------------
@@ -549,8 +549,8 @@ public class ArknetMcpConfiguration {
             final UseCaseService service, final ActorService actorService, final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements, final ConstraintService constraintService,
             final ProjectResolver projectResolver) {
-        return new UseCaseMcpTools(service, service, service, service, service, service, actorService, resolveTerms,
-                resolveRequirements, constraintService, projectResolver);
+        return new UseCaseMcpTools(service, service, service, service, service, service, service, actorService,
+                resolveTerms, resolveRequirements, constraintService, projectResolver);
     }
 
     // --- Bounded-context hexagon -----------------------------------------------
@@ -695,7 +695,7 @@ public class ArknetMcpConfiguration {
             final ResolveBoundedContexts resolveBoundedContexts, final ResolveTerms resolveTerms,
             final ProjectResolver projectResolver) {
         return new AdrMcpTools(service, service, service, service, service, service, service, service,
-                service, service, service, resolveRequirements, resolveBoundedContexts, resolveTerms,
+                service, service, service, service, resolveRequirements, resolveBoundedContexts, resolveTerms,
                 projectResolver);
     }
 

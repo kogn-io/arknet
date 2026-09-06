@@ -13,6 +13,7 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -51,6 +52,7 @@ import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
+import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
 
@@ -106,6 +108,12 @@ class RequirementServiceRealStoreConcurrencyTest {
 
         @Override
         public List<Constraint> findAll(ProjectId projectId, String displayLocale) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public Map<ConstraintCode, ConstraintDisplayFallback> findAllDisplayFallback(
+                ProjectId projectId, String displayLocale) {
             throw new UnsupportedOperationException("not exercised by this test");
         }
 

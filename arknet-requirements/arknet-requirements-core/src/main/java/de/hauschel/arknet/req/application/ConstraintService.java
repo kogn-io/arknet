@@ -4,6 +4,7 @@
 package de.hauschel.arknet.req.application;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -15,6 +16,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.AddConstraint;
 import de.hauschel.arknet.req.application.port.in.DeleteConstraint;
+import de.hauschel.arknet.req.application.port.in.DescribeConstraintDisplayFallback;
 import de.hauschel.arknet.req.application.port.in.GetConstraint;
 import de.hauschel.arknet.req.application.port.in.ListConstraints;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
@@ -23,6 +25,7 @@ import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintConcurrentlyModifiedException;
+import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.ConstraintId;
 import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
 import de.hauschel.arknet.req.domain.ConstraintType;
@@ -59,8 +62,8 @@ import de.hauschel.arknet.req.domain.DuplicateConstraintCodeException;
  * acceptance-criteria-placeholder guard (a constraint has no derived sub-resources to synthesize).</p>
  */
 public class ConstraintService
-        implements AddConstraint, GetConstraint, ListConstraints, ResolveConstraints, UpdateConstraint,
-        DeleteConstraint {
+        implements AddConstraint, GetConstraint, ListConstraints, DescribeConstraintDisplayFallback,
+        ResolveConstraints, UpdateConstraint, DeleteConstraint {
 
     /**
      * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops - see
@@ -108,6 +111,12 @@ public class ConstraintService
     public List<Constraint> list(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         return repository.findAll(projectId, displayLocale);
+    }
+
+    @Override
+    public Map<ConstraintCode, ConstraintDisplayFallback> describe(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        return repository.findAllDisplayFallback(projectId, displayLocale);
     }
 
     @Override

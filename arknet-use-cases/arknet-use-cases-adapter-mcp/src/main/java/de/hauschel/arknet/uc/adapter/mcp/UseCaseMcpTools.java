@@ -3,7 +3,9 @@
 
 package de.hauschel.arknet.uc.adapter.mcp;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.springframework.ai.mcp.annotation.McpTool;
@@ -21,6 +23,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
+import de.hauschel.arknet.uc.application.port.in.DescribeUseCaseDisplayFallback;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
 import de.hauschel.arknet.uc.application.port.in.LinkTerm;
@@ -30,6 +33,7 @@ import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection
 import de.hauschel.arknet.uc.domain.StepTextPatch;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
+import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 
 /**
@@ -97,6 +101,7 @@ public final class UseCaseMcpTools {
 
     private final AddUseCase addUseCase;
     private final ListUseCases listUseCases;
+    private final DescribeUseCaseDisplayFallback describeUseCaseDisplayFallback;
     private final GetUseCase getUseCase;
     private final UpdateUseCase updateUseCase;
     private final LinkTerm linkTerm;
@@ -105,11 +110,13 @@ public final class UseCaseMcpTools {
     private final UseCasePresenter presenter;
 
     /**
-     * Creates the adapter with its six driving in-ports, the four borrowed sibling-hexagon
+     * Creates the adapter with its seven driving in-ports, the four borrowed sibling-hexagon
      * display ports and the resolver that maps each call's origin anchor to a project.
      *
      * @param addUseCase          in-port backing {@code uc_add}
      * @param listUseCases        in-port backing {@code uc_list}
+     * @param describeUseCaseDisplayFallback in-port backing {@code uc_list}'s fallback-visibility
+     *                            line (kogn-io/arknet#475)
      * @param getUseCase          in-port backing {@code uc_get}
      * @param updateUseCase       in-port backing {@code uc_update}
      * @param linkTerm            in-port backing {@code uc_link_term}
@@ -128,6 +135,7 @@ public final class UseCaseMcpTools {
     public UseCaseMcpTools(
             final AddUseCase addUseCase,
             final ListUseCases listUseCases,
+            final DescribeUseCaseDisplayFallback describeUseCaseDisplayFallback,
             final GetUseCase getUseCase,
             final UpdateUseCase updateUseCase,
             final LinkTerm linkTerm,
@@ -139,6 +147,8 @@ public final class UseCaseMcpTools {
             final ProjectResolver projects) {
         this.addUseCase = Objects.requireNonNull(addUseCase, "addUseCase");
         this.listUseCases = Objects.requireNonNull(listUseCases, "listUseCases");
+        this.describeUseCaseDisplayFallback =
+                Objects.requireNonNull(describeUseCaseDisplayFallback, "describeUseCaseDisplayFallback");
         this.getUseCase = Objects.requireNonNull(getUseCase, "getUseCase");
         this.updateUseCase = Objects.requireNonNull(updateUseCase, "updateUseCase");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
@@ -169,18 +179,15 @@ public final class UseCaseMcpTools {
      * fallback to a server-side working directory.
      *
      * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
-     * needs the resolved project's configured default language for three, independent purposes -
-     * {@link #effectiveDisplayLocale} merges it into the read tool's ({@code uc_get}'s)
-     * {@code displayLocale} default; {@code uc_add}/{@code uc_update} instead pass
-     * {@link ResolvedProject#defaultLanguage()} straight through to their in-port as the
-     * {@code defaultLanguage} a write falls back to when the caller omits {@code language}
-     * (issue #258) - and, for {@code uc_update} alone, as the language its read-modify-write round
-     * trip reads the current state in, so a field this call leaves alone is echoed back and
-     * rewritten in the project's own language rather than the daemon's (issue #456); and
-     * {@code uc_list} - which, unlike {@code uc_get}, exposes no explicit
-     * {@code displayLocale} tool argument to merge against - likewise passes it straight through
-     * as the display language every listed use case's text fields are read in (issue #281). Three
-     * different consumers of the very same field, not one the other two skip.</p>
+     * needs the resolved project's configured default language for two, independent purposes -
+     * {@link #effectiveDisplayLocale} merges it into the read tools' ({@code uc_get}'s and,
+     * since kogn-io/arknet#475, {@code uc_list}'s own) {@code displayLocale} default;
+     * {@code uc_add}/{@code uc_update} instead pass {@link ResolvedProject#defaultLanguage()}
+     * straight through to their in-port as the {@code defaultLanguage} a write falls back to
+     * when the caller omits {@code language} (issue #258) - and, for {@code uc_update} alone, as
+     * the language its read-modify-write round trip reads the current state in, so a field this
+     * call leaves alone is echoed back and rewritten in the project's own language rather than
+     * the daemon's (issue #456).</p>
      */
     private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
@@ -189,11 +196,12 @@ public final class UseCaseMcpTools {
 
     /**
      * Merges an explicit, caller-supplied {@code displayLocale} argument with {@code project}'s
-     * own configured default language for {@code uc_get}: the explicit value wins if the caller
-     * gave a non-blank one, otherwise the project's default is used (or {@code null} if it has
-     * none, leaving the decision to {@link de.hauschel.arknet.kernel.DisplayLocale#select}'s own
-     * remaining fallback chain). Mirrors {@code UbiquitousLanguageMcpTools#effectiveDisplayLocale}
-     * - see that method's javadoc for why the write tools never call this.
+     * own configured default language for {@code uc_get}/{@code uc_list} (the latter since
+     * kogn-io/arknet#475): the explicit value wins if the caller gave a non-blank one, otherwise
+     * the project's default is used (or {@code null} if it has none, leaving the decision to
+     * {@link de.hauschel.arknet.kernel.DisplayLocale#select}'s own remaining fallback chain).
+     * Mirrors {@code UbiquitousLanguageMcpTools#effectiveDisplayLocale} - see that method's
+     * javadoc for why the write tools never call this.
      */
     private static String effectiveDisplayLocale(final ResolvedProject project, final String explicit) {
         if (explicit != null && !explicit.isBlank()) {
@@ -312,10 +320,21 @@ public final class UseCaseMcpTools {
         return presenter.formatFull(project.id(), created);
     }
 
-    @McpTool(name = "uc_list", description = "List all use cases in this project (id, title, goal).",
+    @McpTool(name = "uc_list", description = "List all use cases in this project (id, title, goal). A use "
+            + "case shown under a fallen-back language (its title/goal is missing in the requested/"
+            + "project-default language) carries an inline [fallback: ...] tag naming the language "
+            + "actually shown - see displayLocale.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display every use "
+                    + "case's title and goal in, overriding the project's own configured default language "
+                    + "for this one call (kogn-io/arknet#475). Falls back to the project default, then to "
+                    + "the server's own default, then to an untagged literal, then deterministically to any "
+                    + "literal a use case carries - a use case whose shown variant is not this call's "
+                    + "requested/project-default language is marked with an inline [fallback: ...] tag.",
+                    required = false)
+            final String displayLocale,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -324,12 +343,15 @@ public final class UseCaseMcpTools {
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        // No explicit displayLocale tool argument to merge against here, unlike uc_get - every
-        // listed use case's text fields are read straight under the resolved project's own
-        // configured default language (issue #281), the same value uc_add/uc_update already pass
-        // through for the write side.
-        final List<UseCase> all = listUseCases.list(project.id(), project.defaultLanguage());
-        return all.stream().map(UseCasePresenter::formatShort)
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        final List<UseCase> all = listUseCases.list(project.id(), effective);
+        if (all.isEmpty()) {
+            return "(no use cases)";
+        }
+        final Map<UseCaseCode, UseCaseDisplayFallback> fallbacks =
+                describeUseCaseDisplayFallback.describe(project.id(), effective);
+        return all.stream()
+                .map(uc -> UseCasePresenter.formatShort(uc) + fallbackSuffix(fallbacks.get(uc.code())))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no use cases)");
     }
 
@@ -564,5 +586,30 @@ public final class UseCaseMcpTools {
 
     private static String blankToNull(final String value) {
         return (value == null || value.isBlank()) ? null : value;
+    }
+
+    /**
+     * The {@code [fallback: ...]} suffix {@code uc_list} appends to a line whenever {@code
+     * fallback} names at least one field that had to degrade past the requested/project-default
+     * language (kogn-io/arknet#475) - empty string (no visible change) when {@code fallback} is
+     * {@code null} or carries no fallen-back field, matching the requirement that the normal case
+     * stays noise-free.
+     */
+    private static String fallbackSuffix(final UseCaseDisplayFallback fallback) {
+        if (fallback == null || fallback.isEmpty()) {
+            return "";
+        }
+        final List<String> parts = new ArrayList<>();
+        if (fallback.titleTag() != null) {
+            parts.add("title=" + displayTag(fallback.titleTag()));
+        }
+        if (fallback.goalTag() != null) {
+            parts.add("goal=" + displayTag(fallback.goalTag()));
+        }
+        return " [fallback: " + String.join(", ", parts) + "]";
+    }
+
+    private static String displayTag(final String tag) {
+        return tag.isEmpty() ? "untagged" : tag;
     }
 }

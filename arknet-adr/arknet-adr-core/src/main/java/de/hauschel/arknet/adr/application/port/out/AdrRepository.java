@@ -12,6 +12,7 @@ import java.util.Set;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
+import de.hauschel.arknet.adr.domain.AdrDisplayFallback;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
@@ -248,6 +249,20 @@ public interface AdrRepository {
      * @return all decisions, never {@code null}
      */
     List<Adr> findAll(ProjectId projectId, String displayLocale);
+
+    /**
+     * Companion to {@link #findAll}: not the displayed {@code name}, but whether displaying it
+     * required falling back past the requested/project-default language tier of
+     * {@link de.hauschel.arknet.kernel.DisplayLocale#select} (kogn-io/arknet#475). {@link
+     * #findAll} itself cannot answer this - it hands back a plain {@code String}, which looks
+     * identical whether the requested language was found or the chain degraded past it.
+     *
+     * @param projectId     the project (architecture model) to list decisions from
+     * @param displayLocale the same override {@link #findAll} accepts
+     * @return see {@link
+     *         de.hauschel.arknet.adr.application.port.in.DescribeAdrDisplayFallback#describe}
+     */
+    Map<AdrCode, AdrDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale);
 
     /**
      * Returns the business code of every decision recorded in a project, read independently of

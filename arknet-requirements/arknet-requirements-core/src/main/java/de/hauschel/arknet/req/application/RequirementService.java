@@ -22,6 +22,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
+import de.hauschel.arknet.req.application.port.in.DescribeRequirementDisplayFallback;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkConstraint;
@@ -46,6 +47,7 @@ import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
+import de.hauschel.arknet.req.domain.RequirementDisplayFallback;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
@@ -139,9 +141,9 @@ import de.hauschel.arknet.req.domain.TermRef;
  * {@code update} that names one resolves a fresh write language like any other named field,
  * because {@code null} differs from the incoming text.</p>
  */
-public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
-        AcceptRequirement, ProposeRequirement, LinkTerm, LinkConstraint, UpdateRequirement, ResolveRequirements,
-        GetRequirementSchema {
+public class RequirementService implements AddRequirement, ListRequirements, DescribeRequirementDisplayFallback,
+        GetRequirement, AcceptRequirement, ProposeRequirement, LinkTerm, LinkConstraint, UpdateRequirement,
+        ResolveRequirements, GetRequirementSchema {
 
     /**
      * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops.
@@ -238,6 +240,12 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     public List<Requirement> list(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         return repository.findAll(projectId, displayLocale);
+    }
+
+    @Override
+    public Map<RequirementCode, RequirementDisplayFallback> describe(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        return repository.findAllDisplayFallback(projectId, displayLocale);
     }
 
     @Override

@@ -57,6 +57,7 @@ import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
+import de.hauschel.arknet.req.domain.RequirementDisplayFallback;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementReadConflictException;
@@ -1302,6 +1303,60 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                         .toList();
             });
         }
+    }
+
+    /**
+     * Companion to {@link #findAll}: not the displayed {@code title}/{@code description}, but
+     * whether displaying it required falling back past the requested/project-default language
+     * tier (kogn-io/arknet#475). Shares {@link #readTitlesBySubject}/{@link
+     * #readDescriptionsBySubject} with {@link #findAll} - the very candidates {@link #findAll}
+     * already selects among - rather than re-deriving them.
+     */
+    @Override
+    public Map<RequirementCode, RequirementDisplayFallback> findAllDisplayFallback(
+            ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        DisplayLocale effective = withRequestedOverride(displayLocale);
+
+        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + requirementWhereClause("?s <" + IDENTIFIER_PROPERTY + "> ?identifier . ")
+                + "} }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return readInTransaction(projectId, handle, tx -> {
+                Map<String, List<LocalizedLiteral>> titlesBySubject = readTitlesBySubject(tx);
+                Map<String, List<LocalizedLiteral>> descriptionsBySubject = readDescriptionsBySubject(tx);
+                Map<RequirementCode, RequirementDisplayFallback> result = new LinkedHashMap<>();
+                tx.select(query).forEach(row -> {
+                    String subject = iriOf(row, "s").getIRIString();
+                    RequirementCode code = new RequirementCode(literalOf(row, "identifier").getLexicalForm());
+                    RequirementDisplayFallback fallback = new RequirementDisplayFallback(
+                            fallbackTag(titlesBySubject.getOrDefault(subject, List.of()), effective),
+                            fallbackTag(descriptionsBySubject.getOrDefault(subject, List.of()), effective));
+                    if (!fallback.isEmpty()) {
+                        result.put(code, fallback);
+                    }
+                });
+                return result;
+            });
+        }
+    }
+
+    /**
+     * {@code null} if the candidate matching {@code displayLocale}'s requested language was
+     * shown (the requested tier of {@link DisplayLocale#select} succeeded, so nothing fell
+     * back); otherwise the tag of whatever was shown instead - a BCP-47 tag, or {@code ""} for
+     * an untagged literal.
+     */
+    private static String fallbackTag(List<LocalizedLiteral> candidates, DisplayLocale displayLocale) {
+        LocalizedLiteral selected = displayLocale.select(candidates)
+                .orElseThrow(() -> new IllegalStateException(
+                        "a required join, so at least one candidate must exist"));
+        String tag = selected.languageTag();
+        String requestedLanguage = displayLocale.requested().getLanguage();
+        boolean matchesRequested = tag != null
+                && Locale.forLanguageTag(tag).getLanguage().equalsIgnoreCase(requestedLanguage);
+        return matchesRequested ? null : (tag == null ? "" : tag);
     }
 
     /**

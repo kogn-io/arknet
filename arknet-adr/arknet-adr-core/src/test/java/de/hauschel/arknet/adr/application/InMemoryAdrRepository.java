@@ -19,6 +19,7 @@ import java.util.UUID;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
+import de.hauschel.arknet.adr.domain.AdrDisplayFallback;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
@@ -271,6 +272,15 @@ class InMemoryAdrRepository implements AdrRepository {
     @Override
     public List<Adr> findAll(ProjectId projectId, String displayLocale) {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Nothing multi-valued to fall back among in this plain in-memory fake - always empty,
+     * mirroring how {@link #findAll} ignores {@code displayLocale} altogether.
+     */
+    @Override
+    public Map<AdrCode, AdrDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+        return Map.of();
     }
 
     /**

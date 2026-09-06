@@ -20,6 +20,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
+import de.hauschel.arknet.uc.application.port.in.DescribeUseCaseDisplayFallback;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
 import de.hauschel.arknet.uc.application.port.in.LinkTerm;
@@ -41,6 +42,7 @@ import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
+import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
@@ -93,7 +95,8 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * repository, since unlike the sibling requirements bounded context, {@code Constraint} does not
  * live in this bounded context.</p>
  */
-public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, UpdateUseCase, LinkTerm, LinkConstraint {
+public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, DescribeUseCaseDisplayFallback,
+        UpdateUseCase, LinkTerm, LinkConstraint {
 
     private static final String CODE_PREFIX = "UC";
 
@@ -190,6 +193,12 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
     public List<UseCase> list(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         return repository.findAll(projectId, displayLocale);
+    }
+
+    @Override
+    public Map<UseCaseCode, UseCaseDisplayFallback> describe(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        return repository.findAllDisplayFallback(projectId, displayLocale);
     }
 
     @Override
