@@ -44,6 +44,28 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Issue #168: WriteFunnel#compareAndUpdate's Head-CAS, unlike create's code-uniqueness
+             guard, never ran against a real on-disk store under genuine thread concurrency - only
+             against WriteFunnelTest's FakeTx/FakeTransactor. The real-store concurrency test needs
+             an actual RDF4J-backed DatasetLifecycle (NativeStore); test-scope, not compile - no
+             production code here depends on RDF4J. -->
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset-hosting-rdf4j</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- The Guarded* decorators pin a chosen interleaving of two writers against the real
+             store, the same mechanism RequirementServiceRealStoreConcurrencyTest and its siblings
+             use per bounded context - this module has no bounded context of its own, but
+             WriteFunnel is the one place all of them funnel compareAndUpdate through, so the
+             test belongs here instead of duplicated into every BC (issue #168's resolved scope
+             question). No cycle: arknet-persistence-test-support does not depend on
+             arknet-persistence-support. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-persistence-test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- compile-Scope (nicht mehr nur test): das Write-Gate waehlt die Sprache der
              Verletzungsmeldung ueber DisplayLocale, seit io.kogn.rdf 0.2.0 jede sh:message
              mit ihrem Sprachtag ausliefert (kogn-io/rdf-core#20). Der Kernel ist
