@@ -30,16 +30,12 @@ package de.hauschel.arknet.persistence;
  * {@code KognioRdfUseCaseRepository} and a fifth in an architecture test.</p>
  *
  * <p><strong>Scope: the whole active module.</strong> This class mirrors the whole active
- * {@code arknet-actor.ttl} module (the Actor taxonomy and its one datatype property), the same
- * pattern {@link ArkprovVocabulary}/{@link ArkprjVocabulary}/{@link ArkarchVocabulary} follow and
- * {@link ArkdddVocabulary} adopted alongside them (kogn-io/arknet#148) - held against that ontology
- * by a bidirectional architecture test ({@code arknet-architecture-tests}), which is what the
- * mirror makes possible in the first place. {@link #ACTOR_ROLE} is included even though no tool
- * writes it any more (issue #336 removed the glossary's actor facet without replacement): it is
- * still a shipped, documented term of the ontology, and a class that mirrors "the whole module"
- * cannot selectively drop a term just because nothing currently serialises it - the same reasoning
- * that keeps {@link ArkarchVocabulary#ADR_CONSEQUENCES}/{@link ArkarchVocabulary#ADR_ALTERNATIVES}
- * in that class after their write paths retired.</p>
+ * {@code arknet-actor.ttl} module (the Actor taxonomy plus the Role resource and its occupancy
+ * edge), the same pattern {@link ArkprovVocabulary}/{@link ArkprjVocabulary}/
+ * {@link ArkarchVocabulary} follow and {@link ArkdddVocabulary} adopted alongside them
+ * (kogn-io/arknet#148) - held against that ontology by a bidirectional architecture test
+ * ({@code arknet-architecture-tests}), which is what the mirror makes possible in the first
+ * place.</p>
  */
 public final class ArkprocVocabulary {
 
@@ -75,13 +71,19 @@ public final class ArkprocVocabulary {
     public static final String GROUP_ACTOR_TYPE = NAMESPACE + "GroupActor";
 
     /**
-     * {@code arkproc:actorRole} - a short free-text note about the actor, not role modelling. Dead
-     * since issue #336 removed the glossary's actor facet ({@code term_add}/{@code term_update}'s
-     * former {@code actorKind}/{@code actorRole} arguments) without replacement - no tool writes or
-     * reads this property any more, but it remains a shipped, documented term of the ontology (see
-     * the class javadoc).
+     * {@code arkproc:Role} - a named function in which someone or something acts or holds an
+     * interest, named independently of who fills it (ADR-37). A second, independent resource type
+     * in this module, not a subclass of {@link #ACTOR_TYPE}: an actor is rigid, a role is
+     * anti-rigid, and an anti-rigid type may not subclass a rigid one.
      */
-    public static final String ACTOR_ROLE = NAMESPACE + "actorRole";
+    public static final String ROLE_TYPE = NAMESPACE + "Role";
+
+    /**
+     * {@code arkproc:filledBy} - the optional, multivalued edge from a {@link #ROLE_TYPE} to the
+     * {@link #ACTOR_TYPE}(s) that currently occupy it (ADR-37). The specification never reads this
+     * edge; only evaluating views display the occupancy.
+     */
+    public static final String FILLED_BY = NAMESPACE + "filledBy";
 
     private ArkprocVocabulary() {
     }

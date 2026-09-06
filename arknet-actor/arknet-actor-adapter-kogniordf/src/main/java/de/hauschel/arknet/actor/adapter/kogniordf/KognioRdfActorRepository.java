@@ -324,15 +324,21 @@ public class KognioRdfActorRepository implements ActorRepository {
 
     /**
      * The predicates that, if found pointing at an actor, block its deletion (issue #335): a use
-     * case's {@code arkreq:primaryActor}/{@code supportingActor}. See
+     * case's {@code arkreq:primaryActor}/{@code supportingActor}, plus, since ADR-37/kogn-io/arknet
+     * #405, a role's {@code arkproc:filledBy}. See
      * {@link de.hauschel.arknet.actor.domain.ActorReferencedException}'s javadoc for why this check
      * predates its first consumer - it was built with issue #335's own scope in mind and became
      * reachable in practice with issue #336, which pointed {@code arknet-use-cases}' actor
-     * resolution at this register.
+     * resolution at this register. {@code arkproc:filledBy} is listed here even though no tool
+     * writes it yet (the Role hexagon is a later part of #405) - {@code rdfs:range arkproc:Actor}
+     * already makes it a reference the ontology declares, and
+     * {@code ReferenceGuardsCoverEveryOntologyEdgeTest} in {@code arknet-architecture-tests} holds
+     * this map against every such range, not against which write paths currently exist.
      */
     private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
             ArkreqVocabulary.PRIMARY_ACTOR, "primaryActor",
-            ArkreqVocabulary.SUPPORTING_ACTOR, "supportingActor");
+            ArkreqVocabulary.SUPPORTING_ACTOR, "supportingActor",
+            ArkprocVocabulary.FILLED_BY, "filledBy");
 
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still

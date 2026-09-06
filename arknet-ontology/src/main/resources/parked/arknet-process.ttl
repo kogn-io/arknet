@@ -11,7 +11,7 @@
 #         Imports arknet-core for DDD base concepts.
 #
 #  NOT included here (separate module):
-#    - Actor, HumanActor, SystemActor, actorRole → arknet-actor.ttl
+#    - Actor, HumanActor, SystemActor, Role → arknet-actor.ttl
 #
 #  Caveat: arkproc:Step predates and duplicates the live arkreq:Step
 #  (different properties entirely - stepId/stepName/stepOrder/performedBy

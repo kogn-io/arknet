@@ -75,7 +75,8 @@ class ActorVocabularyMatchesOntologyTest {
                 ArkprocVocabulary.SYSTEM_ACTOR_TYPE,
                 ArkprocVocabulary.LEGAL_ACTOR_TYPE,
                 ArkprocVocabulary.GROUP_ACTOR_TYPE,
-                ArkprocVocabulary.ACTOR_ROLE), declared,
+                ArkprocVocabulary.ROLE_TYPE,
+                ArkprocVocabulary.FILLED_BY), declared,
                 "arknet-actor.ttl and ArkprocVocabulary must describe the same vocabulary");
     }
 
@@ -126,13 +127,29 @@ class ActorVocabularyMatchesOntologyTest {
                         + "desynchronise that closed set");
     }
 
-    /** {@code arkproc:actorRole} is a plain free-text note, never a resource reference. */
+    /**
+     * {@code arkproc:Role} (ADR-37) is a class of its own, never a subclass of
+     * {@link ArkprocVocabulary#ACTOR_TYPE}: an actor is rigid, a role is anti-rigid, and an
+     * anti-rigid type may not subclass a rigid one.
+     */
     @Test
-    void theOntologyDeclaresActorRoleAsADatatypeProperty() {
-        assertTrue(ontology.contains(iri(ArkprocVocabulary.ACTOR_ROLE), RDF.TYPE, OWL.DATATYPEPROPERTY),
-                "arkproc:actorRole must be declared an owl:DatatypeProperty");
-        assertTrue(ontology.contains(iri(ArkprocVocabulary.ACTOR_ROLE), RDFS.DOMAIN,
+    void theOntologyDeclaresRoleAsAClassNotAnActorSubclass() {
+        assertTrue(ontology.contains(iri(ArkprocVocabulary.ROLE_TYPE), RDF.TYPE, OWL.CLASS),
+                "arkproc:Role must be declared an owl:Class");
+        assertTrue(ontology.filter(iri(ArkprocVocabulary.ROLE_TYPE), RDFS.SUBCLASSOF, null).isEmpty(),
+                "arkproc:Role must not be a subclass of arkproc:Actor");
+    }
+
+    /** {@code arkproc:filledBy} is the optional, multivalued occupancy edge from a role to its actor(s). */
+    @Test
+    void theOntologyDeclaresFilledByAsAnObjectPropertyFromRoleToActor() {
+        assertTrue(ontology.contains(iri(ArkprocVocabulary.FILLED_BY), RDF.TYPE, OWL.OBJECTPROPERTY),
+                "arkproc:filledBy must be declared an owl:ObjectProperty");
+        assertTrue(ontology.contains(iri(ArkprocVocabulary.FILLED_BY), RDFS.DOMAIN,
+                iri(ArkprocVocabulary.ROLE_TYPE)),
+                "arkproc:filledBy must be scoped to arkproc:Role");
+        assertTrue(ontology.contains(iri(ArkprocVocabulary.FILLED_BY), RDFS.RANGE,
                 iri(ArkprocVocabulary.ACTOR_TYPE)),
-                "arkproc:actorRole must be scoped to arkproc:Actor");
+                "arkproc:filledBy must range over arkproc:Actor");
     }
 }
