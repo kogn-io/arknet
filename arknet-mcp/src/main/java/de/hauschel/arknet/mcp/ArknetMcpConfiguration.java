@@ -46,6 +46,7 @@ import de.hauschel.arknet.actor.adapter.mcp.ActorMcpTools;
 import de.hauschel.arknet.actor.adapter.mcp.RoleMcpTools;
 import de.hauschel.arknet.actor.application.ActorService;
 import de.hauschel.arknet.actor.application.RoleService;
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RoleRepository;
 import de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepositoryFactory;
@@ -94,13 +95,13 @@ import de.hauschel.arknet.ul.adapter.mcp.UbiquitousLanguageMcpTools;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
-import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfActorLookup;
 import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfRequirementLookup;
+import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfRoleLookup;
 import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfUseCaseRepositoryFactory;
 import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools;
 import de.hauschel.arknet.uc.application.UseCaseService;
-import de.hauschel.arknet.uc.application.port.out.ActorLookup;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
+import de.hauschel.arknet.uc.application.port.out.RoleLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 
 /**
@@ -141,16 +142,19 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       (same RDF4J-free wiring as requirements).</li>
  *   <li><strong>use-cases</strong> ({@link UseCaseMcpTools} over {@link UseCaseService} over
  *       an RDF-persisted use-case repository) - the six use-case tools, assembled through
- *       {@link KognioRdfUseCaseRepositoryFactory}. {@code uc_add}'s cross-BC label-to-identity
+ *       {@link KognioRdfUseCaseRepositoryFactory}. {@code uc_add}'s cross-BC code-to-identity
  *       resolution, the use-cases analogue of requirements' own equivalent, is two separate
- *       {@link KognioRdfRequirementLookup}/{@link KognioRdfActorLookup} beans over the same
- *       shared dataset lifecycle, called once by {@link UseCaseService#add}. {@code uc_link_term}/
+ *       {@link KognioRdfRequirementLookup}/{@link KognioRdfRoleLookup} beans over the same
+ *       shared dataset lifecycle, called once by {@link UseCaseService#add} (ADR-37/
+ *       kogn-io/arknet#405 Part C - the role lookup replaced the actor register's former
+ *       name-based lookup here). {@code uc_link_term}/
  *       {@code uc_link_constraint} (issue #329) add two more such lookups, {@code
  *       KognioRdfTermLookup}/{@code KognioRdfConstraintLookup} - own implementations in the
  *       use-cases adapter module, not the sibling requirements/ubiquitous-language adapters'
  *       classes of the same simple name (the Borrowed In-Port pattern forbids the cross-BC adapter
  *       import that would be). {@code uc_get}/{@code uc_list}'s reverse direction (identity back to a displayable
- *       business code/name) is not a second store adapter - it is the requirements hexagon's own
+ *       business code/name) is not a second store adapter - it is the actor hexagon's own
+ *       {@link ResolveRoles}, the requirements hexagon's own
  *       {@link ResolveRequirements}/{@link ResolveConstraints} and the ubiquitous-language
  *       hexagon's own {@link ResolveTerms} in-ports, wired straight into
  *       {@link UseCaseMcpTools}.</li>
@@ -474,9 +478,9 @@ public class ArknetMcpConfiguration {
     /**
      * The use-case out-adapter, assembled over the <em>shared</em> {@link DatasetLifecycle}
      * bean. This adapter no longer performs any cross-BC lookup itself - it
-     * persists the already-resolved {@link de.hauschel.arknet.uc.domain.ActorRef}/
+     * persists the already-resolved {@link de.hauschel.arknet.uc.domain.RoleRef}/
      * {@link de.hauschel.arknet.uc.domain.RequirementRef} identities {@link UseCaseService}
-     * hands it (resolved via {@link #useCaseRequirementLookup}/{@link #useCaseActorLookup}
+     * hands it (resolved via {@link #useCaseRequirementLookup}/{@link #useCaseRoleLookup}
      * below).
      */
     @Bean
@@ -499,15 +503,15 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * Resolves an actor's human-typed name (e.g. {@code Customer}) to its opaque subject
-     * identity - the strict cross-BC lookup {@code uc_add}'s {@code primaryActor}/
-     * {@code supportingActors} references need. Acquires datasets from the same
-     * shared {@link DatasetLifecycle} as {@link #termRepository}, so it reads the same
-     * project the ubiquitous-language hexagon writes into.
+     * Resolves a role's human-typed business code (e.g. {@code ROLE-4}) to its opaque subject
+     * identity - the strict cross-BC lookup {@code uc_add}'s {@code primaryRole}/
+     * {@code supportingRoles} references need (ADR-37/kogn-io/arknet#405 Part C). Acquires
+     * datasets from the same shared {@link DatasetLifecycle} as {@link #roleRepository}, so it
+     * reads the same project the actor hexagon's role resource type writes into.
      */
     @Bean
-    ActorLookup useCaseActorLookup(final DatasetLifecycle datasetLifecycle) {
-        return new KognioRdfActorLookup(datasetLifecycle);
+    RoleLookup useCaseRoleLookup(final DatasetLifecycle datasetLifecycle) {
+        return new KognioRdfRoleLookup(datasetLifecycle);
     }
 
     /**
@@ -540,30 +544,31 @@ public class ArknetMcpConfiguration {
     @Bean
     UseCaseService useCaseService(
             final UseCaseRepository repository, final ResourceIdFactory resourceIdFactory,
-            final RequirementLookup useCaseRequirementLookup, final ActorLookup useCaseActorLookup,
+            final RequirementLookup useCaseRequirementLookup, final RoleLookup useCaseRoleLookup,
             final de.hauschel.arknet.uc.application.port.out.TermLookup useCaseTermLookup,
             final de.hauschel.arknet.uc.application.port.out.ConstraintLookup useCaseConstraintLookup) {
-        return new UseCaseService(repository, resourceIdFactory, useCaseRequirementLookup, useCaseActorLookup,
+        return new UseCaseService(repository, resourceIdFactory, useCaseRequirementLookup, useCaseRoleLookup,
                 useCaseTermLookup, useCaseConstraintLookup);
     }
 
     /**
-     * {@code resolveActors}/{@code resolveTerms}/{@code resolveRequirements}/{@code
-     * resolveConstraints} are the actor, ubiquitous-language and requirements hexagons' own
-     * driving ports (implemented by their {@code ActorService}/{@code TermService}/{@code
-     * RequirementService}/{@code ConstraintService} beans) - borrowed here purely so {@code
-     * uc_get}/{@code uc_list} can render a referenced actor's business code (issue #336; the
-     * register replaced the old ubiquitous-language actor facet as the resolution source) /
-     * linked term's / requirement's business code / linked constraint's business code instead of
-     * a bare IRI. This wires an In-Adapter to <em>different</em> hexagons' In-Ports, not to those
-     * hexagons' cores - see the "kein *-core* haengt an einem anderen BC" precision in CLAUDE.md.
+     * {@code resolveRoles}/{@code resolveTerms}/{@code resolveRequirements}/{@code
+     * resolveConstraints} are the actor (role resource type), ubiquitous-language and
+     * requirements hexagons' own driving ports (implemented by their {@code RoleService}/
+     * {@code TermService}/{@code RequirementService}/{@code ConstraintService} beans) - borrowed
+     * here purely so {@code uc_get}/{@code uc_list} can render a referenced role's business code
+     * (ADR-37/kogn-io/arknet#405 Part C; the role register replaced the old actor register as the
+     * resolution source) / linked term's / requirement's business code / linked constraint's
+     * business code instead of a bare IRI. This wires an In-Adapter to <em>different</em>
+     * hexagons' In-Ports, not to those hexagons' cores - see the "kein *-core* haengt an einem
+     * anderen BC" precision in CLAUDE.md.
      */
     @Bean
     UseCaseMcpTools useCaseMcpTools(
-            final UseCaseService service, final ActorService actorService, final ResolveTerms resolveTerms,
+            final UseCaseService service, final ResolveRoles resolveRoles, final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements, final ConstraintService constraintService,
             final ProjectResolver projectResolver) {
-        return new UseCaseMcpTools(service, service, service, service, service, service, service, actorService,
+        return new UseCaseMcpTools(service, service, service, service, service, service, service, resolveRoles,
                 resolveTerms, resolveRequirements, constraintService, projectResolver);
     }
 
@@ -926,7 +931,11 @@ public class ArknetMcpConfiguration {
      *
      * <p>{@link RoleCards} (ADR-37/kogn-io/arknet#405) mirrors {@link ActorCards} exactly:
      * {@code roleService} was already wired for {@link #roleMcpTools}, and {@link RoleService}
-     * implements {@code ListRoles} too, so no new bean is needed to read it a second time here.</p>
+     * implements {@code ListRoles} too, so no new bean is needed to read it a second time here.
+     * {@link UseCaseCards} (ADR-37/kogn-io/arknet#405 Part C) borrows the very same
+     * {@code roleService} bean a third time, as its {@code ResolveRoles} in-port, to resolve a
+     * use case's {@code primaryRole}/{@code supportingRole} to a display name and business code
+     * instead of the bare-IRI defect its former {@code Glossary}-based resolution carried.</p>
      */
     @Bean
     ModelViews modelViews(
@@ -936,7 +945,7 @@ public class ArknetMcpConfiguration {
             final RoleService roleService, final ResolveRequirements resolveRequirements) {
         return new ModelViews(
                 terms,
-                new UseCaseCards(useCases, resolveRequirements),
+                new UseCaseCards(useCases, resolveRequirements, roleService),
                 new RequirementCards(requirements),
                 new ConstraintCards(constraintService),
                 new BoundedContextCards(boundedContexts),
@@ -1070,7 +1079,7 @@ public class ArknetMcpConfiguration {
 
     /**
      * The five traceability reporting tools ({@code trace_matrix}, {@code orphan_check},
-     * {@code impact_analysis}, {@code actor_usecase_matrix}, {@code term_cooccurrence}). Reuses
+     * {@code impact_analysis}, {@code role_usecase_matrix}, {@code term_cooccurrence}). Reuses
      * the very same {@link #storeReader}/{@link #storeReportPrefixes} beans as
      * {@link #storeReportTools} instead of building a second {@link StoreReader} - one generic
      * read path, two presentations over it (a full-snapshot digest vs. a graph traversal).

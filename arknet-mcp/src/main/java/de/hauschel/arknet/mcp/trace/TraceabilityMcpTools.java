@@ -19,7 +19,8 @@ import de.hauschel.arknet.mcp.store.StoreReader;
 
 /**
  * Read-only traceability reporting tools exposed over MCP: {@code trace_matrix}, {@code
- * orphan_check}, {@code impact_analysis}, {@code actor_usecase_matrix} and {@code
+ * orphan_check}, {@code impact_analysis}, {@code role_usecase_matrix} (ADR-37/kogn-io/arknet#405
+ * Part C, formerly {@code actor_usecase_matrix}) and {@code
  * term_cooccurrence} (issue #108, raw strategic-design read tools - no bounded-context
  * clustering or verdict, just the data for a human or agent to draw that boundary).
  *
@@ -85,12 +86,12 @@ public final class TraceabilityMcpTools {
     @McpTool(name = "orphan_check",
             description = "Finds orphaned artifacts: requirements no use case realises, glossary terms never"
                     + " referenced (neither used by a requirement, a use case or an architecture decision"
-                    + " (arkarch:usesTerm), playing an actor role in a use"
-                    + " case, a bounded context's ubiquitous language, nor another term's skos:broader or skos:related),"
+                    + " (arkarch:usesTerm), a bounded context's ubiquitous language, nor another term's"
+                    + " skos:broader or skos:related),"
                     + " mentions"
                     + " without a backing edge - a requirement's, use case's, bounded context's or architecture"
                     + " decision's text naming a term without the matching"
-                    + " usesTerm/primaryActor/supportingActor/ubiquitousLanguageTerm edge (a use case's goal,"
+                    + " usesTerm/primaryRole/supportingRole/ubiquitousLanguageTerm edge (a use case's goal,"
                     + " scope, trigger, precondition, postcondition and every step/extension text count as its"
                     + " text; an architecture decision's name, context, decision, every consequence's statement"
                     + " and every considered option's name/rationale count as its text), or a term's own"
@@ -111,7 +112,7 @@ public final class TraceabilityMcpTools {
 
     @McpTool(name = "impact_analysis",
             description = "What is transitively affected if the given resource changes: follows"
-                    + " arkreq:usesTerm/primaryActor/supportingActor/stepRealises, oslc_rm:constrainedBy,"
+                    + " arkreq:usesTerm/primaryRole/supportingRole/stepRealises, oslc_rm:constrainedBy,"
                     + " arkddd:ubiquitousLanguageTerm/upstream/downstream and"
                     + " arkarch:addressesRequirement/affectsContext/usesTerm backwards (who references this)"
                     + " and arkarch:supersededBy forwards (from a superseded decision to its"
@@ -135,13 +136,14 @@ public final class TraceabilityMcpTools {
         return renderer.impactAnalysis(project.id(), readGraph(project), targetIri);
     }
 
-    @McpTool(name = "actor_usecase_matrix",
-            description = "Raw bipartite view of actor/use-case involvement: for every actor, which use"
-                    + " case(s) reference it via arkreq:primaryActor/supportingActor; for every use case, its"
-                    + " full actor set. No clustering, no bounded-context judgement - a shared actor across"
-                    + " many use cases does not by itself mean they belong to the same context.",
+    @McpTool(name = "role_usecase_matrix",
+            description = "Raw bipartite view of role/use-case involvement: for every role, which use"
+                    + " case(s) reference it via arkreq:primaryRole/supportingRole; for every use case, its"
+                    + " full role set. No clustering, no bounded-context judgement - a shared role across"
+                    + " many use cases does not by itself mean they belong to the same context."
+                    + " (ADR-37/kogn-io/arknet#405 Part C, formerly actor_usecase_matrix.)",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
-    public String actorUseCaseMatrix(
+    public String roleUseCaseMatrix(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Optional anchor identifying the project to analyse, used "
                     + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
@@ -150,7 +152,7 @@ public final class TraceabilityMcpTools {
                     + "what is registered.", required = false)
             final String projectAnchor) {
         final ResolvedProject project = AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
-        return renderer.actorUseCaseMatrix(project.id(), readGraph(project));
+        return renderer.roleUseCaseMatrix(project.id(), readGraph(project));
     }
 
     @McpTool(name = "term_cooccurrence",

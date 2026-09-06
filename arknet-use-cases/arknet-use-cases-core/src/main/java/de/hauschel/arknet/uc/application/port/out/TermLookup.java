@@ -23,13 +23,13 @@ import de.hauschel.arknet.kernel.ProjectId;
  * propagate as a didactic rejection of the write, not to handle a missing term as a normal
  * case.</p>
  *
- * <p><strong>Not the same port as {@code ActorLookup}.</strong> Since issue #336 an actor is its
- * own resource type in {@code arknet-actor}'s register, resolved by its untagged {@code
- * arknet:name} constrained to the four concrete actor types - a different graph, a different
- * property and a different identity space than a glossary term used via {@code arkreq:usesTerm},
- * which carries no such constraint and is resolved by {@code dcterms:identifier} instead - the
- * same distinction {@code KognioRdfTermLookup} (requirements) already draws against
- * {@code KognioRdfActorLookup} (use-cases).</p>
+ * <p><strong>Not the same port as {@code RoleLookup}.</strong> A role is its own resource type in
+ * {@code arknet-actor}'s register, resolved by its {@code ROLE-N} code among subjects typed
+ * {@code arkproc:Role} in the roles graph - a different graph, a different type constraint and a
+ * different identity space than a glossary term used via {@code arkreq:usesTerm}, which is
+ * resolved by {@code dcterms:identifier} among {@code skos:Concept}s - the same distinction
+ * {@code KognioRdfTermLookup} (requirements) already draws against {@code KognioRdfRoleLookup}
+ * (use-cases).</p>
  */
 public interface TermLookup {
 

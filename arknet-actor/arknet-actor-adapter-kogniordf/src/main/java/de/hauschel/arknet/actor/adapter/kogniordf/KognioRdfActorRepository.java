@@ -530,49 +530,10 @@ public class KognioRdfActorRepository implements ActorRepository {
 
     /**
      * Finds every actor in a project whose identity is among {@code ids}, in one store
-     * round-trip - the same batch shape {@code KognioRdfTermRepository#findByIds}/
-     * {@code KognioRdfRequirementRepository#findByIds} already establish. Not a per-id existence
-     * check: an id absent from the project (or not an actor at all) is simply absent from the
-     * result, never an error.
-     */
-    @Override
-    public List<ActorRepository.ActorProjection> findByIds(ProjectId projectId, List<ResourceId> ids) {
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(ids, "ids");
-        if (ids.isEmpty()) {
-            return List.of();
-        }
-
-        // ResourceId#of validates IRIREF-safety at construction, so every id here is already
-        // guaranteed safe to embed - mirrors KognioRdfTermRepository#findByIds's reasoning.
-        String values = ids.stream()
-                .map(id -> SparqlTerms.iriRef(id.value()))
-                .collect(Collectors.joining(" "));
-
-        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
-                + "VALUES ?s { " + values + " } "
-                + "?s a ?type . "
-                + actorTypeFilter()
-                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
-
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            Map<String, ActorRepository.ActorProjection> bySubject = new LinkedHashMap<>();
-            handle.sparqlQuery().select(query).forEach(row -> {
-                String subjectIri = iriOf(row, "s").getIRIString();
-                // putIfAbsent, not put: the first row wins if a subject has several identifiers.
-                bySubject.putIfAbsent(subjectIri, new ActorRepository.ActorProjection(
-                        ResourceId.of(subjectIri),
-                        new ActorCode(literalOf(row, "identifier").getLexicalForm())));
-            });
-            return List.copyOf(bySubject.values());
-        }
-    }
-
-    /**
-     * Finds every actor in a project whose identity is among {@code ids}, in one store
      * round-trip, returning the full {@link Actor} aggregate - added for {@code RoleService}
-     * (ADR-37/kogn-io/arknet#405), see {@link ActorRepository#findAllByIds}'s own javadoc for why
-     * this is a separate method from {@link #findByIds}. Joins {@code type}/{@code name}/
+     * (ADR-37/kogn-io/arknet#405), see {@link ActorRepository#findAllByIds}'s own javadoc for
+     * why this hexagon carries only this one batch-by-identity lookup rather than a
+     * narrower, code-only sibling. Joins {@code type}/{@code name}/
      * {@code description} the same way {@link #findAll} does, grouped and reduced per subject via
      * {@link #firstDistinctValue} through the shared {@link ActorAssembly} accumulator - the same
      * row-multiplication guard every other multi-actor read path here already needs.

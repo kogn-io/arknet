@@ -21,7 +21,8 @@ import de.hauschel.arknet.mcp.store.StoreResource;
 
 /**
  * Renders the compact, token-cheap text digests {@code trace_matrix}/{@code orphan_check}/
- * {@code impact_analysis}/{@code actor_usecase_matrix}/{@code term_cooccurrence} return, given a
+ * {@code impact_analysis}/{@code role_usecase_matrix} (ADR-37/kogn-io/arknet#405 Part C, formerly
+ * {@code actor_usecase_matrix})/{@code term_cooccurrence} return, given a
  * {@link TraceabilityGraph} already built over one project's statements.
  *
  * <p>Pure: it consumes only a {@link TraceabilityGraph} plus a {@link Prefixes} resolver, so it
@@ -74,7 +75,7 @@ public final class TraceabilityRenderer {
 
     /**
      * Renders {@code orphan_check}: requirements no use case realises, glossary terms never
-     * used (neither via {@code arkreq:usesTerm}/actor role - a requirement's or a use case's,
+     * used (neither via {@code arkreq:usesTerm} - a requirement's or a use case's,
      * issue #329 - as a bounded context's ubiquitous language, nor via an architecture decision's
      * {@code arkarch:usesTerm}, kogn-io/arknet#393, nor as another term's {@code skos:broader},
      * issue #252, nor as another term's {@code skos:related} peer, kogn-io/arknet#420), terms a requirement's, use case's, bounded context's or architecture decision's
@@ -151,38 +152,39 @@ public final class TraceabilityRenderer {
     }
 
     /**
-     * Renders {@code actor_usecase_matrix}: the raw bipartite view of which actor plays a role
+     * Renders {@code role_usecase_matrix} (ADR-37/kogn-io/arknet#405 Part C, formerly {@code
+     * actor_usecase_matrix}): the raw bipartite view of which role is played
      * (primary or supporting) in which use case, in both directions - no clustering, no verdict
-     * about bounded-context boundaries, just the {@code arkreq:primaryActor}/{@code
-     * supportingActor} edges as data for a human or agent to draw that boundary themselves
-     * (issue #108). The "Actors" section lists <em>every</em> actor in the project ({@link
-     * TraceabilityGraph#actorIris()}), not only the ones a use case happens to reference - an
-     * actor no use case references yet is exactly the strongest signal for "a use case is
-     * missing here" or "this actor belongs in a different bounded context", so it must not go
-     * missing from an inventory whose own description promises "for every actor" (issue #147).
+     * about bounded-context boundaries, just the {@code arkreq:primaryRole}/{@code
+     * supportingRole} edges as data for a human or agent to draw that boundary themselves
+     * (issue #108). The "Roles" section lists <em>every</em> role in the project ({@link
+     * TraceabilityGraph#roleIris()}), not only the ones a use case happens to reference - a
+     * role no use case references yet is exactly the strongest signal for "a use case is
+     * missing here" or "this role belongs in a different bounded context", so it must not go
+     * missing from an inventory whose own description promises "for every role" (issue #147).
      *
      * @param projectId the project the graph was read from
      * @param graph       the traceability graph to report on
      * @return the digest text
      */
-    public String actorUseCaseMatrix(ProjectId projectId, TraceabilityGraph graph) {
+    public String roleUseCaseMatrix(ProjectId projectId, TraceabilityGraph graph) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(graph, "graph");
         List<String> useCaseIris = graph.useCaseIris();
-        Set<String> actorIris = new TreeSet<>(graph.actorIris());
+        Set<String> roleIris = new TreeSet<>(graph.roleIris());
         for (String useCaseIri : useCaseIris) {
-            actorIris.addAll(graph.actorsOf(useCaseIri));
+            roleIris.addAll(graph.rolesOf(useCaseIri));
         }
 
         StringBuilder out = new StringBuilder();
-        out.append("# Actor/use-case matrix -- project ").append(projectId.value()).append('\n');
-        out.append("\n## Actors (").append(actorIris.size()).append(")\n");
-        if (actorIris.isEmpty()) {
+        out.append("# Role/use-case matrix -- project ").append(projectId.value()).append('\n');
+        out.append("\n## Roles (").append(roleIris.size()).append(")\n");
+        if (roleIris.isEmpty()) {
             out.append("- none\n");
         }
-        for (String actorIri : actorIris) {
-            out.append("- ").append(displayLine(graph, actorIri)).append('\n');
-            out.append("    use cases : ").append(codesOrNone(graph, graph.useCasesOf(actorIri))).append('\n');
+        for (String roleIri : roleIris) {
+            out.append("- ").append(displayLine(graph, roleIri)).append('\n');
+            out.append("    use cases : ").append(codesOrNone(graph, graph.useCasesOf(roleIri))).append('\n');
         }
         out.append("\n## Use cases (").append(useCaseIris.size()).append(")\n");
         if (useCaseIris.isEmpty()) {
@@ -190,7 +192,7 @@ public final class TraceabilityRenderer {
         }
         for (String useCaseIri : useCaseIris) {
             out.append("- ").append(displayLine(graph, useCaseIri)).append('\n');
-            out.append("    actors    : ").append(codesOrNone(graph, graph.actorsOf(useCaseIri))).append('\n');
+            out.append("    roles     : ").append(codesOrNone(graph, graph.rolesOf(useCaseIri))).append('\n');
         }
         return out.toString();
     }

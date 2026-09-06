@@ -74,8 +74,8 @@ import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
 import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfUseCaseRepositoryFactory;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
-import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
+import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -105,6 +105,7 @@ class TraceabilityGraphTest {
     private static final String TERM_4_IRI = "https://w3id.org/arknet/id/trace-test-term-4";
     private static final String TERM_5_IRI = "https://w3id.org/arknet/id/trace-test-term-5";
     private static final String ACTOR_IRI = "https://w3id.org/arknet/id/trace-test-actor";
+    private static final String ROLE_IRI = "https://w3id.org/arknet/id/trace-test-role";
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/trace-test-fr-1";
     private static final String FR_2_IRI = "https://w3id.org/arknet/id/trace-test-fr-2";
     private static final String UC_1_IRI = "https://w3id.org/arknet/id/trace-test-uc-1";
@@ -134,6 +135,8 @@ class TraceabilityGraphTest {
         ConstraintRepository constraints = KognioRdfConstraintRepositoryFactory.over(
                 lifecycle, DisplayLocale.DEFAULT, requirementsFunnel);
         ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+        WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(lifecycle, DisplayLocale.DEFAULT);
+        RoleRepository roles = KognioRdfRoleRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, actorFunnel);
 
         // CON-1: bound to FR-1 via constrainedBy. CON-2: never referenced (orphan, issue #223).
         // CON-3: bound ONLY to UC1 via constrainedBy (issue #329) - never to any requirement.
@@ -154,10 +157,15 @@ class TraceabilityGraphTest {
                 new TermId(ResourceId.of(TERM_2_IRI)), new TermCode("TERM-2"), "Passwort",
                 "A secret credential.", null), null);
         // Actor (since issue #336, its own resource type in arknet-actor's register, no longer a
-        // glossary term): never usesTerm'd but referenced as UC1's primary actor - must show up
-        // in actorIris() independent of that reference (issue #147).
+        // glossary term): never usesTerm'd, never filledBy'd, never referenced by any use case -
+        // must show up in actorIris() regardless (issue #147).
         actors.create(PROJECT, new Actor(
                 new ActorId(ResourceId.of(ACTOR_IRI)), new ActorCode("ACTOR-1"), ActorType.HUMAN, "Customer", null));
+        // Role (ADR-37/kogn-io/arknet#405 Part C, its own resource type in the same register):
+        // never usesTerm'd but referenced as UC1's primary role - must show up in roleIris()
+        // independent of that reference (issue #147), the same way the actor above does.
+        roles.create(PROJECT, new Role(
+                new RoleId(ResourceId.of(ROLE_IRI)), new RoleCode("ROLE-1"), "Customer", null, List.of()), "en");
         // TERM-4: never usesTerm'd, referenced only through BC-1's ubiquitousLanguageTerm edge -
         // must NOT count as an orphan term either.
         terms.create(PROJECT, new Term(
@@ -189,7 +197,7 @@ class TraceabilityGraphTest {
         useCases.create(PROJECT, new UseCase(
                 new UseCaseId(ResourceId.of(UC_1_IRI)), new UseCaseCode("UC1"), "Log in",
                 "Customer authenticates", null, null,
-                new ActorRef(ResourceId.of(ACTOR_IRI)), List.of(), null, null,
+                new RoleRef(ResourceId.of(ROLE_IRI)), List.of(), null, null,
                 List.of(new Step(1, "Customer enters credentials",
                         List.of(new RequirementRef(ResourceId.of(FR_1_IRI))))),
                 List.of(),
@@ -296,11 +304,6 @@ class TraceabilityGraphTest {
         }
 
         @Test
-        void isReferencedTermIsTrueForTheActor() {
-            assertThat(graph.isReferencedTerm(ACTOR_IRI)).isTrue();
-        }
-
-        @Test
         void isReferencedTermIsFalseForTheOrphanTerm() {
             assertThat(graph.isReferencedTerm(TERM_2_IRI)).isFalse();
         }
@@ -358,8 +361,8 @@ class TraceabilityGraphTest {
         }
 
         @Test
-        void dependentsOfTheActorReachesUc1Directly() {
-            assertThat(graph.dependents(ACTOR_IRI)).containsExactly(UC_1_IRI);
+        void dependentsOfTheRoleReachesUc1Directly() {
+            assertThat(graph.dependents(ROLE_IRI)).containsExactly(UC_1_IRI);
         }
 
         /** {@code arkddd:ubiquitousLanguageTerm} must be a traversable dependent edge too. */
@@ -433,25 +436,39 @@ class TraceabilityGraphTest {
         /**
          * Since issue #336 {@link #ACTOR_IRI} is registered in {@code arknet-actor}'s own register
          * rather than written as a term - {@link TraceabilityGraph#actorIris()} is graph-agnostic, so
-         * it finds it there exactly as it used to find the old term-facetted actor.
+         * it finds it there exactly as it used to find the old term-facetted actor. Since
+         * ADR-37/kogn-io/arknet#405 Part C no use case references it any more (a use case's
+         * {@code primaryRole}/{@code supportingRole} targets {@link #ROLE_IRI} instead), so this
+         * actor is unreferenced by anything in the fixture - exactly the case {@code actorIris()}
+         * must still not silently drop (issue #147).
          */
         @Test
         void actorIrisContainsTheRegisteredActor() {
             assertThat(graph.actorIris()).containsExactly(ACTOR_IRI);
         }
 
+        /**
+         * Mirrors {@link #actorIrisContainsTheRegisteredActor()} for the role register: {@link
+         * #ROLE_IRI} is registered in {@code arknet-actor}'s role graph and found there regardless
+         * of the reference below (issue #147).
+         */
         @Test
-        void actorsOfUc1ContainsTheActor() {
-            assertThat(graph.actorsOf(UC_1_IRI)).containsExactly(ACTOR_IRI);
+        void roleIrisContainsTheRegisteredRole() {
+            assertThat(graph.roleIris()).containsExactly(ROLE_IRI);
         }
 
         @Test
-        void useCasesOfTheActorContainsUc1() {
-            assertThat(graph.useCasesOf(ACTOR_IRI)).containsExactly(UC_1_IRI);
+        void rolesOfUc1ContainsTheRole() {
+            assertThat(graph.rolesOf(UC_1_IRI)).containsExactly(ROLE_IRI);
         }
 
         @Test
-        void useCasesOfATermThatIsNeverAnActorIsEmpty() {
+        void useCasesOfTheRoleContainsUc1() {
+            assertThat(graph.useCasesOf(ROLE_IRI)).containsExactly(UC_1_IRI);
+        }
+
+        @Test
+        void useCasesOfATermThatIsNeverARoleIsEmpty() {
             assertThat(graph.useCasesOf(TERM_1_IRI)).isEmpty();
         }
 
@@ -466,16 +483,16 @@ class TraceabilityGraphTest {
         }
 
         /**
-         * UC1's goal names its own primary actor ("Customer authenticates" mentions {@code Customer},
-         * the actor {@link #ACTOR_IRI} is registered under). Since issue #336 an actor is no longer a
-         * glossary term by default, so {@code Customer} is not even a mention candidate here any
-         * more - this now holds vacuously rather than by the {@code actorsOf(useCaseIri)} suppression
+         * UC1's goal names its own primary role ("Customer authenticates" mentions {@code
+         * Customer}, {@link #ROLE_IRI}'s name). Neither an actor nor a role is a glossary term by
+         * default, so {@code Customer} is not even a mention candidate here - this holds
+         * vacuously rather than by the {@code rolesOf(useCaseIri)} suppression
          * {@link TraceabilityGraph#unlinkedMentions()} still applies. That suppression remains live
-         * for the (still legal) case of a resource that is both a registered actor and a separately
+         * for the (still legal) case of a resource that is both a registered role and a separately
          * registered glossary term sharing the same label - not pinned by this test.
          */
         @Test
-        void unlinkedMentionsDoesNotFlagAUseCasesOwnPrimaryActorMentionInItsGoal() {
+        void unlinkedMentionsDoesNotFlagAUseCasesOwnPrimaryRoleMentionInItsGoal() {
             assertThat(graph.unlinkedMentions())
                     .filteredOn(mention -> mention.sourceIri().equals(UC_1_IRI))
                     .isEmpty();
@@ -765,8 +782,9 @@ class TraceabilityGraphTest {
         }
 
         /**
-         * Registers a fresh actor of {@code type} via the real {@link ActorRepository}, with no
-         * {@code primaryActor}/{@code supportingActor} edge from any use case - for {@link
+         * Registers a fresh actor of {@code type} via the real {@link ActorRepository} - no use
+         * case can reference it at all any more since ADR-37/kogn-io/arknet#405 Part C repointed
+         * {@code primaryRole}/{@code supportingRole} at {@code arkproc:Role} - for {@link
          * #actorIrisIncludesAnActorNoUseCaseReferencesYet()} and its GROUP/LEGAL siblings.
          */
         private void seedActor(String actorIri, ActorCode code, ActorType type, String name) {
@@ -809,13 +827,15 @@ class TraceabilityGraphTest {
          */
         @Test
         void dependentsOfAnActorReachesTheRoleWhoseFilledByOccupiesIt() {
-            String roleIri = "https://w3id.org/arknet/id/trace-test-role-1";
+            // ROLE-1 is already taken by the base fixture's own role (buildBaseFixture) - this
+            // fixture's own role code must not collide with it.
+            String roleIri = "https://w3id.org/arknet/id/trace-test-role-filledby";
             WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
                     lifecycle, DisplayLocale.DEFAULT);
             RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
                     lifecycle, DisplayLocale.DEFAULT, actorFunnel);
             roles.create(PROJECT, new Role(
-                    new RoleId(ResourceId.of(roleIri)), new RoleCode("ROLE-1"), "Requirements Engineer",
+                    new RoleId(ResourceId.of(roleIri)), new RoleCode("ROLE-2"), "Requirements Engineer",
                     "Writes and maintains requirements.",
                     List.of(new ActorId(ResourceId.of(ACTOR_IRI)))), "en");
 
@@ -850,8 +870,9 @@ class TraceabilityGraphTest {
 
         /**
          * Regression test for issue #147: {@link TraceabilityGraph#actorIris()} must find an actor
-         * from its {@code arkproc:HumanActor}/{@code SystemActor} type alone, independent of whether
-         * any use case's {@code primaryActor}/{@code supportingActor} edge references it yet.
+         * from its {@code arkproc:HumanActor}/{@code SystemActor} type alone - since ADR-37/
+         * kogn-io/arknet#405 Part C no use case can reference an actor at all any more (see
+         * {@link #roleIrisContainsTheRegisteredRole} for the sibling regression on the role side).
          */
         @Test
         void actorIrisIncludesAnActorNoUseCaseReferencesYet() {
@@ -905,7 +926,7 @@ class TraceabilityGraphTest {
             useCases.create(PROJECT, new UseCase(
                     new UseCaseId(ResourceId.of(UC_2_IRI)), new UseCaseCode("UC2"), "Manage cart",
                     "Customer manages the cart", "Checkout subsystem", "Customer opens the cart",
-                    new ActorRef(ResourceId.of(ACTOR_IRI)), List.of(), "Cart is empty", "Cart is saved",
+                    new RoleRef(ResourceId.of(ACTOR_IRI)), List.of(), "Cart is empty", "Cart is saved",
                     List.of(new Step(1, "Customer adds an item", List.of())),
                     List.of("Customer cancels"), List.of(), List.of()), null);
             StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
@@ -927,7 +948,7 @@ class TraceabilityGraphTest {
             useCases.create(PROJECT, new UseCase(
                     new UseCaseId(ResourceId.of(UC_2_IRI)), new UseCaseCode("UC2"), "Reset",
                     "Customer resets their Passwort", null, null,
-                    new ActorRef(ResourceId.of(ACTOR_IRI)), List.of(), null, null,
+                    new RoleRef(ResourceId.of(ACTOR_IRI)), List.of(), null, null,
                     List.of(new Step(1, "Customer confirms", List.of())), List.of(), List.of(), List.of()), null);
             StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
             TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);

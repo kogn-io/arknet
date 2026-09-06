@@ -22,7 +22,6 @@ import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 
 /**
@@ -107,30 +106,6 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         return repository.findByCode(projectId, code);
-    }
-
-    /**
-     * Batch-resolves opaque actor identities back to their identity and business code, in a
-     * single store round-trip - a plain, directly usable capability of this service rather than
-     * an implementation of a driving port. Until ADR-37/kogn-io/arknet#405 Part C this method
-     * implemented the driving port {@code ResolveActors}, published for {@code arknet-use-cases}'
-     * driving adapter to render a use case's {@code primaryActor}/{@code supportingActor} as their
-     * business code; Part C repointed those edges at {@code arkproc:Role}, so that port and its
-     * last external consumer are both gone. Never rejects: an id that resolves to nothing in the
-     * project is simply absent from the result.
-     *
-     * @param projectId the project (architecture model) to resolve actors in
-     * @param ids       the opaque identities to resolve; may be empty
-     * @return the resolved actors found; an id absent from the project is simply absent here too,
-     *         never {@code null}
-     */
-    public List<ActorRepository.ActorProjection> resolveExisting(ProjectId projectId, ResourceId... ids) {
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(ids, "ids");
-        if (ids.length == 0) {
-            return List.of();
-        }
-        return repository.findByIds(projectId, List.of(ids));
     }
 
     @Override

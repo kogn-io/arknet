@@ -153,15 +153,6 @@ final class InMemoryActorRepository implements ActorRepository {
     }
 
     @Override
-    public List<ActorProjection> findByIds(ProjectId projectId, List<ResourceId> ids) {
-        Set<ResourceId> wanted = Set.copyOf(ids);
-        return byProject.getOrDefault(projectId, Map.of()).values().stream()
-                .filter(actor -> wanted.contains(actor.id().value()))
-                .map(actor -> new ActorProjection(actor.id().value(), actor.code()))
-                .toList();
-    }
-
-    @Override
     public List<Actor> findAllByIds(ProjectId projectId, List<ResourceId> ids) {
         Set<ResourceId> wanted = Set.copyOf(ids);
         return byProject.getOrDefault(projectId, Map.of()).values().stream()

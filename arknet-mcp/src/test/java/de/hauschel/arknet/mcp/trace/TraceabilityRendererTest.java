@@ -37,14 +37,14 @@ class TraceabilityRendererTest {
     private static final String USES_TERM = ARKREQ + "usesTerm";
     private static final String MAIN_STEP = ARKREQ + "mainStep";
     private static final String STEP_REALISES = ARKREQ + "stepRealises";
-    private static final String PRIMARY_ACTOR = ARKREQ + "primaryActor";
-    private static final String SUPPORTING_ACTOR = ARKREQ + "supportingActor";
+    private static final String PRIMARY_ROLE = ARKREQ + "primaryRole";
+    private static final String SUPPORTING_ROLE = ARKREQ + "supportingRole";
     private static final String USE_CASE_GOAL = ARKREQ + "useCaseGoal";
     private static final String ACCEPTANCE_CRITERION = ARKREQ + "acceptanceCriterion";
     private static final String CRITERION_TEXT = ARKREQ + "criterionText";
     private static final String DOMAIN_VISION = ARKDDD + "domainVision";
     private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
-    private static final String HUMAN_ACTOR_TYPE = ARKPROC + "HumanActor";
+    private static final String ROLE_TYPE = ARKPROC + "Role";
     private static final String CONSTRAINED_BY = "http://open-services.net/ns/rm#constrainedBy";
 
     private static final String FR_1 = ID + "fr-1";
@@ -64,9 +64,9 @@ class TraceabilityRendererTest {
     private static final String UC_A = ID + "uc-a";
     private static final String UC_B = ID + "uc-b";
     private static final String UC_10 = ID + "uc-10";
-    private static final String ACTOR_A = ID + "actor-a";
-    private static final String ACTOR_B = ID + "actor-b";
-    private static final String ACTOR_C = ID + "actor-c";
+    private static final String ROLE_A = ID + "role-a";
+    private static final String ROLE_B = ID + "role-b";
+    private static final String ROLE_C = ID + "role-c";
     private static final String BC_2 = ID + "bc-2";
     private static final String CON_1 = ID + "con-1";
     private static final String CON_2 = ID + "con-2";
@@ -240,50 +240,50 @@ class TraceabilityRendererTest {
     }
 
     @Test
-    void actorUseCaseMatrixReportsBothDirectionsOfActorInvolvement() {
-        TraceabilityGraph graph = TraceabilityGraph.of(actorUseCaseFixtureSnapshot(), DisplayLocale.DEFAULT);
+    void roleUseCaseMatrixReportsBothDirectionsOfRoleInvolvement() {
+        TraceabilityGraph graph = TraceabilityGraph.of(roleUseCaseFixtureSnapshot(), DisplayLocale.DEFAULT);
 
-        String matrix = renderer.actorUseCaseMatrix(PROJECT, graph);
+        String matrix = renderer.roleUseCaseMatrix(PROJECT, graph);
 
-        assertThat(matrix).contains("# Actor/use-case matrix -- project sample-project");
-        assertThat(matrix).contains("## Actors (2)");
+        assertThat(matrix).contains("# Role/use-case matrix -- project sample-project");
+        assertThat(matrix).contains("## Roles (2)");
         assertThat(matrix).contains("## Use cases (2)");
-        String actorsSection = matrix.substring(matrix.indexOf("## Actors"), matrix.indexOf("## Use cases"));
-        assertThat(actorsSection).contains("ACTOR-A").contains("use cases : UCA, UCB");
-        assertThat(actorsSection).contains("ACTOR-B").contains("use cases : UCA");
+        String rolesSection = matrix.substring(matrix.indexOf("## Roles"), matrix.indexOf("## Use cases"));
+        assertThat(rolesSection).contains("ROLE-A").contains("use cases : UCA, UCB");
+        assertThat(rolesSection).contains("ROLE-B").contains("use cases : UCA");
         String useCasesSection = matrix.substring(matrix.indexOf("## Use cases"));
-        assertThat(useCasesSection).contains("UCA").contains("actors    : ACTOR-A, ACTOR-B");
-        assertThat(useCasesSection).contains("UCB").contains("actors    : ACTOR-A");
+        assertThat(useCasesSection).contains("UCA").contains("roles     : ROLE-A, ROLE-B");
+        assertThat(useCasesSection).contains("UCB").contains("roles     : ROLE-A");
     }
 
     /**
-     * ACTOR_C carries no {@code primaryActor}/{@code supportingActor} edge from any use case -
-     * the exact gap issue #147 reports: the tool's own description promises "for every actor",
-     * but the "Actors" section used to be built exclusively from
-     * {@link TraceabilityGraph#actorsOf(String)}, so an actor no use case references yet never
+     * ROLE_C carries no {@code primaryRole}/{@code supportingRole} edge from any use case -
+     * the exact gap issue #147 reports: the tool's own description promises "for every role",
+     * but the "Roles" section used to be built exclusively from
+     * {@link TraceabilityGraph#rolesOf(String)}, so a role no use case references yet never
      * appeared and the section's count silently under-reported. It must now show up, with
      * "(none)" for its use cases - the strongest signal that a use case is missing or that this
-     * actor belongs to a different bounded context.
+     * role belongs to a different bounded context.
      */
     @Test
-    void actorUseCaseMatrixIncludesAnActorNoUseCaseReferencesYet() {
-        TraceabilityGraph graph = TraceabilityGraph.of(actorWithoutUseCaseFixtureSnapshot(), DisplayLocale.DEFAULT);
+    void roleUseCaseMatrixIncludesARoleNoUseCaseReferencesYet() {
+        TraceabilityGraph graph = TraceabilityGraph.of(roleWithoutUseCaseFixtureSnapshot(), DisplayLocale.DEFAULT);
 
-        String matrix = renderer.actorUseCaseMatrix(PROJECT, graph);
+        String matrix = renderer.roleUseCaseMatrix(PROJECT, graph);
 
-        assertThat(matrix).contains("## Actors (2)");
-        String actorsSection = matrix.substring(matrix.indexOf("## Actors"), matrix.indexOf("## Use cases"));
-        assertThat(actorsSection).contains("ACTOR-A").contains("use cases : UCA");
-        assertThat(actorsSection).contains("ACTOR-C").contains("use cases : (none)");
+        assertThat(matrix).contains("## Roles (2)");
+        String rolesSection = matrix.substring(matrix.indexOf("## Roles"), matrix.indexOf("## Use cases"));
+        assertThat(rolesSection).contains("ROLE-A").contains("use cases : UCA");
+        assertThat(rolesSection).contains("ROLE-C").contains("use cases : (none)");
     }
 
     @Test
-    void actorUseCaseMatrixReportsNoneForAProjectWithoutUseCases() {
+    void roleUseCaseMatrixReportsNoneForAProjectWithoutUseCases() {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
 
-        String matrix = renderer.actorUseCaseMatrix(PROJECT, graph);
+        String matrix = renderer.roleUseCaseMatrix(PROJECT, graph);
 
-        assertThat(matrix).contains("## Actors (0)").contains("## Use cases (1)");
+        assertThat(matrix).contains("## Roles (0)").contains("## Use cases (1)");
     }
 
     @Test
@@ -376,47 +376,43 @@ class TraceabilityRendererTest {
         assertThat(report).contains("TERM-A").contains("TERM-B").contains("1 text(s)");
     }
 
-    private static StoreSnapshot actorUseCaseFixtureSnapshot() {
+    private static StoreSnapshot roleUseCaseFixtureSnapshot() {
         return StoreSnapshot.of(List.of(
-                iri(ACTOR_A, RDF_TYPE, SKOS + "Concept"),
-                iri(ACTOR_A, RDF_TYPE, HUMAN_ACTOR_TYPE),
-                lit(ACTOR_A, PREF_LABEL, "Customer"),
-                lit(ACTOR_A, IDENTIFIER, "ACTOR-A"),
+                iri(ROLE_A, RDF_TYPE, ROLE_TYPE),
+                lit(ROLE_A, PREF_LABEL, "Customer"),
+                lit(ROLE_A, IDENTIFIER, "ROLE-A"),
 
-                iri(ACTOR_B, RDF_TYPE, SKOS + "Concept"),
-                iri(ACTOR_B, RDF_TYPE, HUMAN_ACTOR_TYPE),
-                lit(ACTOR_B, PREF_LABEL, "Support agent"),
-                lit(ACTOR_B, IDENTIFIER, "ACTOR-B"),
+                iri(ROLE_B, RDF_TYPE, ROLE_TYPE),
+                lit(ROLE_B, PREF_LABEL, "Support agent"),
+                lit(ROLE_B, IDENTIFIER, "ROLE-B"),
 
                 iri(UC_A, RDF_TYPE, ARKREQ + "UseCase"),
                 lit(UC_A, TITLE, "Place order"),
                 lit(UC_A, IDENTIFIER, "UCA"),
-                iri(UC_A, PRIMARY_ACTOR, ACTOR_A),
-                iri(UC_A, SUPPORTING_ACTOR, ACTOR_B),
+                iri(UC_A, PRIMARY_ROLE, ROLE_A),
+                iri(UC_A, SUPPORTING_ROLE, ROLE_B),
 
                 iri(UC_B, RDF_TYPE, ARKREQ + "UseCase"),
                 lit(UC_B, TITLE, "Cancel order"),
                 lit(UC_B, IDENTIFIER, "UCB"),
-                iri(UC_B, PRIMARY_ACTOR, ACTOR_A)));
+                iri(UC_B, PRIMARY_ROLE, ROLE_A)));
     }
 
-    private static StoreSnapshot actorWithoutUseCaseFixtureSnapshot() {
+    private static StoreSnapshot roleWithoutUseCaseFixtureSnapshot() {
         return StoreSnapshot.of(List.of(
-                iri(ACTOR_A, RDF_TYPE, SKOS + "Concept"),
-                iri(ACTOR_A, RDF_TYPE, HUMAN_ACTOR_TYPE),
-                lit(ACTOR_A, PREF_LABEL, "Customer"),
-                lit(ACTOR_A, IDENTIFIER, "ACTOR-A"),
+                iri(ROLE_A, RDF_TYPE, ROLE_TYPE),
+                lit(ROLE_A, PREF_LABEL, "Customer"),
+                lit(ROLE_A, IDENTIFIER, "ROLE-A"),
 
-                // Never referenced by any use case's primaryActor/supportingActor edge.
-                iri(ACTOR_C, RDF_TYPE, SKOS + "Concept"),
-                iri(ACTOR_C, RDF_TYPE, HUMAN_ACTOR_TYPE),
-                lit(ACTOR_C, PREF_LABEL, "Auditor"),
-                lit(ACTOR_C, IDENTIFIER, "ACTOR-C"),
+                // Never referenced by any use case's primaryRole/supportingRole edge.
+                iri(ROLE_C, RDF_TYPE, ROLE_TYPE),
+                lit(ROLE_C, PREF_LABEL, "Auditor"),
+                lit(ROLE_C, IDENTIFIER, "ROLE-C"),
 
                 iri(UC_A, RDF_TYPE, ARKREQ + "UseCase"),
                 lit(UC_A, TITLE, "Place order"),
                 lit(UC_A, IDENTIFIER, "UCA"),
-                iri(UC_A, PRIMARY_ACTOR, ACTOR_A)));
+                iri(UC_A, PRIMARY_ROLE, ROLE_A)));
     }
 
     private static StoreSnapshot termCooccurrenceFixtureSnapshot() {

@@ -11,15 +11,18 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles;
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles.ResolvedRole;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.trace.TraceabilityGraph;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
-import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
+import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
@@ -30,31 +33,36 @@ import de.hauschel.arknet.uc.domain.UseCase;
  *
  * <p>This is the reason the report stopped rendering everything generically. Read as triples,
  * a use case falls apart: its flow lives in {@code n} separate {@code arkreq:Step} resources
- * under opaque IRIs whose order is an {@code arkreq:position} literal, and its actors and
+ * under opaque IRIs whose order is an {@code arkreq:position} literal, and its roles and
  * realised requirements are further opaque IRIs. Read through {@link ListUseCases} it arrives
- * as what it is - a goal, actors, and an ordered flow - because the owning context already did
+ * as what it is - a goal, roles, and an ordered flow - because the owning context already did
  * the ordering and the joining.</p>
  *
- * <p><strong>Actors are glossary terms.</strong> An actor reference is resolved against the
- * report's {@link Glossary}, so the chip reads {@code Customer} rather than {@code TERM-1}.
- * Requirement references keep the borrowed {@link ResolveRequirements} port (the same borrowing
- * {@code uc_get} does), because a requirement's business code {@code FR-1} <em>is</em>
- * how a human names it. Both are called once per report, batched across every reference of
- * every use case, and an identity neither resolves falls back to its IRI rather than being
- * dropped.</p>
+ * <p><strong>Roles are resolved against the actor register's role resource type, not the
+ * glossary (ADR-37/kogn-io/arknet#405 Part C).</strong> Before this, a use case's {@code
+ * primaryActor}/{@code supportingActors} were rendered by looking the referenced identity up in
+ * {@link Glossary} - correct while an actor was a glossary term's facet, but a latent defect
+ * since issue #336 repointed an actor at its own register: a real store's {@code primaryActor}
+ * chip resolved against {@link Glossary} rendered a bare, dead-looking IRI, because the
+ * identity it pointed at was no longer a {@code skos:Concept} the glossary had ever read. This
+ * class fixes that alongside the rename: {@link ResolveRoles}, the role register's own driving
+ * port (borrowed here the same way {@link ResolveRequirements} already is), resolves a {@code
+ * primaryRole}/{@code supportingRole} reference to its business code <em>and</em> its
+ * {@code displayLocale}-resolved name, so the chip reads {@code Requirements Engineer} with
+ * {@code ROLE-1} as its tooltip - never a raw IRI for a role this project actually has.</p>
  *
  * <p><strong>The glossary in the sentence, not beside it (issue #333).</strong> Since issue #329
  * a use case's goal/scope/trigger/precondition/postcondition and its step/extension texts can
  * mention the ubiquitous language while the model records it as {@code arkreq:usesTerm}
- * (glossary) or {@code arkreq:primaryActor}/{@code supportingActor} (the use case's own actors)
+ * (glossary) or {@code arkreq:primaryRole}/{@code supportingRole} (the use case's own roles)
  * edges - the same gap {@link RequirementCards} closed for requirement prose. Every one of those
  * fields is therefore marked up through {@link Glossary}, mirroring {@link
  * TraceabilityGraph#useCaseProseTexts(String)} (the mention scan behind {@code orphan_check}'s
  * "mentioned in text but not linked" list, which now covers the same fields): a mention backed
- * by a {@code usesTerm} edge, or naming the use case's own primary/supporting actor, is a link,
+ * by a {@code usesTerm} edge, or naming the use case's own primary/supporting role, is a link,
  * any other mention a gap. The {@code Uses terms} chip list survives only for edges whose term
  * no field's text names, exactly as {@link RequirementCards} already does for its own {@code
- * usesTerm} edges. {@code Primary actor}/{@code Supporting actors} stay full chip lists
+ * usesTerm} edges. {@code Primary role}/{@code Supporting roles} stay full chip lists
  * regardless of mention - they are the use case's cast, always shown, not a "not named in the
  * text" residue.</p>
  *
@@ -80,14 +88,21 @@ public final class UseCaseCards {
 
     private final ListUseCases useCases;
     private final ResolveRequirements requirements;
+    private final ResolveRoles resolveRoles;
 
     /**
      * @param useCases     the use-cases context's list in-port
      * @param requirements borrowed for realised-requirement display codes
+     * @param resolveRoles the actor register's role resource type's driving port, borrowed for
+     *                     {@code primaryRole}/{@code supportingRole} display name and business code
+     *                     (ADR-37/kogn-io/arknet#405 Part C)
      */
-    public UseCaseCards(final ListUseCases useCases, final ResolveRequirements requirements) {
+    public UseCaseCards(
+            final ListUseCases useCases, final ResolveRequirements requirements,
+            final ResolveRoles resolveRoles) {
         this.useCases = Objects.requireNonNull(useCases, "useCases");
         this.requirements = Objects.requireNonNull(requirements, "requirements");
+        this.resolveRoles = Objects.requireNonNull(resolveRoles, "resolveRoles");
     }
 
     /**
@@ -95,38 +110,42 @@ public final class UseCaseCards {
      * @param displayLocale the resolved project's own configured default display language
      *                      (BCP-47 tag), or {@code null} if it has none - passed straight through
      *                      to {@code uc_list}'s own port so the report honours the same project
-     *                      default {@code uc_list}/{@code term_list} already do (issue #281)
-     * @param glossary    the project's glossary, for actor labels
+     *                      default {@code uc_list}/{@code term_list} already do (issue #281), and
+     *                      to {@link ResolveRoles#resolveExisting} so a rendered role's name
+     *                      agrees with the rest of the report
+     * @param glossary    the project's glossary, for term labels
      * @return the use-case section, ordered by business code
      */
     public ModelSection section(final ProjectId projectId, final String displayLocale, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
         final List<UseCase> all = useCases.list(projectId, displayLocale);
         final Map<ResourceId, ResolvedRequirement> reqs = resolveRequirements(projectId, all);
+        final Map<ResourceId, ResolvedRole> roles = resolveRolesFor(projectId, displayLocale, all);
         final List<ModelCard> cards = all.stream()
                 .sorted(Comparator.comparing(uc -> uc.code().value(), BusinessCodes.ORDER))
-                .map(uc -> card(uc, glossary, reqs))
+                .map(uc -> card(uc, glossary, reqs, roles))
                 .toList();
         return new ModelSection(SECTION_TITLE, "use-cases",
-                "goal, actors and the ordered main flow - as authored, not as triples", cards);
+                "goal, roles and the ordered main flow - as authored, not as triples", cards);
     }
 
     private ModelCard card(
             final UseCase uc,
             final Glossary glossary,
-            final Map<ResourceId, ResolvedRequirement> reqs) {
+            final Map<ResourceId, ResolvedRequirement> reqs,
+            final Map<ResourceId, ResolvedRole> roles) {
         final Set<ResourceId> usesTerms = uc.usesTerms().stream()
                 .map(TermRef::value)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        // For markup, a mention of the use case's own primary/supporting actor is not an
+        // For markup, a mention of the use case's own primary/supporting role is not an
         // unlinked mention either - that relationship is already recorded, just under
-        // primaryActor/supportingActor rather than usesTerm (issue #333, mirrors
+        // primaryRole/supportingRole rather than usesTerm (issue #333, mirrors
         // TraceabilityGraph#unlinkedMentions()'s use-case sweep). The narrower usesTerms alone
-        // stays the "linked" set for the Uses-terms chip reduction below, since an actor is
-        // already shown in its own Primary/Supporting actor block.
+        // stays the "linked" set for the Uses-terms chip reduction below, since a role is
+        // already shown in its own Primary/Supporting role block.
         final Set<ResourceId> linked = new LinkedHashSet<>(usesTerms);
-        linked.add(uc.primaryActor().value());
-        uc.supportingActors().stream().map(ActorRef::value).forEach(linked::add);
+        linked.add(uc.primaryRole().value());
+        uc.supportingRoles().stream().map(RoleRef::value).forEach(linked::add);
 
         final List<String> texts = new ArrayList<>();
         texts.add(uc.goal());
@@ -141,11 +160,10 @@ public final class UseCaseCards {
         blocks.add(ProseMarkdown.prose("Goal", uc.goal(), text -> glossary.markUp(text, linked)));
         addIfPresent(blocks, "Scope", uc.scope(), glossary, linked);
         addIfPresent(blocks, "Trigger", uc.trigger(), glossary, linked);
-        blocks.add(new Block.Refs("Primary actor", List.of(glossary.ref(uc.primaryActor().value()))));
-        if (!uc.supportingActors().isEmpty()) {
-            blocks.add(new Block.Refs("Supporting actors", uc.supportingActors().stream()
-                    .map(ActorRef::value)
-                    .map(glossary::ref)
+        blocks.add(new Block.Refs("Primary role", List.of(roleRef(uc.primaryRole(), roles))));
+        if (!uc.supportingRoles().isEmpty()) {
+            blocks.add(new Block.Refs("Supporting roles", uc.supportingRoles().stream()
+                    .map(ref -> roleRef(ref, roles))
                     .toList()));
         }
         addIfPresent(blocks, "Precondition", uc.precondition(), glossary, linked);
@@ -174,6 +192,14 @@ public final class UseCaseCards {
     private static Ref requirementRef(final RequirementRef ref, final Map<ResourceId, ResolvedRequirement> reqs) {
         final ResolvedRequirement resolved = reqs.get(ref.value());
         return Ref.of(resolved != null ? resolved.code().value() : ref.value().value(), ref.value().value());
+    }
+
+    /** Renders one role reference: its resolved name with its business code as the tooltip, or its bare IRI as a fallback. */
+    private static Ref roleRef(final RoleRef ref, final Map<ResourceId, ResolvedRole> rolesById) {
+        final ResolvedRole role = rolesById.get(ref.value());
+        return role != null
+                ? new Ref(role.name(), role.code().value(), ref.value().value())
+                : Ref.of(ref.value().value(), ref.value().value());
     }
 
     private static void addIfPresent(
@@ -209,5 +235,24 @@ public final class UseCaseCards {
         }
         return requirements.resolveExisting(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedRequirement::id, r -> r, (first, second) -> first));
+    }
+
+    /**
+     * Resolves every role referenced by any use case (its primary role plus its supporting
+     * roles) in one call to {@link ResolveRoles#resolveExisting} - same duplicate-key-tolerant
+     * merge reasoning as {@link #resolveRequirements}.
+     */
+    private Map<ResourceId, ResolvedRole> resolveRolesFor(
+            final ProjectId projectId, final String displayLocale, final List<UseCase> all) {
+        final ResourceId[] ids = all.stream()
+                .flatMap(uc -> Stream.concat(Stream.of(uc.primaryRole()), uc.supportingRoles().stream()))
+                .map(RoleRef::value)
+                .distinct()
+                .toArray(ResourceId[]::new);
+        if (ids.length == 0) {
+            return Map.of();
+        }
+        return resolveRoles.resolveExisting(projectId, displayLocale, ids).stream()
+                .collect(Collectors.toMap(ResolvedRole::id, r -> r, (first, second) -> first));
     }
 }

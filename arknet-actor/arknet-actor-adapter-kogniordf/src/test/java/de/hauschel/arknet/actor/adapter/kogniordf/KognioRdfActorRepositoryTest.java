@@ -507,48 +507,15 @@ class KognioRdfActorRepositoryTest {
         assertTrue(repository.findAll(PROJECT_B).isEmpty());
     }
 
-    // ---- findByIds: the slim ActorRepository.ActorProjection batch lookup -----------------
-
-    /**
-     * The batch shape {@link ActorRepository#findByIds} offers: known ids resolve, an id absent
-     * from the project is simply missing from the result rather than an error. Until ADR-37/
-     * kogn-io/arknet#405 Part C this backed the driving port {@code ResolveActors}, which
-     * {@code arknet-use-cases} drove to render a use case's {@code primaryActor}/
-     * {@code supportingActor}; Part C repointed those edges at {@code arkproc:Role} and deleted
-     * that port along with its nested {@code ResolvedActor} record (moved here as
-     * {@link ActorRepository.ActorProjection}), but this method itself stays a directly tested
-     * out-adapter capability.
-     */
-    @Test
-    void findByIdsResolvesOnlyTheIdentitiesTheProjectHolds() {
-        Actor first = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        Actor second = actor(new ActorCode("ACTOR-2"), ActorType.SYSTEM, null);
-        repository.create(PROJECT_A, first);
-        repository.create(PROJECT_A, second);
-        ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID());
-
-        List<ActorRepository.ActorProjection> resolved = repository.findByIds(
-                PROJECT_A, List.of(first.id().value(), second.id().value(), unknown));
-
-        assertEquals(2, resolved.size());
-        assertTrue(resolved.contains(new ActorRepository.ActorProjection(first.id().value(), first.code())));
-        assertTrue(resolved.contains(new ActorRepository.ActorProjection(second.id().value(), second.code())));
-    }
-
-    @Test
-    void findByIdsOfAnEmptyListQueriesNothing() {
-        assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of()));
-    }
-
     // ---- findAllByIds: the batch lookup RoleService drives (ADR-37/kogn-io/arknet#405) --------
 
     /**
      * The batch shape {@code RoleService} needs to render a role's {@code arkproc:filledBy}
-     * occupants as {@code ACTOR-N (Name)}: unlike {@link ActorRepository#findByIds} this one
-     * materialises the whole {@link Actor}, so type, name and the optional description all have to
-     * survive the round-trip. An id the project does not hold is simply absent from the result
-     * rather than an error - {@code RoleService} filters those out silently, so this test is what
-     * says the absence means "no such actor" and not "the query is broken".
+     * occupants as {@code ACTOR-N (Name)}: it materialises the whole {@link Actor}, so type, name
+     * and the optional description all have to survive the round-trip. An id the project does not
+     * hold is simply absent from the result rather than an error - {@code RoleService} filters
+     * those out silently, so this test is what says the absence means "no such actor" and not
+     * "the query is broken".
      */
     @Test
     void findAllByIdsMaterialisesEveryHeldActorAndSkipsTheUnknownId() {

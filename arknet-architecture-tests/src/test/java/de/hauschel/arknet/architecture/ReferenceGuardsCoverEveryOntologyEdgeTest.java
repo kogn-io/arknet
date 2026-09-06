@@ -73,12 +73,11 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
     private static final String ACTOR_CLASS = ArkprocVocabulary.ACTOR_TYPE;
 
     /**
-     * The role class a future property would declare as its range once one exists
-     * (ADR-37/kogn-io/arknet#405 Part C: {@code arkreq:primaryActor}/{@code supportingActor} are
-     * planned to be repointed here). Nothing ranges over it today, so
-     * {@link #everyPropertyRangingOverARoleBlocksTheRolesDeletion} carries no non-empty assertion -
-     * it exists so the day one ships without updating {@code KognioRdfRoleRepository
-     * #REFERENCING_PREDICATES}, this test - not a later audit - is what turns red.
+     * The role class every role-referencing property declares as its range since ADR-37/
+     * kogn-io/arknet#405 Part C: {@code arkreq:primaryRole}/{@code supportingRole} repointed here
+     * from {@link #ACTOR_CLASS}. No longer vacuous - {@link
+     * #everyPropertyRangingOverARoleBlocksTheRolesDeletion} now has two real candidates, and
+     * {@code KognioRdfRoleRepository#REFERENCING_PREDICATES} lists both.
      */
     private static final String ROLE_CLASS = ArkprocVocabulary.ROLE_TYPE;
 
@@ -92,10 +91,16 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
 
     /**
      * Every property the shipped ontologies declare as pointing at a glossary term must block that
-     * term's deletion. The check is one-directional on purpose: the term guard also lists
-     * {@code arkreq:primaryActor}/{@code supportingActor}, edges that stopped pointing at terms
-     * with issue #336 but can still sit in a store filled before that cut, so extra entries are
-     * legitimate - a missing one never is.
+     * term's deletion. The check is one-directional on purpose ({@code containsAll}, not set
+     * equality): {@code KognioRdfTermRepository#REFERENCING_PREDICATES} is free to carry an entry
+     * this test does not require - a missing one never is. Until ADR-37/kogn-io/arknet#405
+     * Part C that slack held a real pre-#336 compatibility entry for {@code arkreq:primaryActor}/
+     * {@code supportingActor}; Part C repointed those two properties at {@code arkproc:Role}
+     * (see {@link #ROLE_CLASS}), so no edge of theirs can point at a term any more and the
+     * compatibility entry is gone with it, not merely renamed (see that field's own javadoc for
+     * why term_delete's old check on it was retired rather than migrated) - the slack itself
+     * stays, since a future addition (e.g. a second borrowed vocabulary reusing this class'
+     * general pattern) should not have to fight this test to exist.
      */
     @Test
     void everyPropertyRangingOverAGlossaryTermBlocksTheTermsDeletion() {
@@ -123,14 +128,23 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
     }
 
     /**
-     * The role-side counterpart, guarding {@code role_delete} the same way - vacuously true today
-     * (no property ranges over {@code arkproc:Role} yet), unlike its sibling tests, which is exactly
-     * the point: see {@link #ROLE_CLASS}'s own javadoc.
+     * The role-side counterpart, guarding {@code role_delete} the same way. Since ADR-37/
+     * kogn-io/arknet#405 Part C repointed {@code arkreq:primaryRole}/{@code supportingRole} at
+     * {@link #ROLE_CLASS}, this is no longer vacuous: it is the belief that {@code role_delete}
+     * genuinely blocks a use-case-occupied role, not merely that the map has the right shape.
+     * Mutation belief (2026-09-06): removing both entries from {@code KognioRdfRoleRepository
+     * #REFERENCING_PREDICATES} turns this test red with "role_delete would not notice these
+     * edges: [https://w3id.org/arknet/requirements#primaryRole,
+     * https://w3id.org/arknet/requirements#supportingRole] - add them to
+     * KognioRdfRoleRepository.REFERENCING_PREDICATES", confirming the guard actually depends on
+     * the map rather than passing regardless.
      */
     @Test
     void everyPropertyRangingOverARoleBlocksTheRolesDeletion() {
         Set<String> pointingAtRoles = propertiesRangingOver(ROLE_CLASS);
 
+        assertFalse(pointingAtRoles.isEmpty(),
+                "no property with rdfs:range arkproc:Role found - the ontologies were not loaded");
         assertTrue(referencingPredicatesOf(KognioRdfRoleRepository.class).keySet().containsAll(pointingAtRoles),
                 () -> "role_delete would not notice these edges: "
                         + new TreeSet<>(missing(pointingAtRoles, KognioRdfRoleRepository.class))

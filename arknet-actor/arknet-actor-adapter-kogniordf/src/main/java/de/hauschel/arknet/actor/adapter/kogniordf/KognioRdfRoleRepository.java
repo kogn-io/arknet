@@ -123,9 +123,9 @@ public class KognioRdfRoleRepository implements RoleRepository {
 
     /**
      * The predicates that, if found pointing at a role, block its deletion: a use case's
-     * {@code arkreq:primaryRole}/{@code supportingRole} (ADR-37/kogn-io/arknet#405 Part C - built
-     * empty ahead of a real entry in Part B, see {@link RoleReferencedException}'s own javadoc for
-     * that history). {@code ReferenceGuardsCoverEveryOntologyEdgeTest#
+     * {@code arkreq:primaryRole}/{@code supportingRole} (ADR-37/kogn-io/arknet#405 Part C, which
+     * repointed both edges here from {@code arkproc:Actor}). {@code
+     * ReferenceGuardsCoverEveryOntologyEdgeTest#
      * everyPropertyRangingOverARoleBlocksTheRolesDeletion} in {@code arknet-architecture-tests}
      * holds this map against every property the shipped ontologies declare with
      * {@code rdfs:range arkproc:Role}, so a future one cannot ship unnoticed either.
@@ -346,12 +346,11 @@ public class KognioRdfRoleRepository implements RoleRepository {
 
     /**
      * Finds every role in a project whose identity is among {@code ids}, in one store round-trip
-     * - backs {@link ResolveRoles}, the same batch shape {@code KognioRdfActorRepository#findByIds}
-     * establishes for the sibling resource type. Not a per-id existence check: an id absent from
+     * - backs {@link ResolveRoles}. Not a per-id existence check: an id absent from
      * the project (or not a role at all) is simply absent from the result, never an error.
      *
-     * <p>Unlike {@code KognioRdfActorRepository#findByIds}, this joins the resolved {@code name}
-     * too, since a role's name is language-tagged: {@code displayLocale} selects which candidate
+     * <p>Joins the resolved {@code name} too, since a role's name is language-tagged:
+     * {@code displayLocale} selects which candidate
      * literal wins, the same {@link #literalsBySubject}/{@link DisplayLocale#select} machinery
      * {@link #findAll} already uses, applied to the whole graph's names rather than a
      * {@code VALUES}-scoped join - identical to how {@link #findAll} itself reads names, since a
@@ -371,7 +370,7 @@ public class KognioRdfRoleRepository implements RoleRepository {
         DisplayLocale effective = this.displayLocale.withRequestedOverride(displayLocale);
 
         // ResourceId#of validates IRIREF-safety at construction, so every id here is already
-        // guaranteed safe to embed - mirrors KognioRdfActorRepository#findByIds's reasoning.
+        // guaranteed safe to embed.
         String values = ids.stream()
                 .map(id -> SparqlTerms.iriRef(id.value()))
                 .collect(Collectors.joining(" "));

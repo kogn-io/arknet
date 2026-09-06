@@ -189,17 +189,15 @@ public interface RoleRepository {
 
     /**
      * Finds every role in a project whose identity is among {@code ids}, in one store round-trip
-     * - backs {@link ResolveRoles}, the same batch shape {@code ActorRepository#findByIds}
-     * establishes for the sibling resource type. Not a per-id existence check: an id absent from
+     * - backs {@link ResolveRoles}. Not a per-id existence check: an id absent from
      * the project (or not a role at all) is simply absent from the result, never an error.
      *
      * <p>Returns the slim {@link ResolveRoles.ResolvedRole} projection, not the full {@link Role}
      * aggregate: the only consumer of this method is {@link ResolveRoles}, which exists purely to
-     * answer "what code and name identify this identity" for display. Unlike
-     * {@code ActorRepository#findByIds}'s {@code ActorProjection}, the projection here also
-     * carries the resolved {@code name} - a role's name is language-tagged, so {@code displayLocale}
-     * selects which variant a caller sees, the same fallback chain {@link #findByCode} already
-     * applies.</p>
+     * answer "what code and name identify this identity" for display. Unlike a bare code-only
+     * projection, the projection here also carries the resolved {@code name} - a role's name is
+     * language-tagged, so {@code displayLocale} selects which variant a caller sees, the same
+     * fallback chain {@link #findByCode} already applies.</p>
      *
      * @param projectId     the project (architecture model) to look up roles in
      * @param displayLocale the BCP-47 language tag the caller wants each role's resolved
