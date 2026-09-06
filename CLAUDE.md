@@ -148,7 +148,8 @@ Projektbeschreibung (`project_add`/`project_update`), Requirement-`title`/
 `description`/AcceptanceCriterion-`text` (`req_add`/`req_update`),
 UseCase-`title`/`goal`/`scope`/`trigger`/`precondition`/`postcondition`/
 Step-`text`/Extension-`text` (`uc_add`/`uc_update`), Constraint-`title`/
-`constraintStatement` (`constraint_add`/`constraint_update`) sowie die
+`constraintStatement` (`constraint_add`/`constraint_update`), Role-`name`/
+`description` (`role_add`/`role_update`) sowie die
 ADR-Felder `name`/`context`/`decision` samt Consequence- und
 ConsideredOption-Texten (`adr_add`/`adr_update`) tragen jeweils
 mehrere sprachgetaggte RDF-Literale je Ressource, ueber ein optionales
