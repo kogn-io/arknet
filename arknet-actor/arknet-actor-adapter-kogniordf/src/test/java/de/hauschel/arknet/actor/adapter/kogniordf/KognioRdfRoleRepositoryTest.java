@@ -30,9 +30,16 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.actor.application.RoleService;
+import de.hauschel.arknet.actor.application.port.in.AddRole.NewRole;
+import de.hauschel.arknet.actor.application.port.in.RoleDetail.FilledByActor;
+import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.application.port.out.RoleRepository;
+import de.hauschel.arknet.actor.domain.Actor;
+import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorId;
+import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.actor.domain.DuplicateRoleCodeException;
 import de.hauschel.arknet.actor.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.actor.domain.Role;
@@ -43,6 +50,7 @@ import de.hauschel.arknet.actor.domain.RoleNotFoundException;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -73,13 +81,20 @@ class KognioRdfRoleRepositoryTest {
     private DatasetLifecycleRdf4j lifecycle;
     private KognioRdfRoleRepository repository;
 
+    /**
+     * The one funnel both resource types of this hexagon write through - kept as a field, not a
+     * local, so {@link #filledByReadsBackAsCodeAndNameThroughTheServiceReadPath()} can build the
+     * sibling actor repository over the very same instance the composition root shares.
+     */
+    private WriteFunnel funnel;
+
     @BeforeEach
     void setUp() {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
-        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = new KognioRdfRoleRepository(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
@@ -297,6 +312,42 @@ class KognioRdfRoleRepositoryTest {
         ShaclWriteGate gate = KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         gate.enforce(candidate);
+    }
+
+    /**
+     * The one test that walks the whole occupancy read path against the real store rather than
+     * stopping at this repository's opaque {@code filledBy} identities: {@code role_add}, then
+     * {@code role_get}/{@code role_list} rendered as {@code ACTOR-N (Name)}. That last hop is
+     * {@code ActorRepository#findAllByIds} - a query with mandatory joins of its own - and
+     * {@code RoleService} drops silently whatever it fails to materialise, so without this test a
+     * broken query would show up as an unfilled role rather than as a failure.
+     *
+     * <p>An application service inside an adapter test is deliberate and confined to this one
+     * case: {@code RoleDetail} is where the two resource types of this hexagon meet, and both
+     * sides of that meeting are out-adapters. The sibling actor repository shares {@link #funnel},
+     * exactly as the composition root wires it.</p>
+     */
+    @Test
+    void filledByReadsBackAsCodeAndNameThroughTheServiceReadPath() {
+        ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, funnel);
+        actors.create(PROJECT_A, new Actor(freshActorId(), new ActorCode("ACTOR-1"), ActorType.HUMAN,
+                "Sachbearbeiter", null));
+        actors.create(PROJECT_A, new Actor(freshActorId(), new ActorCode("ACTOR-2"), ActorType.SYSTEM,
+                "Fachanwendung", null));
+        RoleService service = new RoleService(repository, actors, new UuidResourceIdFactory());
+
+        RoleCode code = service.add(PROJECT_A, new NewRole("Requirements Engineer",
+                "Writes and maintains requirements.", List.of("ACTOR-1", "ACTOR-2"), "en"), "en")
+                .role().code();
+
+        List<FilledByActor> occupants = service.get(PROJECT_A, code, "en").orElseThrow().filledByActors();
+        assertEquals(2, occupants.size(), occupants.toString());
+        assertTrue(occupants.contains(new FilledByActor(new ActorCode("ACTOR-1"), "Sachbearbeiter")),
+                occupants.toString());
+        assertTrue(occupants.contains(new FilledByActor(new ActorCode("ACTOR-2"), "Fachanwendung")),
+                occupants.toString());
+        assertEquals(occupants, service.list(PROJECT_A, "en").get(0).filledByActors(),
+                "role_list must resolve the occupants the same way role_get does");
     }
 
     // ---- the SHACL gate: name -----------------------------------------------------------

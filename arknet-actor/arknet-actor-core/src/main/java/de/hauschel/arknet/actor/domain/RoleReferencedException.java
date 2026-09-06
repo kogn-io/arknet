@@ -18,9 +18,10 @@ import de.hauschel.arknet.kernel.ProjectId;
  * {@code KognioRdfRoleRepository.REFERENCING_PREDICATES} is empty today and this exception is
  * currently unreachable. It exists now so the guard is already in place, the same way
  * {@link ActorReferencedException} predated issue #336's actual referencing consumer (see that
- * class's own javadoc): {@code ReferenceGuardsCoverEveryOntologyEdgeTestForRole} in
- * {@code arknet-architecture-tests} will fail the day a property ranging over {@code arkproc:Role}
- * ships without this map knowing about it.</p>
+ * class's own javadoc): {@code ReferenceGuardsCoverEveryOntologyEdgeTest#
+ * everyPropertyRangingOverARoleBlocksTheRolesDeletion} in {@code arknet-architecture-tests} will
+ * fail the day a property ranging over {@code arkproc:Role} ships without this map knowing about
+ * it.</p>
  */
 public class RoleReferencedException extends RuntimeException {
 

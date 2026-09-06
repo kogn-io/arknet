@@ -40,7 +40,8 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * {@code arkarch:addressesRequirement} (ADR -&gt; Requirement), {@code arkarch:affectsContext}
  * (ADR -&gt; BoundedContext), {@code arkarch:usesTerm} (ADR -&gt; Term, kogn-io/arknet#393) and
  * {@code arkarch:supersededBy} (ADR -&gt; ADR, written on the
- * superseded decision, issue #69/kogn-io/arknet#357), and the
+ * superseded decision, issue #69/kogn-io/arknet#357), {@code arkproc:filledBy} (Role -&gt; Actor,
+ * ADR-37/kogn-io/arknet#405), and the
  * two-hop {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
  * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/use-case/bounded-context/ADR
  * prose ({@code dcterms:description}/{@code arkreq:acceptanceCriterion}, {@link
@@ -226,6 +227,12 @@ public final class TraceabilityGraph {
     private static final String GROUP_ACTOR_TYPE = ArkprocVocabulary.GROUP_ACTOR_TYPE;
 
     /**
+     * {@code arkproc:filledBy} - Role -&gt; Actor (ADR-37/kogn-io/arknet#405), the same shared
+     * constant {@code KognioRdfRoleRepository} serialises the occupancy edge with.
+     */
+    private static final String FILLED_BY = ArkprocVocabulary.FILLED_BY;
+
+    /**
      * The predicates {@link #dependents(String)} follows backwards ("who references this").
      * {@code mainStep}/{@code extensionStep} are in this set purely to hop a reached
      * {@code arkreq:Step} back to its owning use case - a step itself is never reported (see
@@ -260,12 +267,18 @@ public final class TraceabilityGraph {
      * traversed further from there: the partner bounded context on the relationship's other end is
      * not itself reached (it carries no backward-pointing edge to the relationship) - doing so
      * would need a two-hop traversal analogous to {@code mainStep}/{@code stepRealises}, left for a
-     * follow-up if ever needed.
+     * follow-up if ever needed. {@code arkproc:filledBy} (Role -&gt; Actor, ADR-37/
+     * kogn-io/arknet#405) joins the set backwards for the same reason and with the same
+     * consistency obligation issue #293 taught: {@code KognioRdfActorRepository}'s delete guard
+     * refuses to remove an actor a role still occupies, so leaving the edge out here would let
+     * {@code impact_analysis} answer "nothing depends on this" for exactly the actor
+     * {@code actor_delete} then refuses to delete - the one tool asked "what breaks if I change
+     * this" contradicting the one that enforces the answer.
      */
     private static final Set<String> DEPENDENT_EDGE_PREDICATES = Set.of(
             USES_TERM, PRIMARY_ACTOR, SUPPORTING_ACTOR, STEP_REALISES, MAIN_STEP, EXTENSION_STEP,
             UBIQUITOUS_LANGUAGE_TERM, UPSTREAM, DOWNSTREAM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT,
-            ADR_USES_TERM, CONSTRAINED_BY, SUPERSEDES);
+            ADR_USES_TERM, CONSTRAINED_BY, SUPERSEDES, FILLED_BY);
 
     /**
      * The predicates {@link #dependents(String)} follows <em>forwards</em> instead - the target of

@@ -28,11 +28,16 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepositoryFactory;
+import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfRoleRepositoryFactory;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
+import de.hauschel.arknet.actor.application.port.out.RoleRepository;
 import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorId;
 import de.hauschel.arknet.actor.domain.ActorType;
+import de.hauschel.arknet.actor.domain.Role;
+import de.hauschel.arknet.actor.domain.RoleCode;
+import de.hauschel.arknet.actor.domain.RoleId;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfContextRelationshipRepositoryFactory;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
@@ -792,6 +797,34 @@ class TraceabilityGraphTest {
          * report. Both directions are checked: the relationship is reported as affected whichever of
          * its two bounded contexts changes.
          */
+        /**
+         * Regression test for the {@code arkproc:filledBy} edge (ADR-37/kogn-io/arknet#405): the
+         * same consistency obligation issue #293 pinned for {@code arkddd:upstream}/{@code
+         * downstream}. {@code KognioRdfActorRepository}'s delete guard refuses to remove an actor a
+         * role still occupies, so {@code impact_analysis} must report that role as affected - a
+         * missing entry in {@code DEPENDENT_EDGE_PREDICATES} would have the "what breaks if this
+         * changes" tool answer "nothing" for exactly the actor {@code actor_delete} then refuses to
+         * delete. Seeded through the real {@link RoleRepository}, never hand-written triples, like
+         * every other fixture here.
+         */
+        @Test
+        void dependentsOfAnActorReachesTheRoleWhoseFilledByOccupiesIt() {
+            String roleIri = "https://w3id.org/arknet/id/trace-test-role-1";
+            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+                    lifecycle, DisplayLocale.DEFAULT);
+            RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
+                    lifecycle, DisplayLocale.DEFAULT, actorFunnel);
+            roles.create(PROJECT, new Role(
+                    new RoleId(ResourceId.of(roleIri)), new RoleCode("ROLE-1"), "Requirements Engineer",
+                    "Writes and maintains requirements.",
+                    List.of(new ActorId(ResourceId.of(ACTOR_IRI)))), "en");
+
+            StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+            TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+            assertThat(freshGraph.dependents(ACTOR_IRI)).contains(roleIri);
+        }
+
         @Test
         void dependentsOfEitherBoundedContextReachesTheirContextRelationship() {
             String bc2Iri = "https://w3id.org/arknet/id/trace-test-bc-2";

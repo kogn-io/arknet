@@ -107,8 +107,9 @@ actshapes:Role-description
 #  therefore also pull that target under ActorShape's own sh:minCount 1 on
 #  arknet:name - a node this write never carries a name for, since only its
 #  opaque identity is known at this point. KognioRdfRoleRepositoryTest#
-#  gateRejectsAFilledByTargetWithNoAssertedActorType/Accepts... pin the
-#  rejected combination this shape stays deliberately silent on: whether the
+#  gateRejectsAFilledByTargetThatIsABlankNode/#gateAcceptsAFilledByTarget
+#  ThatIsAnIri pin what this shape does demand, and what it stays
+#  deliberately silent on is the rest: whether the
 #  target actually IS an arkproc:Actor is RoleService's job (it resolves
 #  every filledByActorCodes entry against ActorRepository before a Role is
 #  ever built), not this shape's.

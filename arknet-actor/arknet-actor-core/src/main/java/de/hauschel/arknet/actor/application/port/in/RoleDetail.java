@@ -24,8 +24,14 @@ import de.hauschel.arknet.actor.domain.Role;
  *
  * @param role           the role itself, with its opaque {@code filledBy} identities intact
  * @param filledByActors {@link #role}'s {@code filledBy} occupants, each resolved to its current
- *                       business code and name; an identity that no longer resolves (deleted
- *                       store-first) is simply absent rather than an error. Never {@code null}
+ *                       business code and name; an identity the read path cannot materialise is
+ *                       simply absent rather than an error. In practice that means a store-first
+ *                       actor written without an {@code arknet:name} - a mandatory join of
+ *                       {@code ActorRepository#findAllByIds}, and the very asymmetry
+ *                       {@code findAllCodes} exists for (kogn-io/arknet#360). A <em>deleted</em>
+ *                       occupant is the theoretical second case only: {@code actor_delete}'s
+ *                       reference guard refuses to remove an actor a role still occupies. Never
+ *                       {@code null}
  */
 public record RoleDetail(Role role, List<FilledByActor> filledByActors) {
 

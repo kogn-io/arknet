@@ -121,9 +121,9 @@ public class KognioRdfRoleRepository implements RoleRepository {
     /**
      * The predicates that, if found pointing at a role, block its deletion - empty today,
      * deliberately: see {@link RoleReferencedException}'s own javadoc for why this map exists
-     * ahead of a real entry, and {@code ReferenceGuardsCoverEveryOntologyEdgeTestForRole} in
-     * {@code arknet-architecture-tests} for the guard that keeps it honest once a property ranging
-     * over {@code arkproc:Role} ships.
+     * ahead of a real entry, and {@code ReferenceGuardsCoverEveryOntologyEdgeTest#
+     * everyPropertyRangingOverARoleBlocksTheRolesDeletion} in {@code arknet-architecture-tests}
+     * for the guard that keeps it honest once a property ranging over {@code arkproc:Role} ships.
      */
     private static final Map<String, String> REFERENCING_PREDICATES = Map.of();
 

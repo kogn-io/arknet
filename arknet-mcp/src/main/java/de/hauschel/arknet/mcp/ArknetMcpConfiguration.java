@@ -196,17 +196,26 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       anchor raw and looks it up, which is deliberate rather than an omission.
  *       Since it answers the routing question for everyone else, it cannot itself be routed.</li>
  *   <li><strong>actor</strong> ({@link ActorMcpTools} over {@link ActorService} over an
- *       RDF-persisted actor repository) - the four actor tools ({@code actor_add}/
- *       {@code actor_list}/{@code actor_get}/{@code actor_update}), assembled through
- *       {@link KognioRdfActorRepositoryFactory}. The plainest wiring of the seven: no cross-BC
- *       lookup bean on the write side and no borrowed neighbour in-port on the read side,
+ *       RDF-persisted actor repository) - the five actor tools ({@code actor_add}/
+ *       {@code actor_list}/{@code actor_get}/{@code actor_update}/{@code actor_delete}), assembled
+ *       through {@link KognioRdfActorRepositoryFactory}. The plainest wiring of the seven: no
+ *       cross-BC lookup bean on the write side and no borrowed neighbour in-port on the read side,
  *       because an {@code arkproc:Actor} carries no reference to a term, a requirement or a bounded
  *       context in this scope - it exists as a resource of its own, independent of the actor facet
- *       the ubiquitous-language hexagon still sets on a {@code skos:Concept}. Its repository also
- *       builds its own {@link WriteFunnel} inside that factory rather than sharing one, since it
- *       owns both of its resource files ({@code actor-shapes.ttl}, {@code arknet-actor.ttl})
- *       outright - unlike {@link ConstraintMcpTools}'s repository, which shares the requirements
- *       funnel precisely because it shares those files.</li>
+ *       the ubiquitous-language hexagon still sets on a {@code skos:Concept}. Its {@link
+ *       WriteFunnel} is built once here as a bean of its own ({@link #actorWriteFunnel}) and
+ *       <em>shared</em> with this hexagon's second resource type below, the same way
+ *       {@link ConstraintMcpTools}'s repository shares the requirements funnel - the two write
+ *       through one gate because they share both resource files ({@code actor-shapes.ttl},
+ *       {@code arknet-actor.ttl}), while writing into two different named graphs.</li>
+ *   <li><strong>role</strong> ({@link RoleMcpTools} over {@link RoleService} over an RDF-persisted
+ *       role repository) - the five role tools ({@code role_add}/{@code role_list}/
+ *       {@code role_get}/{@code role_update}/{@code role_delete}), assembled through
+ *       {@link KognioRdfRoleRepositoryFactory} over the shared {@link #actorWriteFunnel}
+ *       (ADR-37/kogn-io/arknet#405). Not an eighth hexagon but the actor hexagon's second resource
+ *       type, which is why {@link RoleService} resolves an {@code arkproc:filledBy} occupant
+ *       against {@link ActorRepository} directly instead of borrowing an in-port: no bounded-context
+ *       boundary is crossed here.</li>
  * </ul>
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
