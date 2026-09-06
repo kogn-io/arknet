@@ -23,7 +23,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  * domain type.</p>
  *
  * <p><strong>Part of the use case's own state, not a side edge.</strong> Same reasoning as
- * {@link UseCase#primaryActor()}/{@link RequirementRef}: the out-adapter persists a use case by
+ * {@link UseCase#primaryRole()}/{@link RequirementRef}: the out-adapter persists a use case by
  * replacing it wholesale, so a link kept outside this record would be silently dropped by the
  * next {@code uc_update}.</p>
  *

@@ -50,14 +50,14 @@ public final class ArkreqVocabulary {
     /**
      * {@code arkreq:primaryRole} - UseCase -&gt; the role whose goal it fulfils (an
      * {@code arkproc:Role}; ADR-37/kogn-io/arknet#405 Part C - formerly {@code arkreq:primaryActor}
-     * targeting an {@code arkproc:Actor}, ersatzlos renamed, no compatibility read path).
+     * targeting an {@code arkproc:Actor}; renamed without a compatibility read path).
      */
     public static final String PRIMARY_ROLE = NAMESPACE + "primaryRole";
 
     /**
      * {@code arkreq:supportingRole} - UseCase -&gt; a supporting role the system calls upon (an
      * {@code arkproc:Role}; ADR-37/kogn-io/arknet#405 Part C - formerly {@code arkreq:supportingActor}
-     * targeting an {@code arkproc:Actor}, ersatzlos renamed, no compatibility read path).
+     * targeting an {@code arkproc:Actor}; renamed without a compatibility read path).
      */
     public static final String SUPPORTING_ROLE = NAMESPACE + "supportingRole";
 

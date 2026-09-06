@@ -57,7 +57,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * owns nor carries. Reusing {@code KognioRdfBoundedContextRepositoryFactory#buildGate} unfiltered
  * would therefore reject every otherwise-valid write. {@link #loadContextRelationshipShapes()}
  * resolves this exactly the way {@code KognioRdfUseCaseRepositoryFactory#loadUseCaseShapes}
- * resolves the identical problem for {@code arkreq:primaryActor}/{@code stepRealises}: it keeps
+ * resolves the identical problem for {@code arkreq:primaryRole}/{@code stepRealises}: it keeps
  * {@code /arknet-shapes.ttl}'s triples but removes every {@code sh:targetClass} that is not
  * {@code arkddd:ContextRelationship}, so only {@code ContextRelationshipShape} still fires.</p>
  */

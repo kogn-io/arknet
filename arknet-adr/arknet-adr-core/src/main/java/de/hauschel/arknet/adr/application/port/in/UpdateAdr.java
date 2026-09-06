@@ -86,7 +86,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * {@code null} leaves the existing edges untouched, an empty list is the explicit, unambiguous
  * signal to remove every edge of that relation, and a non-empty list replaces the relation
  * wholesale. This is the one place where {@code null} and empty must not be conflated - the same
- * tri-state {@code UpdateUseCase}'s {@code supportingActors} carries.</p>
+ * tri-state {@code UpdateUseCase}'s {@code supportingRoles} carries.</p>
  */
 public interface UpdateAdr {
 

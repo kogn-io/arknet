@@ -46,21 +46,22 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * reorder steps, and a patch naming a position with no matching step is rejected rather than
  * silently ignored, in either list.</p>
  *
- * <p><strong>Actor corrections (issue #343).</strong> {@code primaryActor} and
- * {@code supportingActors} are corrected by name, exactly as {@link AddUseCase} takes them: raw,
- * human-typed labels the application service resolves against the actor register, never opaque
- * identities. What "unchanged" means differs between the two, because the model constrains them
- * differently. A use case has exactly one primary actor ({@code sh:minCount 1}/{@code
- * sh:maxCount 1} on {@code arkreq:primaryActor}), so {@code primaryActor} is a plain
- * replace-or-leave field: {@code null} leaves it as it is, a name replaces it, and there is no
- * way to clear it. {@code supportingActors} carries no such floor and is a wholesale replace
+ * <p><strong>Role corrections (issue #343; repointed from actor to role by ADR-37/
+ * kogn-io/arknet#405 Part C).</strong> {@code primaryRole} and
+ * {@code supportingRoles} are corrected by business code, exactly as {@link AddUseCase} takes
+ * them: raw, human-typed codes the application service resolves against the role register, never
+ * opaque identities. What "unchanged" means differs between the two, because the model
+ * constrains them differently. A use case has exactly one primary role ({@code sh:minCount 1}/
+ * {@code sh:maxCount 1} on {@code arkreq:primaryRole}), so {@code primaryRole} is a plain
+ * replace-or-leave field: {@code null} leaves it as it is, a code replaces it, and there is no
+ * way to clear it. {@code supportingRoles} carries no such floor and is a wholesale replace
  * with the same tri-state as {@code stepRealisesPatches}: {@code null} leaves the existing list
  * untouched, a non-{@code null} list replaces it entirely, and an empty list is the explicit,
- * unambiguous signal to clear every supporting actor. An unknown or ambiguous name is rejected
- * before anything is written, exactly as in {@link AddUseCase} - correcting an actor reference
+ * unambiguous signal to clear every supporting role. An unknown code is rejected
+ * before anything is written, exactly as in {@link AddUseCase} - correcting a role reference
  * never has to go through delete-and-recreate, which would mint a new {@link UseCaseCode} and
  * break every inbound reference to the use case. Neither field carries a language-tagged
- * literal, so neither ever forces a write language to be resolved: an actor-only correction
+ * literal, so neither ever forces a write language to be resolved: a role-only correction
  * goes through in a project that has no {@code defaultLanguage} configured at all.</p>
  *
  * <p><strong>Explicitly out of scope.</strong> Full step-list restructuring (adding, removing or
@@ -104,9 +105,9 @@ public interface UpdateUseCase {
      * @return the updated use case
      * @throws UseCaseNotFoundException              if no use case with {@code code} exists in
      *                                                {@code projectId}
-     * @throws RuntimeException                      if {@code correction}'s {@code primaryActor}
-     *                                                or any entry of its {@code supportingActors}
-     *                                                names an actor that is unknown or ambiguous
+     * @throws RuntimeException                      if {@code correction}'s {@code primaryRole}
+     *                                                or any entry of its {@code supportingRoles}
+     *                                                names a role that is unknown
      *                                                within {@code projectId} - the same didactic
      *                                                rejection {@link AddUseCase} raises, thrown
      *                                                before anything is written
@@ -139,12 +140,12 @@ public interface UpdateUseCase {
      * @param scope               the new system/design scope, or {@code null} to leave it
      *                            unchanged
      * @param trigger             the new triggering event, or {@code null} to leave it unchanged
-     * @param primaryActor        the name of the actor that should be this use case's primary
-     *                            actor going forward, resolved against the actor register, or
-     *                            {@code null} to leave it unchanged - a use case always has
+     * @param primaryRole         the business code of the role that should be this use case's
+     *                            primary role going forward, resolved against the role register,
+     *                            or {@code null} to leave it unchanged - a use case always has
      *                            exactly one, so there is no way to clear it
-     * @param supportingActors    the names of the supporting (secondary) actors this use case
-     *                            should carry going forward, resolved against the actor register
+     * @param supportingRoles     the business codes of the supporting roles this use case
+     *                            should carry going forward, resolved against the role register
      *                            and replacing the existing ones wholesale; an empty list clears
      *                            them all, {@code null} leaves them unchanged
      * @param precondition        the new precondition, or {@code null} to leave it unchanged
@@ -177,8 +178,8 @@ public interface UpdateUseCase {
             String goal,
             String scope,
             String trigger,
-            String primaryActor,
-            List<String> supportingActors,
+            String primaryRole,
+            List<String> supportingRoles,
             String precondition,
             String postcondition,
             List<String> extensions,
@@ -203,8 +204,8 @@ public interface UpdateUseCase {
             private String goal;
             private String scope;
             private String trigger;
-            private String primaryActor;
-            private List<String> supportingActors;
+            private String primaryRole;
+            private List<String> supportingRoles;
             private String precondition;
             private String postcondition;
             private List<String> extensions;
@@ -239,15 +240,15 @@ public interface UpdateUseCase {
                 return this;
             }
 
-            /** @param value see {@link UseCaseCorrection#primaryActor()} @return this builder */
-            public Builder primaryActor(String value) {
-                this.primaryActor = value;
+            /** @param value see {@link UseCaseCorrection#primaryRole()} @return this builder */
+            public Builder primaryRole(String value) {
+                this.primaryRole = value;
                 return this;
             }
 
-            /** @param value see {@link UseCaseCorrection#supportingActors()} @return this builder */
-            public Builder supportingActors(List<String> value) {
-                this.supportingActors = value;
+            /** @param value see {@link UseCaseCorrection#supportingRoles()} @return this builder */
+            public Builder supportingRoles(List<String> value) {
+                this.supportingRoles = value;
                 return this;
             }
 
@@ -292,8 +293,8 @@ public interface UpdateUseCase {
 
             /** @return the correction collected so far */
             public UseCaseCorrection build() {
-                return new UseCaseCorrection(title, goal, scope, trigger, primaryActor,
-                        supportingActors, precondition, postcondition, extensions, stepTextPatches,
+                return new UseCaseCorrection(title, goal, scope, trigger, primaryRole,
+                        supportingRoles, precondition, postcondition, extensions, stepTextPatches,
                         stepRealisesPatches, language);
             }
         }

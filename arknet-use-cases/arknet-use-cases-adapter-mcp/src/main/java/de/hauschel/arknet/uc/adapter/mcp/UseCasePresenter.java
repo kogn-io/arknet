@@ -8,17 +8,17 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import de.hauschel.arknet.actor.application.port.in.ResolveActors;
-import de.hauschel.arknet.actor.application.port.in.ResolveActors.ResolvedActor;
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles;
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles.ResolvedRole;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints.ResolvedConstraint;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
-import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
+import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
@@ -31,26 +31,28 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * change: {@link UseCaseMcpTools} changes when a tool's parameter contract changes, this class
  * changes when the rendered text does - the two were previously mixed into a single class body.
  *
- * <p><strong>Actor/requirement display resolution.</strong> {@link ActorRef} and
+ * <p><strong>Role/requirement display resolution.</strong> {@link RoleRef} and
  * {@link RequirementRef} carry an opaque subject identity, not a business label - but a human
- * who typed {@code Customer}/{@code FR-1} into {@code uc_add} expects to see those again, not a
+ * who typed {@code ROLE-4}/{@code FR-1} into {@code uc_add} expects to see those again, not a
  * raw IRI they cannot re-type. {@link UseCaseMcpTools} is the gate into the use-cases hexagon,
  * not part of its core, so this presenter may borrow driving ports of <em>different</em>
- * hexagons ({@link ResolveActors}, owned by the actor register since issue #336, and
- * {@link ResolveRequirements}, owned by requirements) to answer that purely for display - the
- * use-cases core itself still never depends on {@code arknet-actor-core}/
- * {@code arknet-requirements-core}, and {@code uc_add}'s own write path still resolves via the
- * decoupled {@code ActorLookup}/{@code RequirementLookup} out-ports. {@link
- * #formatFull} calls {@link ResolveActors#resolveExisting}/{@link
+ * hexagons ({@link ResolveRoles}, owned by the actor register's role resource type since
+ * ADR-37/kogn-io/arknet#405 Part C - replacing this same class's former {@code ResolveActors} use,
+ * from before {@code arkreq:primaryRole}/{@code supportingRole} repointed those edges at
+ * {@code arkproc:Role} instead of {@code arkproc:Actor} - and {@link ResolveRequirements}, owned
+ * by requirements) to answer that purely for display - the use-cases core itself still never
+ * depends on {@code arknet-actor-core}/{@code arknet-requirements-core}, and {@code uc_add}'s own
+ * write path still resolves via the decoupled {@code RoleLookup}/{@code RequirementLookup}
+ * out-ports. {@link #formatFull} calls {@link ResolveRoles#resolveExisting}/{@link
  * ResolveRequirements#resolveExisting} exactly once each per rendering, batched across every
- * {@link ActorRef}/{@link RequirementRef} involved; an id either port could not resolve simply
+ * {@link RoleRef}/{@link RequirementRef} involved; an id either port could not resolve simply
  * falls back to the bare IRI - rendering never throws and never drops a reference.</p>
  *
  * <p><strong>Term/constraint display resolution (issue #329).</strong> {@link TermRef}/
  * {@link ConstraintRef} carry a glossary term's/constraint's opaque subject identity, mirroring
  * the requirements bounded context's own {@code RequirementPresenter} exactly. {@code usesTerms}
- * batches through {@link ResolveTerms}, borrowed independently of {@link ResolveActors} - since
- * issue #336 actor identities and glossary-term identities are two disjoint identity spaces
+ * batches through {@link ResolveTerms}, borrowed independently of {@link ResolveRoles} - since
+ * issue #336 actor/role identities and glossary-term identities are two disjoint identity spaces
  * altogether, not merely disjoint by well-formed-project convention as before; {@code
  * constrainedBy} batches through {@link ResolveConstraints}, a second, genuinely
  * cross-bounded-context port from the requirements hexagon (not this same module's own port the
@@ -59,14 +61,15 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  */
 final class UseCasePresenter {
 
-    private final ResolveActors resolveActors;
+    private final ResolveRoles resolveRoles;
     private final ResolveTerms resolveTerms;
     private final ResolveRequirements resolveRequirements;
     private final ResolveConstraints resolveConstraints;
 
     /**
-     * @param resolveActors        the actor register's driving port used to render a referenced
-     *                             actor's business code instead of its bare IRI (issue #336)
+     * @param resolveRoles         the actor register's driving port used to render a referenced
+     *                             role's business code instead of its bare IRI (ADR-37/
+     *                             kogn-io/arknet#405 Part C)
      * @param resolveTerms         ubiquitous-language driving port used to render a linked
      *                             glossary term's business code instead of its bare IRI
      * @param resolveRequirements requirements driving port used only to render a referenced
@@ -74,9 +77,9 @@ final class UseCasePresenter {
      * @param resolveConstraints  requirements driving port used only to render a linked
      *                             constraint's business code instead of its bare IRI
      */
-    UseCasePresenter(final ResolveActors resolveActors, final ResolveTerms resolveTerms,
+    UseCasePresenter(final ResolveRoles resolveRoles, final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements, final ResolveConstraints resolveConstraints) {
-        this.resolveActors = Objects.requireNonNull(resolveActors, "resolveActors");
+        this.resolveRoles = Objects.requireNonNull(resolveRoles, "resolveRoles");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.resolveRequirements = Objects.requireNonNull(resolveRequirements, "resolveRequirements");
         this.resolveConstraints = Objects.requireNonNull(resolveConstraints, "resolveConstraints");
@@ -86,8 +89,18 @@ final class UseCasePresenter {
         return "%s | %s | %s".formatted(uc.code().value(), uc.title(), uc.goal());
     }
 
-    String formatFull(final ProjectId projectId, final UseCase uc) {
-        final Map<ResourceId, ResolvedActor> actorsById = resolveActorsFor(projectId, uc);
+    /**
+     * @param displayLocale the BCP-47 language tag the caller's own read call is showing this use
+     *                      case's other fields under, passed straight through to
+     *                      {@link ResolveRoles#resolveExisting} so a rendered role's overridden
+     *                      display language agrees with the rest of the call ({@code uc_get}'s own
+     *                      {@code displayLocale} argument), or {@code null} when the caller has no
+     *                      such context of its own ({@code uc_add}/{@code uc_update}/
+     *                      {@code uc_link_term}/{@code uc_link_constraint}, none of which resolve a
+     *                      read-side display language for anything else either)
+     */
+    String formatFull(final ProjectId projectId, final UseCase uc, final String displayLocale) {
+        final Map<ResourceId, ResolvedRole> rolesById = resolveRolesFor(projectId, uc, displayLocale);
         final Map<ResourceId, ResolvedRequirement> requirementsById = resolveRequirementsFor(projectId, uc);
         final Map<ResourceId, ResolvedTerm> usesTermsById = resolveUsesTermsFor(projectId, uc);
         final Map<ResourceId, ResolvedConstraint> constraintsById = resolveConstraintsFor(projectId, uc);
@@ -97,10 +110,10 @@ final class UseCasePresenter {
         sb.append("  goal: ").append(uc.goal()).append('\n');
         appendOptional(sb, "scope", uc.scope());
         appendOptional(sb, "trigger", uc.trigger());
-        sb.append("  primaryActor: ").append(renderActor(uc.primaryActor(), actorsById)).append('\n');
-        if (!uc.supportingActors().isEmpty()) {
-            sb.append("  supportingActors: ")
-                    .append(uc.supportingActors().stream().map(ref -> renderActor(ref, actorsById))
+        sb.append("  primaryRole: ").append(renderRole(uc.primaryRole(), rolesById)).append('\n');
+        if (!uc.supportingRoles().isEmpty()) {
+            sb.append("  supportingRoles: ")
+                    .append(uc.supportingRoles().stream().map(ref -> renderRole(ref, rolesById))
                             .reduce((a, b) -> a + ", " + b).orElse(""))
                     .append('\n');
         }
@@ -137,10 +150,10 @@ final class UseCasePresenter {
         return sb.toString().stripTrailing();
     }
 
-    /** Renders one actor reference: its resolved business code, or its bare IRI as a fallback. */
-    private static String renderActor(final ActorRef ref, final Map<ResourceId, ResolvedActor> actorsById) {
-        final ResolvedActor actor = actorsById.get(ref.value());
-        return actor != null ? actor.code().value() : ref.value().value();
+    /** Renders one role reference: its resolved business code, or its bare IRI as a fallback. */
+    private static String renderRole(final RoleRef ref, final Map<ResourceId, ResolvedRole> rolesById) {
+        final ResolvedRole role = rolesById.get(ref.value());
+        return role != null ? role.code().value() : ref.value().value();
     }
 
     /**
@@ -154,38 +167,41 @@ final class UseCasePresenter {
     }
 
     /**
-     * Batch-resolves every actor referenced by {@code uc} (its primary actor plus its supporting
-     * actors) in exactly one call to {@link ResolveActors#resolveExisting} (issue #336 - the
-     * register replaced the old ubiquitous-language actor facet as the resolution source here).
+     * Batch-resolves every role referenced by {@code uc} (its primary role plus its supporting
+     * roles) in exactly one call to {@link ResolveRoles#resolveExisting} (ADR-37/
+     * kogn-io/arknet#405 Part C - the role resource type replaced the actor register as the
+     * resolution source here, mirroring issue #336's own replacement of the resolution source
+     * one level up).
      *
      * <p><strong>Structurally cannot throw on a duplicate key (mirrors
-     * {@code RequirementPresenter#resolveTermsFor}).</strong> {@link ResolveActors} promises at
-     * most one {@link ResolvedActor} per identity, but this method must not rely on every
-     * implementation upholding that: a plain {@code Collectors.toMap(a -> a.id(), a -> a)} throws
-     * {@code IllegalStateException} the moment two returned {@link ResolvedActor}s share an
+     * {@code RequirementPresenter#resolveTermsFor}).</strong> {@link ResolveRoles} promises at
+     * most one {@link ResolvedRole} per identity, but this method must not rely on every
+     * implementation upholding that: a plain {@code Collectors.toMap(r -> r.id(), r -> r)} throws
+     * {@code IllegalStateException} the moment two returned {@link ResolvedRole}s share an
      * identity, turning a display concern into a thrown exception - the very thing this rendering
      * path exists to avoid. The merge function below keeps the first entry for a duplicate key
      * instead; which one is kept is immaterial here, since rendering only ever reads
-     * {@link ResolvedActor#code()}.</p>
+     * {@link ResolvedRole#code()}.</p>
      */
-    private Map<ResourceId, ResolvedActor> resolveActorsFor(final ProjectId projectId, final UseCase uc) {
+    private Map<ResourceId, ResolvedRole> resolveRolesFor(
+            final ProjectId projectId, final UseCase uc, final String displayLocale) {
         final ResourceId[] ids = Stream.concat(
-                        Stream.of(uc.primaryActor()), uc.supportingActors().stream())
-                .map(ActorRef::value)
+                        Stream.of(uc.primaryRole()), uc.supportingRoles().stream())
+                .map(RoleRef::value)
                 .distinct()
                 .toArray(ResourceId[]::new);
         if (ids.length == 0) {
             return Map.of();
         }
-        return resolveActors.resolveExisting(projectId, ids).stream()
-                .collect(Collectors.toMap(ResolvedActor::id, a -> a, (first, second) -> first));
+        return resolveRoles.resolveExisting(projectId, displayLocale, ids).stream()
+                .collect(Collectors.toMap(ResolvedRole::id, r -> r, (first, second) -> first));
     }
 
     /**
      * Batch-resolves every requirement referenced by {@code uc}'s steps (the union of all
      * {@code realises} references) in exactly one call to
      * {@link ResolveRequirements#resolveExisting} - same merge-function reasoning as
-     * {@link #resolveActorsFor}.
+     * {@link #resolveRolesFor}.
      */
     private Map<ResourceId, ResolvedRequirement> resolveRequirementsFor(
             final ProjectId projectId, final UseCase uc) {
@@ -217,9 +233,9 @@ final class UseCasePresenter {
     /**
      * Batch-resolves every glossary term {@code uc} uses ({@code usesTerms}, issue #329) in
      * exactly one call to {@link ResolveTerms#resolve} - independent of
-     * {@link #resolveActorsFor}'s own batch call against a different port and, since issue #336,
+     * {@link #resolveRolesFor}'s own batch call against a different port and, since issue #336,
      * a structurally different identity space ({@code arknet-actor}'s register vs. the glossary).
-     * Same duplicate-key-tolerant merge reasoning as {@link #resolveActorsFor}.
+     * Same duplicate-key-tolerant merge reasoning as {@link #resolveRolesFor}.
      */
     private Map<ResourceId, ResolvedTerm> resolveUsesTermsFor(final ProjectId projectId, final UseCase uc) {
         final ResourceId[] ids = uc.usesTerms().stream()
@@ -236,7 +252,7 @@ final class UseCasePresenter {
     /**
      * Batch-resolves every constraint {@code uc} is bound by ({@code constrainedBy}, issue #329)
      * in exactly one call to {@link ResolveConstraints#resolveExisting}. Same duplicate-key-
-     * tolerant merge reasoning as {@link #resolveActorsFor}, mirroring
+     * tolerant merge reasoning as {@link #resolveRolesFor}, mirroring
      * {@code RequirementPresenter#resolveConstraintsFor}.
      */
     private Map<ResourceId, ResolvedConstraint> resolveConstraintsFor(final ProjectId projectId, final UseCase uc) {
