@@ -27,7 +27,6 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
-import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.domain.Actor;
@@ -43,7 +42,6 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
-import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -323,21 +321,19 @@ public class KognioRdfActorRepository implements ActorRepository {
     }
 
     /**
-     * The predicates that, if found pointing at an actor, block its deletion (issue #335): a use
-     * case's {@code arkreq:primaryActor}/{@code supportingActor}, plus, since ADR-37/kogn-io/arknet
-     * #405, a role's {@code arkproc:filledBy}. See
-     * {@link de.hauschel.arknet.actor.domain.ActorReferencedException}'s javadoc for why this check
-     * predates its first consumer - it was built with issue #335's own scope in mind and became
-     * reachable in practice with issue #336, which pointed {@code arknet-use-cases}' actor
-     * resolution at this register. {@code arkproc:filledBy} is listed here even though no tool
-     * writes it yet (the Role hexagon is a later part of #405) - {@code rdfs:range arkproc:Actor}
-     * already makes it a reference the ontology declares, and
-     * {@code ReferenceGuardsCoverEveryOntologyEdgeTest} in {@code arknet-architecture-tests} holds
-     * this map against every such range, not against which write paths currently exist.
+     * The predicates that, if found pointing at an actor, block its deletion (issue #335): a
+     * role's {@code arkproc:filledBy}. Issue #336 through ADR-37/kogn-io/arknet#405 Part C, a use
+     * case's {@code arkreq:primaryActor}/{@code supportingActor} used to sit here too - since Part
+     * C those properties were renamed to {@code arkreq:primaryRole}/{@code supportingRole} and now
+     * range over {@code arkproc:Role}, not {@code arkproc:Actor}, so no use-case edge can point at
+     * an actor any more and {@code actor_delete} no longer needs to check for one. {@code
+     * arkproc:filledBy} is listed here even before {@code role_add}/{@code role_update} exist as
+     * the only tools that write it - {@code rdfs:range arkproc:Actor} already makes it a reference
+     * the ontology declares, and {@code ReferenceGuardsCoverEveryOntologyEdgeTest} in {@code
+     * arknet-architecture-tests} holds this map against every such range, not against which write
+     * paths currently exist.
      */
     private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
-            ArkreqVocabulary.PRIMARY_ACTOR, "primaryActor",
-            ArkreqVocabulary.SUPPORTING_ACTOR, "supportingActor",
             ArkprocVocabulary.FILLED_BY, "filledBy");
 
     /**
@@ -534,49 +530,10 @@ public class KognioRdfActorRepository implements ActorRepository {
 
     /**
      * Finds every actor in a project whose identity is among {@code ids}, in one store
-     * round-trip - backs {@link ResolveActors}, the same batch shape
-     * {@code KognioRdfTermRepository#findByIds}/{@code KognioRdfRequirementRepository#findByIds}
-     * already establish. Not a per-id existence check: an id absent from the project (or not an
-     * actor at all) is simply absent from the result, never an error.
-     */
-    @Override
-    public List<ResolveActors.ResolvedActor> findByIds(ProjectId projectId, List<ResourceId> ids) {
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(ids, "ids");
-        if (ids.isEmpty()) {
-            return List.of();
-        }
-
-        // ResourceId#of validates IRIREF-safety at construction, so every id here is already
-        // guaranteed safe to embed - mirrors KognioRdfTermRepository#findByIds's reasoning.
-        String values = ids.stream()
-                .map(id -> SparqlTerms.iriRef(id.value()))
-                .collect(Collectors.joining(" "));
-
-        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
-                + "VALUES ?s { " + values + " } "
-                + "?s a ?type . "
-                + actorTypeFilter()
-                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
-
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            Map<String, ResolveActors.ResolvedActor> bySubject = new LinkedHashMap<>();
-            handle.sparqlQuery().select(query).forEach(row -> {
-                String subjectIri = iriOf(row, "s").getIRIString();
-                // putIfAbsent, not put: the first row wins if a subject has several identifiers.
-                bySubject.putIfAbsent(subjectIri, new ResolveActors.ResolvedActor(
-                        ResourceId.of(subjectIri),
-                        new ActorCode(literalOf(row, "identifier").getLexicalForm())));
-            });
-            return List.copyOf(bySubject.values());
-        }
-    }
-
-    /**
-     * Finds every actor in a project whose identity is among {@code ids}, in one store
      * round-trip, returning the full {@link Actor} aggregate - added for {@code RoleService}
-     * (ADR-37/kogn-io/arknet#405), see {@link ActorRepository#findAllByIds}'s own javadoc for why
-     * this is a separate method from {@link #findByIds}. Joins {@code type}/{@code name}/
+     * (ADR-37/kogn-io/arknet#405), see {@link ActorRepository#findAllByIds}'s own javadoc for
+     * why this hexagon carries only this one batch-by-identity lookup rather than a
+     * narrower, code-only sibling. Joins {@code type}/{@code name}/
      * {@code description} the same way {@link #findAll} does, grouped and reduced per subject via
      * {@link #firstDistinctValue} through the shared {@link ActorAssembly} accumulator - the same
      * row-multiplication guard every other multi-actor read path here already needs.

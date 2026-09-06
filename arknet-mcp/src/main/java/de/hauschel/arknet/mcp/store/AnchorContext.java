@@ -33,7 +33,7 @@ public final class AnchorContext {
      * open to every MCP client. Shared by {@link StoreReportTools}
      * ({@code store_overview}/{@code resource_get}) and the five traceability tools
      * ({@code trace_matrix}/{@code orphan_check}/{@code impact_analysis}/
-     * {@code actor_usecase_matrix}/{@code term_cooccurrence}), which each expose the same
+     * {@code role_usecase_matrix}/{@code term_cooccurrence}), which each expose the same
      * optional-anchor parameter, instead of each carrying its own copy.
      *
      * <p><strong>An anchor, not an id.</strong> This parameter used to be called {@code workspace}

@@ -29,7 +29,7 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
-import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -53,7 +53,7 @@ import de.hauschel.arknet.uc.domain.UseCaseId;
 class KognioRdfUseCaseRepositoryMultilingualTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
-    private static final ActorRef CUSTOMER = new ActorRef(ResourceId.of("https://w3id.org/arknet/model/term/customer"));
+    private static final RoleRef CUSTOMER = new RoleRef(ResourceId.of("https://w3id.org/arknet/model/role/customer"));
 
     @TempDir
     Path storageRoot;
@@ -67,7 +67,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), storageRoot);
         repository = KognioRdfUseCaseRepositoryFactory.over(
                 lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
-        seedCustomerActor();
+        seedCustomerRole();
     }
 
     @AfterEach
@@ -75,13 +75,14 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         lifecycle.shutDownAll();
     }
 
-    private void seedCustomerActor() {
+    private void seedCustomerRole() {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/actors> { "
-                        + "<https://w3id.org/arknet/model/term/customer> "
-                        + "a <https://w3id.org/arknet/process#HumanActor> ; "
-                        + "<https://w3id.org/arknet/core#name> \"Customer\" . } }");
+                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/roles> { "
+                        + "<https://w3id.org/arknet/model/role/customer> "
+                        + "a <https://w3id.org/arknet/process#Role> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"ROLE-customer\" ; "
+                        + "<https://w3id.org/arknet/core#name> \"Customer\"@en . } }");
                 return null;
             });
         }
@@ -863,7 +864,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Place order\"@" + titleLanguageTag + " ; "
                 + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Order is placed\" ; "
-                + "<https://w3id.org/arknet/requirements#primaryActor> <" + CUSTOMER.value().value() + "> ; "
+                + "<https://w3id.org/arknet/requirements#primaryRole> <" + CUSTOMER.value().value() + "> ; "
                 + "<https://w3id.org/arknet/requirements#mainStep> <" + stepIri + "> . "
                 + "<" + stepIri + "> a <https://w3id.org/arknet/requirements#Step> ; "
                 + "<https://w3id.org/arknet/requirements#position> \"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; "
@@ -889,7 +890,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Place order\" ; "
                 + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Order is placed\" ; "
-                + "<https://w3id.org/arknet/requirements#primaryActor> <" + CUSTOMER.value().value() + "> ; "
+                + "<https://w3id.org/arknet/requirements#primaryRole> <" + CUSTOMER.value().value() + "> ; "
                 + "<https://w3id.org/arknet/requirements#mainStep> <" + stepIri + "> . "
                 + "<" + stepIri + "> a <https://w3id.org/arknet/requirements#Step> ; "
                 + "<https://w3id.org/arknet/requirements#position> \"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; "
@@ -917,7 +918,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Place order\" ; "
                 + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Order is placed\" ; "
-                + "<https://w3id.org/arknet/requirements#primaryActor> <" + CUSTOMER.value().value() + "> ; "
+                + "<https://w3id.org/arknet/requirements#primaryRole> <" + CUSTOMER.value().value() + "> ; "
                 + "<https://w3id.org/arknet/requirements#mainStep> <" + stepIri + "> . "
                 + "<" + stepIri + "> a <https://w3id.org/arknet/requirements#Step> ; "
                 + "<https://w3id.org/arknet/requirements#position> \"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; "
@@ -943,7 +944,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 + "<http://purl.org/dc/terms/title> \"Place order\" ; "
                 + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Order is placed\" ; "
                 + "<https://w3id.org/arknet/requirements#designScope> \"Webshop\" ; "
-                + "<https://w3id.org/arknet/requirements#primaryActor> <" + CUSTOMER.value().value() + "> ; "
+                + "<https://w3id.org/arknet/requirements#primaryRole> <" + CUSTOMER.value().value() + "> ; "
                 + "<https://w3id.org/arknet/requirements#mainStep> <" + stepIri + "> . "
                 + "<" + stepIri + "> a <https://w3id.org/arknet/requirements#Step> ; "
                 + "<https://w3id.org/arknet/requirements#position> \"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; "
@@ -970,7 +971,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Place order\" ; "
                 + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Order is placed\" ; "
-                + "<https://w3id.org/arknet/requirements#primaryActor> <" + CUSTOMER.value().value() + "> ; "
+                + "<https://w3id.org/arknet/requirements#primaryRole> <" + CUSTOMER.value().value() + "> ; "
                 + "<https://w3id.org/arknet/requirements#mainStep> <" + stepIri + "> ; "
                 + "<https://w3id.org/arknet/requirements#extensionStep> <" + extensionStepIri + "> . "
                 + "<" + stepIri + "> a <https://w3id.org/arknet/requirements#Step> ; "

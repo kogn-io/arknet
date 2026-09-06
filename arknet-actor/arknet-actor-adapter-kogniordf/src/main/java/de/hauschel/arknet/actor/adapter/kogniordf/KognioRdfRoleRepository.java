@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import io.kogn.rdf.dataset.BindingSet;
@@ -27,6 +28,7 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.application.port.out.RoleRepository;
 import de.hauschel.arknet.actor.domain.ActorId;
@@ -47,6 +49,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteFunnel;
@@ -119,13 +122,17 @@ public class KognioRdfRoleRepository implements RoleRepository {
     private static final String CODE_PREFIX = "ROLE-";
 
     /**
-     * The predicates that, if found pointing at a role, block its deletion - empty today,
-     * deliberately: see {@link RoleReferencedException}'s own javadoc for why this map exists
-     * ahead of a real entry, and {@code ReferenceGuardsCoverEveryOntologyEdgeTest#
+     * The predicates that, if found pointing at a role, block its deletion: a use case's
+     * {@code arkreq:primaryRole}/{@code supportingRole} (ADR-37/kogn-io/arknet#405 Part C, which
+     * repointed both edges here from {@code arkproc:Actor}). {@code
+     * ReferenceGuardsCoverEveryOntologyEdgeTest#
      * everyPropertyRangingOverARoleBlocksTheRolesDeletion} in {@code arknet-architecture-tests}
-     * for the guard that keeps it honest once a property ranging over {@code arkproc:Role} ships.
+     * holds this map against every property the shipped ontologies declare with
+     * {@code rdfs:range arkproc:Role}, so a future one cannot ship unnoticed either.
      */
-    private static final Map<String, String> REFERENCING_PREDICATES = Map.of();
+    private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
+            ArkreqVocabulary.PRIMARY_ROLE, "primaryRole",
+            ArkreqVocabulary.SUPPORTING_ROLE, "supportingRole");
 
     private final DatasetLifecycle lifecycle;
     private final DisplayLocale displayLocale;
@@ -338,10 +345,71 @@ public class KognioRdfRoleRepository implements RoleRepository {
     }
 
     /**
+     * Finds every role in a project whose identity is among {@code ids}, in one store round-trip
+     * - backs {@link ResolveRoles}. Not a per-id existence check: an id absent from
+     * the project (or not a role at all) is simply absent from the result, never an error.
+     *
+     * <p>Joins the resolved {@code name} too, since a role's name is language-tagged:
+     * {@code displayLocale} selects which candidate
+     * literal wins, the same {@link #literalsBySubject}/{@link DisplayLocale#select} machinery
+     * {@link #findAll} already uses, applied to the whole graph's names rather than a
+     * {@code VALUES}-scoped join - identical to how {@link #findAll} itself reads names, since a
+     * role's multi-valued, multilingual name candidates cannot be reduced inside a single scalar
+     * join. A role whose current display-locale selection yields no candidate (an unreachable
+     * store-first gap, {@code actshapes:Role-name} carries {@code sh:minCount 1} at
+     * {@code sh:Violation}) is skipped rather than crashing the whole batch, mirroring
+     * {@link #findAll}'s own reasoning.
+     */
+    @Override
+    public List<ResolveRoles.ResolvedRole> findByIds(ProjectId projectId, String displayLocale, List<ResourceId> ids) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        DisplayLocale effective = this.displayLocale.withRequestedOverride(displayLocale);
+
+        // ResourceId#of validates IRIREF-safety at construction, so every id here is already
+        // guaranteed safe to embed.
+        String values = ids.stream()
+                .map(id -> SparqlTerms.iriRef(id.value()))
+                .collect(Collectors.joining(" "));
+
+        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + ROLE_GRAPH + "> { "
+                + "VALUES ?s { " + values + " } "
+                + "?s a <" + ROLE_TYPE + "> . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            SparqlQuery sparql = handle.sparqlQuery();
+            Map<String, List<LocalizedLiteral>> namesBySubject = literalsBySubject(sparql, NAME_PROPERTY);
+            Map<String, ResolveRoles.ResolvedRole> bySubject = new LinkedHashMap<>();
+            sparql.select(query).forEach(row -> {
+                String subjectIri = iriOf(row, "s").getIRIString();
+                // putIfAbsent, not put: the first row wins if a subject has several identifiers.
+                if (bySubject.containsKey(subjectIri)) {
+                    return;
+                }
+                Optional<LocalizedLiteral> name =
+                        effective.select(namesBySubject.getOrDefault(subjectIri, List.of()));
+                if (name.isEmpty()) {
+                    return;
+                }
+                bySubject.put(subjectIri, new ResolveRoles.ResolvedRole(
+                        ResourceId.of(subjectIri),
+                        new RoleCode(literalOf(row, "identifier").getLexicalForm()),
+                        name.get().value()));
+            });
+            return List.copyOf(bySubject.values());
+        }
+    }
+
+    /**
      * Rejects the delete, without touching a single triple, if anything in the project still
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - mirrors
-     * {@link KognioRdfActorRepository#rejectIfReferenced} exactly. A no-op today, since that map is
-     * empty (see its own javadoc).
+     * {@link KognioRdfActorRepository#rejectIfReferenced} exactly, including the graph-crossing
+     * {@code GRAPH ?g} search: a referencing {@code arkreq:primaryRole}/{@code supportingRole}
+     * edge lives in the use-case BC's own model graph, not {@link #ROLE_GRAPH}.
      */
     private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, RoleCode code) {
         IRI target = rdf.createIRI(subjectIri);

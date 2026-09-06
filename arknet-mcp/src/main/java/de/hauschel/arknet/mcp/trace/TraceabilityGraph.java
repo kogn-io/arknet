@@ -32,8 +32,10 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
 /**
  * An in-memory directed multigraph over one project's statements, purpose-built for the
  * cross-bounded-context edges the traceability tools traverse:
- * {@code arkreq:usesTerm} (Requirement/UseCase -&gt; Term, issue #329), {@code arkreq:primaryActor}/
- * {@code arkreq:supportingActor} (UseCase -&gt; Term/Actor), {@code arkddd:ubiquitousLanguageTerm}
+ * {@code arkreq:usesTerm} (Requirement/UseCase -&gt; Term, issue #329), {@code arkreq:primaryRole}/
+ * {@code arkreq:supportingRole} (UseCase -&gt; Role, ADR-37/kogn-io/arknet#405 Part C - formerly
+ * {@code arkreq:primaryActor}/{@code supportingActor}, UseCase -&gt; Term/Actor),
+ * {@code arkddd:ubiquitousLanguageTerm}
  * (BoundedContext -&gt; Term), {@code arkddd:upstream}/{@code arkddd:downstream} (ContextRelationship
  * -&gt; BoundedContext, issue #293), {@code oslc_rm:constrainedBy} (Requirement/UseCase -&gt;
  * Constraint, issue #223/#329), the four ADR edges
@@ -47,8 +49,9 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * prose ({@code dcterms:description}/{@code arkreq:acceptanceCriterion}, {@link
  * #useCaseProseTexts(String)}, {@code arkddd:domainVision}, {@link #adrProseTexts(String)}, issue
  * #406) that {@code orphan_check}'s unlinked-mention check scans for a glossary term nothing links to.
- * {@code actor_usecase_matrix} needs the {@code primaryActor}/{@code
- * supportingActor} edges in the <em>forward</em> direction too ({@link #actorsOf(String)}/{@link
+ * {@code role_usecase_matrix} (ADR-37/kogn-io/arknet#405 Part C, formerly {@code
+ * actor_usecase_matrix}) needs the {@code primaryRole}/{@code
+ * supportingRole} edges in the <em>forward</em> direction too ({@link #rolesOf(String)}/{@link
  * #useCasesOf(String)}), and {@code term_cooccurrence} reuses the same prose-scanning idea for a
  * use case's {@code arkreq:useCaseGoal} ({@link #useCaseProseTexts(String)}, issue #108).
  *
@@ -79,8 +82,8 @@ public final class TraceabilityGraph {
     // predicate or type rename cannot silently desync the write side from this read-side
     // traversal.
     private static final String USES_TERM = ArkreqVocabulary.USES_TERM;
-    private static final String PRIMARY_ACTOR = ArkreqVocabulary.PRIMARY_ACTOR;
-    private static final String SUPPORTING_ACTOR = ArkreqVocabulary.SUPPORTING_ACTOR;
+    private static final String PRIMARY_ROLE = ArkreqVocabulary.PRIMARY_ROLE;
+    private static final String SUPPORTING_ROLE = ArkreqVocabulary.SUPPORTING_ROLE;
     private static final String MAIN_STEP = ArkreqVocabulary.MAIN_STEP;
     private static final String EXTENSION_STEP = ArkreqVocabulary.EXTENSION_STEP;
     private static final String STEP_REALISES = ArkreqVocabulary.STEP_REALISES;
@@ -227,6 +230,14 @@ public final class TraceabilityGraph {
     private static final String GROUP_ACTOR_TYPE = ArkprocVocabulary.GROUP_ACTOR_TYPE;
 
     /**
+     * {@code arkproc:Role} (ADR-37/kogn-io/arknet#405 Part B/C) - the matrix row type
+     * {@link #roleIris()} collects, since {@code arkreq:primaryRole}/{@code supportingRole}
+     * repointed the use-case edges at this type instead of {@link #HUMAN_ACTOR_TYPE} and its three
+     * siblings.
+     */
+    private static final String ROLE_TYPE = ArkprocVocabulary.ROLE_TYPE;
+
+    /**
      * {@code arkproc:filledBy} - Role -&gt; Actor (ADR-37/kogn-io/arknet#405), the same shared
      * constant {@code KognioRdfRoleRepository} serialises the occupancy edge with.
      */
@@ -276,7 +287,7 @@ public final class TraceabilityGraph {
      * this" contradicting the one that enforces the answer.
      */
     private static final Set<String> DEPENDENT_EDGE_PREDICATES = Set.of(
-            USES_TERM, PRIMARY_ACTOR, SUPPORTING_ACTOR, STEP_REALISES, MAIN_STEP, EXTENSION_STEP,
+            USES_TERM, PRIMARY_ROLE, SUPPORTING_ROLE, STEP_REALISES, MAIN_STEP, EXTENSION_STEP,
             UBIQUITOUS_LANGUAGE_TERM, UPSTREAM, DOWNSTREAM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT,
             ADR_USES_TERM, CONSTRAINED_BY, SUPERSEDES, FILLED_BY);
 
@@ -354,9 +365,10 @@ public final class TraceabilityGraph {
     /**
      * @return the IRIs of every {@code skos:Concept} (glossary terms), sorted. Since issue #336 a
      *         term is a plain {@code skos:Concept} again - it no longer carries an actor facet -
-     *         so this list and {@link #actorIris()} are disjoint unless a resource happens to be
-     *         both a registered actor and a separately registered glossary term (multi-typing is
-     *         still legal, just no longer the only way to be an actor).
+     *         so this list and {@link #actorIris()}/{@link #roleIris()} are disjoint unless a
+     *         resource happens to be both a registered actor/role and a separately registered
+     *         glossary term (multi-typing is still legal, just no longer the only way to be an
+     *         actor).
      */
     public List<String> termIris() {
         return subjectsOfType(CONCEPT_TYPE);
@@ -419,34 +431,46 @@ public final class TraceabilityGraph {
 
     /**
      * @return the IRIs of every {@code arkproc:HumanActor}/{@code SystemActor}/{@code LegalActor}/
-     *         {@code GroupActor} in the project, sorted - independent of whether any use case
-     *         references it via {@code arkreq:primaryActor}/{@code supportingActor}, and
-     *         independent of which named graph it lives in: since issue #336 an actor lives in
-     *         {@code arknet-actor}'s own register graph rather than the ubiquitous-language
-     *         graph, but this traversal is graph-agnostic (it indexes {@link
-     *         StoreSnapshot}'s resources by type, never by graph), so it finds the register's
-     *         actors the same way it always found the old term-facetted ones.
-     *         {@code actor_usecase_matrix}'s "Actors" section unions this with
-     *         {@link #actorsOf(String)}'s results so an actor nobody's use case references yet
-     *         still appears, instead of silently disappearing from a matrix whose own tool
-     *         description promises "for every actor" (issue #147).
+     *         {@code GroupActor} in the project, sorted - independent of which named graph it
+     *         lives in: since issue #336 an actor lives in {@code arknet-actor}'s own register
+     *         graph rather than the ubiquitous-language graph, but this traversal is graph-agnostic
+     *         (it indexes {@link StoreSnapshot}'s resources by type, never by graph), so it finds
+     *         the register's actors the same way it always found the old term-facetted ones. Since
+     *         ADR-37/kogn-io/arknet#405 Part C no use case references an actor directly any more -
+     *         see {@link #roleIris()} for the type a use case's {@code primaryRole}/
+     *         {@code supportingRole} now targets.
      */
     public List<String> actorIris() {
         return subjectsOfType(HUMAN_ACTOR_TYPE, SYSTEM_ACTOR_TYPE, LEGAL_ACTOR_TYPE, GROUP_ACTOR_TYPE);
     }
 
     /**
-     * The actor(s) a use case references: its {@code arkreq:primaryActor} plus every
-     * {@code arkreq:supportingActor} - the forward direction of the same two edges
-     * {@link #DEPENDENT_EDGE_PREDICATES} already traverses backwards for {@link #dependents(String)}
-     * (issue #108).
-     *
-     * @return the actor term IRIs, sorted, deduplicated
+     * @return the IRIs of every {@code arkproc:Role} in the project, sorted - independent of
+     *         whether any use case references it via {@code arkreq:primaryRole}/{@code
+     *         supportingRole} (ADR-37/kogn-io/arknet#405 Part C, formerly {@link #actorIris()}'s
+     *         four concrete Actor types before this edge repointed at {@code arkproc:Role}).
+     *         {@code role_usecase_matrix}'s "Roles" section unions this with
+     *         {@link #rolesOf(String)}'s results so a role nobody's use case references yet still
+     *         appears, instead of silently disappearing from a matrix whose own tool description
+     *         promises "for every role" (issue #147).
      */
-    public List<String> actorsOf(String useCaseIri) {
+    public List<String> roleIris() {
+        return subjectsOfType(ROLE_TYPE);
+    }
+
+    /**
+     * The role(s) a use case references: its {@code arkreq:primaryRole} plus every
+     * {@code arkreq:supportingRole} - the forward direction of the same two edges
+     * {@link #DEPENDENT_EDGE_PREDICATES} already traverses backwards for {@link #dependents(String)}
+     * (issue #108; ADR-37/kogn-io/arknet#405 Part C repointed both edges from {@code arkproc:Actor}
+     * at {@code arkproc:Role}).
+     *
+     * @return the role IRIs, sorted, deduplicated
+     */
+    public List<String> rolesOf(String useCaseIri) {
         Objects.requireNonNull(useCaseIri, "useCaseIri");
         return outgoingBySubject.getOrDefault(useCaseIri, List.of()).stream()
-                .filter(t -> PRIMARY_ACTOR.equals(t.predicate()) || SUPPORTING_ACTOR.equals(t.predicate()))
+                .filter(t -> PRIMARY_ROLE.equals(t.predicate()) || SUPPORTING_ROLE.equals(t.predicate()))
                 .map(Triple::object)
                 .filter(RdfNode.Resource.class::isInstance)
                 .map(o -> ((RdfNode.Resource) o).iri())
@@ -456,15 +480,15 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * The use case(s) an actor plays a role in, as primary or supporting actor - the reverse
-     * lookup of {@link #actorsOf(String)} (issue #108).
+     * The use case(s) a role is played in, as primary or supporting role - the reverse
+     * lookup of {@link #rolesOf(String)} (issue #108).
      *
      * @return the use-case IRIs, sorted, deduplicated
      */
-    public List<String> useCasesOf(String actorIri) {
-        Objects.requireNonNull(actorIri, "actorIri");
-        return incomingByObject.getOrDefault(actorIri, List.of()).stream()
-                .filter(t -> PRIMARY_ACTOR.equals(t.predicate()) || SUPPORTING_ACTOR.equals(t.predicate()))
+    public List<String> useCasesOf(String roleIri) {
+        Objects.requireNonNull(roleIri, "roleIri");
+        return incomingByObject.getOrDefault(roleIri, List.of()).stream()
+                .filter(t -> PRIMARY_ROLE.equals(t.predicate()) || SUPPORTING_ROLE.equals(t.predicate()))
                 .map(Triple::subject)
                 .distinct()
                 .sorted()
@@ -474,8 +498,7 @@ public final class TraceabilityGraph {
     /**
      * @return {@code true} if a term is used by a requirement or a use case
      *         ({@code arkreq:usesTerm}, issue #329), by an architecture decision
-     *         ({@code arkarch:usesTerm}, kogn-io/arknet#393), plays an actor role in a use case
-     *         ({@code arkreq:primaryActor}/{@code arkreq:supportingActor}), is a bounded context's
+     *         ({@code arkarch:usesTerm}, kogn-io/arknet#393), is a bounded context's
      *         ubiquitous language ({@code arkddd:ubiquitousLanguageTerm}), is another term's
      *         broader (superordinate) term ({@code skos:broader}, issue #252) - an interior/root
      *         taxonomy term stops being reported as an orphan once something is hung under it - or
@@ -487,13 +510,19 @@ public final class TraceabilityGraph {
      *         woven into the model by anything else, which is exactly what "orphan" means. The
      *         symmetric peer at the other end of that edge does get credit for it - which is the
      *         whole point of reading incoming edges.</p>
+     *
+     *         <p>No longer checks {@code arkreq:primaryRole}/{@code supportingRole}: since issue
+     *         #336 an actor/role is not a glossary term, and since ADR-37/kogn-io/arknet#405 Part C
+     *         these two edges target {@code arkproc:Role} rather than a term-facetted resource, so
+     *         an incoming edge of either predicate on a {@code skos:Concept} cannot occur under a
+     *         well-formed write path; the pre-#336 compatibility branch this method carried for a
+     *         term-facetted actor is removed along with the edge it checked for (Vorentscheidung
+     *         2), not merely renamed.</p>
      */
     public boolean isReferencedTerm(String termIri) {
         Objects.requireNonNull(termIri, "termIri");
         return incomingByObject.getOrDefault(termIri, List.of()).stream()
                 .anyMatch(t -> USES_TERM.equals(t.predicate()) || ADR_USES_TERM.equals(t.predicate())
-                        || PRIMARY_ACTOR.equals(t.predicate())
-                        || SUPPORTING_ACTOR.equals(t.predicate())
                         || UBIQUITOUS_LANGUAGE_TERM.equals(t.predicate())
                         || BROADER.equals(t.predicate())
                         || RELATED.equals(t.predicate()));
@@ -688,8 +717,8 @@ public final class TraceabilityGraph {
      * not link to: a requirement's {@code dcterms:description}/{@code
      * arkreq:acceptanceCriterion} checked against its {@code arkreq:usesTerm} edges, a use case's
      * {@link #useCaseProseTexts(String)} checked against its own {@code arkreq:usesTerm} edges
-     * plus its {@code arkreq:primaryActor}/{@code supportingActor} edges (issue #333 - a goal or
-     * step naming the use case's own actor is not an unlinked mention, since that relationship is
+     * plus its {@code arkreq:primaryRole}/{@code supportingRole} edges (issue #333 - a goal or
+     * step naming the use case's own role is not an unlinked mention, since that relationship is
      * already recorded, just under a different predicate than {@code usesTerm}), and a
      * bounded context's {@code arkddd:domainVision} checked against its {@code
      * arkddd:ubiquitousLanguageTerm} edges. Reuses the very matching rules the HTML report
@@ -743,7 +772,7 @@ public final class TraceabilityGraph {
         }
         for (String useCaseIri : useCaseIris()) {
             Set<String> linked = new HashSet<>(usedTerms(useCaseIri));
-            linked.addAll(actorsOf(useCaseIri));
+            linked.addAll(rolesOf(useCaseIri));
             for (String termIri : matcher.mentionedIn(useCaseProseTexts(useCaseIri))) {
                 if (!linked.contains(termIri)) {
                     found.add(new UnlinkedMention(useCaseIri, termIri, termLabels.get(termIri), "usesTerm"));

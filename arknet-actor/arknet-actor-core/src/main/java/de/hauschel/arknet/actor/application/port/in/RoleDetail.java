@@ -42,9 +42,7 @@ public record RoleDetail(Role role, List<FilledByActor> filledByActors) {
 
     /**
      * One resolved {@code filledBy} occupant: just enough to render who fills a role, not the full
-     * {@code Actor} aggregate - the same slim-projection reasoning
-     * {@link de.hauschel.arknet.actor.application.port.in.ResolveActors.ResolvedActor} follows, plus
-     * the name a display actually needs.
+     * {@code Actor} aggregate a display never needs in full - code and name only.
      *
      * @param code the occupant's business code (e.g. {@code ACTOR-1})
      * @param name the occupant's current name

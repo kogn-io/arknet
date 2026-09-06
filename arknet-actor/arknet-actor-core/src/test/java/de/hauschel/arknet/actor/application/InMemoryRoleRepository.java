@@ -9,8 +9,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.application.port.out.RoleRepository;
 import de.hauschel.arknet.actor.domain.DuplicateRoleCodeException;
@@ -22,6 +24,7 @@ import de.hauschel.arknet.actor.domain.RoleDisplayFallback;
 import de.hauschel.arknet.actor.domain.RoleId;
 import de.hauschel.arknet.actor.domain.RoleNotFoundException;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResourceId;
 
 /**
  * In-memory test double for {@link RoleRepository} - mirrors {@code InMemoryConstraintRepository}
@@ -139,5 +142,15 @@ final class InMemoryRoleRepository implements RoleRepository {
     @Override
     public List<RoleCode> findRetainedCodes(ProjectId projectId) {
         return List.copyOf(retainedByProject.getOrDefault(projectId, List.of()));
+    }
+
+    /** Nothing multi-valued to select a language variant from in this plain in-memory fake. */
+    @Override
+    public List<ResolveRoles.ResolvedRole> findByIds(ProjectId projectId, String displayLocale, List<ResourceId> ids) {
+        Set<ResourceId> wanted = Set.copyOf(ids);
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .filter(role -> wanted.contains(role.id().value()))
+                .map(role -> new ResolveRoles.ResolvedRole(role.id().value(), role.code(), role.name()))
+                .toList();
     }
 }

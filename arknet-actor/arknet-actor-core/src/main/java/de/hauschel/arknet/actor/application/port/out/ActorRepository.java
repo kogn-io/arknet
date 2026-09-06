@@ -6,7 +6,6 @@ package de.hauschel.arknet.actor.application.port.out;
 import java.util.List;
 import java.util.Optional;
 
-import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorConcurrentlyModifiedException;
@@ -194,29 +193,13 @@ public interface ActorRepository {
 
     /**
      * Finds every actor in a project whose identity is among {@code ids}, in one store
-     * round-trip - backs {@link ResolveActors}. This is a batch lookup, not a per-id existence
-     * check: an id absent from the project is simply absent from the result, never an error.
-     *
-     * <p>Returns the slim {@link ResolveActors.ResolvedActor} projection, not the full
-     * {@link Actor} aggregate: the only consumer of this method is {@link ResolveActors}, which
-     * exists purely to answer "what code names this identity" for display.</p>
-     *
-     * @param projectId the project (architecture model) to look up actors in
-     * @param ids       the opaque identities to resolve; an empty list yields an empty result
-     * @return the resolved actors found, in no particular order, never {@code null}
-     */
-    List<ResolveActors.ResolvedActor> findByIds(ProjectId projectId, List<ResourceId> ids);
-
-    /**
-     * Finds every actor in a project whose identity is among {@code ids}, in one store
-     * round-trip, returning the full {@link Actor} aggregate rather than {@link #findByIds}'
-     * slim {@link ResolveActors.ResolvedActor} projection - added for {@code RoleService}
+     * round-trip, returning the full {@link Actor} aggregate - added for {@code RoleService}
      * (ADR-37/kogn-io/arknet#405), which resolves a role's {@code arkproc:filledBy} occupants to
-     * their current <em>name</em> for display, not just their code. Kept separate from
-     * {@link #findByIds} rather than widening that method's return shape: {@link ResolveActors} is
-     * a published contract another bounded context's driving adapter consumes
-     * ({@code arknet-use-cases}, see that port's own javadoc), and widening it would hand every
-     * such caller fields it never asked for.
+     * their current name for display. The narrower, code-only batch lookup this hexagon carried
+     * before Part C ({@code findByIds}/{@code ActorProjection}, backing the since-deleted driving
+     * port {@code ResolveActors}) was removed rather than kept alongside this one once Part C
+     * repointed a use case's {@code primaryActor}/{@code supportingActor} at {@code arkproc:Role}
+     * and left it with no consumer at all, inside this hexagon or outside it.
      *
      * <p>Not a per-id existence check: an id absent from the project (or not an actor at all) is
      * simply absent from the result, never an error.</p>

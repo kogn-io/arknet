@@ -43,11 +43,11 @@ import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
-import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
@@ -82,34 +82,34 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  *
  * <p>The remaining properties are exactly those of the already-merged requirements/use-case
  * ontology: {@code arkreq:useCaseGoal}, {@code arkreq:designScope}, {@code arkreq:trigger},
- * {@code arkreq:useCasePrecondition}, {@code arkreq:useCasePostcondition}, {@code arkreq:primaryActor},
- * {@code arkreq:supportingActor}, {@code arkreq:mainStep}, {@code arkreq:extensionStep},
+ * {@code arkreq:useCasePrecondition}, {@code arkreq:useCasePostcondition}, {@code arkreq:primaryRole},
+ * {@code arkreq:supportingRole}, {@code arkreq:mainStep}, {@code arkreq:extensionStep},
  * {@code arkreq:position}, {@code arkreq:stepText}, {@code arkreq:stepRealises} and
  * {@code oslc_rm:satisfies}.</p>
  *
- * <p><strong>Requirement/actor references arrive pre-resolved, identity-carrying.</strong>
- * {@link RequirementRef} and {@link ActorRef} carry the referenced
+ * <p><strong>Requirement/role references arrive pre-resolved, identity-carrying.</strong>
+ * {@link RequirementRef} and {@link RoleRef} carry the referenced
  * resource's opaque subject {@link ResourceId} directly - resolving a human-typed requirement
- * code (e.g. {@code FR-5}) or actor name (e.g. {@code Customer}) against the shared project
+ * code (e.g. {@code FR-5}) or role code (e.g. {@code ROLE-4}) against the shared project
  * store, and rejecting an unknown or ambiguous one, is done once by
- * {@code KognioRdfRequirementLookup}/{@code KognioRdfActorLookup} at the moment a use case is
+ * {@code KognioRdfRequirementLookup}/{@code KognioRdfRoleLookup} at the moment a use case is
  * written (in the application service), not here on every write. This adapter therefore neither
- * queries the sibling requirements/terms graphs nor re-verifies that a referenced subject still
- * denotes a requirement or an actor; it trusts the identity it was handed, the same way it trusts
+ * queries the sibling requirements/role graphs nor re-verifies that a referenced subject still
+ * denotes a requirement or a role; it trusts the identity it was handed, the same way it trusts
  * a use case's own scalar fields without re-resolving them. It still asserts each referenced
- * subject's type ({@code arkreq:Requirement}/{@code arkproc:Actor}) in the SHACL write-gate's
+ * subject's type ({@code arkreq:Requirement}/{@code arkproc:Role}) in the SHACL write-gate's
  * validation-only context (see below), because the shapes need that type to fire correctly
  * against a candidate graph that does not itself carry the referenced subject's type triple. The
  * coarse {@code UseCase oslc_rm:satisfies Requirement} edge is derived as the union of the
  * resolved {@code stepRealises} targets.</p>
  *
- * <p><strong>Still lossy for one, narrower case.</strong> Reading {@code primaryActor}/
- * {@code supportingActor}/{@code stepRealises} back filters for IRI-ness only
+ * <p><strong>Still lossy for one, narrower case.</strong> Reading {@code primaryRole}/
+ * {@code supportingRole}/{@code stepRealises} back filters for IRI-ness only
  * ({@code FILTER(isIRI(...))}), mirroring {@code KognioRdfRequirementRepository#readUsesTerms}:
  * none of the three properties carries an {@code sh:nodeKind} constraint, so a store-first
  * edge may legally target a blank node, which {@link ResourceId} cannot represent. For
- * {@code supportingActor}/{@code stepRealises} such an edge is simply absent from the
- * corresponding list. {@code primaryActor} is a required (non-{@code OPTIONAL}) triple pattern
+ * {@code supportingRole}/{@code stepRealises} such an edge is simply absent from the
+ * corresponding list. {@code primaryRole} is a required (non-{@code OPTIONAL}) triple pattern
  * in the scalar read, so filtering it out there instead makes the whole use case unreadable -
  * {@link #readBySubject} returns {@link Optional#empty()}, and {@link #findAll}/
  * {@link #findByCode} treat it as "not found", silently skipping only that one use case rather
@@ -119,7 +119,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * <p><strong>{@code usesTerm}/{@code constrainedBy} (issue #329).</strong> {@link TermRef}/
  * {@link ConstraintRef} carry the referenced term's/constraint's opaque subject identity
  * directly, arriving pre-resolved from {@code KognioRdfTermLookup}/{@code KognioRdfConstraintLookup}
- * the same way {@link RequirementRef}/{@link ActorRef} do - {@link #write} therefore neither
+ * the same way {@link RequirementRef}/{@link RoleRef} do - {@link #write} therefore neither
  * queries the sibling terms/constraints graphs to resolve them nor re-verifies that a referenced
  * subject still denotes a term/constraint on every write; it trusts the identity it was handed.
  * It still asserts each referenced term's type ({@code skos:Concept}) in the SHACL write-gate's
@@ -147,7 +147,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * {@code sh:Violation}), so {@link ShaclWriteGate#enforce} lets a store-first use case
  * through with no {@code arkreq:mainStep} triples at all - {@link UseCase}'s compact constructor
  * rejects an empty {@code steps} list unconditionally. {@link #readBySubject} skips such a use
- * case the same way it skips a blank-node {@code primaryActor}, rather than letting the
+ * case the same way it skips a blank-node {@code primaryRole}, rather than letting the
  * constructor's exception propagate out of {@link #findAll}/{@link #findByCode} and crash every
  * read for the whole project.</p>
  *
@@ -191,7 +191,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "Requirement";
     // Shared via ArkprocVocabulary (kogn-io/arknet#148): this class used to declare its own private
     // copy of this IRI literal, duplicated with an architecture test's own private copy.
-    private static final String ACTOR_TYPE = ArkprocVocabulary.ACTOR_TYPE;
+    private static final String ROLE_TYPE = ArkprocVocabulary.ROLE_TYPE;
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String CONSTRAINT_TYPE = ARKREQ_NAMESPACE + "Constraint";
     private static final String USE_CASE_GOAL_PROPERTY = ArkreqVocabulary.USE_CASE_GOAL;
@@ -199,8 +199,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String TRIGGER_PROPERTY = ArkreqVocabulary.TRIGGER;
     private static final String PRECONDITION_PROPERTY = ArkreqVocabulary.USE_CASE_PRECONDITION;
     private static final String POSTCONDITION_PROPERTY = ArkreqVocabulary.USE_CASE_POSTCONDITION;
-    private static final String PRIMARY_ACTOR_PROPERTY = ArkreqVocabulary.PRIMARY_ACTOR;
-    private static final String SUPPORTING_ACTOR_PROPERTY = ArkreqVocabulary.SUPPORTING_ACTOR;
+    private static final String PRIMARY_ROLE_PROPERTY = ArkreqVocabulary.PRIMARY_ROLE;
+    private static final String SUPPORTING_ROLE_PROPERTY = ArkreqVocabulary.SUPPORTING_ROLE;
     private static final String MAIN_STEP_PROPERTY = ArkreqVocabulary.MAIN_STEP;
     private static final String EXTENSION_STEP_PROPERTY = ArkreqVocabulary.EXTENSION_STEP;
     private static final String POSITION_PROPERTY = ARKREQ_NAMESPACE + "position";
@@ -302,12 +302,12 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
 
-        // 1. Every actor/requirement reference already carries its resolved identity (see
+        // 1. Every role/requirement reference already carries its resolved identity (see
         //    class-level note), guaranteed IRIREF-safe by ResourceId#of same as
         //    the subject above.
-        IRI primaryActorIri = actorIriFor(useCase.primaryActor());
-        List<IRI> supportingActorIris = useCase.supportingActors().stream()
-                .map(this::actorIriFor)
+        IRI primaryRoleIri = roleIriFor(useCase.primaryRole());
+        List<IRI> supportingRoleIris = useCase.supportingRoles().stream()
+                .map(this::roleIriFor)
                 .toList();
 
         // 2. Build the candidate graph. title/goal/scope/trigger/precondition/postcondition are
@@ -324,9 +324,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         addOptional(graph, subjectIri, TRIGGER_PROPERTY, useCase.trigger(), triggerTag);
         addOptional(graph, subjectIri, PRECONDITION_PROPERTY, useCase.precondition(), preconditionTag);
         addOptional(graph, subjectIri, POSTCONDITION_PROPERTY, useCase.postcondition(), postconditionTag);
-        graph.add(subjectIri, rdf.createIRI(PRIMARY_ACTOR_PROPERTY), primaryActorIri);
-        for (IRI supporting : supportingActorIris) {
-            graph.add(subjectIri, rdf.createIRI(SUPPORTING_ACTOR_PROPERTY), supporting);
+        graph.add(subjectIri, rdf.createIRI(PRIMARY_ROLE_PROPERTY), primaryRoleIri);
+        for (IRI supporting : supportingRoleIris) {
+            graph.add(subjectIri, rdf.createIRI(SUPPORTING_ROLE_PROPERTY), supporting);
         }
 
         // 3. Main-flow steps (own opaque resources) + the coarse UC->Requirement satisfies edge.
@@ -374,7 +374,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         }
 
         // 5. usesTerm/constrainedBy (issue #329): both reference resolved identities the same way
-        //    primaryActor/supportingActor/stepRealises do (class-level note) - one edge per
+        //    primaryRole/supportingRole/stepRealises do (class-level note) - one edge per
         //    reference, no re-resolution here.
         List<IRI> termIris = useCase.usesTerms().stream().map(this::termIriFor).toList();
         for (IRI termIri : termIris) {
@@ -385,22 +385,22 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             graph.add(subjectIri, rdf.createIRI(CONSTRAINED_BY_PROPERTY), constraintIri);
         }
 
-        // 6. The shapes carry sh:class constraints on primaryActor (arkproc:Actor),
+        // 6. The shapes carry sh:class constraints on primaryRole (arkproc:Role),
         //    stepRealises (arkreq:Requirement), usesTerm (skos:Concept) and constrainedBy
         //    (arkreq:Constraint). The type triples for those referenced nodes live in the
-        //    sibling requirements/terms/constraints graphs, not in this candidate graph.
+        //    sibling role/requirements/terms/constraints graphs, not in this candidate graph.
         //    They are handed to the funnel's gate as a validation-only asserted context (never
         //    persisted here). This is safe: the reference was already proven to exist and be
         //    of the right kind at the moment it was resolved (KognioRdfRequirementLookup /
-        //    KognioRdfActorLookup / KognioRdfTermLookup / KognioRdfConstraintLookup, called once
+        //    KognioRdfRoleLookup / KognioRdfTermLookup / KognioRdfConstraintLookup, called once
         //    from the application service) - the lookup, not the shape, is what keeps the edge
         //    non-dangling; this adapter no longer re-verifies it. A bare arkreq:Constraint type
         //    assertion is enough for constrainedBy here (class-level note on why this
         //    deliberately does not mirror KognioRdfRequirementRepository#constraintAssertedContext).
         Graph assertedContext = rdf.createGraph();
-        assertedContext.add(primaryActorIri, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
-        for (IRI supporting : supportingActorIris) {
-            assertedContext.add(supporting, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
+        assertedContext.add(primaryRoleIri, VocabRdf.TYPE, rdf.createIRI(ROLE_TYPE));
+        for (IRI supporting : supportingRoleIris) {
+            assertedContext.add(supporting, VocabRdf.TYPE, rdf.createIRI(ROLE_TYPE));
         }
         for (IRI reqIri : satisfies.values()) {
             assertedContext.add(reqIri, VocabRdf.TYPE, rdf.createIRI(REQUIREMENT_TYPE));
@@ -892,10 +892,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * read paths query the core fields identically - drift between two near-identical read paths
      * was a real bug more than once in the sibling requirements adapter.
      *
-     * <p>{@code FILTER(isIRI(?primaryActor))} mirrors {@link #readSupportingActors}/
-     * {@link #readMainStepRealises}: {@code arkreq:primaryActor} carries no {@code sh:nodeKind}
+     * <p>{@code FILTER(isIRI(?primaryRole))} mirrors {@link #readSupportingRoles}/
+     * {@link #readMainStepRealises}: {@code arkreq:primaryRole} carries no {@code sh:nodeKind}
      * constraint, so a store-first edge may legally target a blank node, which
-     * {@link ResourceId} cannot represent. Unlike the other two properties, {@code primaryActor}
+     * {@link ResourceId} cannot represent. Unlike the other two properties, {@code primaryRole}
      * is part of this required (non-{@code OPTIONAL}) triple pattern, so filtering it out here
      * makes the whole scalar query yield no row for such a use case - the caller then treats it
      * as "not found", silently skipping only this one use case rather than crashing the whole
@@ -911,8 +911,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      */
     private static String scalarWhereClause(String subject) {
         return subject + " a <" + USE_CASE_TYPE + "> ; "
-                + "<" + PRIMARY_ACTOR_PROPERTY + "> ?primaryActor . "
-                + "FILTER(isIRI(?primaryActor)) ";
+                + "<" + PRIMARY_ROLE_PROPERTY + "> ?primaryRole . "
+                + "FILTER(isIRI(?primaryRole)) ";
     }
 
     private Optional<UseCase> readBySubject(
@@ -923,7 +923,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             return Optional.empty();
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
-        String scalarQuery = "SELECT ?primaryActor "
+        String scalarQuery = "SELECT ?primaryRole "
                 + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { " + scalarWhereClause(subject) + "} }";
 
         Optional<BindingSet> row = handle.sparqlQuery().select(scalarQuery).findFirst();
@@ -937,7 +937,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * Reads a use case's current state together with its concurrency token: the core scalar
      * fields and the head itself come from one query call - one snapshot, the load-bearing
      * guarantee, mirroring {@code KognioRdfRequirementRepository#findCurrentByCode}.
-     * {@code supportingActors}/{@code steps}/{@code extensions} still come from later, independent
+     * {@code supportingRoles}/{@code steps}/{@code extensions} still come from later, independent
      * reads inside {@link #buildUseCase} - safe precisely because a later read can only be
      * fresher, never staler, than the head: a funnel write landing in between moves the head, so
      * the subsequent {@link #compareAndUpdate} then fails its comparison and the caller re-reads
@@ -949,7 +949,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             return Optional.empty();
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
-        String scalarQuery = "SELECT ?primaryActor ?head "
+        String scalarQuery = "SELECT ?primaryRole ?head "
                 + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { " + scalarWhereClause(subject) + "} "
                 + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + subject + " <" + ArkprovVocabulary.HEAD + "> ?head } } }";
@@ -1032,7 +1032,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     /**
      * Builds a {@link UseCase} from {@code row} (the projection of {@link #scalarWhereClause})
-     * plus the follow-up reads {@link #readSupportingActors}/{@link #readMainStepAssemblies}/
+     * plus the follow-up reads {@link #readSupportingRoles}/{@link #readMainStepAssemblies}/
      * {@link #readExtensionStepAssemblies}/{@link #readTitles}/{@link #readGoals}/
      * {@link #readScopes}/{@link #readTriggers}/{@link #readPreconditions}/
      * {@link #readPostconditions} - shared by {@link #readBySubject} and
@@ -1059,14 +1059,14 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 locale.select(readPreconditions(handle, subject)).map(LocalizedLiteral::value).orElse(null);
         String postcondition =
                 locale.select(readPostconditions(handle, subject)).map(LocalizedLiteral::value).orElse(null);
-        List<ActorRef> supportingActors = readSupportingActors(handle, subject);
+        List<RoleRef> supportingRoles = readSupportingRoles(handle, subject);
         List<StepAssembly> stepAssemblies = readMainStepAssemblies(handle, subject);
         List<Step> steps = toSteps(stepAssemblies, locale);
         if (steps.isEmpty()) {
             // arkreq:mainStep is only sh:Warning severity at sh:minCount 1 (not sh:Violation), so
             // ShaclWriteGate#enforce lets a store-first use case through with zero main
             // steps. UseCase's compact constructor rejects an empty steps list unconditionally -
-            // mirror the primaryActor blank-node guard above: skip this one use case instead of
+            // mirror the primaryRole blank-node guard above: skip this one use case instead of
             // letting the constructor throw out of findByCode/findAll for the whole project.
             return Optional.empty();
         }
@@ -1089,8 +1089,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 goal.get().value(),
                 scope,
                 trigger,
-                new ActorRef(ResourceId.of(iriOf(row, "primaryActor").getIRIString())),
-                supportingActors,
+                new RoleRef(ResourceId.of(iriOf(row, "primaryRole").getIRIString())),
+                supportingRoles,
                 precondition,
                 postcondition,
                 steps,
@@ -1138,21 +1138,21 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     /**
-     * Reads the {@code arkreq:supportingActor} edges back as actor references.
+     * Reads the {@code arkreq:supportingRole} edges back as role references.
      *
      * <p><strong>No longer a join.</strong> The edge's target IRI <em>is</em> the
-     * {@link ActorRef} - no join into the sibling terms graph is needed, and none is performed
+     * {@link RoleRef} - no join into the sibling actor graph is needed, and none is performed
      * here. {@code FILTER(isIRI(?a))} mirrors
      * {@code KognioRdfRequirementRepository#readUsesTerms}: the property carries no
      * {@code sh:nodeKind} constraint, so a store-first edge may legally target a blank
      * node, which {@link ResourceId} cannot represent - excluded here, unreachable via the MCP
      * tools.</p>
      */
-    private List<ActorRef> readSupportingActors(DatasetHandle handle, String subject) {
+    private List<RoleRef> readSupportingRoles(DatasetHandle handle, String subject) {
         String query = "SELECT ?a WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
-                + subject + " <" + SUPPORTING_ACTOR_PROPERTY + "> ?a } FILTER(isIRI(?a)) }";
+                + subject + " <" + SUPPORTING_ROLE_PROPERTY + "> ?a } FILTER(isIRI(?a)) }";
         return handle.sparqlQuery().select(query)
-                .map(row -> new ActorRef(ResourceId.of(iriOf(row, "a").getIRIString())))
+                .map(row -> new RoleRef(ResourceId.of(iriOf(row, "a").getIRIString())))
                 .toList();
     }
 
@@ -1277,7 +1277,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * and store-first data never runs through that. Grouping by the derived position
      * integer instead of step identity would silently merge two such steps' {@code stepRealises}
      * targets under one key, the same class of bug already fixed for
-     * {@code supportingActor}/{@code stepRealises} elsewhere in this adapter.</p>
+     * {@code supportingRole}/{@code stepRealises} elsewhere in this adapter.</p>
      */
     private Map<String, List<RequirementRef>> readMainStepRealises(DatasetHandle handle, String subject) {
         String query = "SELECT ?step ?req WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
@@ -1322,11 +1322,11 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     /**
-     * Converts an already-resolved {@link ActorRef} to an {@link IRI} for writing. Mirrors
+     * Converts an already-resolved {@link RoleRef} to an {@link IRI} for writing. Mirrors
      * {@code KognioRdfRequirementRepository#termIriFor}; see {@link #requirementIriFor} for the
      * IRIREF-safety rationale.
      */
-    private IRI actorIriFor(ActorRef ref) {
+    private IRI roleIriFor(RoleRef ref) {
         return rdf.createIRI(ref.value().value());
     }
 

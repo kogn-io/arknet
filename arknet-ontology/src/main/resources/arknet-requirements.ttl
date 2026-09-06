@@ -236,17 +236,19 @@ arkreq:useCasePostcondition a owl:DatatypeProperty ;
 # -- Use Case Relationships --------------------------------------------------
 #    UseCase oslc_rm:satisfies Requirement  (reused; siehe Requirement-Block)
 
-arkreq:primaryActor a owl:ObjectProperty ;
+arkreq:primaryRole a owl:ObjectProperty ;
     rdfs:domain arkreq:UseCase ;
-    rdfs:range  arkproc:Actor ;
-    rdfs:label  "primary actor"@en ;
-    rdfs:comment "Der Akteur, dessen Ziel der Use Case erfuellt."@de .
+    rdfs:range  arkproc:Role ;
+    rdfs:label  "primary role"@en , "primaere Rolle"@de ;
+    rdfs:comment "The role whose goal the use case fulfils. The edge is named after its target: it points at a Role, not at whoever fills it. A role may remain unoccupied -- the specification never reads the occupancy."@en ,
+                 "Die Rolle, deren Ziel der Use Case erfuellt. Die Kante heisst nach ihrem Ziel: sie zeigt auf eine Rolle, nicht auf deren Traeger. Eine Rolle darf unbesetzt bleiben -- die Spezifikation liest die Besetzung nie."@de .
 
-arkreq:supportingActor a owl:ObjectProperty ;
+arkreq:supportingRole a owl:ObjectProperty ;
     rdfs:domain arkreq:UseCase ;
-    rdfs:range  arkproc:Actor ;
-    rdfs:label  "supporting actor"@en ;
-    rdfs:comment "Ein unterstuetzender (sekundaerer) Akteur, den das System aufruft."@de .
+    rdfs:range  arkproc:Role ;
+    rdfs:label  "supporting role"@en , "unterstuetzende Rolle"@de ;
+    rdfs:comment "A supporting (secondary) role that the system calls upon. The edge is named after its target: it points at a Role, not at whoever fills it. A role may remain unoccupied -- the specification never reads the occupancy."@en ,
+                 "Eine unterstuetzende (sekundaere) Rolle, die das System aufruft. Die Kante heisst nach ihrem Ziel: sie zeigt auf eine Rolle, nicht auf deren Traeger. Eine Rolle darf unbesetzt bleiben -- die Spezifikation liest die Besetzung nie."@de .
 
 arkreq:realizedBy a owl:ObjectProperty ;
     rdfs:subPropertyOf oslc_rm:implementedBy ;

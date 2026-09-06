@@ -72,8 +72,8 @@
 arkproc:Actor a owl:Class ;
     rdfs:subClassOf prov:Agent ;
     rdfs:label "Actor"@en , "Akteur"@de ;
-    rdfs:comment "Someone or something that can act on the system under description, or hold an interest in it, or both. Acting covers participation in a use case (primaryActor/supportingActor) as much as any other interaction; holding an interest covers a regulator, a funder or a business unit that never touches the system at all. Participation is therefore one role an actor may take, not what makes it an actor."@en ,
-                 "Jemand oder etwas, das auf das beschriebene System einwirken kann, ein Interesse daran hat, oder beides. Einwirken schliesst die Teilnahme an einem Use Case (primaryActor/supportingActor) ebenso ein wie jede andere Interaktion; ein Interesse zu haben deckt eine Aufsichtsbehoerde, einen Geldgeber oder einen Fachbereich ab, der das System nie beruehrt. Die Use-Case-Teilnahme ist damit eine von mehreren Rollen eines Akteurs, nicht das, was ihn zum Akteur macht."@de .
+    rdfs:comment "Someone or something that can act on the system under description, or hold an interest in it, or both. Acting covers filling a role that participates in a use case (arkproc:filledBy on a Role referenced via arkreq:primaryRole/supportingRole) as much as any other interaction; holding an interest covers a regulator, a funder or a business unit that never touches the system at all. Filling a role is therefore one thing an actor may do, not what makes it an actor."@en ,
+                 "Jemand oder etwas, das auf das beschriebene System einwirken kann, ein Interesse daran hat, oder beides. Einwirken schliesst das Besetzen einer Rolle ein, die an einem Use Case teilnimmt (arkproc:filledBy auf einer ueber arkreq:primaryRole/supportingRole referenzierten Rolle), ebenso wie jede andere Interaktion; ein Interesse zu haben deckt eine Aufsichtsbehoerde, einen Geldgeber oder einen Fachbereich ab, der das System nie beruehrt. Eine Rolle zu besetzen ist damit eine von mehreren Dingen, die ein Akteur tun kann, nicht das, was ihn zum Akteur macht."@de .
 
 arkproc:HumanActor a owl:Class ;
     rdfs:subClassOf arkproc:Actor ;

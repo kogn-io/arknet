@@ -37,7 +37,6 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
-import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.domain.Actor;
@@ -55,6 +54,7 @@ import de.hauschel.arknet.actor.domain.RoleId;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
@@ -507,42 +507,15 @@ class KognioRdfActorRepositoryTest {
         assertTrue(repository.findAll(PROJECT_B).isEmpty());
     }
 
-    // ---- findByIds: the batch lookup ResolveActors/uc_get/uc_list drive -------------------
-
-    /**
-     * The batch shape {@link ResolveActors} needs: known ids resolve, an id absent from the
-     * project is simply missing from the result rather than an error.
-     */
-    @Test
-    void findByIdsResolvesOnlyTheIdentitiesTheProjectHolds() {
-        Actor first = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        Actor second = actor(new ActorCode("ACTOR-2"), ActorType.SYSTEM, null);
-        repository.create(PROJECT_A, first);
-        repository.create(PROJECT_A, second);
-        ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID());
-
-        List<ResolveActors.ResolvedActor> resolved = repository.findByIds(
-                PROJECT_A, List.of(first.id().value(), second.id().value(), unknown));
-
-        assertEquals(2, resolved.size());
-        assertTrue(resolved.contains(new ResolveActors.ResolvedActor(first.id().value(), first.code())));
-        assertTrue(resolved.contains(new ResolveActors.ResolvedActor(second.id().value(), second.code())));
-    }
-
-    @Test
-    void findByIdsOfAnEmptyListQueriesNothing() {
-        assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of()));
-    }
-
     // ---- findAllByIds: the batch lookup RoleService drives (ADR-37/kogn-io/arknet#405) --------
 
     /**
      * The batch shape {@code RoleService} needs to render a role's {@code arkproc:filledBy}
-     * occupants as {@code ACTOR-N (Name)}: unlike {@link ActorRepository#findByIds} this one
-     * materialises the whole {@link Actor}, so type, name and the optional description all have to
-     * survive the round-trip. An id the project does not hold is simply absent from the result
-     * rather than an error - {@code RoleService} filters those out silently, so this test is what
-     * says the absence means "no such actor" and not "the query is broken".
+     * occupants as {@code ACTOR-N (Name)}: it materialises the whole {@link Actor}, so type, name
+     * and the optional description all have to survive the round-trip. An id the project does not
+     * hold is simply absent from the result rather than an error - {@code RoleService} filters
+     * those out silently, so this test is what says the absence means "no such actor" and not
+     * "the query is broken".
      */
     @Test
     void findAllByIdsMaterialisesEveryHeldActorAndSkipsTheUnknownId() {
@@ -750,16 +723,19 @@ class KognioRdfActorRepositoryTest {
 
     /**
      * {@link ActorReferencedException} blocks the delete while something still points at the actor
-     * via {@code arkreq:primaryActor} - {@link KognioRdfActorRepository#rejectIfReferenced} searches
-     * across every named graph, so a reference living outside {@link #ACTOR_GRAPH} (as a use-case
-     * edge would) must still be found.
+     * via {@code arkproc:filledBy} - {@link KognioRdfActorRepository#rejectIfReferenced} searches
+     * across every named graph, so a reference living outside {@link #ACTOR_GRAPH} (as a role edge
+     * would) must still be found. A hand-inserted triple, not one written through
+     * {@link KognioRdfRoleRepository} - {@link #deleteRejectsAnActorStillReferencedByARolesFilledBy}
+     * already covers the real-writer path; this one pins the graph-crossing search itself,
+     * independent of who wrote the edge.
      */
     @Test
-    void deleteRejectsAnActorStillReferencedAsPrimaryActor() {
+    void deleteRejectsAnActorStillReferencedByAFilledByEdgeInAForeignGraph() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
         repository.create(PROJECT_A, stored);
-        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
-                + ArkreqVocabulary.PRIMARY_ACTOR + "> <" + stored.id().value().value() + "> } }";
+        String reference = "INSERT DATA { GRAPH <https://example.org/roles> { <https://example.org/roles/1> <"
+                + ArkprocVocabulary.FILLED_BY + "> <" + stored.id().value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(reference);
@@ -770,6 +746,36 @@ class KognioRdfActorRepositoryTest {
         assertThrows(ActorReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
         assertTrue(repository.findByCode(PROJECT_A, stored.code()).isPresent(),
                 "a rejected delete must leave the actor untouched");
+    }
+
+    /**
+     * {@code actor_delete} no longer blocks on a use-case edge, since ADR-37/kogn-io/arknet#405
+     * Part C repointed {@code arkreq:primaryRole}/{@code supportingRole} at {@code arkproc:Role}
+     * instead of {@code arkproc:Actor} - {@link KognioRdfActorRepository#REFERENCING_PREDICATES}
+     * carries neither predicate any more. A hand-inserted {@code arkreq:primaryRole} triple
+     * pointing (nonsensically, as a stand-in for stale pre-migration data) at this actor must not
+     * stop the delete - only {@link #deleteRejectsAnActorStillReferencedByARolesFilledBy}'s
+     * {@code arkproc:filledBy} edge still does. Mutation check: reinstating the old
+     * {@code PRIMARY_ACTOR}/{@code SUPPORTING_ACTOR} entries in {@code REFERENCING_PREDICATES}
+     * turns this test red with an unexpected {@code ActorReferencedException}.
+     */
+    @Test
+    void deleteDoesNotRejectAnActorReferencedOnlyByAPrimaryRoleEdge() {
+        Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
+        repository.create(PROJECT_A, stored);
+        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
+                + ArkreqVocabulary.PRIMARY_ROLE + "> <" + stored.id().value().value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(reference);
+                return null;
+            });
+        }
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isEmpty(),
+                "a primaryRole edge must no longer block the delete");
     }
 
     /**

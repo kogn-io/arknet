@@ -12,16 +12,19 @@ import de.hauschel.arknet.kernel.ProjectId;
  * Thrown when {@code role_delete} is asked to remove a role that something else in the project
  * still points at - mirrors {@link ActorReferencedException} exactly.
  *
- * <p><strong>Built ahead of its first consumer, deliberately.</strong> No property carries
- * {@code rdfs:range arkproc:Role} yet - {@code arkreq:primaryActor}/{@code supportingActor} are
- * planned to be repointed at {@link Role} in a later part of kogn-io/arknet#405, not this one - so
- * {@code KognioRdfRoleRepository.REFERENCING_PREDICATES} is empty today and this exception is
- * currently unreachable. It exists now so the guard is already in place, the same way
- * {@link ActorReferencedException} predated issue #336's actual referencing consumer (see that
- * class's own javadoc): {@code ReferenceGuardsCoverEveryOntologyEdgeTest#
- * everyPropertyRangingOverARoleBlocksTheRolesDeletion} in {@code arknet-architecture-tests} will
- * fail the day a property ranging over {@code arkproc:Role} ships without this map knowing about
- * it.</p>
+ * <p><strong>Built ahead of its first consumer, then reached it.</strong> Until ADR-37/
+ * kogn-io/arknet#405 Part C no property carried {@code rdfs:range arkproc:Role} yet, so
+ * {@code KognioRdfRoleRepository.REFERENCING_PREDICATES} was empty and this exception was
+ * unreachable - built early the same way {@link ActorReferencedException} predated issue #336's
+ * actual referencing consumer (see that class's own javadoc). Part C repointed
+ * {@code arkreq:primaryRole}/{@code supportingRole} at {@link Role} (they used to target
+ * {@code arkproc:Actor} as {@code primaryActor}/{@code supportingActor}), so both now range over
+ * {@code arkproc:Role} and {@code REFERENCING_PREDICATES} lists them: a role a use case still
+ * references as its {@code primaryRole}/{@code supportingRole} now really does reject
+ * {@code role_delete}. {@code ReferenceGuardsCoverEveryOntologyEdgeTest#
+ * everyPropertyRangingOverARoleBlocksTheRolesDeletion} in {@code arknet-architecture-tests} holds
+ * that map against the shipped ontologies, so a future property ranging over {@code arkproc:Role}
+ * cannot ship unnoticed either.</p>
  */
 public class RoleReferencedException extends RuntimeException {
 
