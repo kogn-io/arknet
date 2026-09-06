@@ -221,9 +221,6 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "MoSCoW priority (optional): MUST_HAVE, SHOULD_HAVE, COULD_HAVE or "
                     + "WONT_HAVE", required = false)
             final String priority,
-            @McpToolParam(description = "IRI of the arkreq:Goal this requirement is motivated by (optional)",
-                    required = false)
-            final String motivatedBy,
             @McpToolParam(description = "Free-text quality category (optional, e.g. performance, security, "
                     + "reliability); only meaningful for NON_FUNCTIONAL requirements", required = false)
             final String qualityCategory,
@@ -247,7 +244,7 @@ public final class RequirementMcpTools {
         final Requirement created = addRequirement.add(project.id(),
                 new NewRequirement(title, description, blankToNull(rationale), requirementType,
                         requirementPriority,
-                        blankToNull(motivatedBy), blankToNull(qualityCategory),
+                        blankToNull(qualityCategory),
                         acceptanceCriteria == null ? List.of() : List.copyOf(acceptanceCriteria),
                         blankToNull(language)),
                 project.defaultLanguage());

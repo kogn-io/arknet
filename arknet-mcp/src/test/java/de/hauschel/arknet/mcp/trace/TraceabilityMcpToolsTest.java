@@ -109,11 +109,11 @@ class TraceabilityMcpToolsTest {
             actors.add(project, new NewActor(ActorType.HUMAN, "Customer", null));
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
-                    "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null, null,
+                    "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null,
                     List.of("Login succeeds with valid credentials"), null), "en");
             requirements.linkTerm(project, fr1.code(), term.code().value(), "en");
             Requirement fr2 = requirements.add(project, new NewRequirement("Logout",
-                    "The system shall let a user log out.", null, RequirementType.FUNCTIONAL, null, null, null,
+                    "The system shall let a user log out.", null, RequirementType.FUNCTIONAL, null, null,
                     List.of("Logout succeeds"), null), "en");
 
             useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
@@ -148,10 +148,10 @@ class TraceabilityMcpToolsTest {
             actors.add(project, new NewActor(ActorType.HUMAN, "Customer", null));
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
-                    "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null, null,
+                    "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null,
                     List.of("Login succeeds with valid credentials"), null), "en");
             Requirement fr2 = requirements.add(project, new NewRequirement("Logout",
-                    "The system shall let a user log out.", null, RequirementType.FUNCTIONAL, null, null, null,
+                    "The system shall let a user log out.", null, RequirementType.FUNCTIONAL, null, null,
                     List.of("Logout succeeds"), null), "en");
 
             useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
@@ -189,7 +189,7 @@ class TraceabilityMcpToolsTest {
             actors.add(project, new NewActor(ActorType.HUMAN, "Customer", null));
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
-                    "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null, null,
+                    "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null,
                     List.of("Login succeeds with valid credentials"), null), "en");
             requirements.linkTerm(project, fr1.code(), term.code().value(), "en");
 
@@ -288,7 +288,7 @@ class TraceabilityMcpToolsTest {
             terms.add(ws, new NewTerm("Vertrag", "A binding agreement.", null), "en");
 
             requirements.add(ws, new NewRequirement("Bestandsdaten",
-                    "Der Kunde sieht seine Bestellung ein.", null, RequirementType.FUNCTIONAL, null, null, null,
+                    "Der Kunde sieht seine Bestellung ein.", null, RequirementType.FUNCTIONAL, null, null,
                     List.of("Die Bestandsdaten werden korrekt angezeigt"), null), "en");
             useCases.add(ws, new NewUseCase("View order", "Kunde bestaetigt die Bestellung", null, null,
                     "Kunde", List.of(), null, null,
@@ -346,7 +346,7 @@ class TraceabilityMcpToolsTest {
 
             requirements.add(project, new NewRequirement("Requirement anlegen",
                     "Nach dem Anlegen liefert das System einen eindeutigen Business-Code fuer das Requirement.", null,
-                    RequirementType.FUNCTIONAL, null, null, null,
+                    RequirementType.FUNCTIONAL, null, null,
                     List.of("Ein Anlageversuch ohne Titel wird abgelehnt."), null), "de");
 
             String report = tools.orphanCheck(null, ANCHOR);

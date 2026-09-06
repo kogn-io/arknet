@@ -79,7 +79,7 @@ class ArknetMcpConfigurationTest {
                     Requirement created = service.add(PROJECT,
                             new NewRequirement("Wired via composition root",
                                     "The composition root shall wire the requirements hexagon.", null,
-                                    RequirementType.FUNCTIONAL, null, null, null,
+                                    RequirementType.FUNCTIONAL, null, null,
                                     List.of("The requirement round-trips through the store"), null), "en");
 
                     assertThat(created.code().value()).isEqualTo("FR-1");
@@ -236,7 +236,7 @@ class ArknetMcpConfigurationTest {
                     Requirement before = requirements.add(legacy,
                             new NewRequirement("Written before the registered-anchor model",
                                     "The system shall keep data written under a derived id reachable.", null,
-                                    RequirementType.FUNCTIONAL, null, null, null,
+                                    RequirementType.FUNCTIONAL, null, null,
                                     List.of("The requirement survives adoption"), null), "en");
 
                     ProjectService projects = context.getBean(ProjectService.class);

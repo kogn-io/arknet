@@ -45,10 +45,6 @@ import de.hauschel.arknet.kernel.ProjectId;
  * @param priority         MoSCoW priority; maps to {@code arkreq:priority}. Optional (may be
  *                         {@code null}); applies to both functional and non-functional
  *                         requirements
- * @param motivatedBy      IRI of the {@code arkreq:Goal} this requirement is motivated by;
- *                         maps to {@code arkreq:motivatedBy}. Optional (may be {@code null});
- *                         no Goal aggregate exists yet, so this is carried as a plain IRI
- *                         reference rather than resolved to a domain object
  * @param qualityCategory  free-text quality category (e.g. "performance", "security"); maps
  *                         to {@code arkreq:qualityCategory}. Optional (may be {@code null});
  *                         only meaningful for {@link RequirementType#NON_FUNCTIONAL}
@@ -86,7 +82,6 @@ public record Requirement(
         RequirementType type,
         RequirementStatus status,
         Priority priority,
-        String motivatedBy,
         String qualityCategory,
         List<TermRef> usesTerms,
         List<AcceptanceCriterion> acceptanceCriteria,
@@ -162,7 +157,7 @@ public record Requirement(
                     "illegal status transition " + status() + " -> " + RequirementStatus.ACCEPTED);
         }
         return new Requirement(id(), code(), title(), description(), rationale(), type(),
-                RequirementStatus.ACCEPTED, priority(), motivatedBy(), qualityCategory(), usesTerms(),
+                RequirementStatus.ACCEPTED, priority(), qualityCategory(), usesTerms(),
                 acceptanceCriteria(), constrainedBy());
     }
 
@@ -189,7 +184,7 @@ public record Requirement(
                     "illegal status transition " + status() + " -> " + RequirementStatus.PROPOSED);
         }
         return new Requirement(id(), code(), title(), description(), rationale(), type(),
-                RequirementStatus.PROPOSED, priority(), motivatedBy(), qualityCategory(), usesTerms(),
+                RequirementStatus.PROPOSED, priority(), qualityCategory(), usesTerms(),
                 acceptanceCriteria(), constrainedBy());
     }
 
@@ -215,7 +210,7 @@ public record Requirement(
             appended.add(new AcceptanceCriterion(nextPosition++, text));
         }
         return new Requirement(id, code, title, description, rationale, type, status, priority,
-                motivatedBy, qualityCategory, usesTerms, appended, constrainedBy);
+                qualityCategory, usesTerms, appended, constrainedBy);
     }
 
     /**
@@ -258,7 +253,7 @@ public record Requirement(
             throw new AcceptanceCriterionPositionNotFoundException(projectId, code, unmatchedPosition);
         }
         return new Requirement(id, code, title, description, rationale, type, status, priority,
-                motivatedBy, qualityCategory, usesTerms, patched, constrainedBy);
+                qualityCategory, usesTerms, patched, constrainedBy);
     }
 
     /**

@@ -33,8 +33,6 @@ rshapes:RequirementShape
     sh:property rshapes:Requirement-rationale ;
     sh:property rshapes:Requirement-priority ;
     sh:property rshapes:Requirement-status ;
-    sh:property rshapes:Requirement-motivatedBy ;
-    sh:property rshapes:Requirement-motivatedBy-count ;
     sh:property rshapes:Requirement-usesTerm ;
     sh:property rshapes:Requirement-acceptanceCriterion ;
     sh:property rshapes:Requirement-constrainedBy .
@@ -93,20 +91,6 @@ rshapes:Requirement-status
     sh:message  "arkreq:status must be one of the valid lifecycle values (Proposed | Accepted | Implemented | Verified | Rejected | Deprecated)."@en , "arkreq:status muss einer der gueltigen Lifecycle-Werte sein (Proposed | Accepted | Implemented | Verified | Rejected | Deprecated)."@de ;
     sh:severity sh:Violation .
 
-rshapes:Requirement-motivatedBy
-    a sh:PropertyShape ;
-    sh:path     arkreq:motivatedBy ;
-    sh:class    arkreq:Goal ;
-    sh:message  "Best practice: link the requirement to a Goal via arkreq:motivatedBy (traceability to the WHY)."@en , "Best Practice: Verknuepfe die Anforderung ueber arkreq:motivatedBy mit einem Goal (Traceability zum WARUM)."@de ;
-    sh:severity sh:Warning .
-
-rshapes:Requirement-motivatedBy-count
-    a sh:PropertyShape ;
-    sh:path     arkreq:motivatedBy ;
-    sh:maxCount 1 ;
-    sh:message  "A Requirement may have at most one arkreq:motivatedBy (the domain field is single-valued)."@en , "Requirement darf hoechstens ein arkreq:motivatedBy haben (Domain-Feld ist einwertig)."@de ;
-    sh:severity sh:Violation .
-
 rshapes:Requirement-usesTerm
     a sh:PropertyShape ;
     sh:path     arkreq:usesTerm ;
@@ -148,25 +132,6 @@ rshapes:NFR-qualityCategory
     sh:datatype xsd:string ;
     sh:message  "A Non-Functional Requirement should state an arkreq:qualityCategory (e.g. performance, security, reliability)."@en , "Non-Functional Requirement sollte eine arkreq:qualityCategory nennen (z.B. performance, security, reliability)."@de ;
     sh:severity sh:Warning .
-
-
-##############################################################################
-#  GOAL SHAPES
-##############################################################################
-
-rshapes:GoalShape
-    a sh:NodeShape ;
-    sh:targetClass arkreq:Goal ;
-    sh:property rshapes:Goal-statement .
-
-rshapes:Goal-statement
-    a sh:PropertyShape ;
-    sh:path     arkreq:goalStatement ;
-    sh:minCount 1 ;
-    sh:datatype xsd:string ;
-    sh:minLength 5 ;
-    sh:message  "A Goal needs an arkreq:goalStatement (min. 5 characters)."@en , "Goal braucht eine arkreq:goalStatement (min. 5 Zeichen)."@de ;
-    sh:severity sh:Violation .
 
 
 ##############################################################################

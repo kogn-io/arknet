@@ -211,7 +211,7 @@ public interface RequirementRepository {
      * side of the read-modify-write round trip whose write side {@link #compareAndUpdate} guards.
      *
      * <p><strong>What "together" guarantees.</strong> The core fields (type, title, description,
-     * rationale, status, priority, motivatedBy, qualityCategory) and the token itself (recorded by the last
+     * rationale, status, priority, qualityCategory) and the token itself (recorded by the last
      * write through this port) come from one query call - one snapshot.
      * {@code usesTerms} and {@code acceptanceCriteria}, in contrast, are filled in by later,
      * independent follow-up reads; that is safe because a later read can only be fresher, never

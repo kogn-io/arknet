@@ -47,8 +47,6 @@ public interface AddRequirement {
      *                        registering a requirement more than a recorded reason is worth
      * @param type            functional vs. non-functional classification
      * @param priority        MoSCoW priority; optional (may be {@code null})
-     * @param motivatedBy     IRI of the motivating {@code arkreq:Goal}; optional (may be
-     *                        {@code null})
      * @param qualityCategory free-text quality category; optional (may be {@code null}),
      *                        only meaningful for {@link RequirementType#NON_FUNCTIONAL}
      * @param acceptanceCriteria the testable "Done when ..." criteria, as plain texts; required,
@@ -68,7 +66,6 @@ public interface AddRequirement {
             String rationale,
             RequirementType type,
             Priority priority,
-            String motivatedBy,
             String qualityCategory,
             List<String> acceptanceCriteria,
             String language) {

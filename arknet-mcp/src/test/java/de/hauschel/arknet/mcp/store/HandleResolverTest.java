@@ -64,7 +64,7 @@ class HandleResolverTest {
         requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.", null,
-                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null,
                 List.of(), List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of()), null);
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
