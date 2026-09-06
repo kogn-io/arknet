@@ -158,6 +158,13 @@ public class RoleService
      * would let the same call reject on one attempt and succeed on the next depending on unrelated
      * timing.
      *
+     * <p>That single resolution happens <strong>after</strong> the role has been read, so a call
+     * that names both a missing role and a missing actor reports {@link RoleNotFoundException}
+     * first: the role is the resource this call addresses, and a caller told only about the actor
+     * code would fix it and learn about the missing role in a second round. The retry invariant is
+     * untouched - the first read is handed into the loop, so the normal path still costs exactly
+     * one read.</p>
+     *
      * <p>A call that changes neither text, neither field's language tag, nor the occupancy is a
      * no-op: it returns the role as read without writing - the same "naming a field with its
      * already-current text but an explicit, different language is still a write" rule
@@ -166,12 +173,16 @@ public class RoleService
      */
     private Role updateWithOptimisticRetry(ProjectId projectId, RoleCode code, String name, String description,
             List<String> filledByActorCodes, String language, String defaultLanguage) {
+        RoleRepository.CurrentRole current = repository.findCurrentByCode(projectId, code, defaultLanguage)
+                .orElseThrow(() -> new RoleNotFoundException(projectId, code));
         List<ActorId> resolvedFilledBy =
                 filledByActorCodes == null ? null : resolveActorCodes(projectId, filledByActorCodes);
         RoleConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-            RoleRepository.CurrentRole current = repository.findCurrentByCode(projectId, code, defaultLanguage)
-                    .orElseThrow(() -> new RoleNotFoundException(projectId, code));
+            if (attempt > 1) {
+                current = repository.findCurrentByCode(projectId, code, defaultLanguage)
+                        .orElseThrow(() -> new RoleNotFoundException(projectId, code));
+            }
             Role updated = new Role(current.value().id(), current.value().code(),
                     name != null ? name : current.value().name(),
                     description != null ? description : current.value().description(),

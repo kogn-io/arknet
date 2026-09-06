@@ -81,6 +81,21 @@ class RoleTest {
         assertEquals(List.of(ACTOR_1, ACTOR_2), role.filledBy());
     }
 
+    /**
+     * {@code arkproc:filledBy} is a set in the store, read back without a promised solution order,
+     * so the order a caller happened to name the occupants in must not survive into the aggregate -
+     * otherwise re-stating the same occupancy differently ordered would read as a change and cost a
+     * PROV revision behind which nothing changed ({@code RoleService}'s no-op contract).
+     */
+    @Test
+    void ordersFilledByCanonicallySoTheCallersOrderNeverReachesEquality() {
+        Role oneWayRound = new Role(ID, CODE, "Requirements Engineer", null, List.of(ACTOR_1, ACTOR_2));
+        Role theOther = new Role(ID, CODE, "Requirements Engineer", null, List.of(ACTOR_2, ACTOR_1));
+
+        assertEquals(List.of(ACTOR_1, ACTOR_2), theOther.filledBy());
+        assertEquals(oneWayRound, theOther);
+    }
+
     @Test
     void acceptsSeveralOccupants() {
         Role role = new Role(ID, CODE, "Requirements Engineer", "Writes and maintains requirements.",

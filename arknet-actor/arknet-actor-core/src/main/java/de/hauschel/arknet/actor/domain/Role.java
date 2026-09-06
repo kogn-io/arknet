@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.actor.domain;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -49,8 +50,10 @@ import java.util.Objects;
  *                    {@code arknet:name} and is required by the role SHACL shape
  * @param description free-text description of the role; maps to {@code arknet:description}.
  *                    Optional (may be {@code null}), but never blank when present
- * @param filledBy    the actors currently occupying this role, in no particular order; maps to
- *                    {@code arkproc:filledBy}. Never {@code null}, may be empty - an unfilled role
+ * @param filledBy    the actors currently occupying this role, deduplicated and canonically
+ *                    ordered by identity (the edge is an RDF set, so the caller's order carries no
+ *                    meaning and must not reach equality); maps to {@code arkproc:filledBy}. Never
+ *                    {@code null}, may be empty - an unfilled role
  */
 public record Role(
         RoleId id,
@@ -73,9 +76,14 @@ public record Role(
         if (filledBy.stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("filledBy must not contain a null actor identity");
         }
-        // Deduplicated (not merely defensively copied): arkproc:filledBy is an RDF edge, so two
-        // identical triples read back as one - the aggregate's own equality should not depend on
-        // whether a caller happened to name the same actor twice.
-        filledBy = filledBy.stream().distinct().toList();
+        // Deduplicated and canonically ordered (not merely defensively copied): arkproc:filledBy
+        // is an RDF edge, i.e. an unordered set, so neither a repeated mention nor the order a
+        // caller happened to name the occupants in may reach this record's equality - otherwise
+        // re-stating the same occupancy in a different order would read as a change and cost a
+        // PROV revision behind which nothing changed.
+        filledBy = filledBy.stream()
+                .distinct()
+                .sorted(Comparator.comparing(occupant -> occupant.value().value()))
+                .toList();
     }
 }

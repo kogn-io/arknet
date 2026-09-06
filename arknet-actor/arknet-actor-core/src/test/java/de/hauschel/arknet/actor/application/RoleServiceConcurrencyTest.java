@@ -19,6 +19,10 @@ import de.hauschel.arknet.actor.application.port.in.AddRole.NewRole;
 import de.hauschel.arknet.actor.application.port.in.RoleDetail;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.application.port.out.RoleRepository;
+import de.hauschel.arknet.actor.domain.Actor;
+import de.hauschel.arknet.actor.domain.ActorCode;
+import de.hauschel.arknet.actor.domain.ActorId;
+import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.actor.domain.Role;
 import de.hauschel.arknet.actor.domain.RoleCode;
 import de.hauschel.arknet.actor.domain.RoleConcurrentlyModifiedException;
@@ -109,6 +113,32 @@ class RoleServiceConcurrencyTest {
                 added.role().description(), null, null, DEFAULT_LANGUAGE);
 
         assertEquals(added.role(), result.role());
+    }
+
+    /**
+     * {@code arkproc:filledBy} is a set in the store: naming the same two occupants in the other
+     * order states the same occupancy and must therefore write nothing. Pinned against a store that
+     * reports a conflict on every write, so a write would surface as
+     * {@link RoleConcurrentlyModifiedException} rather than as a silent extra PROV revision.
+     */
+    @Test
+    void aReorderedButOtherwiseIdenticalOccupancyIsStillANoOp() {
+        actorRepository.create(WS, actor("ACTOR-1", "Erstbesetzung"));
+        actorRepository.create(WS, actor("ACTOR-2", "Zweitbesetzung"));
+        RoleDetail added = otherCaller.add(WS, new NewRole("Case Handler", null, List.of("ACTOR-1", "ACTOR-2"), "en"),
+                DEFAULT_LANGUAGE);
+        RoleService underTest = new RoleService(new AlwaysConflictingRepository(store), actorRepository,
+                resourceIdFactory);
+
+        RoleDetail result = underTest.update(WS, added.role().code(), null, null, List.of("ACTOR-2", "ACTOR-1"), null,
+                DEFAULT_LANGUAGE);
+
+        assertEquals(added.role(), result.role());
+    }
+
+    private static Actor actor(String code, String name) {
+        return new Actor(new ActorId(ResourceId.of("https://w3id.org/arknet/id/" + code.toLowerCase())),
+                new ActorCode(code), ActorType.HUMAN, name, null);
     }
 
     private static NewRole newRole() {

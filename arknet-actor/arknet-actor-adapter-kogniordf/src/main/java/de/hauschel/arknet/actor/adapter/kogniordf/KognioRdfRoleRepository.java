@@ -608,10 +608,18 @@ public class KognioRdfRoleRepository implements RoleRepository {
      * the property carries no {@code sh:class}/{@code sh:nodeKind} it does not itself declare
      * beyond IRI-ness, so a store-first edge may in principle target a blank node, which
      * {@link ActorId} cannot represent - excluded here.
+     *
+     * <p>{@code ORDER BY ?a} is query hygiene, not the guard: a SPARQL solution sequence is
+     * promised by nothing without it, and this edge is a set in the store. What actually makes an
+     * unchanged occupancy read back identically every time is {@link Role}'s own compact
+     * constructor, which sorts by the same key - every result of this method reaches a caller only
+     * through it. Deliberately kept anyway, so the query is deterministic on its own terms and
+     * agrees with the aggregate rather than relying on it; that also means removing it breaks no
+     * test, and no test claims otherwise.</p>
      */
     private List<ActorId> readFilledBy(Function<String, Stream<BindingSet>> selectFn, String subject) {
         String query = "SELECT ?a WHERE { GRAPH <" + ROLE_GRAPH + "> { "
-                + subject + " <" + FILLED_BY_PROPERTY + "> ?a } FILTER(isIRI(?a)) }";
+                + subject + " <" + FILLED_BY_PROPERTY + "> ?a } FILTER(isIRI(?a)) } ORDER BY ?a";
         return selectFn.apply(query)
                 .map(row -> new ActorId(ResourceId.of(iriOf(row, "a").getIRIString())))
                 .toList();

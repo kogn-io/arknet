@@ -27,7 +27,9 @@ import de.hauschel.arknet.kernel.ProjectId;
  * untouched, an empty list is the explicit, unambiguous signal to remove every occupant (vacating
  * the role, a legitimate state - TERM-21/FR-7), and a non-empty list replaces the occupancy
  * wholesale. Independent of {@code language}: touching the occupancy never demands a language, and
- * touching the text never demands an occupancy list.</p>
+ * touching the text never demands an occupancy list. The occupancy is a <strong>set</strong>, so
+ * the order the codes are listed in carries no meaning and is not preserved: re-stating the same
+ * occupants in a different order changes nothing and writes nothing.</p>
  *
  * <p><strong>What a role update deliberately cannot change.</strong> Not its {@link RoleCode}: it
  * stands from the moment the role is created, the same reasoning {@link UpdateActor} gives for
@@ -59,7 +61,9 @@ public interface UpdateRole {
      *                           changing and that ships no {@code language}
      * @return the updated role, with its {@code filledBy} occupants resolved
      * @throws de.hauschel.arknet.actor.domain.RoleNotFoundException if no role with {@code code}
-     *         exists in this project
+     *         exists in this project - reported in preference to
+     *         {@code ActorNotFoundException} when a call gets both wrong, the role being the
+     *         resource the call addresses
      * @throws de.hauschel.arknet.actor.domain.ActorNotFoundException if a
      *         {@code filledByActorCodes} entry names no actor in {@code projectId} - rejected
      *         before anything is written

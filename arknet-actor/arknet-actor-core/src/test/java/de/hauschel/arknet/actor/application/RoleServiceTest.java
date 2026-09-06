@@ -272,6 +272,18 @@ class RoleServiceTest {
         assertTrue(service.get(WS, code, null).orElseThrow().role().filledBy().isEmpty());
     }
 
+    /**
+     * The role is the resource this call addresses, so it is the one a caller has to hear about
+     * first: a call naming a missing role <em>and</em> a missing actor code must not spend a round
+     * on the actor code before revealing that the role does not exist.
+     */
+    @Test
+    void updateReportsTheUnknownRoleBeforeAnUnknownActorCode() {
+        assertThrows(RoleNotFoundException.class,
+                () -> service.update(WS, new RoleCode("ROLE-99"), null, null, List.of("ACTOR-42"), null,
+                        DEFAULT_LANGUAGE));
+    }
+
     @Test
     void updateChangesNeitherCode() {
         RoleDetail added = service.add(WS, newRole(), DEFAULT_LANGUAGE);

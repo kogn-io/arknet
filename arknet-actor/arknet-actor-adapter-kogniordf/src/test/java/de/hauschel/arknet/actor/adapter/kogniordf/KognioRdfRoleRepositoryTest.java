@@ -111,6 +111,11 @@ class KognioRdfRoleRepositoryTest {
         return new ActorId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID()));
     }
 
+    /** A deliberately chosen opaque actor identity, for the tests that pin the occupancy order. */
+    private static ActorId actorId(String localName) {
+        return new ActorId(ResourceId.of("https://w3id.org/arknet/id/" + localName));
+    }
+
     private static Role role(RoleCode code, String description, List<ActorId> filledBy) {
         return new Role(freshId(), code, "Requirements Engineer", description, filledBy);
     }
@@ -250,8 +255,14 @@ class KognioRdfRoleRepositoryTest {
         }
     }
 
+    /**
+     * The occupancy is a set in the store, so the read has to impose the order rather than inherit
+     * one ({@code ORDER BY ?a}) - it must come back exactly as the aggregate canonicalised it, or
+     * an unchanged occupancy could read back differently from one call to the next and the
+     * committed {@code store-report.html} export could diff without a model change.
+     */
     @Test
-    void filledByAcceptsSeveralOccupants() {
+    void filledByAcceptsSeveralOccupantsAndReadsThemBackInTheAggregatesCanonicalOrder() {
         ActorId first = freshActorId();
         ActorId second = freshActorId();
         Role stored = role(new RoleCode("ROLE-1"), null, List.of(first, second));
@@ -260,7 +271,7 @@ class KognioRdfRoleRepositoryTest {
 
         Role found = repository.findByCode(PROJECT_A, new RoleCode("ROLE-1"), "en").orElseThrow();
         assertEquals(2, found.filledBy().size());
-        assertTrue(found.filledBy().containsAll(List.of(first, second)));
+        assertEquals(stored.filledBy(), found.filledBy(), found.filledBy().toString());
     }
 
     /** {@code compareAndUpdate} replaces the occupancy wholesale, mirroring every other field's replace. */
@@ -327,12 +338,18 @@ class KognioRdfRoleRepositoryTest {
      * sides of that meeting are out-adapters. The sibling actor repository shares {@link #funnel},
      * exactly as the composition root wires it.</p>
      */
+    /**
+     * The two occupants get deliberately chosen opaque identities here, ordered the other way round
+     * than the {@code ACTOR-N} codes the call names them under: the occupancy is ordered by
+     * identity, not by the order a caller happened to type - that is what makes an unchanged
+     * occupancy read back identically every time.
+     */
     @Test
     void filledByReadsBackAsCodeAndNameThroughTheServiceReadPath() {
         ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, funnel);
-        actors.create(PROJECT_A, new Actor(freshActorId(), new ActorCode("ACTOR-1"), ActorType.HUMAN,
+        actors.create(PROJECT_A, new Actor(actorId("actor-b"), new ActorCode("ACTOR-1"), ActorType.HUMAN,
                 "Sachbearbeiter", null));
-        actors.create(PROJECT_A, new Actor(freshActorId(), new ActorCode("ACTOR-2"), ActorType.SYSTEM,
+        actors.create(PROJECT_A, new Actor(actorId("actor-a"), new ActorCode("ACTOR-2"), ActorType.SYSTEM,
                 "Fachanwendung", null));
         RoleService service = new RoleService(repository, actors, new UuidResourceIdFactory());
 
@@ -341,11 +358,8 @@ class KognioRdfRoleRepositoryTest {
                 .role().code();
 
         List<FilledByActor> occupants = service.get(PROJECT_A, code, "en").orElseThrow().filledByActors();
-        assertEquals(2, occupants.size(), occupants.toString());
-        assertTrue(occupants.contains(new FilledByActor(new ActorCode("ACTOR-1"), "Sachbearbeiter")),
-                occupants.toString());
-        assertTrue(occupants.contains(new FilledByActor(new ActorCode("ACTOR-2"), "Fachanwendung")),
-                occupants.toString());
+        assertEquals(List.of(new FilledByActor(new ActorCode("ACTOR-2"), "Fachanwendung"),
+                new FilledByActor(new ActorCode("ACTOR-1"), "Sachbearbeiter")), occupants, occupants.toString());
         assertEquals(occupants, service.list(PROJECT_A, "en").get(0).filledByActors(),
                 "role_list must resolve the occupants the same way role_get does");
     }
