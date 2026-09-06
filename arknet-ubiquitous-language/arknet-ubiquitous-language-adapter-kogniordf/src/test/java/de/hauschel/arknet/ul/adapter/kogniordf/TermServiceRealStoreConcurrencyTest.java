@@ -54,6 +54,7 @@ import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermCycleException;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermLabelMismatchException;
 
 /**
  * Regression test for the second interleaving of the code-assignment race, reproduced against a
@@ -188,24 +189,28 @@ class TermServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * The {@code term_update} counterpart of the race above (issue #230 review): two
-     * {@code term_update}-shaped calls against the very same term, both reading the same
-     * {@code arkprov:head}, each correcting a <em>different</em> language variant of
-     * {@code skos:prefLabel} - proof that the CAS token races on regardless, because it guards
-     * the whole resource, not a single predicate/language slot ({@code
-     * arknet-ubiquitous-language/CLAUDE.md}: "der Head ist pro Ressource, nicht pro
-     * Praedikat"). Unlike {@code ProjectRegistry#updateAttributes}'s CAS retry (which lives one
-     * layer up, in {@code ProjectService}), {@link KognioRdfTermRepository#update}'s retry loop
-     * lives inside the out-adapter itself and re-reads the current state on every attempt, so it
-     * absorbs the lost race transparently: neither caller ever sees {@link
-     * de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException}, and the assertions below
-     * pin the two failure modes a purely mocked/in-memory test cannot exercise - a lost update
-     * (the loser's {@code @fr} label silently missing) and an orphaned duplicate (the original
-     * {@code @de} label surviving next to its own correction, the exact defect the language-scoped
-     * delete in issue #228 exists to prevent).
+     * The {@code term_update} counterpart of the race above (issue #230 review), reworked for
+     * FR-10 (kogn-io/arknet#502): a term's {@code skos:prefLabel} is now the same word under every
+     * language tag, so two racers writing two genuinely different words for two different
+     * languages - the original scenario here - would itself be the violation the rule exists to
+     * prevent, not a race worth surviving. The race that remains interesting is a translation
+     * racing a rename: the winner renames the term outright (no {@code language}); the loser,
+     * unaware, tries to add an {@code @fr} translation of the term's OLD word. The loser's
+     * pre-transaction mismatch check passes against its own (still stale) read - the old word
+     * still matches at that point - but it then loses the head CAS to the winner's commit under
+     * {@code SERIALIZABLE} isolation. Its internal retry (inside
+     * {@link KognioRdfTermRepository#update}) re-reads the now-current state, sees the winner's
+     * new word, and correctly rejects the stale translation with {@link TermLabelMismatchException}
+     * instead of silently writing a translation of a word the term no longer carries.
+     *
+     * <p>This is the reason the mismatch guard sits in
+     * {@link KognioRdfTermRepository#attemptUpdate}, checked against the very same
+     * compare-and-set read on every attempt, rather than as a separate, one-shot read in
+     * {@code TermService}: only a check that reruns on every retry can see the concurrent rename
+     * before it writes.</p>
      */
     @Test
-    void concurrentUpdatesOfDifferentLanguageVariants_bothSurviveWithoutLossOrDuplication()
+    void concurrentRenameAndStaleTranslationWrite_theStaleTranslationIsRejectedNotSilentlyWritten()
             throws InterruptedException {
         TermRepository straightThrough = KognioRdfTermRepositoryFactory.over(realLifecycle);
         TermId id = new TermId(new UuidResourceIdFactory().newId());
@@ -226,7 +231,7 @@ class TermServiceRealStoreConcurrencyTest {
 
         Thread winnerThread = new Thread(() -> {
             try {
-                winnerRepository.update(WS, code, "Kunde (korrigiert)", null, "de", null, null, null);
+                winnerRepository.update(WS, code, "Kunde (korrigiert)", null, null, null, null, null);
             } catch (Throwable t) {
                 winnerFailure.set(t);
             } finally {
@@ -235,7 +240,7 @@ class TermServiceRealStoreConcurrencyTest {
         }, "racer-A");
         Thread loserThread = new Thread(() -> {
             try {
-                loserRepository.update(WS, code, "Client", null, "fr", null, null, null);
+                loserRepository.update(WS, code, "Kunde", null, "fr", null, null, null);
             } catch (Throwable t) {
                 loserFailure.set(t);
             }
@@ -247,18 +252,22 @@ class TermServiceRealStoreConcurrencyTest {
         loserThread.join();
 
         assertNull(winnerFailure.get(), "the winner commits first and must not fail");
-        assertNull(loserFailure.get(),
-                "the internal retry loop (KognioRdfTermRepository#update) must absorb the lost race "
-                        + "with a fresh read - no caller-visible failure");
+        assertNotNull(loserFailure.get(),
+                "the loser's stale translation write must be rejected once its retry sees the winner's rename");
+        assertInstanceOf(TermLabelMismatchException.class, loserFailure.get(),
+                "the retry must re-read the renamed word and report a label mismatch, not a generic "
+                        + "concurrent-modification failure");
+        assertTrue(loserFailure.get().getMessage().contains("Kunde (korrigiert)"),
+                "the rejection must name the term's now-current label");
 
         assertTrue(subjectHasLanguageTaggedPrefLabel(id, "Kunde (korrigiert)", "de"),
-                "the winner's corrected @de label must be stored");
-        assertTrue(subjectHasLanguageTaggedPrefLabel(id, "Client", "fr"),
-                "the loser's new @fr label must be stored - not lost to the lost race");
+                "the winner's rename must be stored");
+        assertFalse(subjectHasLanguageTaggedPrefLabel(id, "Kunde (korrigiert)", "fr"),
+                "the rejected loser must not have written any @fr variant");
         assertFalse(subjectHasLanguageTaggedPrefLabel(id, "Kunde", "de"),
-                "the original @de label must have been replaced, not left standing next to its own correction");
-        assertEquals(2, countPrefLabelTriples(id),
-                "exactly one prefLabel per language - no accumulated duplicate from the retried write");
+                "the original word must not survive the winner's rename");
+        assertEquals(1, countPrefLabelTriples(id),
+                "exactly one prefLabel: the winner's rename - nothing added or left over from the loser");
     }
 
     /**

@@ -179,7 +179,9 @@ public final class UbiquitousLanguageMcpTools {
             description = "Register a new ubiquitous-language term (minted as a SKOS concept in the glossary)." + PROSE_MARKUP)
     public String add(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "The term itself (its preferred label), e.g. 'Gutschrift'")
+            @McpToolParam(description = "The term itself (its preferred label), e.g. 'Gutschrift' - the same "
+                    + "word under every language the term is later given (label in the language the domain "
+                    + "community actually uses for it); only the definition is translated")
             final String label,
             @McpToolParam(description = "The meaning of the term (its definition). Domain meaning only - no "
                     + "architecture, technology, or implementation decisions (source-of-record, persistence, "
@@ -255,7 +257,13 @@ public final class UbiquitousLanguageMcpTools {
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
-            @McpToolParam(description = "New preferred label (optional, unchanged if omitted)", required = false)
+            @McpToolParam(description = "New preferred label (optional, unchanged if omitted). Two distinct "
+                    + "meanings depending on language: omitted -> renames the term under EVERY language tag it "
+                    + "carries at once (a glossary term is the same word in every language, only the definition "
+                    + "is translated); given -> must equal the label the term already carries, and is then only "
+                    + "added/refreshed under that one language tag - a differing word is rejected, naming the "
+                    + "existing label, so a caller who meant to rename knows to omit language instead. To "
+                    + "translate the term, leave label out and supply definition alone.", required = false)
             final String label,
             @McpToolParam(description = "New definition (optional, unchanged if omitted). Domain meaning only - "
                     + "no architecture, technology, or implementation decisions (source-of-record, persistence, "
@@ -283,7 +291,9 @@ public final class UbiquitousLanguageMcpTools {
                     + "carrying the tag actually written is replaced - every other language variant of a "
                     + "field being corrected survives untouched, except a stale untagged one left over from "
                     + "before a language was ever supplied, which is swept away when the resolved tag equals "
-                    + "the project's default.", required = false)
+                    + "the project's default. For label specifically, this is what decides between the two "
+                    + "meanings above: omitted -> rename under every tag, given -> that one tag only.",
+                    required = false)
             final String language,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {

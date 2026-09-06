@@ -15,6 +15,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermCycleException;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermLabelMismatchException;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 import de.hauschel.arknet.ul.domain.TermReferencedException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
@@ -103,33 +104,44 @@ public interface TermRepository {
      * {@code broader}, {@code related}) {@code null} is a no-op: nothing is written, no revision is
      * recorded, and the revision head does not move.</p>
      *
+     * <p><strong>The label is one word under every language (kogn-io/arknet#502, FR-10).</strong>
+     * {@code prefLabel} therefore has two meanings, told apart by whether {@code language} was
+     * supplied. With an explicit {@code language} it is a language-scoped write - the translation
+     * path - and must equal the label the term already carries, or the call is rejected with
+     * {@link TermLabelMismatchException} naming that label; accepted, it writes the same word under
+     * that one tag. Without {@code language} it is a rename: the new word replaces the label under
+     * every language tag the term currently carries (plus {@code defaultLanguage}, if the project
+     * has one), so no tag is left holding the old word. A definition write is language-scoped in
+     * both cases.</p>
+     *
      * @param projectId the project (architecture model) the term lives in
      * @param code        the term's own, unchanged business code - {@code update} never rewrites
      *                    the term's identifier, so this can never itself introduce a code
      *                    collision
      * @param prefLabel   the new preferred label, or {@code null} to leave every existing
-     *                    preferred label untouched
+     *                    preferred label untouched - a rename under every tag without {@code
+     *                    language}, a same-word translation write with it (see above)
      * @param definition  the new definition, or {@code null} to leave every existing
      *                    definition untouched
-     * @param language    the BCP-47 language tag the new {@code prefLabel}/{@code definition} is
-     *                    written in (e.g. {@code "de"}), or {@code null} for a plain, untagged
-     *                    literal (the caller, {@code TermService#update}, has already resolved a
-     *                    {@code null} against the project's default before this port sees it, or
-     *                    rejected the call - see {@code UpdateTerm}'s own {@code language}
-     *                    parameter). Deletion is scoped to this same tag: only the existing literal
-     *                    carrying it is removed, so every other language-tagged variant of a field
-     *                    being corrected survives untouched
-     * @param defaultLanguage the target project's configured default language, canonicalized by
-     *                    the caller, or {@code null} if it has none. Used only to decide whether an
+     * @param language    the BCP-47 language tag the caller named explicitly (e.g. {@code "de"}),
+     *                    or {@code null} if the caller named none. The tag a {@code definition}
+     *                    (and a translation-path {@code prefLabel}) is actually written under is
+     *                    {@code language} if given, else {@code defaultLanguage}, else untagged -
+     *                    derived here, not by the caller, because whether {@code language} was
+     *                    named at all is what decides a {@code prefLabel}'s meaning ({@code
+     *                    TermService#update} still rejects a call that would resolve to no
+     *                    language at all before this port sees it). Deletion is scoped to the tag
+     *                    written: only the existing literal carrying it is removed, so every other
+     *                    language-tagged variant of a field being corrected survives untouched
+     * @param defaultLanguage the target project's configured default language, or {@code null} if
+     *                    it has none. Besides being the fallback tag above, it decides whether an
      *                    existing <em>untagged</em> literal on {@code prefLabel}/{@code definition}
      *                    should be swept away rather than preserved: when the tag actually written
      *                    for that field equals {@code defaultLanguage}, the literal being written
      *                    is - by construction - the very literal an omitted {@code language}
      *                    argument would have resolved to, so a still-untagged sibling of the same
      *                    predicate is a stale duplicate of it, not a genuine other-language
-     *                    variant, and the delete filter widens to remove it too (issue #258). Has
-     *                    no bearing on which tag is actually written - that decision was already
-     *                    made by the caller
+     *                    variant, and the delete filter widens to remove it too (issue #258)
      * @param broader     {@code null} to leave an already-set {@code skos:broader} term untouched,
      *                    {@link Optional#empty()} to clear it, or {@link Optional#of} the code of
      *                    an already-existing term to set/replace it - resolved and cycle-checked
@@ -151,6 +163,12 @@ public interface TermRepository {
      * @throws TermCycleException                if setting {@code broader} would make
      *                                            {@code code} its own (direct or transitive)
      *                                            broader term
+     * @throws TermLabelMismatchException        if {@code prefLabel} and {@code language} are
+     *                                            both given and {@code prefLabel} differs from the
+     *                                            label the term already carries - checked against
+     *                                            the same read the compare-and-set is based on, so
+     *                                            a rename committed concurrently is seen on the
+     *                                            retry, never overwritten
      * @throws TermConcurrentlyModifiedException if a concurrent writer kept advancing the term's
      *                                            revision head across every retry attempt
      * @throws RuntimeException if the patched term violates a SHACL write constraint. The

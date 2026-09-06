@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -56,6 +57,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermCycleException;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermLabelMismatchException;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 import de.hauschel.arknet.ul.domain.TermReferencedException;
 
@@ -147,6 +149,20 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * #248). A concept is never dropped for lacking the requested language - only the shown language
  * degrades. {@code findByIds} (the {@link ResolveTerms} batch) is deliberately untouched: it joins
  * only {@code identifier}, never {@code prefLabel}/{@code definition}.</p>
+ *
+ * <p><strong>One word under every language (kogn-io/arknet#502, FR-10).</strong> Several
+ * {@code skos:prefLabel} literals are one word under several tags, never a translation - only the
+ * definition is translated. {@link #attemptUpdate} enforces that on the write path, where a
+ * supplied {@code prefLabel} means one of two things depending on whether the caller named a
+ * language: with an explicit tag it is a translation-scoped write that must equal every label the
+ * term already carries (else {@link TermLabelMismatchException}, naming them) and then merely
+ * adds or refreshes that one tag; without one it is a rename that replaces the label under every
+ * tag the term carries at once (plus the project default), so no tag keeps the old word. The
+ * comparison runs against the same read the compare-and-set is based on, so a rename committed
+ * concurrently moves the head, the retry re-reads the new word, and the stale translation write is
+ * rejected rather than silently reverting the rename - the reason this check is not a separate
+ * read in {@code TermService}. Existing data written before the rule holds is not migrated: a
+ * store-first term still carrying two words is corrected by a rename.</p>
  *
  * <p><strong>Blank-node subject guard.</strong> {@code ulshapes:TermShape} carries no
  * {@code sh:nodeKind sh:IRI} constraint on the subject, so a store-first concept whose
@@ -505,12 +521,12 @@ public class KognioRdfTermRepository implements TermRepository {
             }
         }
 
-        String tag = canonicalLanguageTag(language);
+        String explicitTag = canonicalLanguageTag(language);
         String defaultTag = canonicalLanguageTag(defaultLanguage);
         TermConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             try {
-                return attemptUpdate(projectId, code, prefLabel, definition, tag, defaultTag, broader, related);
+                return attemptUpdate(projectId, code, prefLabel, definition, explicitTag, defaultTag, broader, related);
             } catch (TermConcurrentlyModifiedException e) {
                 // A concurrent writer advanced the head between our read and our write - retry
                 // against the now-current state instead of surfacing a transient race.
@@ -682,9 +698,17 @@ public class KognioRdfTermRepository implements TermRepository {
      * re-asserts {@code current}'s own existing targets for the gate, mirroring the {@code broader}
      * branch. No cycle check accompanies it - {@code skos:related} is symmetric, and two mutually
      * related terms are the relation working as intended rather than a loop to break.</p>
+     *
+     * <p><strong>Label (kogn-io/arknet#502).</strong> {@code explicitTag} is the tag the caller
+     * named, {@code null} if none; {@code definition} is written under it, else under {@code
+     * defaultTag}, else untagged. A non-{@code null} {@code prefLabel} with an {@code explicitTag}
+     * is compared against every label {@code current} carries before anything is built for the
+     * gate ({@link #rejectLabelMismatch}) and then written under that one tag, scoped exactly like
+     * a definition; without an {@code explicitTag} it is a rename, written under every tag
+     * {@link #renameTags} derives from {@code current} - see the class-level note.</p>
      */
     private Term attemptUpdate(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            String language, String defaultLanguage, Optional<TermCode> broader, List<TermCode> related) {
+            String explicitTag, String defaultTag, Optional<TermCode> broader, List<TermCode> related) {
         DatasetId dataset = new DatasetId(projectId.value());
         CurrentTerm currentTerm;
         String broaderTargetIri = null;
@@ -737,8 +761,16 @@ public class KognioRdfTermRepository implements TermRepository {
             // No field to patch - a true no-op: the funnel is never
             // consulted, so no revision is recorded and the head does not move (see class-level
             // "No-op update" note).
-            return resultingTerm(current, null, null, null, null, defaultLanguage);
+            return resultingTerm(current, null, null, null, null, defaultTag);
         }
+
+        String writeTag = explicitTag != null ? explicitTag : defaultTag;
+        if (prefLabel != null && explicitTag != null) {
+            rejectLabelMismatch(projectId, code, prefLabel, explicitTag, current.prefLabels);
+        }
+        List<String> renameTags = prefLabel != null && explicitTag == null
+                ? renameTags(current.prefLabels, defaultTag)
+                : List.of();
 
         String subjectIriString = current.id.value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
@@ -754,8 +786,12 @@ public class KognioRdfTermRepository implements TermRepository {
         Graph writeCandidate = rdf.createGraph();
         Graph assertedContext = rdf.createGraph();
         assertedContext.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
-        if (prefLabel != null) {
-            writeCandidate.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), rdf.createLiteral(prefLabel));
+        if (prefLabel != null && explicitTag != null) {
+            writeCandidate.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(prefLabel, explicitTag));
+        } else if (prefLabel != null) {
+            for (String tag : renameTags) {
+                writeCandidate.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(prefLabel, tag));
+            }
         } else {
             for (LocalizedLiteral existing : current.prefLabels) {
                 assertedContext.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), toLiteral(existing));
@@ -821,13 +857,20 @@ public class KognioRdfTermRepository implements TermRepository {
                         assertNoCycle(tx::select, projectId, code, subjectIriString,
                                 finalBroaderCode, finalBroaderTargetIri);
                     }
-                    if (prefLabel != null) {
-                        tx.update(deleteTriplesOfLanguage(subject, PREF_LABEL_PROPERTY, language, defaultLanguage));
-                        tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, literalOf(prefLabel, language)));
+                    if (prefLabel != null && explicitTag != null) {
+                        tx.update(deleteTriplesOfLanguage(subject, PREF_LABEL_PROPERTY, explicitTag, defaultTag));
+                        tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, literalOf(prefLabel, explicitTag)));
+                    } else if (prefLabel != null) {
+                        // Rename: the old word goes under every tag, the new one comes back under
+                        // every tag renameTags derived - the one write that is not language-scoped.
+                        tx.update(deleteAllTriplesOf(subject, PREF_LABEL_PROPERTY));
+                        for (String tag : renameTags) {
+                            tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, literalOf(prefLabel, tag)));
+                        }
                     }
                     if (definition != null) {
-                        tx.update(deleteTriplesOfLanguage(subject, DEFINITION_PROPERTY, language, defaultLanguage));
-                        tx.add(graphIri, singleTriple(subjectIri, DEFINITION_PROPERTY, literalOf(definition, language)));
+                        tx.update(deleteTriplesOfLanguage(subject, DEFINITION_PROPERTY, writeTag, defaultTag));
+                        tx.add(graphIri, singleTriple(subjectIri, DEFINITION_PROPERTY, literalOf(definition, writeTag)));
                     }
                     if (broader != null) {
                         // Both "set/replace" and "explicit clear" start by removing the existing
@@ -851,7 +894,50 @@ public class KognioRdfTermRepository implements TermRepository {
                     }
                 });
 
-        return resultingTerm(current, prefLabel, definition, broader, related, defaultLanguage);
+        return resultingTerm(current, prefLabel, definition, broader, related, defaultTag);
+    }
+
+    /**
+     * Rejects a translation-scoped label write whose word differs from any label the term already
+     * carries (kogn-io/arknet#502, FR-10) - naming every distinct existing word, so a caller who
+     * meant to translate sees what the term is called, and a caller who meant to rename is told to
+     * drop the language. Runs against {@code existing} as read for this attempt's compare-and-set,
+     * see the class-level "One word under every language" note for why that is race-free.
+     */
+    private static void rejectLabelMismatch(ProjectId projectId, TermCode code, String prefLabel,
+            String explicitTag, List<LocalizedLiteral> existing) {
+        List<String> existingWords = existing.stream().map(LocalizedLiteral::value).distinct().toList();
+        if (existingWords.stream().anyMatch(word -> !word.equals(prefLabel))) {
+            throw new TermLabelMismatchException(projectId, code, prefLabel, explicitTag, existingWords);
+        }
+    }
+
+    /**
+     * The tags a rename writes the new word under: every tag {@code existing} carries (deduplicated
+     * case-insensitively, first spelling kept - a store-first {@code @DE} next to {@code @de} must
+     * not come back as two literals of one language) plus {@code defaultTag}, if the project has
+     * one. An untagged literal is not carried over once any tag remains: the word is the same under
+     * every tag, so the display fallback chain loses nothing, and the untagged slot was only ever a
+     * leftover from before a language was supplied (issue #258). Only when nothing would remain at
+     * all - no tagged label, no project default - is the rename written untagged, as a single
+     * {@code null} entry.
+     */
+    private static List<String> renameTags(List<LocalizedLiteral> existing, String defaultTag) {
+        Map<String, String> byLowerCase = new LinkedHashMap<>();
+        for (LocalizedLiteral literal : existing) {
+            if (literal.languageTag() != null) {
+                byLowerCase.putIfAbsent(literal.languageTag().toLowerCase(Locale.ROOT), literal.languageTag());
+            }
+        }
+        if (defaultTag != null) {
+            byLowerCase.putIfAbsent(defaultTag.toLowerCase(Locale.ROOT), defaultTag);
+        }
+        if (byLowerCase.isEmpty()) {
+            List<String> untagged = new ArrayList<>();
+            untagged.add(null);
+            return untagged;
+        }
+        return List.copyOf(new LinkedHashSet<>(byLowerCase.values()));
     }
 
     /** Deletes every existing triple of {@code subject} on {@code predicateIri} - a no-op if none exists. */
@@ -898,11 +984,12 @@ public class KognioRdfTermRepository implements TermRepository {
      *
      * <p><strong>Widening the filter for a default-language write (issue #258).</strong> {@code
      * language} is normally never {@code null} by the time a real {@code term_update} call reaches
-     * here - {@code TermService#update} already resolved it against the project's {@code
-     * defaultLanguage} (or rejected the call) before {@code prefLabel}/{@code definition} could be
-     * non-{@code null} - but this out-adapter's own port contract still permits a caller-supplied
-     * {@code null} directly (untagged write), so this method stays null-tolerant for that
-     * lower-level case. When {@code language} is non-{@code null} and (canonicalized) equals
+     * here - {@link #attemptUpdate} already fell back to the project's {@code defaultLanguage}
+     * for a caller that named none, and {@code TermService#update} rejected a call that would
+     * resolve to no language at all - but this out-adapter's own port contract still permits a
+     * caller-supplied {@code null} without a project default (untagged write), so this method
+     * stays null-tolerant for that lower-level case. When {@code language} is non-{@code null} and
+     * (canonicalized) equals
      * {@code defaultLanguage} (canonicalized), the literal about to be written <em>is</em>, by
      * construction, what an omitted {@code language} argument would have resolved to - so an
      * existing <em>untagged</em> literal on this predicate is no longer a genuine other-language
