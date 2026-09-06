@@ -39,6 +39,7 @@ public final class ModelViews {
     private final BoundedContextCards boundedContexts;
     private final AdrCards adrs;
     private final ActorCards actors;
+    private final RoleCards roles;
 
     /**
      * @param terms           the ubiquitous-language context's list in-port, read once into the
@@ -49,6 +50,7 @@ public final class ModelViews {
      * @param boundedContexts builds the bounded-context section
      * @param adrs            builds the architecture-decisions section
      * @param actors          builds the actor section
+     * @param roles           builds the role section (ADR-37/kogn-io/arknet#405)
      */
     public ModelViews(
             final ListTerms terms,
@@ -57,7 +59,8 @@ public final class ModelViews {
             final ConstraintCards constraints,
             final BoundedContextCards boundedContexts,
             final AdrCards adrs,
-            final ActorCards actors) {
+            final ActorCards actors,
+            final RoleCards roles) {
         this.terms = Objects.requireNonNull(terms, "terms");
         this.useCases = Objects.requireNonNull(useCases, "useCases");
         this.requirements = Objects.requireNonNull(requirements, "requirements");
@@ -65,6 +68,7 @@ public final class ModelViews {
         this.boundedContexts = Objects.requireNonNull(boundedContexts, "boundedContexts");
         this.adrs = Objects.requireNonNull(adrs, "adrs");
         this.actors = Objects.requireNonNull(actors, "actors");
+        this.roles = Objects.requireNonNull(roles, "roles");
     }
 
     /**
@@ -110,6 +114,7 @@ public final class ModelViews {
                 () -> useCases.section(projectId, displayLocale, glossary));
         collect(sections, failures, AdrCards.SECTION_TITLE, () -> adrs.section(projectId, glossary));
         collect(sections, failures, ActorCards.SECTION_TITLE, () -> actors.section(projectId));
+        collect(sections, failures, RoleCards.SECTION_TITLE, () -> roles.section(projectId, displayLocale));
         collect(sections, failures, TermCards.SECTION_TITLE, () -> TermCards.section(glossary));
         return new Views(CodeReferences.markUp(sections), failures);
     }

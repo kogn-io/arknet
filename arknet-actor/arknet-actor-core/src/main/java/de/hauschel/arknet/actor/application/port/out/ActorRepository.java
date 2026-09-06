@@ -206,4 +206,24 @@ public interface ActorRepository {
      * @return the resolved actors found, in no particular order, never {@code null}
      */
     List<ResolveActors.ResolvedActor> findByIds(ProjectId projectId, List<ResourceId> ids);
+
+    /**
+     * Finds every actor in a project whose identity is among {@code ids}, in one store
+     * round-trip, returning the full {@link Actor} aggregate rather than {@link #findByIds}'
+     * slim {@link ResolveActors.ResolvedActor} projection - added for {@code RoleService}
+     * (ADR-37/kogn-io/arknet#405), which resolves a role's {@code arkproc:filledBy} occupants to
+     * their current <em>name</em> for display, not just their code. Kept separate from
+     * {@link #findByIds} rather than widening that method's return shape: {@link ResolveActors} is
+     * a published contract another bounded context's driving adapter consumes
+     * ({@code arknet-use-cases}, see that port's own javadoc), and widening it would hand every
+     * such caller fields it never asked for.
+     *
+     * <p>Not a per-id existence check: an id absent from the project (or not an actor at all) is
+     * simply absent from the result, never an error.</p>
+     *
+     * @param projectId the project (architecture model) to look up actors in
+     * @param ids       the opaque identities to resolve; an empty list yields an empty result
+     * @return the actors found, in no particular order, never {@code null}
+     */
+    List<Actor> findAllByIds(ProjectId projectId, List<ResourceId> ids);
 }

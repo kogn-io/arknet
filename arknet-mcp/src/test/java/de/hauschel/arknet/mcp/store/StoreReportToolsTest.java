@@ -50,6 +50,7 @@ import de.hauschel.arknet.mcp.report.ConstraintCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcp.report.RequirementCards;
+import de.hauschel.arknet.mcp.report.RoleCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.domain.Anchor;
@@ -166,7 +167,8 @@ class StoreReportToolsTest {
                 new ConstraintCards((projectId, displayLocale) -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
                 new AdrCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
-                new ActorCards(projectId -> List.of()));
+                new ActorCards(projectId -> List.of()),
+                new RoleCards((projectId, displayLocale) -> List.of()));
     }
 
     @AfterEach
@@ -576,7 +578,8 @@ class StoreReportToolsTest {
                 new ConstraintCards((projectId, displayLocale) -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
                 new AdrCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
-                new ActorCards(projectId -> List.of()));
+                new ActorCards(projectId -> List.of()),
+                new RoleCards((projectId, displayLocale) -> List.of()));
         final StoreReportTools toolsWithGermanDefault = new StoreReportTools(
                 reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
                 modelViewsWithRealTerms, germanDefaultProject, NO_LABELS, reportDir, null);

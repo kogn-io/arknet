@@ -60,4 +60,64 @@ actshapes:Actor-description
     sh:message  "An Actor's 'arknet:description' is optional, but there is at most one - an actor carries a single description, not a set of them."@en , "Die 'arknet:description' eines Actors ist optional, es gibt aber hoechstens eine - ein Akteur traegt genau eine Beschreibung, keine Menge davon."@de ;
     sh:severity sh:Violation .
 
+##############################################################################
+#  ROLE SHAPE  (ADR-37 / kogn-io/arknet#405 Part B)
+##############################################################################
+
+#  RoleShape targets the CONCRETE arkproc:Role directly - unlike ActorShape,
+#  Role carries no subclass hierarchy, so no rdfs:subClassOf reasoning is
+#  needed for this shape to fire; it is validated by the very same
+#  reasoning write-gate ActorShape already requires, since both shapes now
+#  share one WriteFunnel (see KognioRdfRoleRepositoryFactory).
+#
+#  arknet:name/arknet:description are MULTILINGUAL here (sh:uniqueLang),
+#  unlike ActorShape's untagged arknet:name/arknet:description - a role's
+#  name is a function description that translates (Requirements Engineer /
+#  Requirements Engineer(in)), unlike an actor's proper noun. See Role's
+#  own javadoc and arknet-actor/CLAUDE.md for the full reasoning.
+
+actshapes:RoleShape
+    a sh:NodeShape ;
+    sh:targetClass arkproc:Role ;
+    sh:property actshapes:Role-name ;
+    sh:property actshapes:Role-description ;
+    sh:property actshapes:Role-filledBy .
+
+actshapes:Role-name
+    a sh:PropertyShape ;
+    sh:path     arknet:name ;
+    sh:minCount 1 ;
+    sh:minLength 2 ;
+    sh:uniqueLang true ;
+    sh:message  "A Role needs at least one 'arknet:name' (min. 2 characters) - what this role is called, e.g. 'Requirements Engineer'. sh:uniqueLang allows at most one arknet:name per non-empty language tag - two names sharing the same tag are not allowed, but DIFFERENT language tags are (a role may be named in several languages)."@en , "Eine Rolle braucht mindestens einen 'arknet:name' (min. 2 Zeichen) - wie diese Rolle heisst, z.B. 'Requirements Engineer'. sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag - zwei Namen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Rolle darf mehrsprachig benannt sein)."@de ;
+    sh:severity sh:Violation .
+
+actshapes:Role-description
+    a sh:PropertyShape ;
+    sh:path     arknet:description ;
+    sh:uniqueLang true ;
+    sh:message  "A Role's 'arknet:description' is optional. sh:uniqueLang allows at most one arknet:description per non-empty language tag - two descriptions sharing the same tag are not allowed, but DIFFERENT language tags are (a role may be described in several languages)."@en , "Die 'arknet:description' einer Rolle ist optional. sh:uniqueLang erlaubt hoechstens eine arknet:description je nicht-leerem Sprach-Tag - zwei Beschreibungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Rolle darf mehrsprachig beschrieben sein)."@de ;
+    sh:severity sh:Violation .
+
+#  sh:nodeKind sh:IRI, not sh:class arkproc:Actor: this write-gate reasons over
+#  arknet-actor.ttl's rdfs:subClassOf chain so ActorShape fires through it
+#  (KognioRdfActorRepositoryFactory#buildGate), and ActorShape targets that
+#  very same arkproc:Actor class. Asserting a filledBy target's type as
+#  validation-only context (the requirements gate's usesTerm pattern) would
+#  therefore also pull that target under ActorShape's own sh:minCount 1 on
+#  arknet:name - a node this write never carries a name for, since only its
+#  opaque identity is known at this point. KognioRdfRoleRepositoryTest#
+#  gateRejectsAFilledByTargetThatIsABlankNode/#gateAcceptsAFilledByTarget
+#  ThatIsAnIri pin what this shape does demand, and what it stays
+#  deliberately silent on is the rest: whether the
+#  target actually IS an arkproc:Actor is RoleService's job (it resolves
+#  every filledByActorCodes entry against ActorRepository before a Role is
+#  ever built), not this shape's.
+actshapes:Role-filledBy
+    a sh:PropertyShape ;
+    sh:path     arkproc:filledBy ;
+    sh:nodeKind sh:IRI ;
+    sh:message  "Every 'arkproc:filledBy' target of a Role must be an IRI - a role may only be filled by an actor, addressed by its identity, and may legally be filled by none at all."@en , "Jedes Ziel von 'arkproc:filledBy' einer Rolle muss eine IRI sein - eine Rolle darf nur durch einen Actor besetzt werden, adressiert ueber seine Identitaet, und darf auch unbesetzt bleiben."@de ;
+    sh:severity sh:Violation .
+
 # END OF ACTOR SHAPES

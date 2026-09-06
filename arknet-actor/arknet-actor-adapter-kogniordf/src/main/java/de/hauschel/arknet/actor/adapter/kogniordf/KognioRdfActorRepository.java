@@ -573,6 +573,47 @@ public class KognioRdfActorRepository implements ActorRepository {
     }
 
     /**
+     * Finds every actor in a project whose identity is among {@code ids}, in one store
+     * round-trip, returning the full {@link Actor} aggregate - added for {@code RoleService}
+     * (ADR-37/kogn-io/arknet#405), see {@link ActorRepository#findAllByIds}'s own javadoc for why
+     * this is a separate method from {@link #findByIds}. Joins {@code type}/{@code name}/
+     * {@code description} the same way {@link #findAll} does, grouped and reduced per subject via
+     * {@link #firstDistinctValue} through the shared {@link ActorAssembly} accumulator - the same
+     * row-multiplication guard every other multi-actor read path here already needs.
+     */
+    @Override
+    public List<Actor> findAllByIds(ProjectId projectId, List<ResourceId> ids) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        String values = ids.stream()
+                .map(id -> SparqlTerms.iriRef(id.value()))
+                .collect(Collectors.joining(" "));
+
+        String query = "SELECT ?s ?identifier ?type ?name ?description WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+                + "VALUES ?s { " + values + " } "
+                + "?s a ?type . "
+                + actorTypeFilter()
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
+                + "?s <" + NAME_PROPERTY + "> ?name . "
+                + "OPTIONAL { ?s <" + DESCRIPTION_PROPERTY + "> ?description } } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            Map<String, ActorAssembly> bySubject = new LinkedHashMap<>();
+            handle.sparqlQuery().select(query).forEach(row -> {
+                String subjectIri = iriOf(row, "s").getIRIString();
+                bySubject.computeIfAbsent(subjectIri, iri -> new ActorAssembly(
+                        new ActorId(ResourceId.of(iri)),
+                        new ActorCode(literalOf(row, "identifier").getLexicalForm()))).addRow(row);
+            });
+            return bySubject.values().stream().map(ActorAssembly::toActor).toList();
+        }
+    }
+
+    /**
      * Picks one value of {@code candidates} deterministically (first-seen), logging a single
      * {@code WARN} naming {@code subjectIri}/{@code fieldName} when more than one distinct value was
      * collapsed. The shared row-multiplication guard behind both read paths - {@code actor-shapes.ttl}

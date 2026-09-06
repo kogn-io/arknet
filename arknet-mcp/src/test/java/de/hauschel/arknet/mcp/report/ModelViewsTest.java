@@ -64,7 +64,8 @@ class ModelViewsTest {
                 emptyConstraintCards(),
                 new BoundedContextCards(projectId -> List.of()),
                 emptyAdrCards(),
-                emptyActorCards());
+                emptyActorCards(),
+                emptyRoleCards());
 
         final ModelViews.Views result = views.of(PROJECT, null);
 
@@ -93,7 +94,8 @@ class ModelViewsTest {
                 emptyConstraintCards(),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
                 emptyAdrCards(),
-                emptyActorCards());
+                emptyActorCards(),
+                emptyRoleCards());
 
         final ModelViews.Views result = views.of(PROJECT, null);
 
@@ -115,7 +117,8 @@ class ModelViewsTest {
                 emptyConstraintCards(),
                 new BoundedContextCards(projectId -> List.of()),
                 emptyAdrCards(),
-                emptyActorCards());
+                emptyActorCards(),
+                emptyRoleCards());
 
         final ModelViews.Views result = views.of(PROJECT, null);
 
@@ -139,7 +142,8 @@ class ModelViewsTest {
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
                 new AdrCards((projectId, displayLocale) -> List.of(adrDetail()),
                         (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
-                new ActorCards(projectId -> List.of(actor())));
+                new ActorCards(projectId -> List.of(actor())),
+                emptyRoleCards());
 
         assertThat(views.of(PROJECT, null).sections()).extracting(ModelSection::title)
                 .containsExactly("Bounded Contexts", "Requirements", "Constraints", "Use Cases",
@@ -209,5 +213,9 @@ class ModelViewsTest {
 
     private static ActorCards emptyActorCards() {
         return new ActorCards(projectId -> List.of());
+    }
+
+    private static RoleCards emptyRoleCards() {
+        return new RoleCards((projectId, displayLocale) -> List.of());
     }
 }

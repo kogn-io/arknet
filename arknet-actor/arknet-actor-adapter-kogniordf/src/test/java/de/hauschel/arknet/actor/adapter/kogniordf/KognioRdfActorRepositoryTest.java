@@ -49,6 +49,9 @@ import de.hauschel.arknet.actor.domain.ActorReferencedException;
 import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.actor.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.actor.domain.Role;
+import de.hauschel.arknet.actor.domain.RoleCode;
+import de.hauschel.arknet.actor.domain.RoleId;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -531,6 +534,65 @@ class KognioRdfActorRepositoryTest {
         assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of()));
     }
 
+    // ---- findAllByIds: the batch lookup RoleService drives (ADR-37/kogn-io/arknet#405) --------
+
+    /**
+     * The batch shape {@code RoleService} needs to render a role's {@code arkproc:filledBy}
+     * occupants as {@code ACTOR-N (Name)}: unlike {@link ActorRepository#findByIds} this one
+     * materialises the whole {@link Actor}, so type, name and the optional description all have to
+     * survive the round-trip. An id the project does not hold is simply absent from the result
+     * rather than an error - {@code RoleService} filters those out silently, so this test is what
+     * says the absence means "no such actor" and not "the query is broken".
+     */
+    @Test
+    void findAllByIdsMaterialisesEveryHeldActorAndSkipsTheUnknownId() {
+        Actor first = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN,
+                "Bearbeitet eingehende Antraege im Backoffice.");
+        Actor second = actor(new ActorCode("ACTOR-2"), ActorType.SYSTEM, null);
+        repository.create(PROJECT_A, first);
+        repository.create(PROJECT_A, second);
+        ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID());
+
+        List<Actor> found = repository.findAllByIds(
+                PROJECT_A, List.of(first.id().value(), second.id().value(), unknown));
+
+        assertEquals(2, found.size(), found.toString());
+        assertTrue(found.contains(first), "the full aggregate must come back, description included");
+        assertTrue(found.contains(second), "the full aggregate must come back, null description included");
+    }
+
+    @Test
+    void findAllByIdsIsIsolatedPerProject() {
+        Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
+        repository.create(PROJECT_A, stored);
+
+        assertEquals(List.of(), repository.findAllByIds(PROJECT_B, List.of(stored.id().value())));
+    }
+
+    @Test
+    void findAllByIdsOfAnEmptyListQueriesNothing() {
+        assertEquals(List.of(), repository.findAllByIds(PROJECT_A, List.of()));
+    }
+
+    /**
+     * The one way a {@code filledBy} occupant can legitimately vanish from a role's rendered
+     * occupancy list (kogn-io/arknet#360, the same asymmetry {@link
+     * #findAllCodesKeepsTheCodeOfASubjectFindAllCannotMaterialiseAtAll} pins for the counter):
+     * {@code arknet:name} is a mandatory join of this query, so a store-first actor written
+     * without one is not materialisable and is dropped - which is what {@code RoleDetail
+     * #filledByActors}' javadoc names as the reason an occupant may be absent. Deleting the
+     * occupant is <em>not</em> that reason: {@code actor_delete}'s reference guard refuses that
+     * delete outright.
+     */
+    @Test
+    void findAllByIdsSkipsAStoreFirstActorWrittenWithoutAName() {
+        ActorId bare = freshId();
+        insertTriple(bare.value().value(), VocabRdf.TYPE.getIRIString(), "<" + HUMAN_ACTOR_TYPE + ">");
+        insertTriple(bare.value().value(), IDENTIFIER_PROPERTY, "\"ACTOR-1\"");
+
+        assertEquals(List.of(), repository.findAllByIds(PROJECT_A, List.of(bare.value())));
+    }
+
     // ---- revision trail: one revision per write, head queryable ------------------
 
     @Test
@@ -704,6 +766,32 @@ class KognioRdfActorRepositoryTest {
                 return null;
             });
         }
+
+        assertThrows(ActorReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
+        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isPresent(),
+                "a rejected delete must leave the actor untouched");
+    }
+
+    /**
+     * {@link ActorReferencedException} blocks the delete while a role's {@code arkproc:filledBy}
+     * still points at the actor - real as of ADR-37/kogn-io/arknet#405 Part B, unlike
+     * {@link #deleteRejectsAnActorStillReferencedAsPrimaryActor}'s hand-inserted triple: this test
+     * writes the referencing role through {@link KognioRdfRoleRepository} itself, sharing this
+     * test's own {@link WriteFunnel}, exactly the way a real {@code role_add} would. Pins
+     * {@code REFERENCING_PREDICATES}' {@code arkproc:filledBy} entry (added in Part A, ahead of a
+     * real writer) now that one exists.
+     */
+    @Test
+    void deleteRejectsAnActorStillReferencedByARolesFilledBy() {
+        Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
+        repository.create(PROJECT_A, stored);
+        WriteFunnel funnel = new WriteFunnel(lifecycle, KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT),
+                WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        KognioRdfRoleRepository roles = new KognioRdfRoleRepository(lifecycle, DisplayLocale.DEFAULT, funnel);
+        roles.create(PROJECT_A, new Role(
+                new RoleId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID())),
+                new RoleCode("ROLE-1"), "Sachbearbeiter", null,
+                List.of(stored.id())), "de");
 
         assertThrows(ActorReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
         assertTrue(repository.findByCode(PROJECT_A, stored.code()).isPresent(),
