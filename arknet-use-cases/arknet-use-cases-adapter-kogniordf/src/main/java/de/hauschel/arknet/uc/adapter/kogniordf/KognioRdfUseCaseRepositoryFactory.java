@@ -138,7 +138,7 @@ public final class KognioRdfUseCaseRepositoryFactory {
      *
      * <p>The file bundles all requirements-context shapes. A use-case write must only be
      * validated against the use-case/step shapes - not against {@code RequirementShape},
-     * {@code GoalShape}, ... The adapter supplies minimal {@code rdf:type} assertions for the
+     * {@code ConstraintShape}, ... The adapter supplies minimal {@code rdf:type} assertions for the
      * referenced actor/requirement nodes so the {@code sh:class} constraints on
      * {@code primaryActor}/{@code stepRealises} are satisfied; without disabling the foreign
      * node shapes, those very type assertions would (correctly) pull the referenced resources

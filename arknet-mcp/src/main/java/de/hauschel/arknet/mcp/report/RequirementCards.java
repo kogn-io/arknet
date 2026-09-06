@@ -13,7 +13,6 @@ import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.mcp.store.StoreResource;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
@@ -110,10 +109,6 @@ public final class RequirementCards {
                 .toList()));
         if (requirement.qualityCategory() != null) {
             blocks.add(Block.Prose.plain("Quality category", requirement.qualityCategory()));
-        }
-        if (requirement.motivatedBy() != null) {
-            blocks.add(new Block.Refs("Motivated by", List.of(
-                    Ref.of(StoreResource.localName(requirement.motivatedBy()), requirement.motivatedBy()))));
         }
         UnmentionedTerms.addTo(blocks, linked, glossary, texts, "Uses terms", "not named in the text");
         return new ModelCard(requirement.code().value(), requirement.title(),

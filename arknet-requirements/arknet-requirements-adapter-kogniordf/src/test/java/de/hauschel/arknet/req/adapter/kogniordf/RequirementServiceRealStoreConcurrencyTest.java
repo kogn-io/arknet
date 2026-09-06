@@ -355,7 +355,7 @@ class RequirementServiceRealStoreConcurrencyTest {
 
     private static NewRequirement newFunctionalRequirement() {
         return new NewRequirement("User can log in", "The system shall let a registered user authenticate.", null,
-                RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null);
+                RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null);
     }
 
     // ---- synchronisation helpers ---------------------------------------------------------

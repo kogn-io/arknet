@@ -88,7 +88,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
     private static Requirement requirement(RequirementId id, RequirementCode code, String title,
             String description, String rationale) {
         return new Requirement(id, code, title, description, rationale, RequirementType.FUNCTIONAL,
-                RequirementStatus.PROPOSED, null, null, null, null,
+                RequirementStatus.PROPOSED, null, null, null,
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
     }
 
@@ -144,7 +144,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         RevisionToken head = currentHead(code);
 
         Requirement statusChangeOnly = new Requirement(created.id(), code, created.title(), created.description(), null,
-                created.type(), RequirementStatus.ACCEPTED, created.priority(), created.motivatedBy(),
+                created.type(), RequirementStatus.ACCEPTED, created.priority(),
                 created.qualityCategory(), created.usesTerms(), created.acceptanceCriteria(), List.of());
         repository.compareAndUpdate(
                 PROJECT_A, head, statusChangeOnly, "en", "en", null, noAcceptanceCriteriaLanguages(statusChangeOnly), null);
@@ -214,8 +214,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 new AcceptanceCriterion(1, "Anmeldung gelingt mit gueltigen Zugangsdaten"),
                 created.acceptanceCriteria().get(1));
         Requirement withGermanFirstCriterion = new Requirement(created.id(), code, created.title(),
-                created.description(), null, created.type(), created.status(), created.priority(),
-                created.motivatedBy(), created.qualityCategory(), created.usesTerms(), updatedCriteria,
+                created.description(), null, created.type(), created.status(), created.priority(), created.qualityCategory(), created.usesTerms(), updatedCriteria,
                 created.constrainedBy());
         Map<Integer, String> languages = new LinkedHashMap<>();
         languages.put(1, "de");
@@ -249,7 +248,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 List.of(new AcceptanceCriterion(1, "Anmeldung gelingt mit gueltigen Zugangsdaten"));
         Requirement withGermanCriterion = new Requirement(current.value().id(), code, current.value().title(),
                 current.value().description(), null, current.value().type(), current.value().status(),
-                current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
+                current.value().priority(), current.value().qualityCategory(),
                 current.value().usesTerms(), updatedCriteria, current.value().constrainedBy());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanCriterion, current.titleLanguage(),
@@ -325,7 +324,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
             criteria.add(new AcceptanceCriterion(position++, text));
         }
         return new Requirement(id, code, title, description, null, RequirementType.FUNCTIONAL,
-                RequirementStatus.PROPOSED, null, null, null, null, criteria, List.of());
+                RequirementStatus.PROPOSED, null, null, null, criteria, List.of());
     }
 
     /**
@@ -380,7 +379,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 .orElseThrow();
         Requirement withGermanTitle = new Requirement(current.value().id(), code, "Anmeldung",
                 current.value().description(), null, current.value().type(), current.value().status(),
-                current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
+                current.value().priority(), current.value().qualityCategory(),
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanTitle, "de", current.descriptionLanguage(), null,
@@ -406,7 +405,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 .orElseThrow();
         Requirement withFrenchTitle = new Requirement(current.value().id(), code, "Connexion",
                 current.value().description(), null, current.value().type(), current.value().status(),
-                current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
+                current.value().priority(), current.value().qualityCategory(),
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchTitle, "fr", current.descriptionLanguage(), null,
@@ -449,7 +448,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 .orElseThrow();
         Requirement statusChangeOnly = new Requirement(current.value().id(), code, current.value().title(),
                 current.value().description(), null, current.value().type(), RequirementStatus.ACCEPTED,
-                current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
+                current.value().priority(), current.value().qualityCategory(),
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         assertDoesNotThrow(() -> repository.compareAndUpdate(PROJECT_A, current.head(), statusChangeOnly,
@@ -480,7 +479,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 .orElseThrow();
         Requirement statusChangeOnly = new Requirement(current.value().id(), code, current.value().title(),
                 current.value().description(), null, current.value().type(), RequirementStatus.ACCEPTED,
-                current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
+                current.value().priority(), current.value().qualityCategory(),
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), statusChangeOnly,
@@ -629,7 +628,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 noAcceptanceCriteriaLanguages(withGermanRationale), null);
 
         Requirement statusChangeOnly = new Requirement(id, code, created.title(), created.description(), null,
-                created.type(), RequirementStatus.ACCEPTED, null, null, null, null, created.acceptanceCriteria(),
+                created.type(), RequirementStatus.ACCEPTED, null, null, null, created.acceptanceCriteria(),
                 List.of());
         repository.compareAndUpdate(PROJECT_A, currentHead(code), statusChangeOnly, "en", "en", "en",
                 noAcceptanceCriteriaLanguages(statusChangeOnly), "en");
@@ -769,7 +768,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         Requirement german = new Requirement(english.id(), code, "Anmeldung",
                 "Das System soll einen Benutzer authentifizieren.",
                 "damit der Support kein Passwort mehr von Hand zuruecksetzt", english.type(), english.status(),
-                english.priority(), english.motivatedBy(), english.qualityCategory(), english.usesTerms(),
+                english.priority(), english.qualityCategory(), english.usesTerms(),
                 List.of(new AcceptanceCriterion(1, "Anmeldung gelingt mit gueltigen Zugangsdaten")),
                 english.constrainedBy());
         repository.compareAndUpdate(PROJECT_A, currentHead(code), german, "de", "de", "de", Map.of(1, "de"), "de");

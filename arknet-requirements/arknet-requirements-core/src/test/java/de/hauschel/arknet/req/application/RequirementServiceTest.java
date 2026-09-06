@@ -93,7 +93,7 @@ class RequirementServiceTest {
     void addAssignsFirstFunctionalCode() {
         Requirement added = service.add(WS, new NewRequirement("User can log in",
                 "The system shall let a registered user authenticate.", null, RequirementType.FUNCTIONAL,
-                null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+                null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
 
         assertEquals(new RequirementCode("FR-1"), added.code());
     }
@@ -102,7 +102,7 @@ class RequirementServiceTest {
     void addSetsProposedStatusByDefault() {
         Requirement added = service.add(WS, new NewRequirement("User can log in",
                 "The system shall let a registered user authenticate.", null, RequirementType.FUNCTIONAL,
-                null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+                null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
 
         assertEquals(RequirementStatus.PROPOSED, added.status());
     }
@@ -116,7 +116,7 @@ class RequirementServiceTest {
     void addPersistsAllSuppliedFields() {
         Requirement added = service.add(WS, new NewRequirement("User can log in",
                 "The system shall let a registered user authenticate.", null, RequirementType.FUNCTIONAL,
-                null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+                null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
 
         assertEquals("User can log in", added.title());
         assertEquals("The system shall let a registered user authenticate.", added.description());
@@ -264,19 +264,18 @@ class RequirementServiceTest {
     void addAssignsNfrPrefixForNonFunctional() {
         Requirement added = service.add(WS, new NewRequirement("Page loads < 200ms",
                 "95% of page loads shall complete in under 200ms.", null, RequirementType.NON_FUNCTIONAL,
-                null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+                null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
 
         assertEquals(new RequirementCode("NFR-1"), added.code());
     }
 
     @Test
-    void addCarriesPriorityMotivatedByAndQualityCategoryThrough() {
+    void addCarriesPriorityAndQualityCategoryThrough() {
         Requirement added = service.add(WS, new NewRequirement("Page loads < 200ms",
                 "95% of page loads shall complete in under 200ms.", null, RequirementType.NON_FUNCTIONAL,
-                Priority.MUST_HAVE, "https://w3id.org/arknet/model/goal/fast-ux", "performance", List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+                Priority.MUST_HAVE, "performance", List.of("Done when it works"), null), DEFAULT_LANGUAGE);
 
         assertEquals(Priority.MUST_HAVE, added.priority());
-        assertEquals("https://w3id.org/arknet/model/goal/fast-ux", added.motivatedBy());
         assertEquals("performance", added.qualityCategory());
         assertEquals(added, repository.findByCode(WS, added.code(), null).orElseThrow());
     }
@@ -284,11 +283,11 @@ class RequirementServiceTest {
     @Test
     void addNumbersRunPerTypeIndependently() {
         RequirementCode fr1 = service.add(WS,
-                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
         RequirementCode nfr1 = service.add(WS,
-                new NewRequirement("b", "desc b", null, RequirementType.NON_FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+                new NewRequirement("b", "desc b", null, RequirementType.NON_FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
         RequirementCode fr2 = service.add(WS,
-                new NewRequirement("c", "desc c", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+                new NewRequirement("c", "desc c", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
         assertEquals(new RequirementCode("FR-1"), fr1);
         assertEquals(new RequirementCode("NFR-1"), nfr1);
@@ -335,10 +334,10 @@ class RequirementServiceTest {
     @Test
     void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
-        service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+        service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
 
         Requirement inOther = service.add(other,
-                new NewRequirement("b", "desc b", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+                new NewRequirement("b", "desc b", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
 
         assertEquals(new RequirementCode("FR-1"), inOther.code());
         assertTrue(service.list(other, null).stream().allMatch(r -> r.title().equals("b")));
@@ -347,8 +346,8 @@ class RequirementServiceTest {
 
     @Test
     void listReturnsAllInInsertionOrder() {
-        service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
-        service.add(WS, new NewRequirement("b", "desc b", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+        service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+        service.add(WS, new NewRequirement("b", "desc b", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
 
         List<Requirement> all = service.list(WS, null);
 
@@ -360,7 +359,7 @@ class RequirementServiceTest {
     @Test
     void getReturnsPersistedRequirement() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
         assertTrue(service.get(WS, code, null).isPresent());
         assertEquals("a", service.get(WS, code, null).orElseThrow().title());
@@ -374,7 +373,7 @@ class RequirementServiceTest {
     @Test
     void acceptTransitionsProposedToAccepted() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
         Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
 
@@ -384,21 +383,20 @@ class RequirementServiceTest {
     }
 
     @Test
-    void acceptPreservesPriorityMotivatedByAndQualityCategory() {
+    void acceptPreservesPriorityAndQualityCategory() {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.NON_FUNCTIONAL,
-                Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security", List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+                Priority.COULD_HAVE, "security", List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
         Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
 
         assertEquals(Priority.COULD_HAVE, accepted.priority());
-        assertEquals("https://w3id.org/arknet/model/goal/g", accepted.motivatedBy());
         assertEquals("security", accepted.qualityCategory());
     }
 
     @Test
     void acceptIsIdempotentWhenAlreadyAccepted() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
         service.accept(WS, code, DEFAULT_LANGUAGE);
 
         Requirement result = service.accept(WS, code, DEFAULT_LANGUAGE);
@@ -432,7 +430,7 @@ class RequirementServiceTest {
     @Test
     void acceptPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null,
                         List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
         service.accept(WS, code, "de");
@@ -443,7 +441,7 @@ class RequirementServiceTest {
     @Test
     void proposePassesTheProjectsDefaultLanguageToFindCurrentByCode() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null,
                         List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
         service.accept(WS, code, DEFAULT_LANGUAGE);
 
@@ -455,7 +453,7 @@ class RequirementServiceTest {
     @Test
     void linkTermPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null,
                         List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
         service.linkTerm(WS, code, "TERM-1", "de");
@@ -466,7 +464,7 @@ class RequirementServiceTest {
     @Test
     void linkConstraintPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null,
                         List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
         Constraint constraint = givenConstraint("Titel", "Statement", ConstraintType.TECHNICAL);
 
@@ -483,7 +481,7 @@ class RequirementServiceTest {
     @Test
     void proposeTransitionsAcceptedToProposed() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
         service.accept(WS, code, DEFAULT_LANGUAGE);
 
         Requirement proposed = service.propose(WS, code, DEFAULT_LANGUAGE);
@@ -496,7 +494,7 @@ class RequirementServiceTest {
     @Test
     void proposeIsIdempotentWhenAlreadyProposed() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
         Requirement result = service.propose(WS, code, DEFAULT_LANGUAGE);
 
@@ -602,7 +600,7 @@ class RequirementServiceTest {
     @Test
     void updatePreservesStatusLinkedTermsAndOtherFields() {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.NON_FUNCTIONAL,
-                Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security",
+                Priority.COULD_HAVE, "security",
                 List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
         service.accept(WS, code, DEFAULT_LANGUAGE);
         service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
@@ -613,7 +611,6 @@ class RequirementServiceTest {
         assertEquals(RequirementStatus.ACCEPTED, updated.status());
         assertEquals(List.of(new TermRef(TERM_1)), updated.usesTerms());
         assertEquals(Priority.COULD_HAVE, updated.priority());
-        assertEquals("https://w3id.org/arknet/model/goal/g", updated.motivatedBy());
         assertEquals("security", updated.qualityCategory());
     }
 
@@ -625,7 +622,7 @@ class RequirementServiceTest {
     @Test
     void updateChangesThePriorityWithoutTouchingAnyOtherField() {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL,
-                Priority.MUST_HAVE, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+                Priority.MUST_HAVE, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
         Requirement updated =
                 service.update(WS, code, null, null, null, null, null, Priority.SHOULD_HAVE, null, DEFAULT_LANGUAGE);
@@ -656,7 +653,7 @@ class RequirementServiceTest {
     @Test
     void updateWithANullPriorityDoesNotClearAnAlreadySetOne() {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL,
-                Priority.MUST_HAVE, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+                Priority.MUST_HAVE, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
         Requirement updated =
                 service.update(WS, code, "New title", null, null, null, null, null, null, DEFAULT_LANGUAGE);
@@ -894,7 +891,7 @@ class RequirementServiceTest {
         Requirement legacyAccepted = new Requirement(
                 new RequirementId(resourceIdFactory.newId()), code, "legacy title",
                 "A requirement predating the acceptance-criterion invariant.", null, RequirementType.FUNCTIONAL,
-                RequirementStatus.ACCEPTED, null, null, null, List.of(),
+                RequirementStatus.ACCEPTED, null, null, List.of(),
                 List.of(new AcceptanceCriterion(1, "(legacy placeholder - no acceptance criterion on record)")),
                 List.of());
         repository.createLegacy(WS, legacyAccepted);
@@ -1023,7 +1020,7 @@ class RequirementServiceTest {
         Requirement legacy = new Requirement(
                 new RequirementId(resourceIdFactory.newId()), code, "legacy title",
                 "A requirement predating the acceptance-criterion invariant.", null, RequirementType.FUNCTIONAL,
-                RequirementStatus.PROPOSED, null, null, null, List.of(),
+                RequirementStatus.PROPOSED, null, null, List.of(),
                 List.of(new AcceptanceCriterion(1, "(legacy placeholder - no acceptance criterion on record)")),
                 List.of());
         repository.createLegacy(WS, legacy);
@@ -1178,13 +1175,13 @@ class RequirementServiceTest {
 
     private static NewRequirement newFunctionalRequirement() {
         return new NewRequirement("User can log in", "The system shall let a registered user authenticate.", null,
-                RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null);
+                RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null);
     }
 
     /** {@link #newFunctionalRequirement()} carrying a rationale (issue #321). */
     private static NewRequirement newFunctionalRequirementWithRationale() {
         return new NewRequirement("User can log in", "The system shall let a registered user authenticate.",
-                RATIONALE, RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null);
+                RATIONALE, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */

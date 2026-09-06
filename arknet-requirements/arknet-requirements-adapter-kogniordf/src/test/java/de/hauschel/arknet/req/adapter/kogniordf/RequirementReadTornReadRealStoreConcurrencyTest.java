@@ -215,7 +215,7 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
                 plainRepository, new UuidResourceIdFactory(), UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_REPOSITORY,
                 UNUSED_SCHEMA_SOURCE);
         RequirementCode code = plainService.add(WS, new NewRequirement(OLD_TITLE,
-                "A requirement whose fields change mid-read.", null, RequirementType.FUNCTIONAL, null, null, null,
+                "A requirement whose fields change mid-read.", null, RequirementType.FUNCTIONAL, null, null,
                 List.of(OLD_CRITERION), null), "en").code();
 
         CyclicBarrier readerPastMainQuery = new CyclicBarrier(2);

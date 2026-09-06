@@ -77,11 +77,10 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * (identifier, type, title, description, status) plus one or more mandatory
  * {@code arkreq:acceptanceCriterion} edges ({@code 1..n}, testable "Done when ..." criteria) to
  * own, positioned {@code arkreq:AcceptanceCriterion} resources (issue #266, mirroring
- * {@code arkreq:mainStep}/{@code arkreq:Step}) plus up to four optional triples for
- * {@code rationale}, {@code priority},
- * {@code motivatedBy} and {@code qualityCategory} - written only when the corresponding field is
- * non-{@code null} and read back so that requirements without them still match
- * ({@code priority}/{@code motivatedBy}/{@code qualityCategory} via {@code OPTIONAL} SPARQL
+ * {@code arkreq:mainStep}/{@code arkreq:Step}) plus up to three optional triples for
+ * {@code rationale}, {@code priority} and {@code qualityCategory} - written only when the
+ * corresponding field is non-{@code null} and read back so that requirements without them still
+ * match ({@code priority}/{@code qualityCategory} via {@code OPTIONAL} SPARQL
  * clauses; {@code rationale} via its own follow-up query, since it is language-tagged and would
  * multiply rows the way {@code title}/{@code description} would - see {@link #readRationales}). The {@code dcterms:identifier} triple carries the
  * human-readable {@link RequirementCode} ({@code FR-1}) - identity and label are deliberately
@@ -125,11 +124,10 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * an unknown or ambiguous code, is done once by {@code KognioRdfTermLookup} at the moment a term
  * is linked (in the application service), not here on every write. This adapter therefore neither
  * queries the sibling terms graph nor re-verifies that a referenced subject still denotes a
- * {@code skos:Concept}; it trusts the identity it was handed, the same way it trusts {@code
- * motivatedBy} without re-resolving it. It still asserts each referenced subject's type as
- * {@code skos:Concept} in the SHACL write-gate's validation-only context (see below), because the
- * shape needs that type to fire correctly against a candidate graph that does not itself carry
- * the term's type triple.</p>
+ * {@code skos:Concept}; it trusts the identity it was handed. It still asserts each referenced
+ * subject's type as {@code skos:Concept} in the SHACL write-gate's validation-only context (see
+ * below), because the shape needs that type to fire correctly against a candidate graph that does
+ * not itself carry the term's type triple.</p>
  *
  * <p><strong>That assertion is trusted, not verified.</strong> For a ref that {@code
  * KognioRdfTermLookup} produced the type did hold when the link was made - that query requires
@@ -143,7 +141,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  *
  * <p><strong>Row multiplication on {@code priority}/{@code qualityCategory}.</strong>
  * Both properties carry no {@code sh:Violation}-severity {@code sh:maxCount} (unlike
- * {@code title}/{@code description}/{@code motivatedBy}, hardened separately): {@code priority}'s
+ * {@code title}/{@code description}, hardened separately): {@code priority}'s
  * {@code sh:maxCount 1} is {@code sh:Warning}-severity only (never blocks a write), and
  * {@code qualityCategory} carries no {@code sh:maxCount} at all. A store-first
  * requirement with two triples on either predicate therefore legally multiplies {@link #findAll}'s
@@ -166,12 +164,12 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * requirement and the unsupported status, rather than silently filtering it out of the result (see
  * {@link #statusFromIri}).</p>
  *
- * <p><strong>Type-mismatched {@code priority}/{@code motivatedBy}/{@code qualityCategory}.</strong>
- * All three shapes are {@code sh:Warning}-severity (never blocks a write), and none declares
+ * <p><strong>Type-mismatched {@code priority}/{@code qualityCategory}.</strong>
+ * Both shapes are {@code sh:Warning}-severity (never blocks a write), and neither declares
  * {@code sh:nodeKind}: a store-first edit can therefore legally write, say,
- * {@code arkreq:motivatedBy "text"} as a literal instead of an IRI. Unlike {@code status} (a
- * mandatory field, so failing loudly is the right call), these three are already optional domain
- * fields - {@link #priorityOf}/{@link #motivatedByOf}/{@link #qualityCategoryOf} guard their cast
+ * {@code arkreq:priority "text"} as a literal instead of an IRI. Unlike {@code status} (a
+ * mandatory field, so failing loudly is the right call), these two are already optional domain
+ * fields - {@link #priorityOf}/{@link #qualityCategoryOf} guard their cast
  * with an {@code instanceof} check and log a single {@code WARN} plus read the value as "not set"
  * on a mismatch, rather than letting an uncaught {@link ClassCastException} abort the whole
  * {@link #findAll} batch the same way an unguarded {@link #statusFromIri} once did.</p>
@@ -204,7 +202,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String DESCRIPTION_PROPERTY = VocabDct.NAMESPACE + "description";
     private static final String RATIONALE_PROPERTY = ARKREQ_NAMESPACE + "rationale";
     private static final String PRIORITY_PROPERTY = ARKREQ_NAMESPACE + "priority";
-    private static final String MOTIVATED_BY_PROPERTY = ARKREQ_NAMESPACE + "motivatedBy";
     private static final String QUALITY_CATEGORY_PROPERTY = ARKREQ_NAMESPACE + "qualityCategory";
     private static final String ACCEPTANCE_CRITERION_PROPERTY = ArkreqVocabulary.ACCEPTANCE_CRITERION;
     private static final String CONSTRAINED_BY_PROPERTY = ArkreqVocabulary.CONSTRAINED_BY;
@@ -413,8 +410,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * (identifier, type, title, description, status), one or more mandatory
      * {@code arkreq:acceptanceCriterion} edges to freshly minted {@code arkreq:AcceptanceCriterion}
      * resources (issue #266; own {@code arkreq:position}/{@code arkreq:criterionText} triples each,
-     * mirroring {@code arkreq:mainStep}/{@code arkreq:Step}), up to four optional triples
-     * ({@code rationale}, {@code priority}, {@code motivatedBy}, {@code qualityCategory}), zero or
+     * mirroring {@code arkreq:mainStep}/{@code arkreq:Step}), up to three optional triples
+     * ({@code rationale}, {@code priority}, {@code qualityCategory}), zero or
      * more
      * {@code arkreq:usesTerm} edges to {@code termIris}, and zero or more
      * {@code oslc_rm:constrainedBy} edges to {@code constraintIris}. Shared by {@link #create} and
@@ -445,9 +442,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         if (requirement.priority() != null) {
             graph.add(subjectIri, rdf.createIRI(PRIORITY_PROPERTY),
                     rdf.createIRI(priorityIriFor(requirement.priority())));
-        }
-        if (requirement.motivatedBy() != null) {
-            graph.add(subjectIri, rdf.createIRI(MOTIVATED_BY_PROPERTY), rdf.createIRI(requirement.motivatedBy()));
         }
         if (requirement.qualityCategory() != null) {
             graph.add(subjectIri, rdf.createIRI(QUALITY_CATEGORY_PROPERTY),
@@ -801,8 +795,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * store-first subject carrying a third {@code rdf:type} triple alongside its real
      * one would otherwise bind an extra, unpredictable row, and {@link #typeFromIri} throws
      * {@link IllegalStateException} for any type that is neither FunctionalRequirement nor
-     * NonFunctionalRequirement), the mandatory status join, and the three optional joins
-     * (priority, motivatedBy, qualityCategory). {@code status} is deliberately
+     * NonFunctionalRequirement), the mandatory status join, and the two optional joins
+     * (priority, qualityCategory). {@code status} is deliberately
      * <strong>not</strong> filtered the same way {@code type} is - see {@link #statusFromIri} for
      * why a SHACL-legal but MVP-unsupported status fails loudly ({@link
      * UnsupportedRequirementStatusException}) instead of being filtered into invisibility.
@@ -847,7 +841,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "?s <" + STATUS_PROPERTY + "> ?status . "
                 + "FILTER(isIRI(?s)) "
                 + "OPTIONAL { ?s <" + PRIORITY_PROPERTY + "> ?priority } "
-                + "OPTIONAL { ?s <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
                 + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } ";
     }
 
@@ -874,7 +867,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     /**
      * Builds one {@link Requirement} from a row of {@link #requirementByCodeWhereClause}'s
-     * projection ({@code ?s ?type ?status ?priority ?motivatedBy ?qualityCategory}), including
+     * projection ({@code ?s ?type ?status ?priority ?qualityCategory}), including
      * the follow-up reads {@link #readTitles}/{@link #readDescriptions}/{@link #readRationales}/
      * {@link #readUsesTerms}
      * (via {@code query}) and the legacy-placeholder substitution ({@link
@@ -939,7 +932,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 typeFromIri(iriOf(row, "type").getIRIString()),
                 statusFromIri(projectId, code, iriOf(row, "status").getIRIString()),
                 priorityOf(row),
-                motivatedByOf(row),
                 qualityCategoryOf(row),
                 readUsesTerms(query::select, subject),
                 acceptanceCriteria,
@@ -1097,7 +1089,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         Objects.requireNonNull(code, "code");
         DisplayLocale effective = withRequestedOverride(displayLocale);
 
-        String query = "SELECT ?s ?type ?status ?priority ?motivatedBy ?qualityCategory "
+        String query = "SELECT ?s ?type ?status ?priority ?qualityCategory "
                 + "WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + requirementByCodeWhereClause(code)
                 + "} }";
@@ -1172,7 +1164,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         // default language to the configured preference unchanged.
         DisplayLocale effective = withRequestedOverride(canonicalizeLenient(defaultLanguage));
 
-        String query = "SELECT ?s ?type ?status ?priority ?motivatedBy ?qualityCategory ?head "
+        String query = "SELECT ?s ?type ?status ?priority ?qualityCategory ?head "
                 + "WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + requirementByCodeWhereClause(code)
                 + "} "
@@ -1218,7 +1210,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     typeFromIri(iriOf(row, "type").getIRIString()),
                     statusFromIri(projectId, code, iriOf(row, "status").getIRIString()),
                     priorityOf(row),
-                    motivatedByOf(row),
                     qualityCategoryOf(row),
                     readUsesTerms(handle.sparqlQuery()::select, subject),
                     acceptanceCriteria,
@@ -1252,7 +1243,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         Objects.requireNonNull(projectId, "projectId");
         DisplayLocale effective = withRequestedOverride(displayLocale);
 
-        String query = "SELECT ?s ?identifier ?type ?status ?priority ?motivatedBy "
+        String query = "SELECT ?s ?identifier ?type ?status ?priority "
                 + "?qualityCategory WHERE { GRAPH <"
                 + REQUIREMENTS_GRAPH + "> { "
                 + requirementWhereClause("?s <" + IDENTIFIER_PROPERTY + "> ?identifier . ")
@@ -1362,7 +1353,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@code priority}/{@code qualityCategory} without an enforced {@code sh:maxCount} multiplies a
      * requirement into a row per candidate value combination - into a single
      * {@link RequirementAssembly}, keyed by subject IRI. The single-valued fields (identity, code,
-     * type, status, motivatedBy - all either {@code sh:maxCount 1} at {@code sh:Violation}
+     * type, status - all either {@code sh:maxCount 1} at {@code sh:Violation}
      * severity or otherwise guaranteed single-triple by the domain) are read once from the first
      * row of a subject; every row contributes its {@code priority}/{@code qualityCategory} binding
      * (if present) as a candidate via {@link RequirementAssembly#addPriorityCandidate}/
@@ -1382,8 +1373,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 new RequirementId(ResourceId.of(iri)),
                 code,
                 typeFromIri(iriOf(row, "type").getIRIString()),
-                statusFromIri(projectId, code, iriOf(row, "status").getIRIString()),
-                motivatedByOf(row)));
+                statusFromIri(projectId, code, iriOf(row, "status").getIRIString())));
     }
 
     /**
@@ -1398,17 +1388,15 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         private final RequirementCode code;
         private final RequirementType type;
         private final RequirementStatus status;
-        private final String motivatedBy;
         private final List<Priority> priorities = new ArrayList<>();
         private final List<String> qualityCategories = new ArrayList<>();
 
         private RequirementAssembly(RequirementId id, RequirementCode code,
-                RequirementType type, RequirementStatus status, String motivatedBy) {
+                RequirementType type, RequirementStatus status) {
             this.id = id;
             this.code = code;
             this.type = type;
             this.status = status;
-            this.motivatedBy = motivatedBy;
         }
 
         private void addPriorityCandidate(Priority priority) {
@@ -1427,7 +1415,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 List<TermRef> usesTerms, List<AcceptanceCriterion> acceptanceCriteria,
                 List<ConstraintRef> constrainedBy) {
             return new Requirement(id, code, title, description, rationale, type, status,
-                    firstDistinct(priorities, "priority"), motivatedBy,
+                    firstDistinct(priorities, "priority"),
                     firstDistinct(qualityCategories, "qualityCategory"), usesTerms, acceptanceCriteria,
                     constrainedBy);
         }
@@ -1882,20 +1870,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             return priorityFromIri(iri.getIRIString());
         }
         LOG.warn("Requirement {}: field 'priority' expected an IRI but found a {}, ignoring the value",
-                iriOf(row, "s").getIRIString(), value.get().getClass().getSimpleName());
-        return null;
-    }
-
-    /** {@link #priorityOf} with {@code arkreq:motivatedBy} in place of {@code arkreq:priority}. */
-    private static String motivatedByOf(BindingSet row) {
-        Optional<RDFTerm> value = row.getValue("motivatedBy");
-        if (value.isEmpty()) {
-            return null;
-        }
-        if (value.get() instanceof IRI iri) {
-            return iri.getIRIString();
-        }
-        LOG.warn("Requirement {}: field 'motivatedBy' expected an IRI but found a {}, ignoring the value",
                 iriOf(row, "s").getIRIString(), value.get().getClass().getSimpleName());
         return null;
     }

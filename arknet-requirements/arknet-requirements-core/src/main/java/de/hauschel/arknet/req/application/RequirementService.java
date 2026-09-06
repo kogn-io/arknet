@@ -213,7 +213,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
                     RequirementCode code = nextCode(projectId, command.type());
                     Requirement requirement = new Requirement(id, code, command.title(),
                             command.description(), command.rationale(), command.type(),
-                            RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
+                            RequirementStatus.PROPOSED, command.priority(),
                             command.qualityCategory(), List.of(), acceptanceCriteria, List.of());
                     repository.create(projectId, requirement, language);
                     return requirement;
@@ -290,7 +290,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             linked.add(term);
             return new Requirement(current.id(), current.code(), current.title(),
                     current.description(), current.rationale(), current.type(), current.status(),
-                    current.priority(), current.motivatedBy(), current.qualityCategory(), linked,
+                    current.priority(), current.qualityCategory(), linked,
                     current.acceptanceCriteria(), current.constrainedBy());
         });
     }
@@ -322,7 +322,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             linked.add(ref);
             return new Requirement(current.id(), current.code(), current.title(),
                     current.description(), current.rationale(), current.type(), current.status(),
-                    current.priority(), current.motivatedBy(), current.qualityCategory(),
+                    current.priority(), current.qualityCategory(),
                     current.usesTerms(), current.acceptanceCriteria(), linked);
         });
     }
@@ -352,7 +352,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
                     description != null ? description : current.description(),
                     rationale != null ? rationale : current.rationale(),
                     current.type(), current.status(),
-                    priority != null ? priority : current.priority(), current.motivatedBy(),
+                    priority != null ? priority : current.priority(),
                     current.qualityCategory(), current.usesTerms(), current.acceptanceCriteria(),
                     current.constrainedBy());
             base = base.withAppendedAcceptanceCriteria(newAcceptanceCriteria);

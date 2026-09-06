@@ -79,7 +79,7 @@ class KognioRdfRequirementLookupRequirementsSchemaTest {
         RequirementId id = new RequirementId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID()));
         Requirement requirement = new Requirement(id, new RequirementCode("FR-1"),
                 "Store the model", "The system shall persist the architecture model.", null,
-                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null,
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null,
                 List.of(), List.of(new AcceptanceCriterion(1, "Done when the model survives a restart.")),
                 List.of());
 

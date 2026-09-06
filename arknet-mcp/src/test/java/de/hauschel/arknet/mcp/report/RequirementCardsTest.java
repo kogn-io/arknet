@@ -221,7 +221,7 @@ class RequirementCardsTest {
         return new Requirement(
                 new RequirementId(ResourceId.of(ID + "fr-1")),
                 new RequirementCode("FR-1"), "Bestellen", description, rationale,
-                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null,
                 linked.stream().map(TermRef::new).toList(),
                 toCriteria(criteria.isEmpty() ? List.of("Es funktioniert.") : criteria), List.of());
     }
@@ -229,8 +229,7 @@ class RequirementCardsTest {
     private static Requirement requirement(final String code, final String iri, final String title) {
         return new Requirement(
                 new RequirementId(ResourceId.of(iri)), new RequirementCode(code), title,
-                "Beschreibung.", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE,
-                null, null, List.of(), toCriteria(List.of("Es funktioniert.")), List.of());
+                "Beschreibung.", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, List.of(), toCriteria(List.of("Es funktioniert.")), List.of());
     }
 
     private static List<AcceptanceCriterion> toCriteria(final List<String> texts) {

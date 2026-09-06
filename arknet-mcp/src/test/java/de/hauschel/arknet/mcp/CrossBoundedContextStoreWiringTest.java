@@ -103,7 +103,7 @@ class CrossBoundedContextStoreWiringTest {
 
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.", null,
-                            RequirementType.FUNCTIONAL, null, null, null,
+                            RequirementType.FUNCTIONAL, null, null,
                             List.of("An order is placed and confirmed"), null), "en");
                     actors.add(PROJECT, new NewActor(ActorType.HUMAN, "Customer", null));
 
@@ -183,7 +183,7 @@ class CrossBoundedContextStoreWiringTest {
 
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.", null,
-                            RequirementType.FUNCTIONAL, null, null, null,
+                            RequirementType.FUNCTIONAL, null, null,
                             List.of("An order is placed and confirmed"), null), "en");
                     Term order = terms.add(PROJECT, new NewTerm("Order", "A customer's request to buy.", null, null), "en");
 
@@ -209,7 +209,7 @@ class CrossBoundedContextStoreWiringTest {
 
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.", null,
-                            RequirementType.FUNCTIONAL, null, null, null,
+                            RequirementType.FUNCTIONAL, null, null,
                             List.of("An order is placed and confirmed"), null), "en");
 
                     assertThatThrownBy(() -> requirements.linkTerm(PROJECT, fr.code(), "TERM-99", "en"))

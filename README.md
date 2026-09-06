@@ -442,7 +442,7 @@ Active modules (consumed by a BC, published under `w3id.org/arknet/`):
 | `arknet-core.ttl` | `arknet:` | Generic utility vocabulary (name, description, ...), reusable across every module |
 | `arknet-ddd.ttl` | `arkddd:` | BoundedContext, Domain, Subdomain, ContextRelationship, RelationshipType -- the strategic-DDD concepts `arknet-bounded-context` actually writes. Namespace shared with the parked `arknet-ddd_parked.ttl` below (ContextMap, tactical DDD) |
 | `arknet-actor.ttl` | `arkproc:` | Actor (a `prov:Agent` subclass), HumanActor, SystemActor, LegalActor, GroupActor, actorRole -- split out of `parked/arknet-process.ttl`; the only slice of that module a BC touches. `arknet-actor` persists it; `arknet-use-cases` only reads it (resolving `primaryActor`/`supportingActor`), never writes |
-| `arknet-requirements.ttl` | `arkreq:` | Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release |
+| `arknet-requirements.ttl` | `arkreq:` | Requirement (FR/NFR), UseCase, Constraint, Priority (MoSCoW), Status, Milestone, Release |
 | `arknet-provenance.ttl` | `arkprov:` | Revision, head -- PROV-O-based revision trail written by the shared write funnel |
 | `arknet-project.ttl` | `arkprj:` | Project, Anchor, AnchorType -- the registered store identity -- plus its two language fields: `defaultLanguage` (single-valued fallback) and `maintainedLanguage` (multi-valued commitment) |
 | `arknet-architecture.ttl` | `arkarch:` | ArchitectureDecisionRecord, its text properties, the supersededBy/supersedes/relatedTo/addressesRequirement/affectsContext/usesTerm relations and the five ADRStatus individuals -- the ISO-42010 slice `arknet-adr` actually writes. Namespace shared with the parked `arknet-architecture_parked.ttl` below |
