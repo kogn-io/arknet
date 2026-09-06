@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
@@ -63,9 +64,24 @@ import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
  * beforeTransaction} as the hook for "a lost-update / compare-and-set race" in its own javadoc.
  * {@code GuardSyncTx} does not fit here: it is anchored on the <em>second</em> {@code contains()}
  * call, the shape of {@code create}'s two guards, and {@code compareAndUpdate} issues only one
- * {@code contains()} plus one head-reading {@code select()} - so this test pins the interleaving
- * with a small local {@link Function}-based decorator anchored on that {@code select()} instead
- * (documented as the needed alternative in {@code GuardSyncTx}'s own javadoc).</p>
+ * {@code contains()} plus one head-reading {@code select()} - so
+ * {@link #bothCallersPassTheHeadReadButOnlyOneCommits_theLoserFailsInsteadOfLosingAnUpdate} pins
+ * that interleaving with a small local {@link Function}-based decorator anchored on that
+ * {@code select()} instead (documented as the needed alternative in {@code GuardSyncTx}'s own
+ * javadoc).</p>
+ *
+ * <p><strong>Both interleavings, deliberately in two separate methods.</strong> A CAS guard has
+ * two distinct ways of catching a conflict, and one test method proves only one at a time (a
+ * review of an earlier version of this class - see its history - confirmed this the hard way: a
+ * single method built around
+ * {@link #bothCallersPassTheHeadReadButOnlyOneCommits_theLoserFailsInsteadOfLosingAnUpdate}'s
+ * scenario alone stayed green even with the synchronous head comparison itself commented out,
+ * because both racers there start from the still-current head by construction, so that comparison
+ * can never fire - only the commit-time translation is exercised).
+ * {@link #firstCallerCommitsFullyThenASecondCallersStaleExpectedHeadFailsTheSynchronousComparison}
+ * covers the other one: a caller whose read is already stale <em>before</em> its own transaction
+ * even opens, via {@link GuardedLifecycle}'s other hook, {@code beforeTransaction} - "let the
+ * interfering writer commit here", per that hook's own javadoc.</p>
  *
  * <p><strong>Timeout.</strong> No class-level timeout; the project-wide Surefire default backstops
  * a hang instead (kogn-io/arknet#458), mirroring {@code RequirementServiceRealStoreConcurrencyTest}.</p>
@@ -105,13 +121,7 @@ class WriteFunnelCompareAndUpdateRealStoreConcurrencyTest {
     @Test
     void bothCallersPassTheHeadReadButOnlyOneCommits_theLoserFailsInsteadOfLosingAnUpdate()
             throws InterruptedException {
-        WriteFunnel seedFunnel = new WriteFunnel(realLifecycle, permissiveGate(), WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        // create()'s candidate graph is validated by the gate but not written by the funnel
-        // itself - only the body writes model triples, exactly like every real out-adapter's
-        // create() body does.
-        seedFunnel.create(DATASET, GRAPH_IRI, SUBJECT_IRI, "THING-1", candidate(), null,
-                Signals::unexpected, Signals::unexpected, tx -> tx.add(rdf.createIRI(GRAPH_IRI), candidate()));
-        String initialHead = readHead().orElseThrow(() -> new AssertionError("seed write recorded no head"));
+        String initialHead = seedSubject();
 
         CyclicBarrier bothHeadReadsDone = new CyclicBarrier(2);
 
@@ -146,6 +156,51 @@ class WriteFunnelCompareAndUpdateRealStoreConcurrencyTest {
         assertNotEquals(initialHead, newHead, "the winning write must have advanced the head");
         assertEquals(List.of(winnerName), writersOfSubject(), "only the winner's write may be visible - "
                 + "a lost commit must never surface as data, not even partially");
+    }
+
+    /**
+     * The first interleaving: a caller commits fully <em>before</em> a second caller's
+     * transaction even opens, so the second caller's {@code expectedHead} - read earlier, before
+     * either write - is already stale by the time its own transaction's synchronous head
+     * comparison runs. No commit-time conflict is involved here at all: the interfering write is
+     * long done, so the store never sees two overlapping transactions.
+     *
+     * <p>Pinned via {@link GuardedLifecycle}'s {@code beforeTransaction} hook - "let the
+     * interfering writer commit here", exactly as documented on that hook - instead of a barrier:
+     * this interleaving needs no thread coordination, only a write guaranteed to have committed
+     * before the next one's transaction opens.</p>
+     */
+    @Test
+    void firstCallerCommitsFullyThenASecondCallersStaleExpectedHeadFailsTheSynchronousComparison() {
+        String initialHead = seedSubject();
+        WriteFunnel interferingFunnel = new WriteFunnel(realLifecycle, permissiveGate(), WriteFunnel.DEFAULT_WRITE_CONFLICT);
+
+        DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, Function.identity(),
+                () -> interferingFunnel.compareAndUpdate(DATASET, GRAPH_IRI, SUBJECT_IRI, initialHead, candidate(),
+                        null, Signals::unexpected, Signals::unexpected, tx -> markWriter(tx, "interferer")));
+        WriteFunnel staleCallerFunnel = new WriteFunnel(guarded, permissiveGate(), WriteFunnel.DEFAULT_WRITE_CONFLICT);
+
+        // when - the stale caller still hands in the head it observed before the interferer ran
+        assertThrows(HeadMismatch.class,
+                () -> staleCallerFunnel.compareAndUpdate(DATASET, GRAPH_IRI, SUBJECT_IRI, initialHead, candidate(),
+                        null, Signals::unexpected, HeadMismatch::new, tx -> markWriter(tx, "stale-caller")));
+
+        // then - the interferer's fully committed write is the only one visible; the rejected
+        // caller's write never landed, not even partially
+        assertEquals(List.of("interferer"), writersOfSubject());
+        String newHead = readHead().orElseThrow(() -> new AssertionError("interfering write recorded no head"));
+        assertNotEquals(initialHead, newHead, "the interfering write must have advanced the head");
+    }
+
+    /** Creates the racing subject and returns its {@code arkprov:head} right after the seed write. */
+    private String seedSubject() {
+        WriteFunnel seedFunnel = new WriteFunnel(realLifecycle, permissiveGate(), WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        // create()'s candidate graph is validated by the gate but not written by the funnel
+        // itself - only the body writes model triples, exactly like every real out-adapter's
+        // create() body does.
+        seedFunnel.create(DATASET, GRAPH_IRI, SUBJECT_IRI, "THING-1", candidate(), null,
+                Signals::unexpected, Signals::unexpected, tx -> tx.add(rdf.createIRI(GRAPH_IRI), candidate()));
+        return readHead().orElseThrow(() -> new AssertionError("seed write recorded no head"));
     }
 
     /** Runs one {@code compareAndUpdate} call, pausing right after its head read at the barrier. */
