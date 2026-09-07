@@ -167,3 +167,9 @@ Eigene Tool-Klasse `AdrCheckMcpTools` statt einer neunten Methode an `AdrMcpTool
 Die Alt-Schreibform `arkarch:supersedes` bleibt fuer store-first verbliebene Faelle rueckwaerts in der ohnehin rueckwaerts gefolgten Kantenmenge -- `TraceabilityGraph` unterscheidet nicht, ob eine Alt-Kante oder eine store-first inkonsistente Neu-Kante vorliegt, sondern folgt schlicht, was an Tripeln vorhanden ist.
 Kein `adr_impact`.
 Der HTML-Report traegt einen eigenen "Architecture Decisions"-Abschnitt (`AdrCards` in arknet-mcp, siehe dort).
+
+**Hinweis auf veraltete Uebersetzungen (kogn-io/arknet#474).**
+`adr_update` haengt an seine Antwort, welche der vom Projekt gefuehrten Sprachen die geschriebenen Felder noch tragen, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus dem Shared Kernel, blockt nie.
+Gemeldet werden `name`/`adrContext`/`adrDecision` sowie, unter den besitzenden Kanten `consequence`/`consideredOption`, die Texte der Kind-Ressourcen.
+Die vier Referenzlisten und die beiden Klassifikationsfelder bleiben aussen vor: sie schreiben keinen Text unter einer Sprache.
+Ein Aufruf mit `removeConsequencePositions` bzw. `removeConsideredOptionPositions` meldet die betroffene Kante gar nicht erst als geschrieben, was er sonst noch mit der Liste tut: die Tags der Kante sind ueber alle Kinder gepoolt, das entfernte kann der letzte Traeger einer Sprache gewesen sein, und der Hinweis stuende dann neben einer Antwort, in der diese Sprache nirgends mehr vorkommt (Review zu kogn-io/arknet#537).

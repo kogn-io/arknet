@@ -61,4 +61,28 @@ class LanguageTagTest {
     void rejectsAnEmptyTag() {
         assertThrows(InvalidLanguageTagException.class, () -> LanguageTag.canonicalize(""));
     }
+
+    // --- writtenLanguage: the non-throwing sibling (kogn-io/arknet#474) -------
+
+    @Test
+    void writtenLanguagePrefersTheExplicitTagAndCanonicalizesIt() {
+        assertEquals("de", LanguageTag.writtenLanguage("DE", "en"));
+    }
+
+    @Test
+    void writtenLanguageFallsBackToTheProjectDefault() {
+        assertEquals("en", LanguageTag.writtenLanguage(null, "en"));
+    }
+
+    /**
+     * Where {@link LanguageTag#resolveWriteLanguage} rejects, this one answers "none" - it is read
+     * after a write has already been made or refused, so it must never turn a hint into a second
+     * rejection.
+     */
+    @Test
+    void writtenLanguageAnswersNullWhereResolveWriteLanguageRejects() {
+        assertThrows(MissingDefaultLanguageException.class, () -> LanguageTag.resolveWriteLanguage(null, null));
+        assertNull(LanguageTag.writtenLanguage(null, null));
+    }
+
 }

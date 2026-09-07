@@ -94,3 +94,7 @@ Ein geteilter Gate erzwingt aber keinen geteilten Graphen: ein `WriteFunnel`-Auf
 Umgekehrt bereits real erreichbar: `KognioRdfActorRepository.REFERENCING_PREDICATES` listet `arkproc:filledBy` seit Teil A, `KognioRdfActorRepositoryTest#deleteRejectsAnActorStillReferencedByARolesFilledBy` pinnt, dass `actor_delete` einen von einer Rolle besetzten Actor jetzt tatsaechlich ablehnt.
 
 `arkreq:primaryRole`/`supportingRole` referenzieren den `ROLE-N`-Code (aufgeloest ueber `RoleLookup` in `arknet-use-cases`, fuer die Anzeige ueber `ResolveRoles` dieses Hexagons), nicht den Namen -- der Name ist mehrsprachig und daher keine stabile Referenzgrundlage.
+
+**Hinweis auf veraltete Uebersetzungen (kogn-io/arknet#474).**
+`role_update` haengt an seine Antwort, welche der vom Projekt gefuehrten Sprachen `name`/`description` noch tragen, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus dem Shared Kernel, blockt nie.
+`actor_update` bekommt kein solches Signal und ist damit die sichtbare Trennlinie zwischen den beiden Ressourcentypen dieses Hexagons: der Name eines Akteurs ist ein bewusst ungetaggter Eigenname, keine uebersetzte Funktionsbezeichnung.

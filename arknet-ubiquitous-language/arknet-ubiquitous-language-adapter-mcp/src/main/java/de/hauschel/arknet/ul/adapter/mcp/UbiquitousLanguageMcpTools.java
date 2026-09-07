@@ -15,9 +15,11 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
@@ -77,6 +79,18 @@ public final class UbiquitousLanguageMcpTools {
             + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
             + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
 
+    /**
+     * The stale-translation signal, announced on every update tool that writes a multilingual
+     * field (kogn-io/arknet#474). It belongs in the tool description for the same reason
+     * {@link #PROSE_MARKUP} does: the writing agent reads the tool schema and nothing else, and a
+     * signal it does not expect is a signal it does not act on.
+     */
+    private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
+            + " the answer names the fields that still carry a maintained language this call did not"
+            + " write; repeat the call under each of those languages to keep the translations in step."
+            + " A field that did not carry the written language yet is being translated, not corrected,"
+            + " and is not reported.";
+
     private static final String PROJECT_ANCHOR_DESCRIPTION = "Optional anchor identifying the project this call "
             + "targets, used INSTEAD of the anchor your transport sends in the "
             + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -91,6 +105,19 @@ public final class UbiquitousLanguageMcpTools {
     private final UpdateTerm updateTerm;
     private final DeleteTerm deleteTerm;
     private final ProjectResolver projects;
+    private static final String DEFINITION_FIELD = "definition";
+
+    /**
+     * The multilingual fields {@code term_update} reports, as {@code FieldLanguageLookup} keys -
+     * the local names of the predicates behind them. {@code prefLabel} is multilingual too but
+     * deliberately absent (see {@link #staleTranslationHint}). {@code arknet-architecture-tests}
+     * reads this list reflectively and holds it against the {@code sh:uniqueLang} properties the
+     * shipped shapes declare for a term, so a typo or a renamed predicate fails a build instead
+     * of silently muting the signal for that field.
+     */
+    private static final List<String> MULTILINGUAL_FIELDS = List.of(DEFINITION_FIELD);
+
+    private final StaleTranslationHint staleTranslations;
 
     /**
      * Creates the adapter with its six driving in-ports and the resolver that maps each
@@ -104,6 +131,8 @@ public final class UbiquitousLanguageMcpTools {
      * @param updateTerm  in-port backing {@code term_update}
      * @param deleteTerm  in-port backing {@code term_delete}
      * @param projects  resolves each call's target project from its origin directory
+     * @param staleTranslations renders {@code term_update}'s stale-translation signal
+     *                    (kogn-io/arknet#474)
      */
     public UbiquitousLanguageMcpTools(
             final AddTerm addTerm,
@@ -112,7 +141,8 @@ public final class UbiquitousLanguageMcpTools {
             final GetTerm getTerm,
             final UpdateTerm updateTerm,
             final DeleteTerm deleteTerm,
-            final ProjectResolver projects) {
+            final ProjectResolver projects,
+            final StaleTranslationHint staleTranslations) {
         this.addTerm = Objects.requireNonNull(addTerm, "addTerm");
         this.listTerms = Objects.requireNonNull(listTerms, "listTerms");
         this.describeTermDisplayFallback =
@@ -121,6 +151,7 @@ public final class UbiquitousLanguageMcpTools {
         this.updateTerm = Objects.requireNonNull(updateTerm, "updateTerm");
         this.deleteTerm = Objects.requireNonNull(deleteTerm, "deleteTerm");
         this.projects = Objects.requireNonNull(projects, "projects");
+        this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
     }
 
     /**
@@ -274,7 +305,8 @@ public final class UbiquitousLanguageMcpTools {
     @McpTool(name = "term_update",
             description = "Correct an already-created term's preferred label, definition and/or relations, "
                     + "keeping its identity and every existing link into it (e.g. arkreq:usesTerm) unchanged. "
-                    + "Every argument is optional - an omitted one leaves that field unchanged." + PROSE_MARKUP)
+                    + "Every argument is optional - an omitted one leaves that field unchanged."
+                    + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
@@ -321,9 +353,10 @@ public final class UbiquitousLanguageMcpTools {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
         final Optional<TermCode> broaderPatch = parseBroaderPatch(broader);
+        final String staleHint = staleTranslationHint(project, code, blankToNull(definition), blankToNull(language));
         final Term updated = updateTerm.update(project.id(), code, blankToNull(label), blankToNull(definition),
                 blankToNull(language), project.defaultLanguage(), broaderPatch, toTermCodes(related));
-        return format(updated);
+        return format(updated) + staleHint;
     }
 
     @McpTool(name = "term_delete",
@@ -413,4 +446,27 @@ public final class UbiquitousLanguageMcpTools {
     private static String blankToNull(final String value) {
         return (value == null || value.isBlank()) ? null : value;
     }
+
+    /**
+     * The stale-translation signal for a {@code term_update} (kogn-io/arknet#474): which other
+     * maintained language the corrected definition still carries from an earlier write. Asked
+     * before the write and appended after it, because only the state before tells a correction
+     * from a translation (see {@link StaleTranslationHint}).
+     *
+     * <p><strong>Only the definition takes part.</strong> A glossary term is the same word under
+     * every language (kogn-io/arknet#502, FR-10), so {@code prefLabel} cannot go stale in the
+     * sense this signal means: a rename without {@code language} rewrites every tag at once, and a
+     * label written under an explicit {@code language} must equal the one already there or be
+     * rejected. Either way nothing older is left standing.</p>
+     */
+    private String staleTranslationHint(final ResolvedProject project, final TermCode code,
+            final String definition, final String language) {
+        if (definition == null) {
+            return "";
+        }
+        return staleTranslations.forResource(project.id(), code.value(),
+                LanguageTag.writtenLanguage(language, project.defaultLanguage()),
+                project.maintainedLanguages(), MULTILINGUAL_FIELDS);
+    }
+
 }

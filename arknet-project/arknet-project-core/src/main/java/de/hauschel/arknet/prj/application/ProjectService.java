@@ -329,7 +329,7 @@ public class ProjectService
                 // against was just re-read.
                 Project.requireDefaultLanguageMaintained(
                         defaultLanguage != null ? defaultLanguage : current.project().defaultLanguage(),
-                        languages != null ? languages : current.project().maintainedLanguages());
+                        Project.maintainedLanguagesAfter(current.project().maintainedLanguages(), languages));
                 try {
                     Project updated = registry.updateAttributes(projectId, current.head(), description,
                             descriptionLanguage, defaultLanguage, languages);

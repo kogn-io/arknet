@@ -133,6 +133,26 @@ public record Project(ProjectId id, String label, List<Anchor> anchors, String d
     }
 
     /**
+     * The maintained set a {@code project_update} would leave in force: the requested one where
+     * the call supplies it, the current one where it does not. The one place that reading lives -
+     * {@code ProjectService#update} needs it to check {@link #requireDefaultLanguageMaintained}
+     * against the state the write leaves behind, and {@code project_update}'s stale-translation
+     * hint needs the very same answer to name the promise a reader can act on. Two derivations of
+     * one rule agreed today and nothing held them together (kogn-io/arknet#537 review).
+     *
+     * <p>{@code null} means "leave the set alone"; an <em>empty</em> list means "remove it" and is
+     * therefore a change, not an omission - the one argument of that call whose empty value says
+     * something.</p>
+     *
+     * @param current   the set the project carries now
+     * @param requested the set the call supplies, or {@code null} if it supplies none
+     * @return the canonicalized set in force after the write
+     */
+    public static List<String> maintainedLanguagesAfter(List<String> current, List<String> requested) {
+        return requested == null ? canonicalLanguages(current) : canonicalLanguages(requested);
+    }
+
+    /**
      * The pair invariant between the two language fields: where a project declares a non-empty
      * maintained set, its default language has to be one of its members.
      *

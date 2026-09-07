@@ -3,9 +3,13 @@
 
 package de.hauschel.arknet.mcp.store;
 
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import io.kogn.rdf.dataset.BindingSet;
@@ -233,6 +237,65 @@ public final class StoreReader {
                     .distinct()
                     .toList();
         }
+    }
+
+    /**
+     * The language tags each field of one resource carries - the store side of the
+     * stale-translation signal every {@code *_update} tool appends after a single-language write
+     * (kogn-io/arknet#474; contract and key vocabulary in {@link
+     * de.hauschel.arknet.kernel.FieldLanguageLookup}).
+     *
+     * <p><strong>Addressed by {@link DatasetId}, not by {@link ProjectId}</strong>, unlike every
+     * other read here: {@code project_update} needs the very same answer for a project's registry
+     * record, which lives in the reserved system dataset - an id {@link ProjectId} refuses to hold
+     * by construction. Rather than a second, near-identical query method, the one method takes the
+     * dataset directly and its callers name which one they mean.</p>
+     *
+     * <p><strong>One query, two hops.</strong> The second hop reaches the owned child resources
+     * whose text is as multilingual as the parent's own fields - an acceptance criterion, a
+     * use-case step, an ADR consequence - and pools them under the local name of the edge that
+     * owns them, because a caller writes such a list wholesale. It is deliberately not restricted
+     * to owned children: an edge to a neighbouring first-class resource (a linked term, an
+     * addressed requirement) is followed too, and that neighbour's tags land under that edge's
+     * name. Telling the two apart would take type knowledge this read path does not have and does
+     * not want; the extra keys are inert, because a caller asks only for the fields it wrote and
+     * never writes a neighbour through this tool.</p>
+     *
+     * <p><strong>No infrastructure-graph exclusion</strong>, for the same reason
+     * {@link #findByIdentifier} has none: the identifier match may also hit a tombstoned revision
+     * in {@link ArkprovVocabulary#PROVENANCE_GRAPH}, which retains a deleted resource's code, but
+     * a revision carries no language-tagged literal of its own, and what its {@code
+     * prov:specializationOf} hop contributes lands under that predicate's name, which no caller
+     * asks for.</p>
+     *
+     * @param dataset    the dataset holding the resource
+     * @param identifier the resource's {@code dcterms:identifier} lexical value (e.g. {@code FR-1},
+     *                   or a project label for a registry record)
+     * @return field key (predicate local name, or owning-edge local name for a child's fields) to
+     *         the language tags found for it; empty for an identifier nothing carries
+     */
+    public Map<String, Set<String>> languageTagsByField(DatasetId dataset, String identifier) {
+        Objects.requireNonNull(dataset, "dataset");
+        Objects.requireNonNull(identifier, "identifier");
+        String literal = "\"" + SparqlTerms.escape(identifier) + "\"";
+        String query = "SELECT DISTINCT ?p ?lang WHERE { "
+                + "?s <" + DCTERMS_IDENTIFIER + "> " + literal + " . "
+                + "{ ?s ?p ?o . BIND(lang(?o) AS ?lang) FILTER(BOUND(?lang) && ?lang != \"\") } "
+                + "UNION "
+                + "{ ?s ?p ?child . ?child ?cp ?o . BIND(lang(?o) AS ?lang) "
+                + "FILTER(BOUND(?lang) && ?lang != \"\") } }";
+        Map<String, Set<String>> byField = new LinkedHashMap<>();
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            handle.sparqlQuery().select(query).forEach(row -> {
+                RDFTerm predicate = row.getValue("p").orElse(null);
+                RDFTerm language = row.getValue("lang").orElse(null);
+                if (predicate instanceof IRI predicateIri && language instanceof Literal languageLiteral) {
+                    byField.computeIfAbsent(StoreResource.localName(predicateIri.getIRIString()),
+                            key -> new LinkedHashSet<>()).add(languageLiteral.getLexicalForm());
+                }
+            });
+        }
+        return byField;
     }
 
     /**

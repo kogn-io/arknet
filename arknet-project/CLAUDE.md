@@ -97,3 +97,9 @@ Der Port ist absichtlich schmal (nur Identitaeten, kein Handle, kein Lesezugriff
 `ListAdoptableDatasets` rendert das Ergebnis in `project_list` statt in einem eigenen Tool: wer fragt, was da ist, soll nicht erst wissen muessen, dass "registriert" und "im Store vorhanden" auseinanderfallen koennen, um herauszufinden, dass sie es tun.
 Der Abschnitt verschwindet, sobald nichts mehr zu adoptieren ist.
 Das Tool bleibt danach nuetzlich: ein aus einem Backup zurueckgespieltes Dataset auf einer Maschine, deren Registry es nicht kennt, ist dieselbe Lage.
+
+**Hinweis auf veraltete Uebersetzungen (kogn-io/arknet#474).**
+`project_update` haengt an seine Antwort, welche der vom Projekt gefuehrten Sprachen die korrigierte `description` noch traegt, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus dem Shared Kernel, blockt nie.
+Zwei Dinge sind hier anders als in jedem Modell-BC: gelesen wird der Registry-Record im reservierten System-Dataset (eigene Port-Methode `FieldLanguageLookup#ofProjectRegistration`, da `ProjectId` dessen Id nicht halten darf), und ein weggelassenes `language` schreibt hier weiterhin ungetaggt statt auf die Standardsprache zurueckzufallen -- so ein Aufruf benennt keine Sprache und bekommt darum auch kein Signal.
+Verglichen wird gegen den Sprachsatz **nach** diesem Aufruf: `project_update` kann den Satz im selben Zug aendern, und massgeblich ist die Zusage, die jetzt gilt.
+Diese Ableitung ("`null` laesst den Satz stehen, eine leere Liste entfernt ihn") steht als `Project.maintainedLanguagesAfter` genau einmal in der Domaene und wird von beiden Seiten gerufen -- vom In-Adapter fuer den Hinweis und von `ProjectService#update` fuer die Pruefung von `requireDefaultLanguageMaintained` gegen den hinterlassenen Zustand; zwei Formulierungen derselben Regel koennten still auseinanderlaufen (Review zu kogn-io/arknet#537).

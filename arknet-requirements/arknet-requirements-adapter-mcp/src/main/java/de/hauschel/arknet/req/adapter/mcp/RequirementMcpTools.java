@@ -20,9 +20,11 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -106,6 +108,33 @@ public final class RequirementMcpTools {
             + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
             + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
 
+    /**
+     * The stale-translation signal, announced on every update tool that writes a multilingual
+     * field (kogn-io/arknet#474). It belongs in the tool description for the same reason
+     * {@link #PROSE_MARKUP} does: the writing agent reads the tool schema and nothing else, and a
+     * signal it does not expect is a signal it does not act on.
+     */
+    private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
+            + " the answer names the fields that still carry a maintained language this call did not"
+            + " write; repeat the call under each of those languages to keep the translations in step."
+            + " A field that did not carry the written language yet is being translated, not corrected,"
+            + " and is not reported.";
+
+    private static final String TITLE_FIELD = "title";
+    private static final String DESCRIPTION_FIELD = "description";
+    private static final String RATIONALE_FIELD = "rationale";
+    private static final String ACCEPTANCE_CRITERION_FIELD = "acceptanceCriterion";
+
+    /**
+     * The multilingual fields {@code req_update} can write, as {@code FieldLanguageLookup} keys - the
+     * local names of the predicates behind them, or of the edge owning a child resource's text.
+     * {@code arknet-architecture-tests} reads this list reflectively and holds it against the
+     * {@code sh:uniqueLang} properties the shipped shapes declare for this resource, so a typo or
+     * a renamed predicate fails a build instead of silently muting the signal for that field.
+     */
+    private static final List<String> MULTILINGUAL_FIELDS =
+            List.of(TITLE_FIELD, DESCRIPTION_FIELD, RATIONALE_FIELD, ACCEPTANCE_CRITERION_FIELD);
+
     private final AddRequirement addRequirement;
     private final ListRequirements listRequirements;
     private final DescribeRequirementDisplayFallback describeRequirementDisplayFallback;
@@ -118,6 +147,7 @@ public final class RequirementMcpTools {
     private final GetRequirementSchema getRequirementSchema;
     private final ProjectResolver projects;
     private final RequirementPresenter presenter;
+    private final StaleTranslationHint staleTranslations;
 
     /**
      * Creates the adapter with its ten driving in-ports, the borrowed ubiquitous-language and
@@ -140,6 +170,8 @@ public final class RequirementMcpTools {
      * @param resolveConstraints    this module's own driving port used only to render a linked
      *                              constraint's business code instead of its bare IRI
      * @param projects            resolves each call's target project from its origin directory
+     * @param staleTranslations   renders {@code req_update}'s stale-translation signal
+     *                            (kogn-io/arknet#474)
      */
     public RequirementMcpTools(
             final AddRequirement addRequirement,
@@ -154,7 +186,8 @@ public final class RequirementMcpTools {
             final GetRequirementSchema getRequirementSchema,
             final ResolveTerms resolveTerms,
             final ResolveConstraints resolveConstraints,
-            final ProjectResolver projects) {
+            final ProjectResolver projects,
+            final StaleTranslationHint staleTranslations) {
         this.addRequirement = Objects.requireNonNull(addRequirement, "addRequirement");
         this.listRequirements = Objects.requireNonNull(listRequirements, "listRequirements");
         this.describeRequirementDisplayFallback =
@@ -168,6 +201,7 @@ public final class RequirementMcpTools {
         this.getRequirementSchema = Objects.requireNonNull(getRequirementSchema, "getRequirementSchema");
         this.projects = Objects.requireNonNull(projects, "projects");
         this.presenter = new RequirementPresenter(resolveTerms, resolveConstraints);
+        this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
     }
 
     /**
@@ -433,7 +467,8 @@ public final class RequirementMcpTools {
                     + "position and moves the ones after it up - a position cannot be both corrected and "
                     + "removed in one call, and removing every remaining criterion is rejected (at least "
                     + "one must stay). "
-                    + "Does not touch status (use req_set_status) or linked terms (use req_link_term)." + PROSE_MARKUP)
+                    + "Does not touch status (use req_set_status) or linked terms (use req_link_term)."
+                    + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id,
@@ -489,13 +524,16 @@ public final class RequirementMcpTools {
         final Priority requirementPriority = blankToNull(priority) == null
                 ? null
                 : Priority.valueOf(priority.trim());
+        final String staleHint = staleTranslationHint(project, code, blankToNull(language), blankToNull(title),
+                blankToNull(description), blankToNull(rationale), newAcceptanceCriteria,
+                acceptanceCriteriaTextPatches, removeAcceptanceCriterionPositions);
         final Requirement updated = updateRequirement.update(project.id(), code, blankToNull(title),
                 blankToNull(description), blankToNull(rationale),
                 newAcceptanceCriteria == null ? null : List.copyOf(newAcceptanceCriteria),
                 toAcceptanceCriteriaTextPatches(acceptanceCriteriaTextPatches),
                 toRemovedPositions(removeAcceptanceCriterionPositions),
                 requirementPriority, blankToNull(language), project.defaultLanguage());
-        return presenter.format(project.id(), updated);
+        return presenter.format(project.id(), updated) + staleHint;
     }
 
     /**
@@ -561,4 +599,49 @@ public final class RequirementMcpTools {
     private static String displayTag(final String tag) {
         return tag.isEmpty() ? "untagged" : tag;
     }
+
+    /**
+     * The stale-translation signal for a {@code req_update} (kogn-io/arknet#474): the multilingual
+     * fields this call is about to write, named as {@code store_check} names them, so the answer
+     * can say which of them still carry a maintained language this write did not touch. Asked
+     * before the write and appended after it, because only the state before tells a correction
+     * from a translation (see {@link StaleTranslationHint}).
+     *
+     * <p>A call that also <em>removes</em> a criterion reports the acceptance-criterion edge as
+     * unwritten, whatever else it does to that list. The lookup pools the tags of every criterion
+     * hanging off the edge, so a removal can take the last carrier of a language out from under a
+     * snapshot that already counted it - and the hint would then name a language the answer the
+     * caller is holding no longer has anywhere. Better one hint too few than one that is wrong
+     * about the state it is printed next to (kogn-io/arknet#537 review).</p>
+     */
+    private String staleTranslationHint(final ResolvedProject project, final RequirementCode code,
+            final String language, final String title, final String description, final String rationale,
+            final List<String> newAcceptanceCriteria,
+            final List<AcceptanceCriterionPatchInput> acceptanceCriteriaTextPatches,
+            final List<Integer> removeAcceptanceCriterionPositions) {
+        final List<String> fieldsWritten = new ArrayList<>();
+        if (title != null) {
+            fieldsWritten.add(TITLE_FIELD);
+        }
+        if (description != null) {
+            fieldsWritten.add(DESCRIPTION_FIELD);
+        }
+        if (rationale != null) {
+            fieldsWritten.add(RATIONALE_FIELD);
+        }
+        final boolean removesACriterion =
+                removeAcceptanceCriterionPositions != null && !removeAcceptanceCriterionPositions.isEmpty();
+        if (!removesACriterion
+                && (newAcceptanceCriteria != null && !newAcceptanceCriteria.isEmpty()
+                        || acceptanceCriteriaTextPatches != null && !acceptanceCriteriaTextPatches.isEmpty())) {
+            fieldsWritten.add(ACCEPTANCE_CRITERION_FIELD);
+        }
+        if (fieldsWritten.isEmpty()) {
+            return "";
+        }
+        return staleTranslations.forResource(project.id(), code.value(),
+                LanguageTag.writtenLanguage(language, project.defaultLanguage()),
+                project.maintainedLanguages(), fieldsWritten);
+    }
+
 }

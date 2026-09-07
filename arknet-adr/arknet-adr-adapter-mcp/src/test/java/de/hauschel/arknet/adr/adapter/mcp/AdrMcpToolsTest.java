@@ -78,6 +78,8 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.kernel.FieldLanguageLookup;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 
 /**
  * Scaffold-level check that the adapter declares exactly the eight ADR tools and guards its in-port
@@ -86,6 +88,28 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * translation (kogn-io/arknet#357).
  */
 class AdrMcpToolsTest {
+
+    /**
+     * The stale-translation signal over an empty store (kogn-io/arknet#474): every test that sets
+     * up no language inventory keeps the answer it always had, because a field that carries no
+     * other language has nothing to report.
+     */
+    private static final StaleTranslationHint NO_TRANSLATIONS = hints(Map.of());
+
+    /** A lookup answering the same field-to-tags inventory for every resource. */
+    private static StaleTranslationHint hints(Map<String, Set<String>> byField) {
+        return new StaleTranslationHint(new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                return byField;
+            }
+        });
+    }
 
     private static final AdrId ID =
             new AdrId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
@@ -105,7 +129,7 @@ class AdrMcpToolsTest {
     private final RecordingResolveTerms terms = new RecordingResolveTerms();
     private final AdrMcpTools adapter =
             new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
-                    contexts, terms, PROJECTS);
+                    contexts, terms, PROJECTS, NO_TRANSLATIONS);
 
     @Test
     void routesByTheExplicitAnchorParameterWhenTheTransportCarriesNone() {
@@ -140,56 +164,56 @@ class AdrMcpToolsTest {
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(null, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, null, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, null, stub, stub, stub, stub, stub, stub, stub, stub, stub,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, null, stub, stub, stub, stub, stub, stub, stub, stub,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, null, stub, stub, stub, stub, stub, stub, stub,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, stub, stub, stub, stub, stub, stub,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, null, stub, stub, stub, stub, stub,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, null, stub, stub, stub, stub,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, null, stub, stub, stub,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, null, stub, stub,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null, stub,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null,
-                        requirements, contexts, terms, PROJECTS));
+                        requirements, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
-                        null, contexts, terms, PROJECTS));
+                        null, contexts, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
-                        requirements, null, terms, PROJECTS));
+                        requirements, null, terms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
-                        requirements, contexts, null, PROJECTS));
+                        requirements, contexts, null, PROJECTS, NO_TRANSLATIONS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
-                        requirements, contexts, terms, null));
+                        requirements, contexts, terms, null, NO_TRANSLATIONS));
     }
 
     @Test
@@ -880,6 +904,122 @@ class AdrMcpToolsTest {
     private static AdrDetail detail(Adr adr, List<AdrCode> supersedes, List<AdrCode> supersededBy,
             List<AdrCode> relatedTo) {
         return new AdrDetail(adr, supersedes, supersededBy, relatedTo);
+    }
+
+
+    // --- stale-translation signal (kogn-io/arknet#474) ------------------------
+
+    /**
+     * Correcting a record in English names every field whose German variant this call left
+     * standing - including the consequences, whose text lives on child resources and is therefore
+     * reported under the edge that owns them.
+     */
+    @Test
+    void updateReportsTheOtherMaintainedLanguageTheCorrectedFieldsStillCarry() {
+        AdrMcpTools bilingual = new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                stub, stub, requirements, contexts, terms,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
+                hints(Map.of("name", Set.of("en", "de"), "adrContext", Set.of("en"),
+                        "consequence", Set.of("en", "de"))));
+
+        String rendered = bilingual.update(null, "ADR-1", "A better title", "Sharper context", null,
+                List.of(new NewConsequenceInput("New one", "NEGATIVE")), null, null, null, null, null, "en",
+                null, null, null, null, ANCHOR);
+
+        assertTrue(rendered.contains("de: name, consequence"), rendered);
+    }
+
+    /**
+     * A call that adds a consequence and takes another one out in the same breath says nothing
+     * about the consequence edge. The tags the lookup reports for that edge are pooled over every
+     * consequence hanging off it, so the removed one may have been the only carrier of German -
+     * naming it would describe a state the answer next to the hint no longer has. The fields the
+     * call really corrected are reported as usual (kogn-io/arknet#537 review).
+     */
+    @Test
+    void updateStaysSilentAboutAnEdgeTheSameCallAlsoRemovesFrom() {
+        AdrMcpTools bilingual = new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                stub, stub, requirements, contexts, terms,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
+                hints(Map.of("name", Set.of("en", "de"), "consequence", Set.of("en", "de"))));
+
+        String rendered = bilingual.update(null, "ADR-1", "A better title", null, null,
+                List.of(new NewConsequenceInput("New one", "NEGATIVE")), null, null, null,
+                List.of(1), null, "en", null, null, null, null, ANCHOR);
+
+        // The whole hint line, not just its start: the record's own missing-content warning above
+        // it mentions consequences too, so only an exact line proves the edge stayed out.
+        assertTrue(rendered.contains("\n  de: name\nRepeat the call"), rendered);
+    }
+
+    /**
+     * The second call of a two-language workflow - the field so far carries only the other
+     * language, and this call adds the written one - is a translation, not a correction: the
+     * variant already there is its source, and nothing is stale. For a record outside PROPOSED
+     * this is the only text write the aggregate still accepts, so a hint here would recommend a
+     * call that is rejected. The lookup must therefore see the state before the write.
+     */
+    @Test
+    void updateStaysSilentWhenTheCallAddsATranslation() {
+        AdrMcpTools bilingual = new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                stub, stub, requirements, contexts, terms,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
+                new StaleTranslationHint(lookupBeforeTheWrite(Map.of("name", Set.of("en"),
+                        "adrContext", Set.of("en")))));
+
+        String rendered = bilingual.update(null, "ADR-1", "Ein besserer Titel", "Schaerferer Kontext", null,
+                null, null, null, null, null, null, "de", null, null, null, null, ANCHOR);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    /** A project maintaining a single language has no other language to warn about. */
+    @Test
+    void updateStaysSilentForASingleLanguageProject() {
+        AdrMcpTools monolingual = new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                stub, stub, requirements, contexts, terms,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en")),
+                hints(Map.of("name", Set.of("en", "de"))));
+
+        String rendered = monolingual.update(null, "ADR-1", "A better title", null, null, null, null, null,
+                null, null, null, "en", null, null, null, null, ANCHOR);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    /** Correcting only the reference lists writes no text under any language. */
+    @Test
+    void updateStaysSilentWhenOnlyTheReferenceListsChanged() {
+        AdrMcpTools bilingual = new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                stub, stub, requirements, contexts, terms,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
+                hints(Map.of("name", Set.of("en", "de"))));
+
+        String rendered = bilingual.update(null, "ADR-1", null, null, null, null, null, null, null, null, null,
+                null, List.of("FR-1"), null, null, null, ANCHOR);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    /**
+     * A lookup answering {@code byField} as the state <em>before</em> the write - and failing the
+     * test if the write has already happened when it is asked, because only that state tells a
+     * correction from a translation (kogn-io/arknet#474).
+     */
+    private FieldLanguageLookup lookupBeforeTheWrite(Map<String, Set<String>> byField) {
+        return new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                assertNull(stub.lastUpdatedCode, "the lookup must run before the write");
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                assertNull(stub.lastUpdatedCode, "the lookup must run before the write");
+                return byField;
+            }
+        };
     }
 
     /** Structural stub implementing the nine driving in-ports. */
