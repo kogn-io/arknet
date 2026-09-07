@@ -72,6 +72,14 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * literal, so neither ever forces a write language to be resolved: a role-only correction
  * goes through in a project that has no {@code defaultLanguage} configured at all.</p>
  *
+ * <p><strong>{@code usesTermCodes} carries the same tri-state as {@code supportingRoles}
+ * (kogn-io/arknet#540, precedent {@code adr_update}'s reference lists).</strong> {@code null}
+ * leaves the existing {@code arkreq:usesTerm} edges untouched, an empty list is the explicit,
+ * unambiguous signal to remove every one of them, and a non-empty list replaces them wholesale.
+ * {@code uc_link_term} remains the convenient, idempotent way to add a single edge without
+ * restating the rest - this field is what lets a caller drop one, which {@code uc_link_term}
+ * (add-only) cannot.</p>
+ *
  * <p><strong>Explicitly out of scope.</strong> Reordering the main flow is still untouched by this
  * port - {@code newMainSteps}/{@code removeMainStepPositions} append and remove, they never move
  * a surviving step to a different position; a caller wanting a different order still needs
@@ -122,6 +130,11 @@ public interface UpdateUseCase {
      *                                                within {@code projectId} - the same didactic
      *                                                rejection {@link AddUseCase} raises, thrown
      *                                                before anything is written
+     * @throws RuntimeException                      if any entry of {@code correction}'s {@code
+     *                                                usesTermCodes} names a glossary term unknown
+     *                                                within {@code projectId} (kogn-io/arknet#540) -
+     *                                                the same didactic rejection thrown before
+     *                                                anything is written
      * @throws UseCaseConcurrentlyModifiedException if the write keeps losing the compare-and-set
      *                                                race against a concurrent writer across every
      *                                                retry attempt
@@ -191,6 +204,11 @@ public interface UpdateUseCase {
      *                            removing every remaining step is refused too - a use case must
      *                            have at least one (see
      *                            {@link de.hauschel.arknet.uc.domain.UseCase#withoutMainSteps})
+     * @param usesTermCodes       business codes of the glossary terms this use case should use
+     *                            going forward, e.g. {@code TERM-1}, replacing the existing
+     *                            {@code arkreq:usesTerm} edges wholesale; an empty list clears them
+     *                            all, {@code null} leaves them unchanged (kogn-io/arknet#540) - see
+     *                            the class-level note
      * @param language            the BCP-47 language tag every field this call actually touches
      *                            (a non-{@code null} {@code title}/{@code goal}/{@code scope}/
      *                            {@code trigger}/{@code precondition}/{@code postcondition}, each
@@ -217,10 +235,15 @@ public interface UpdateUseCase {
             List<StepRealisesPatch> stepRealisesPatches,
             List<NewMainStep> newMainSteps,
             RemovedPositions removeMainStepPositions,
+            List<String> usesTermCodes,
             String language) {
 
         public UseCaseCorrection {
             newMainSteps = newMainSteps == null ? List.of() : List.copyOf(newMainSteps);
+            // usesTermCodes is not normalised to List.of() here: null/empty carry different
+            // meaning for this field alone (leave alone vs. clear), same as AdrCorrection's own
+            // four reference lists.
+            usesTermCodes = usesTermCodes == null ? null : List.copyOf(usesTermCodes);
             removeMainStepPositions = removeMainStepPositions == null ? RemovedPositions.NONE : removeMainStepPositions;
             rejectCorrectingARemovedPosition(stepTextPatches == null ? List.of()
                     : stepTextPatches.stream().map(StepTextPatch::position).toList(),
@@ -273,6 +296,7 @@ public interface UpdateUseCase {
             private List<StepRealisesPatch> stepRealisesPatches;
             private List<NewMainStep> newMainSteps;
             private RemovedPositions removeMainStepPositions;
+            private List<String> usesTermCodes;
             private String language;
 
             private Builder() {
@@ -362,6 +386,12 @@ public interface UpdateUseCase {
                 return this;
             }
 
+            /** @param value see {@link UseCaseCorrection#usesTermCodes()} @return this builder */
+            public Builder usesTermCodes(List<String> value) {
+                this.usesTermCodes = value;
+                return this;
+            }
+
             /** @param value see {@link UseCaseCorrection#language()} @return this builder */
             public Builder language(String value) {
                 this.language = value;
@@ -372,7 +402,7 @@ public interface UpdateUseCase {
             public UseCaseCorrection build() {
                 return new UseCaseCorrection(title, goal, scope, trigger, primaryRole,
                         supportingRoles, precondition, postcondition, extensions, stepTextPatches,
-                        stepRealisesPatches, newMainSteps, removeMainStepPositions, language);
+                        stepRealisesPatches, newMainSteps, removeMainStepPositions, usesTermCodes, language);
             }
         }
     }

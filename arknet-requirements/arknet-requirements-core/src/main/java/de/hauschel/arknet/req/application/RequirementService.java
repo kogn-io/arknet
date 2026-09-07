@@ -96,8 +96,12 @@ import de.hauschel.arknet.req.domain.TermRef;
  * to remove one); a non-{@code null} value still has to satisfy {@link Requirement}'s own
  * invariants (non-blank title/description, a non-empty, duplicate-free acceptance-criteria
  * list), so a caller cannot use {@code update} to put the requirement into a state {@code
- * req_add} itself could never have created. Status and linked terms are untouched - {@link
- * #accept} and {@link #linkTerm} remain the only way to change those. The priority parameter
+ * req_add} itself could never have created. Status is untouched - {@link #accept} remains the
+ * only way to change it. Linked terms are the deliberate exception: {@code usesTermCodes} takes
+ * the same tri-state {@code adr_update} already uses for its own reference lists
+ * (kogn-io/arknet#540) - {@code null} leaves the existing edges alone, an empty list clears them
+ * all, a non-empty list replaces them wholesale; {@link #linkTerm} remains the convenient,
+ * idempotent way to add a single edge without restating the rest. The priority parameter
  * is an interim step that a generic {@code resource_update} facade is meant to
  * replace; see {@link UpdateRequirement}. If a requirement predates the mandatory
  * acceptance-criterion invariant (its criteria are currently a read-time placeholder, never a
@@ -342,9 +346,19 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
             String rationale, List<String> newAcceptanceCriteria,
             List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
             RemovedPositions removeAcceptanceCriterionPositions,
-            Priority priority, String language, String defaultLanguage) {
+            Priority priority, List<String> usesTermCodes, String language, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        // Resolution first, outside the retry, mirroring linkTerm()/linkConstraint(): an unknown
+        // TERM-9 is a didactic rejection of the whole call, never a race worth retrying. null stays
+        // null here - it is the "leave this relation alone" signal (kogn-io/arknet#540, precedent
+        // AdrService#update's usesTermCodes resolution), an empty list a deliberate clear.
+        List<TermRef> terms = usesTermCodes == null
+                ? null
+                : usesTermCodes.stream()
+                        .map(termCode -> new TermRef(termLookup.resolveByCode(projectId, termCode)))
+                        .distinct()
+                        .toList();
         RemovedPositions removed = removeAcceptanceCriterionPositions == null
                 ? RemovedPositions.NONE : removeAcceptanceCriterionPositions;
         // Which positions this call itself patches (issue #271): the signal
@@ -375,8 +389,8 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
                     rationale != null ? rationale : current.rationale(),
                     current.type(), current.status(),
                     priority != null ? priority : current.priority(),
-                    current.qualityCategory(), current.usesTerms(), current.acceptanceCriteria(),
-                    current.constrainedBy());
+                    current.qualityCategory(), terms != null ? terms : current.usesTerms(),
+                    current.acceptanceCriteria(), current.constrainedBy());
             base = base.withAppendedAcceptanceCriteria(newAcceptanceCriteria);
             base = acceptanceCriteriaTextPatches != null
                     ? base.withAcceptanceCriteriaTextPatches(projectId, acceptanceCriteriaTextPatches)

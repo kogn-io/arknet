@@ -235,6 +235,16 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
                 : correction.supportingRoles().stream()
                         .map(roleCode -> new RoleRef(roleLookup.resolveByCode(projectId, roleCode)))
                         .toList();
+        // Same tri-state resolution as the two role fields above, this time for arkreq:usesTerm
+        // (kogn-io/arknet#540, precedent AdrService#update's own usesTermCodes resolution): null
+        // stays null (leave the edges alone), a non-null list resolves to a wholesale replacement,
+        // including an explicit empty list clearing every edge.
+        List<TermRef> newUsesTerms = correction.usesTermCodes() == null
+                ? null
+                : correction.usesTermCodes().stream()
+                        .map(termCode -> new TermRef(termLookup.resolveByCode(projectId, termCode)))
+                        .distinct()
+                        .toList();
         // Which step positions this call itself patches, and whether it touches extensions at
         // all (issue #271): the signal updateWithOptimisticRetry resolves a fresh language
         // against, instead of comparing the patched/replaced text to what is already stored - a
@@ -274,7 +284,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
                     correction.postcondition() != null ? correction.postcondition() : current.postcondition(),
                     current.steps(),
                     correction.extensions() != null ? List.copyOf(correction.extensions()) : current.extensions(),
-                    current.usesTerms(), current.constrainedBy());
+                    newUsesTerms != null ? newUsesTerms : current.usesTerms(), current.constrainedBy());
             // Append, then correct, then remove (kogn-io/arknet#513, mirrors adr_update's own
             // ordering): appends and corrections address the positions the caller saw via
             // uc_get, and only the removal renumbers - so it must not run before anything that

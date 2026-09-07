@@ -277,7 +277,7 @@ class RequirementMcpToolsTest {
     /** {@code req_update} carries the rationale down to {@link UpdateRequirement}. */
     @Test
     void updatePassesTheRationaleThrough() {
-        adapter.update(null, "FR-1", null, null, RATIONALE, null, null, null, null, null, null);
+        adapter.update(null, "FR-1", null, null, RATIONALE, null, null, null, null, null, null, null);
 
         assertEquals(RATIONALE, stub.lastUpdateRationale);
     }
@@ -285,7 +285,7 @@ class RequirementMcpToolsTest {
     /** An omitted rationale reaches the port as {@code null} - "leave it alone", never "remove it". */
     @Test
     void updateWithoutARationalePassesNullThrough() {
-        adapter.update(null, "FR-1", "New title", null, null, null, null, null, null, null, null);
+        adapter.update(null, "FR-1", "New title", null, null, null, null, null, null, null, null, null);
 
         assertNull(stub.lastUpdateRationale);
     }
@@ -535,7 +535,7 @@ class RequirementMcpToolsTest {
         List<String> criteria = List.of("Bundesueberweisung braucht eine Kopfzahl");
 
         String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", null, criteria, null, null,
-                "SHOULD_HAVE", null, null);
+                "SHOULD_HAVE", null, null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals("Neuer Titel", stub.lastUpdateTitle);
@@ -549,7 +549,7 @@ class RequirementMcpToolsTest {
     @Test
     void updatePassesAcceptanceCriteriaTextPatchesThroughToTheInPort() {
         adapter.update(null, "FR-1", null, null, null, null,
-                List.of(new RequirementMcpTools.AcceptanceCriterionPatchInput(1, "Korrigierter Text")), null, null, null,
+                List.of(new RequirementMcpTools.AcceptanceCriterionPatchInput(1, "Korrigierter Text")), null, null, null, null,
                 null);
 
         assertEquals(List.of(new AcceptanceCriterionTextPatch(1, "Korrigierter Text")),
@@ -564,7 +564,7 @@ class RequirementMcpToolsTest {
     void updatePassesRemoveAcceptanceCriterionPositionsThroughToTheInPort() {
         // The stub's fixture requirement carries a single criterion (position 1); appending one
         // first keeps the removal from emptying the list, which the domain refuses.
-        adapter.update(null, "FR-1", null, null, null, List.of("New criterion"), null, List.of(2), null, null, null);
+        adapter.update(null, "FR-1", null, null, null, List.of("New criterion"), null, List.of(2), null, null, null, null);
 
         assertEquals(new RemovedPositions(java.util.Set.of(2)),
                 stub.lastUpdateRemovedAcceptanceCriterionPositions);
@@ -577,7 +577,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "FR-1", null, null, null, null, null, null, null, null, null);
+        adapter.update(null, "FR-1", null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals(null, stub.lastUpdateTitle);
@@ -585,6 +585,28 @@ class RequirementMcpToolsTest {
         assertEquals(null, stub.lastUpdateNewAcceptanceCriteria);
         assertEquals(null, stub.lastUpdateAcceptanceCriteriaTextPatches);
         assertEquals(null, stub.lastUpdatePriority);
+        assertEquals(null, stub.lastUpdateUsesTermCodes);
+    }
+
+    /**
+     * {@code req_update}'s {@code usesTermCodes} reaches {@link UpdateRequirement} unchanged
+     * (kogn-io/arknet#540) - an empty list is the explicit signal to remove every link, distinct
+     * from the omitted ({@code null}) case above.
+     */
+    @Test
+    void updatePassesUsesTermCodesThroughToTheInPort() {
+        adapter.update(null, "FR-1", null, null, null, null, null, null, null, List.of("TERM-1", "TERM-2"), null,
+                null);
+
+        assertEquals(List.of("TERM-1", "TERM-2"), stub.lastUpdateUsesTermCodes);
+    }
+
+    /** An empty {@code usesTermCodes} list reaches the in-port as an empty list, not {@code null}. */
+    @Test
+    void updatePassesAnEmptyUsesTermCodesListThroughDistinctFromOmitted() {
+        adapter.update(null, "FR-1", null, null, null, null, null, null, null, List.of(), null, null);
+
+        assertEquals(List.of(), stub.lastUpdateUsesTermCodes);
     }
 
     /**
@@ -595,7 +617,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateCanCorrectOnlyThePriority() {
-        String rendered = adapter.update(null, "FR-1", null, null, null, null, null, null, "SHOULD_HAVE", null, null);
+        String rendered = adapter.update(null, "FR-1", null, null, null, null, null, null, "SHOULD_HAVE", null, null, null);
 
         assertEquals(Priority.SHOULD_HAVE, stub.lastUpdatePriority);
         assertEquals(null, stub.lastUpdateTitle);
@@ -611,7 +633,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateTreatsABlankPriorityAsOmitted() {
-        adapter.update(null, "FR-1", null, null, null, null, null, null, "  ", null, null);
+        adapter.update(null, "FR-1", null, null, null, null, null, null, "  ", null, null, null);
 
         assertEquals(null, stub.lastUpdatePriority);
     }
@@ -620,13 +642,13 @@ class RequirementMcpToolsTest {
     @Test
     void updateRejectsAnUnknownPriority() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "FR-1", null, null, null, null, null, null, "NICE_TO_HAVE", null, null));
+                () -> adapter.update(null, "FR-1", null, null, null, null, null, null, "NICE_TO_HAVE", null, null, null));
     }
 
     /** {@code req_update}'s {@code language} argument reaches {@link UpdateRequirement} unchanged. */
     @Test
     void updatePassesTheLanguageThrough() {
-        adapter.update(null, "FR-1", "Neuer Titel", null, null, null, null, null, null, "de", null);
+        adapter.update(null, "FR-1", "Neuer Titel", null, null, null, null, null, null, null, "de", null);
 
         assertEquals("de", stub.lastUpdateLanguage);
     }
@@ -750,7 +772,7 @@ class RequirementMcpToolsTest {
                         "acceptanceCriterion", Set.of("de", "en"))));
 
         String rendered = bilingual.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", null,
-                List.of("Fertig, wenn es geht"), null, null, null, "de", null);
+                List.of("Fertig, wenn es geht"), null, null, null, null, "de", null);
 
         assertTrue(rendered.contains("en: title, acceptanceCriterion"), rendered);
     }
@@ -770,7 +792,7 @@ class RequirementMcpToolsTest {
                 hints(Map.of("title", Set.of("de", "en"), "acceptanceCriterion", Set.of("de", "en"))));
 
         String rendered = bilingual.update(null, "FR-1", "Neuer Titel", null, null,
-                List.of("Fertig, wenn es geht"), null, List.of(1), null, "de", null);
+                List.of("Fertig, wenn es geht"), null, List.of(1), null, null, "de", null);
 
         assertTrue(rendered.contains("en: title"), rendered);
         assertFalse(rendered.contains("acceptanceCriterion"), rendered);
@@ -791,7 +813,7 @@ class RequirementMcpToolsTest {
                         "acceptanceCriterion", Set.of("de")))));
 
         String rendered = bilingual.update(null, "FR-1", "New title", null, null, List.of("Done when it works"),
-                null, null, null, "en", null);
+                null, null, null, null, "en", null);
 
         assertFalse(rendered.contains("stale"), rendered);
     }
@@ -804,7 +826,7 @@ class RequirementMcpToolsTest {
                 anchor -> new ResolvedProject(PROJECT, "de", List.of("de")),
                 hints(Map.of("title", Set.of("de", "en"))));
 
-        String rendered = monolingual.update(null, "FR-1", "Neuer Titel", null, null, null, null, null, null,
+        String rendered = monolingual.update(null, "FR-1", "Neuer Titel", null, null, null, null, null, null, null,
                 "de", null);
 
         assertFalse(rendered.contains("stale"), rendered);
@@ -818,7 +840,7 @@ class RequirementMcpToolsTest {
                 anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
                 hints(Map.of("title", Set.of("de", "en"))));
 
-        String rendered = bilingual.update(null, "FR-1", null, null, null, null, null, null, "MUST_HAVE",
+        String rendered = bilingual.update(null, "FR-1", null, null, null, null, null, null, "MUST_HAVE", null,
                 null, null);
 
         assertFalse(rendered.contains("stale"), rendered);
@@ -871,6 +893,7 @@ class RequirementMcpToolsTest {
         private List<AcceptanceCriterionTextPatch> lastUpdateAcceptanceCriteriaTextPatches;
         private RemovedPositions lastUpdateRemovedAcceptanceCriterionPositions;
         private Priority lastUpdatePriority;
+        private List<String> lastUpdateUsesTermCodes;
         private String lastUpdateLanguage;
         private String lastListDisplayLocale;
         private String lastAcceptDefaultLanguage;
@@ -966,7 +989,7 @@ class RequirementMcpToolsTest {
                 String rationale, List<String> newAcceptanceCriteria,
                 List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
                 RemovedPositions removeAcceptanceCriterionPositions,
-                Priority priority, String language, String defaultLanguage) {
+                Priority priority, List<String> usesTermCodes, String language, String defaultLanguage) {
             lastUpdatedRequirement = code;
             lastUpdateTitle = title;
             lastUpdateDescription = description;
@@ -975,11 +998,17 @@ class RequirementMcpToolsTest {
             lastUpdateAcceptanceCriteriaTextPatches = acceptanceCriteriaTextPatches;
             lastUpdateRemovedAcceptanceCriterionPositions = removeAcceptanceCriterionPositions;
             lastUpdatePriority = priority;
+            lastUpdateUsesTermCodes = usesTermCodes;
             lastUpdateLanguage = language;
+            List<TermRef> terms = usesTermCodes == null
+                    ? List.of()
+                    : usesTermCodes.stream()
+                            .map(termCode -> new TermRef(ResourceId.of("https://w3id.org/arknet/id/" + termCode)))
+                            .toList();
             Requirement base = new Requirement(ID, code, title != null ? title : "t",
                     description != null ? description : "d", rationale, RequirementType.FUNCTIONAL,
                     RequirementStatus.PROPOSED,
-                    priority != null ? priority : Priority.MUST_HAVE, null, List.of(), DEFAULT_CRITERIA,
+                    priority != null ? priority : Priority.MUST_HAVE, null, terms, DEFAULT_CRITERIA,
                     List.of());
             base = base.withAppendedAcceptanceCriteria(newAcceptanceCriteria);
             base = acceptanceCriteriaTextPatches != null

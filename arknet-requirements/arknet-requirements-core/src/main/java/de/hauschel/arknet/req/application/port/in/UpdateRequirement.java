@@ -14,9 +14,9 @@ import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 
 /**
- * Driving port: correct the title, description, rationale, acceptance criteria and/or MoSCoW
- * priority of an already-created requirement, leaving {@code status} and {@code usesTerms} to their
- * own ports ({@code req_set_status}, {@code req_link_term}).
+ * Driving port: correct the title, description, rationale, acceptance criteria, MoSCoW priority
+ * and/or glossary-term links of an already-created requirement, leaving {@code status} to its own
+ * port ({@code req_set_status}).
  *
  * <p>Every field is optional: {@code null} leaves that field unchanged, so a caller can correct
  * only the description without restating the title. A non-{@code null} value must still satisfy
@@ -25,6 +25,15 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  * priority" signal, since {@code null} is already the sentinel for every other field here;
  * un-setting a priority once set is out of scope, and would need a distinct signal rather than
  * overloading {@code null}.</p>
+ *
+ * <p><strong>{@code usesTermCodes} is the deliberate exception and carries a tri-state instead
+ * (kogn-io/arknet#540, precedent {@code adr_update}'s {@code usesTermCodes}).</strong> {@code null}
+ * leaves the existing {@code arkreq:usesTerm} edges untouched, an empty list is the explicit,
+ * unambiguous signal to remove every one of them, and a non-empty list replaces them wholesale -
+ * the one field of this port where {@code null} and empty must not be conflated. {@code
+ * req_link_term} remains the convenient way to add a single edge without restating the rest; this
+ * parameter is what lets a caller drop one, which {@code req_link_term} (deliberately idempotent,
+ * add-only) cannot.</p>
  *
  * <p><strong>Acceptance criteria are three independent, narrowly-scoped mechanisms (issue #266;
  * removal added by kogn-io/arknet#513, mirroring {@code adr_update}'s
@@ -61,7 +70,8 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  * parameter existed. A field/criterion that <em>is</em> being changed but ships no
  * {@code language} falls back to {@code defaultLanguage} (see
  * {@link #update(ProjectId, RequirementCode, String, String, String, java.util.List,
- * java.util.List, Priority, String, String)}'s {@code defaultLanguage} parameter) rather than
+ * java.util.List, RemovedPositions, Priority, java.util.List, String, String)}'s
+ * {@code defaultLanguage} parameter) rather than
  * staying untagged (issue #258) - and if a changed field/criterion's existing value already
  * carries an untagged
  * literal under the same predicate, writing it under a tag equal to {@code defaultLanguage} sweeps
@@ -115,6 +125,11 @@ public interface UpdateRequirement {
      *                            (see {@link de.hauschel.arknet.req.domain.Requirement#withoutAcceptanceCriteria})
      * @param priority            the new MoSCoW priority, or {@code null} to leave an already-set
      *                            one unchanged (never a request to remove it)
+     * @param usesTermCodes       business codes of the glossary terms this requirement should use
+     *                            going forward, e.g. {@code TERM-1}, replacing the existing
+     *                            {@code arkreq:usesTerm} edges wholesale; an empty list clears them
+     *                            all, {@code null} leaves them unchanged (kogn-io/arknet#540) - see
+     *                            the class-level note
      * @param language            the BCP-47 language tag a non-{@code null} {@code title}/
      *                            {@code description}/{@code rationale}/every touched acceptance
      *                            criterion is written in, or {@code null} to fall back to
@@ -141,10 +156,13 @@ public interface UpdateRequirement {
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if a changed field/
      *                            criterion ships no {@code language} and {@code defaultLanguage} is
      *                            {@code null} too
+     * @throws RuntimeException if a {@code usesTermCodes} entry names a glossary term unknown
+     *                            within {@code projectId} - the same didactic rejection
+     *                            {@code req_link_term} raises, thrown before anything is written
      */
     Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
             String rationale, List<String> newAcceptanceCriteria,
             List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
             RemovedPositions removeAcceptanceCriterionPositions,
-            Priority priority, String language, String defaultLanguage);
+            Priority priority, List<String> usesTermCodes, String language, String defaultLanguage);
 }
