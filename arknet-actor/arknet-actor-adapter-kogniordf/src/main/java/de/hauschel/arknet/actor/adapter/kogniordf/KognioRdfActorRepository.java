@@ -115,7 +115,6 @@ public class KognioRdfActorRepository implements ActorRepository {
     private static final Logger LOG = LoggerFactory.getLogger(KognioRdfActorRepository.class);
 
     private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
-    private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
 
     // Shared via ArkprocVocabulary (kogn-io/arknet#148): this class used to declare its own private
@@ -322,27 +321,21 @@ public class KognioRdfActorRepository implements ActorRepository {
     }
 
     /**
-     * The predicates that, if found pointing at an actor, block its deletion (issue #335): a
-     * role's {@code arkproc:filledBy}, plus the two pre-ADR-37 use-case edges {@code
-     * arkreq:primaryActor}/{@code supportingActor}. Issue #336 through ADR-37/kogn-io/arknet#405
-     * Part C renamed those properties to {@code arkreq:primaryRole}/{@code supportingRole}, which
-     * range over {@code arkproc:Role}, not {@code arkproc:Actor} - a use case written after the
-     * rename cannot point at an actor any more - but {@code KognioRdfUseCaseRepository} still
-     * reads the two old predicates transitionally (its {@code scalarWhereClause}'s {@code COALESCE}
-     * / {@code readSupportingRoles}' {@code UNION}), so a use case written before Part C can still
-     * carry one. Deliberately NOT taken from {@link ArkreqVocabulary}, mirroring that adapter's own
-     * choice: the ontology no longer declares these predicates, and the shared vocabulary mirrors
-     * what is shipped. Both legacy entries fall away together with that transitional read path,
-     * once every store has been migrated. {@code arkproc:filledBy} is listed here even before
+     * The predicates that, if found pointing at an actor, block its deletion (issue #335):
+     * a role's {@code arkproc:filledBy}. {@code arkproc:filledBy} is listed here even before
      * {@code role_add}/{@code role_update} exist as the only tools that write it - {@code
      * rdfs:range arkproc:Actor} already makes it a reference the ontology declares, and {@code
      * ReferenceGuardsCoverEveryOntologyEdgeTest} in {@code arknet-architecture-tests} holds this
      * map against every such range, not against which write paths currently exist.
+     *
+     * <p>Used to carry two more entries, the pre-ADR-37 use-case edges {@code
+     * arkreq:primaryActor}/{@code supportingActor} - removed in kogn-io/arknet#530 once
+     * {@code KognioRdfUseCaseRepository}'s transitional read of those predicates was itself
+     * retired and every store had been migrated to {@code arkreq:primaryRole}/{@code
+     * supportingRole}.</p>
      */
     private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
-            ArkprocVocabulary.FILLED_BY, "filledBy",
-            ARKREQ_NAMESPACE + "primaryActor", "primaryActor",
-            ARKREQ_NAMESPACE + "supportingActor", "supportingActor");
+            ArkprocVocabulary.FILLED_BY, "filledBy");
 
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still
