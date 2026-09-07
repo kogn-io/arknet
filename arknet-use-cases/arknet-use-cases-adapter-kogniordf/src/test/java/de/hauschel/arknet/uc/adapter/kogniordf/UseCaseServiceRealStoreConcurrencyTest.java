@@ -122,6 +122,25 @@ class UseCaseServiceRealStoreConcurrencyTest {
     @BeforeEach
     void setUp() {
         realLifecycle = new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageRoot);
+        seedCustomerRole();
+    }
+
+    /**
+     * Puts {@code ROLE-1} into the roles graph for real, not just into {@link #CUSTOMER_ROLE_LOOKUP}.
+     * The update path verifies its role targets against that graph before writing
+     * ({@code KognioRdfUseCaseRepository#assertRoleTargetsAreTypedRoles}, the guard keeping the
+     * transitional {@code primaryActor} read from becoming a silent mis-migration), so a role that
+     * exists only in a stubbed lookup would fail the write for a reason this race is not about.
+     */
+    private void seedCustomerRole() {
+        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/roles> { "
+                        + "<" + CUSTOMER_ID.value() + "> a <https://w3id.org/arknet/process#Role> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"ROLE-1\" } }");
+                return null;
+            });
+        }
     }
 
     @AfterEach
