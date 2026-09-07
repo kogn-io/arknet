@@ -644,7 +644,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     + ", which is not a role (arkproc:Role) in this project. A use case written"
                     + " before the role split still carries the old arkreq:primaryActor edge onto"
                     + " an actor; migrate it by passing primaryRole (and supportingRoles) as"
-                    + " ROLE-N codes on this uc_update - see role_list, or role_add to create the"
+                    + " ROLE-N codes via uc_update - see role_list, or role_add to create the"
                     + " role first.");
         }
     }
