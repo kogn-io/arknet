@@ -79,18 +79,21 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * see {@link #updateWithOptimisticRetry} (mirrors {@code RequirementService}).</p>
  *
  * <p><strong>Correction.</strong> {@link #update} lets a caller correct a use case's
- * goal-level fields and/or an individual step's text and/or realises references after the fact,
- * without the delete-and-recreate round trip through {@code uc_add} that would risk a new
- * {@link UseCaseCode} and orphaned {@code realises}/{@code extensions} references. Every scalar
- * argument is optional ({@code null} leaves it unchanged); {@code stepTextPatches} corrects only
- * the {@code text} of existing main-flow steps by position, never their {@code realises}
- * references, while the separate, independent {@code stepRealisesPatches} corrects only a named
- * step's {@code realises} set - replacing it wholesale, with an empty list explicitly clearing it
- * (issue #255). Neither mechanism adds, removes or reorders steps. {@code primaryRole} and
+ * goal-level fields and/or its main flow after the fact, without the delete-and-recreate round
+ * trip through {@code uc_add} that would risk a new {@link UseCaseCode} and orphaned
+ * {@code realises}/{@code extensions} references. Every scalar argument is optional
+ * ({@code null} leaves it unchanged); {@code stepTextPatches} corrects only the {@code text} of
+ * existing main-flow steps by position, never their {@code realises} references, while the
+ * separate, independent {@code stepRealisesPatches} corrects only a named step's
+ * {@code realises} set - replacing it wholesale, with an empty list explicitly clearing it
+ * (issue #255). {@code newMainSteps} appends steps after the existing ones, numbered continuing
+ * from the current highest; {@code removeMainStepPositions} takes one or more out by position and
+ * renumbers the survivors consecutively from 1 (kogn-io/arknet#513, literal precedent from
+ * {@code adr_update}'s {@code removeConsequencePositions}, issue #483). Reordering the main flow
+ * stays out of scope - see {@link UpdateUseCase}. {@code primaryRole} and
  * {@code supportingRoles} are correctable too (issue #343), by business code and through the very same
  * {@link RoleLookup} {@link #add} resolves against - {@code primaryRole} replace-or-leave,
- * {@code supportingRoles} a wholesale replace whose empty list clears them; full step-list
- * restructuring stays out of this port's scope - see {@link UpdateUseCase}.
+ * {@code supportingRoles} a wholesale replace whose empty list clears them.
  * Linking a glossary term or a constraint is idempotent, independent of
  * {@link #update}, and mirrors {@code RequirementService#linkTerm}/{@code #linkConstraint}
  * exactly (issue #329) - {@link #linkConstraint} resolves the human-typed constraint code via the

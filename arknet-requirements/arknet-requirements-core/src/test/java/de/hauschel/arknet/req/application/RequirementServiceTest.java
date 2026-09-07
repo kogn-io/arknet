@@ -549,10 +549,11 @@ class RequirementServiceTest {
     }
 
     /**
-     * {@code req_update} only appends or in-place patches acceptance criteria (issue #266) - it
-     * cannot restate/replace the whole list wholesale the way {@code title}/{@code description}
-     * can be corrected. Correcting an existing criterion's wording goes through
-     * {@code acceptanceCriteriaTextPatches} instead.
+     * {@code req_update} cannot restate/replace the whole acceptance-criteria list wholesale the
+     * way {@code title}/{@code description} can be corrected (issue #266) - it appends, in-place
+     * patches, and, since kogn-io/arknet#513, removes by position, but never a wholesale rewrite.
+     * Correcting an existing criterion's wording goes through {@code acceptanceCriteriaTextPatches}
+     * instead.
      */
     @Test
     void updateCorrectsAnExistingAcceptanceCriterionByPosition() {
