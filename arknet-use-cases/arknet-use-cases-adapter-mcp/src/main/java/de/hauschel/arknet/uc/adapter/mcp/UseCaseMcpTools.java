@@ -720,6 +720,16 @@ public final class UseCaseMcpTools {
      * snapshot that already counted it - and the hint would then name a language the answer the
      * caller is holding no longer has anywhere. Better one hint too few than one that is wrong
      * about the state it is printed next to (kogn-io/arknet#537 review).</p>
+     *
+     * <p>{@code extensionStep} has the same problem by a different route: {@code extensions} is a
+     * wholesale replace, and whether it shortens or lengthens the stored list is not decidable
+     * from this call's arguments at all - only a comparison against the stored count tells
+     * ({@code UseCaseService#update}'s {@code stableExtensionPrefixLength}). A length change
+     * collapses the prefix of positions that keep their identity, and anything beyond it loses
+     * every language variant but the one this call writes - the same "answer next to the hint no
+     * longer has it" failure as above. This call's extension count is therefore read once, before
+     * the write, purely to compare lengths; the edge is reported only when the count stays the
+     * same (kogn-io/arknet#538).</p>
      */
     private String staleTranslationHint(final ResolvedProject project, final UseCaseCode code,
             final UseCaseCorrection correction, final List<String> extensions,
@@ -738,7 +748,7 @@ public final class UseCaseMcpTools {
                         || newMainSteps != null && !newMainSteps.isEmpty())) {
             fieldsWritten.add(MAIN_STEP_FIELD);
         }
-        if (extensions != null && !extensions.isEmpty()) {
+        if (extensions != null && !extensions.isEmpty() && !extensionCountChanges(project, code, extensions)) {
             fieldsWritten.add(EXTENSION_STEP_FIELD);
         }
         if (fieldsWritten.isEmpty()) {
@@ -754,6 +764,20 @@ public final class UseCaseMcpTools {
         if (value != null) {
             fieldsWritten.add(field);
         }
+    }
+
+    /**
+     * Whether {@code extensions} would replace the stored list with a different length - the one
+     * thing a wholesale {@code extensions} replace does not say about itself (kogn-io/arknet#538).
+     * Reads the current use case once, before the write the caller is about to make, purely to
+     * compare counts; a use case the lookup cannot find (the write is about to fail anyway) counts
+     * as a change, the same "say less rather than say it wrong" choice as elsewhere in this method.
+     */
+    private boolean extensionCountChanges(final ResolvedProject project, final UseCaseCode code,
+            final List<String> extensions) {
+        return getUseCase.get(project.id(), code, null)
+                .map(current -> current.extensions().size() != extensions.size())
+                .orElse(true);
     }
 
 }
