@@ -45,6 +45,8 @@ class TraceabilityRendererTest {
     private static final String DOMAIN_VISION = ARKDDD + "domainVision";
     private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
     private static final String ROLE_TYPE = ARKPROC + "Role";
+    private static final String HUMAN_ACTOR_TYPE = ARKPROC + "HumanActor";
+    private static final String FILLED_BY = ARKPROC + "filledBy";
     private static final String CONSTRAINED_BY = "http://open-services.net/ns/rm#constrainedBy";
 
     private static final String FR_1 = ID + "fr-1";
@@ -67,6 +69,8 @@ class TraceabilityRendererTest {
     private static final String ROLE_A = ID + "role-a";
     private static final String ROLE_B = ID + "role-b";
     private static final String ROLE_C = ID + "role-c";
+    private static final String ACTOR_A = ID + "actor-a";
+    private static final String ACTOR_B = ID + "actor-b";
     private static final String BC_2 = ID + "bc-2";
     private static final String CON_1 = ID + "con-1";
     private static final String CON_2 = ID + "con-2";
@@ -286,6 +290,29 @@ class TraceabilityRendererTest {
         assertThat(matrix).contains("## Roles (0)").contains("## Use cases (1)");
     }
 
+    /**
+     * Regression test for kogn-io/arknet#524 (P2 review finding): the "Actors" section re-wires
+     * {@link TraceabilityGraph#actorIris()}, which lost its last production caller when
+     * ADR-37/kogn-io/arknet#405 Part C repointed {@code primaryRole}/{@code supportingRole} away
+     * from {@code arkproc:Actor} at {@code arkproc:Role}. {@link #ACTOR_A} is occupied by {@link
+     * #ROLE_A} via {@code arkproc:filledBy}; {@link #ACTOR_B} is occupied by nothing - the same
+     * issue #147 promise the "Roles" section already keeps ({@link
+     * #roleUseCaseMatrixIncludesARoleNoUseCaseReferencesYet()}), extended one hop further out to
+     * the carrier side: an actor no role fills yet must still appear, with "(none)" rather than
+     * silently dropping out of the inventory.
+     */
+    @Test
+    void roleUseCaseMatrixIncludesActorsWithAndWithoutAFillingRole() {
+        TraceabilityGraph graph = TraceabilityGraph.of(actorRoleFixtureSnapshot(), DisplayLocale.DEFAULT);
+
+        String matrix = renderer.roleUseCaseMatrix(PROJECT, graph);
+
+        assertThat(matrix).contains("## Actors (2)");
+        String actorsSection = matrix.substring(matrix.indexOf("## Actors"));
+        assertThat(actorsSection).contains("ACTOR-A").contains("roles     : ROLE-A");
+        assertThat(actorsSection).contains("ACTOR-B").contains("roles     : (none)");
+    }
+
     @Test
     void termCooccurrenceFindsTermsNamedTogetherInRequirementAndUseCaseText() {
         TraceabilityGraph graph = TraceabilityGraph.of(termCooccurrenceFixtureSnapshot(), DisplayLocale.DEFAULT);
@@ -413,6 +440,21 @@ class TraceabilityRendererTest {
                 lit(UC_A, TITLE, "Place order"),
                 lit(UC_A, IDENTIFIER, "UCA"),
                 iri(UC_A, PRIMARY_ROLE, ROLE_A)));
+    }
+
+    private static StoreSnapshot actorRoleFixtureSnapshot() {
+        return StoreSnapshot.of(List.of(
+                iri(ACTOR_A, RDF_TYPE, HUMAN_ACTOR_TYPE),
+                lit(ACTOR_A, IDENTIFIER, "ACTOR-A"),
+
+                // Never occupied by any role's filledBy edge - the issue #147 promise (kogn-io/arknet#524).
+                iri(ACTOR_B, RDF_TYPE, HUMAN_ACTOR_TYPE),
+                lit(ACTOR_B, IDENTIFIER, "ACTOR-B"),
+
+                iri(ROLE_A, RDF_TYPE, ROLE_TYPE),
+                lit(ROLE_A, PREF_LABEL, "Customer"),
+                lit(ROLE_A, IDENTIFIER, "ROLE-A"),
+                iri(ROLE_A, FILLED_BY, ACTOR_A)));
     }
 
     private static StoreSnapshot termCooccurrenceFixtureSnapshot() {

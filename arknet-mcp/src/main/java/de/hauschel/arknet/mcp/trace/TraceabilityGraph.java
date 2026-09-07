@@ -52,8 +52,10 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * {@code role_usecase_matrix} (ADR-37/kogn-io/arknet#405 Part C, formerly {@code
  * actor_usecase_matrix}) needs the {@code primaryRole}/{@code
  * supportingRole} edges in the <em>forward</em> direction too ({@link #rolesOf(String)}/{@link
- * #useCasesOf(String)}), and {@code term_cooccurrence} reuses the same prose-scanning idea for a
- * use case's {@code arkreq:useCaseGoal} ({@link #useCaseProseTexts(String)}, issue #108).
+ * #useCasesOf(String)}), plus {@code filledBy} in reverse ({@link #rolesFilledBy(String)},
+ * kogn-io/arknet#524) for its "Actors" section, and {@code term_cooccurrence} reuses the same
+ * prose-scanning idea for a use case's {@code arkreq:useCaseGoal} ({@link
+ * #useCaseProseTexts(String)}, issue #108).
  *
  * <p>Built once per read from a {@link StoreSnapshot} - the same generic {@code SELECT ?s ?p
  * ?o} {@link de.hauschel.arknet.mcp.store.StoreReader} already reads for {@code
@@ -496,6 +498,31 @@ public final class TraceabilityGraph {
     }
 
     /**
+     * The role(s) occupying an actor via {@code arkproc:filledBy} - the reverse lookup of that
+     * edge (Role -&gt; filledBy -&gt; Actor), mirroring {@link #useCasesOf(String)}'s reverse
+     * lookup of {@code primaryRole}/{@code supportingRole}. Since ADR-37/kogn-io/arknet#405 Part B
+     * a Role and an Actor are separate resources - {@code filledBy} is the only edge connecting a
+     * specification-side role to the carrier(s) that occupy it, so {@code role_usecase_matrix}'s
+     * "Actors" section uses this to report each actor's roles the same way its "Roles" section
+     * reports each role's use cases (kogn-io/arknet#524 review finding: {@link #actorIris()} had
+     * no production caller left after the Part C role cut - this method re-wires it instead of
+     * deleting it, keeping the issue #147 promise "what nothing references does not silently
+     * vanish from the inventory" for actors too).
+     *
+     * @return the role IRIs occupying {@code actorIri}, sorted, deduplicated - empty if no role
+     *         names it
+     */
+    public List<String> rolesFilledBy(String actorIri) {
+        Objects.requireNonNull(actorIri, "actorIri");
+        return incomingByObject.getOrDefault(actorIri, List.of()).stream()
+                .filter(t -> FILLED_BY.equals(t.predicate()))
+                .map(Triple::subject)
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    /**
      * @return {@code true} if a term is used by a requirement or a use case
      *         ({@code arkreq:usesTerm}, issue #329), by an architecture decision
      *         ({@code arkarch:usesTerm}, kogn-io/arknet#393), is a bounded context's
@@ -724,6 +751,19 @@ public final class TraceabilityGraph {
      * arkddd:ubiquitousLanguageTerm} edges. Reuses the very matching rules the HTML report
      * already applies inline ({@code de.hauschel.arknet.mcp.report.Glossary}), via the shared
      * {@link LabelMentions} engine, so a text mention means the same thing in both places.
+     *
+     * <p><strong>How far the role exemption actually reaches</strong> (kogn-io/arknet#524
+     * review): {@link #rolesOf(String)} yields ROLE IRIs, and they are compared against the TERM
+     * IRIs {@code LabelMentions} reports - so the exemption can only ever fire where one and the
+     * same IRI is typed both {@code skos:Concept} and {@code arkproc:Role}. Under a well-formed
+     * write path that does not happen: {@code role_add} mints a role's own identity, and ADR-37
+     * keeps role and glossary term apart as separate resources. A project that names a role in a
+     * goal text and keeps a same-named term therefore still gets that mention reported as
+     * unlinked. Stated here rather than quietly widened: making the exemption reach a same-named
+     * term would mean resolving a role to its term (by {@code filledBy}, or by label), which is a
+     * modelling decision, not a rendering detail. The wording above dates from issue #333, when
+     * {@code primaryActor} still pointed at a term-facetted actor and the two sets did overlap;
+     * issue #336 ended that, and the role split renamed the edge without restoring it.</p>
      *
      * <p>Two same-length competing labels break their matching tie by business code ({@link
      * #identifierOf(String)}), the same key {@code Glossary} sorts its terms by before handing

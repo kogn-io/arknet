@@ -139,7 +139,8 @@ public final class TraceabilityMcpTools {
     @McpTool(name = "role_usecase_matrix",
             description = "Raw bipartite view of role/use-case involvement: for every role, which use"
                     + " case(s) reference it via arkreq:primaryRole/supportingRole; for every use case, its"
-                    + " full role set. No clustering, no bounded-context judgement - a shared role across"
+                    + " full role set; for every actor, which role(s) occupy it via arkproc:filledBy. No"
+                    + " clustering, no bounded-context judgement - a shared role across"
                     + " many use cases does not by itself mean they belong to the same context."
                     + " (ADR-37/kogn-io/arknet#405 Part C, formerly actor_usecase_matrix.)",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))

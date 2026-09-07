@@ -161,7 +161,16 @@ public final class TraceabilityRenderer {
      * TraceabilityGraph#roleIris()}), not only the ones a use case happens to reference - a
      * role no use case references yet is exactly the strongest signal for "a use case is
      * missing here" or "this role belongs in a different bounded context", so it must not go
-     * missing from an inventory whose own description promises "for every role" (issue #147).
+     * missing from an inventory whose own description promises "for every role" (issue #147). The
+     * "Actors" section applies the same promise one hop further out, to the carrier side: since
+     * ADR-37/kogn-io/arknet#405 Part B a Role and an Actor are separate resources, connected only
+     * by {@code arkproc:filledBy} (Role -&gt; Actor), so this section is not the "Roles" section
+     * under a different name - it lists <em>every</em> actor in the project ({@link
+     * TraceabilityGraph#actorIris()}) with the role(s) that occupy it ({@link
+     * TraceabilityGraph#rolesFilledBy(String)}), including an actor no role fills yet. Re-wires
+     * {@link TraceabilityGraph#actorIris()}, which lost its last production caller when Part C
+     * repointed {@code primaryRole}/{@code supportingRole} away from {@code arkproc:Actor} at
+     * {@code arkproc:Role} (kogn-io/arknet#524 review finding).
      *
      * @param projectId the project the graph was read from
      * @param graph       the traceability graph to report on
@@ -171,6 +180,7 @@ public final class TraceabilityRenderer {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(graph, "graph");
         List<String> useCaseIris = graph.useCaseIris();
+        List<String> actorIris = graph.actorIris();
         Set<String> roleIris = new TreeSet<>(graph.roleIris());
         for (String useCaseIri : useCaseIris) {
             roleIris.addAll(graph.rolesOf(useCaseIri));
@@ -193,6 +203,14 @@ public final class TraceabilityRenderer {
         for (String useCaseIri : useCaseIris) {
             out.append("- ").append(displayLine(graph, useCaseIri)).append('\n');
             out.append("    roles     : ").append(codesOrNone(graph, graph.rolesOf(useCaseIri))).append('\n');
+        }
+        out.append("\n## Actors (").append(actorIris.size()).append(")\n");
+        if (actorIris.isEmpty()) {
+            out.append("- none\n");
+        }
+        for (String actorIri : actorIris) {
+            out.append("- ").append(displayLine(graph, actorIri)).append('\n');
+            out.append("    roles     : ").append(codesOrNone(graph, graph.rolesFilledBy(actorIri))).append('\n');
         }
         return out.toString();
     }

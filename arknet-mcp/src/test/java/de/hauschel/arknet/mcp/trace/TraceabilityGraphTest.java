@@ -467,6 +467,19 @@ class TraceabilityGraphTest {
             assertThat(graph.useCasesOf(ROLE_IRI)).containsExactly(UC_1_IRI);
         }
 
+        /**
+         * The base fixture's {@link #ROLE_IRI} is created with an empty {@code filledBy} list
+         * (see {@link #buildBaseFixture(DatasetLifecycle)}), so {@link #ACTOR_IRI} - itself never
+         * named by any role's {@code filledBy} - must report no occupying role, not an absent-key
+         * default that happens to look the same. This is the issue #147 promise for the reverse
+         * direction: an actor no role fills yet still appears in {@code role_usecase_matrix}'s
+         * "Actors" section, just with an empty role list (kogn-io/arknet#524).
+         */
+        @Test
+        void rolesFilledByAnActorNoRoleOccupiesIsEmpty() {
+            assertThat(graph.rolesFilledBy(ACTOR_IRI)).isEmpty();
+        }
+
         @Test
         void useCasesOfATermThatIsNeverARoleIsEmpty() {
             assertThat(graph.useCasesOf(TERM_1_IRI)).isEmpty();
@@ -489,7 +502,11 @@ class TraceabilityGraphTest {
          * vacuously rather than by the {@code rolesOf(useCaseIri)} suppression
          * {@link TraceabilityGraph#unlinkedMentions()} still applies. That suppression remains live
          * for the (still legal) case of a resource that is both a registered role and a separately
-         * registered glossary term sharing the same label - not pinned by this test.
+         * registered glossary term sharing the same label - pinned by
+         * {@link #unlinkedMentionsExemptsAUseCasesPrimaryRoleOnlyWhenItIsAlsoRegisteredAsATerm()},
+         * the only constellation in which it actually fires; the regular case, a same-named role
+         * and term with two different IRIs, is pinned as a flagged mention by
+         * {@link #unlinkedMentionsFlagsATermSharingItsLabelWithTheUseCasesOwnRole()}.
          */
         @Test
         void unlinkedMentionsDoesNotFlagAUseCasesOwnPrimaryRoleMentionInItsGoal() {
@@ -845,6 +862,35 @@ class TraceabilityGraphTest {
             assertThat(freshGraph.dependents(ACTOR_IRI)).contains(roleIri);
         }
 
+        /**
+         * Regression test for kogn-io/arknet#524 (P2 review finding): {@link
+         * TraceabilityGraph#rolesFilledBy(String)} must find every role occupying an actor via
+         * {@code arkproc:filledBy}, not just one - two roles seeded through the real {@link
+         * RoleRepository}, both naming {@link #ACTOR_IRI}, must both come back.
+         */
+        @Test
+        void rolesFilledByAnActorContainsBothRolesThatOccupyIt() {
+            String roleIri1 = "https://w3id.org/arknet/id/trace-test-role-filledby-1";
+            String roleIri2 = "https://w3id.org/arknet/id/trace-test-role-filledby-2";
+            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+                    lifecycle, DisplayLocale.DEFAULT);
+            RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
+                    lifecycle, DisplayLocale.DEFAULT, actorFunnel);
+            roles.create(PROJECT, new Role(
+                    new RoleId(ResourceId.of(roleIri1)), new RoleCode("ROLE-2"), "Requirements Engineer",
+                    "Writes and maintains requirements.",
+                    List.of(new ActorId(ResourceId.of(ACTOR_IRI)))), "en");
+            roles.create(PROJECT, new Role(
+                    new RoleId(ResourceId.of(roleIri2)), new RoleCode("ROLE-3"), "Auditor",
+                    "Reviews compliance.",
+                    List.of(new ActorId(ResourceId.of(ACTOR_IRI)))), "en");
+
+            StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+            TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+            assertThat(freshGraph.rolesFilledBy(ACTOR_IRI)).containsExactlyInAnyOrder(roleIri1, roleIri2);
+        }
+
         @Test
         void dependentsOfEitherBoundedContextReachesTheirContextRelationship() {
             String bc2Iri = "https://w3id.org/arknet/id/trace-test-bc-2";
@@ -957,6 +1003,95 @@ class TraceabilityGraphTest {
                     .filteredOn(mention -> mention.sourceIri().equals(UC_2_IRI))
                     .extracting(TraceabilityGraph.UnlinkedMention::termIri, TraceabilityGraph.UnlinkedMention::edgeLocalName)
                     .containsExactly(org.assertj.core.api.Assertions.tuple(TERM_2_IRI, "usesTerm"));
+        }
+
+        /**
+         * The regular case behind the widened javadoc on {@link
+         * TraceabilityGraph#unlinkedMentions()} (kogn-io/arknet#524 review): a use case's goal
+         * names a glossary term that happens to share its label with the use case's own primary
+         * role - but since ADR-37/kogn-io/arknet#405 Part B a role and a term are separate
+         * resources with separate IRIs, {@link TraceabilityGraph#rolesOf(String)}'s ROLE IRI is
+         * never the TERM IRI {@code LabelMentions} reports, so the suppression the sibling
+         * exemption test below relies on cannot fire here - the mention is flagged exactly like
+         * any other unlinked one.
+         */
+        @Test
+        void unlinkedMentionsFlagsATermSharingItsLabelWithTheUseCasesOwnRole() {
+            String roleIri = "https://w3id.org/arknet/id/trace-test-unlinked-role-samename";
+            String termIri = "https://w3id.org/arknet/id/trace-test-unlinked-term-samename";
+            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+                    lifecycle, DisplayLocale.DEFAULT);
+            RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
+                    lifecycle, DisplayLocale.DEFAULT, actorFunnel);
+            roles.create(PROJECT, new Role(
+                    new RoleId(ResourceId.of(roleIri)), new RoleCode("ROLE-UM-1"), "Reviewer",
+                    "Reviews a submission.", List.of()), "en");
+            seedTermWithBroader(termIri, "TERM-UM-1", "Reviewer", "Someone who reviews a submission.", null);
+
+            UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
+                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+            String useCaseIri = "https://w3id.org/arknet/id/trace-test-unlinked-uc-samename";
+            useCases.create(PROJECT, new UseCase(
+                    new UseCaseId(ResourceId.of(useCaseIri)), new UseCaseCode("UC-UM1"), "Approve submission",
+                    "Reviewer approves the submission", null, null,
+                    new RoleRef(ResourceId.of(roleIri)), List.of(), null, null,
+                    List.of(new Step(1, "Details are logged", List.of())), List.of(), List.of(), List.of()), null);
+            StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+            TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+            assertThat(freshGraph.unlinkedMentions())
+                    .filteredOn(mention -> mention.sourceIri().equals(useCaseIri))
+                    .extracting(TraceabilityGraph.UnlinkedMention::termIri)
+                    .containsExactly(termIri);
+        }
+
+        /**
+         * The only constellation in which {@link TraceabilityGraph#rolesOf(String)}'s exemption
+         * actually fires (kogn-io/arknet#524 review): the role IRI and the term IRI are the very
+         * same resource, multi-typed {@code arkproc:Role} and {@code skos:Concept} at once with a
+         * matching {@code skos:prefLabel} - the "still legal" case the predecessor test's javadoc
+         * named but never pinned. A regular {@code role_add} never produces this multi-typing on
+         * its own (a role's name lives under {@code arknet:name}, not {@code skos:prefLabel}), so
+         * the term facet is added directly, the same way {@link #seedTermWithBroader} bypasses the
+         * write path for a graph-level-only fixture.
+         */
+        @Test
+        void unlinkedMentionsExemptsAUseCasesPrimaryRoleOnlyWhenItIsAlsoRegisteredAsATerm() {
+            String roleTermIri = "https://w3id.org/arknet/id/trace-test-unlinked-role-and-term";
+            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+                    lifecycle, DisplayLocale.DEFAULT);
+            RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
+                    lifecycle, DisplayLocale.DEFAULT, actorFunnel);
+            roles.create(PROJECT, new Role(
+                    new RoleId(ResourceId.of(roleTermIri)), new RoleCode("ROLE-UM-2"), "Approver",
+                    "Signs off a request.", List.of()), "en");
+            RDF rdf = new SimpleRdf();
+            Graph graph = rdf.createGraph();
+            IRI roleTerm = rdf.createIRI(roleTermIri);
+            graph.add(roleTerm, rdf.createIRI(RDF_TYPE), rdf.createIRI("http://www.w3.org/2004/02/skos/core#Concept"));
+            graph.add(roleTerm, rdf.createIRI("http://www.w3.org/2004/02/skos/core#prefLabel"),
+                    rdf.createLiteral("Approver"));
+            try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+                handle.transactor().inTransaction(tx -> {
+                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-unlinked-role-and-term-graph"), graph);
+                    return null;
+                });
+            }
+
+            UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
+                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+            String useCaseIri = "https://w3id.org/arknet/id/trace-test-unlinked-uc-role-and-term";
+            useCases.create(PROJECT, new UseCase(
+                    new UseCaseId(ResourceId.of(useCaseIri)), new UseCaseCode("UC-UM2"), "Approve request",
+                    "Approver signs off the request", null, null,
+                    new RoleRef(ResourceId.of(roleTermIri)), List.of(), null, null,
+                    List.of(new Step(1, "Details are logged", List.of())), List.of(), List.of(), List.of()), null);
+            StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+            TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+            assertThat(freshGraph.unlinkedMentions())
+                    .filteredOn(mention -> mention.sourceIri().equals(useCaseIri))
+                    .isEmpty();
         }
     }
 }
