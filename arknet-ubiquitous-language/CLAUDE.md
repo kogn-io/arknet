@@ -68,3 +68,7 @@ Ein Glossarbegriff traegt seit kogn-io/arknet#502 (FR-10) unter jedem Sprachtag 
 `term_update` mit `label` OHNE `language` ist dagegen eine Umbenennung: das neue Wort ersetzt das alte unter jedem bereits vorhandenen Tag zugleich, plus `defaultLanguage`, falls das Projekt eines hat -- ein einzelner Tag bleibt nie mit dem alten Wort zurueck.
 Der Mismatch-Guard sitzt bewusst in `attemptUpdate`, gegen genau denselben Read, auf dem auch das Compare-and-Set beruht, nicht als separater Read in `TermService` -- ein Retry nach verlorenem Head-CAS liest die Labels dadurch automatisch neu und sieht eine zwischenzeitliche Umbenennung, statt eine veraltete Uebersetzung stumm daneben zu schreiben.
 Es gibt keinen Altbestands-Migrator: ein store-first Term, der noch zwei verschiedene Woerter unter zwei Tags traegt, wird durch eine gewoehnliche Umbenennung (`label` ohne `language`) korrigiert, nicht automatisch bereinigt.
+
+**Hinweis auf veraltete Uebersetzungen (kogn-io/arknet#474).**
+`term_update` haengt an seine Antwort, welche der vom Projekt gefuehrten Sprachen die korrigierte `definition` noch traegt, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus dem Shared Kernel, blockt nie.
+Am Signal beteiligt ist allein die Definition, nicht das `prefLabel`: ein Glossarbegriff traegt unter jeder Sprache dasselbe Wort (FR-10), also benennt ein `label` ohne `language` alle Tags gleichzeitig um, und ein `label` unter explizitem `language` muss dem vorhandenen entsprechen -- in beiden Faellen bleibt nichts Aelteres stehen.

@@ -106,3 +106,43 @@ Shared-Kernel-Grund derselbe wie bei `CodeAssignment`: jeder `*-core` braucht de
 RDF-frei bleiben (ArchUnit Regel 3); die Out-Adapter duerfen ihn mitbenutzen und tun es dort, wo sie
 Codes nach laufender Nummer sortieren (`KognioRdfAdrRepository#CODE_BY_RUNNING_NUMBER`), damit
 Sortier- und Zaehl-Parse nicht auseinanderdriften koennen.
+
+Seit kogn-io/arknet#474 traegt `LanguageTag` zusaetzlich `writtenLanguage(String explicit, String
+projectDefaultLanguage)` -- dieselbe Entscheidung wie `resolveWriteLanguage`, aber ohne Ablehnung:
+sie liefert `null`, wo jene `MissingDefaultLanguageException` wirft.
+Der Unterschied ist der Zeitpunkt: `resolveWriteLanguage` entscheidet, ob ein Schreiben stattfinden
+darf, `writtenLanguage` benennt nachtraeglich nur, unter welchem Tag ein bereits erfolgtes Schreiben
+gelandet ist -- dort nochmals abzulehnen machte aus einem Hinweis eine zweite, spaetere Absage eines
+Aufrufs, der schon durch ist.
+
+Denselben Zeitpunkt bedient das Paar `FieldLanguageLookup` (Port) und `StaleTranslationHint`
+(Mechanismus), das Signal aus kogn-io/arknet#474.
+`StaleTranslationHint` beantwortet nach jedem `*_update`, das ein mehrsprachiges Feld schreibt, die
+Frage "welche vom Projekt gefuehrte Sprache traegt dieses Feld noch, die dieser Aufruf nicht
+geschrieben hat" -- ein Hinweisblock an der Antwort, nie eine Ablehnung.
+Ein Hinweis entsteht nur, wenn alle drei Eingaben etwas sagen: der Aufruf hat eine Sprache
+geschrieben, das Projekt fuehrt eine andere (`ResolvedProject#maintainedLanguages`), und das
+geschriebene Feld traegt diese andere tatsaechlich -- traegt es sie nicht, ist das eine **Luecke**,
+die `store_check LANGUAGE` meldet, und sie hier "veraltet" zu nennen waere dieselbe Aussage doppelt
+und einmal falsch.
+Die Formulierung bleibt bewusst bei "dieser Aufruf hat sie nicht geschrieben": der WriteFunnel
+zeichnet je Write **eine** Revision pro Ressource auf, nie eine pro Literal, also gibt es keine
+Revision je Sprachvariante, an der sich "aelter" belegen liesse; belegbar ist allein, dass ein Write
+genau einen Tag je Feld setzt und jeder andere Tag folglich von frueher stammt.
+`FieldLanguageLookup` ist der Port fuer das eine, was ein In-Adapter selbst nicht weiss -- welche
+Tags ein Feld schon traegt.
+Er liegt hier und wird im Composition Root ueber den generischen Store-Lesepfad implementiert
+(`StoreFieldLanguageLookup` in `arknet-mcp`), dieselbe Richtung wie bei `ProjectResolver`: ein Port
+im Kernel, eine Implementierung im Composition Root, konsumiert von jedem BC-In-Adapter, ohne eine
+einzige neue Modulkante.
+Die Alternative -- je BC ein eigener Lookup-Port samt Out-Adapter-Methode nach dem Muster von
+`DescribeTermDisplayFallback` -- waere siebenmal dieselbe Frage in sieben Kopien.
+Feldschluessel sind Modell-Feldnamen, also die Local Names der dahinterliegenden Praedikate
+(`definition`, `title`, `useCaseGoal`, ...), dasselbe Vokabular, unter dem `store_check` seine
+Sprachluecken meldet; ein Feld, dessen Werte auf einer besessenen Kind-Ressource liegen
+(Akzeptanzkriterium, Use-Case-Schritt, ADR-Konsequenz), wird unter der **Kante** gefuehrt, die es
+besitzt (`acceptanceCriterion`, `mainStep`, `consequence`), weil der Aufrufer solche Listen
+geschlossen schreibt.
+Der zweite Port-Methodenname `ofProjectRegistration(String projectLabel)` ist kein Sonderfall aus
+Bequemlichkeit: der Registry-Record eines Projekts liegt im reservierten System-Dataset, dessen Id
+`ProjectId` per Konstruktion nicht halten darf.

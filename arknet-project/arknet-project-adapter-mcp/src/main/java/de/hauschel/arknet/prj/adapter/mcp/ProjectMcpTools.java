@@ -16,6 +16,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 import de.hauschel.arknet.prj.application.port.in.AdoptProject;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
 import de.hauschel.arknet.prj.application.port.in.ListAdoptableDatasets;
@@ -156,6 +157,16 @@ public final class ProjectMcpTools {
                     + "languages can be reported as incomplete at all. If the set is non-empty, "
                     + "defaultLanguage has to be one of its members - the call is refused otherwise.";
 
+    /**
+     * The stale-translation signal, announced on every update tool that writes a multilingual
+     * field (kogn-io/arknet#474). It belongs in the tool description rather than only in the docs:
+     * the writing agent reads the tool schema and nothing else, and a signal it does not expect is
+     * a signal it does not act on.
+     */
+    private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
+            + " the answer names the fields that still carry a maintained language this call did not"
+            + " write; repeat the call under each of those languages to keep the translations in step.";
+
     private final RegisterProject registerProject;
     private final AdoptProject adoptProject;
     private final AttachAnchor attachAnchor;
@@ -164,6 +175,7 @@ public final class ProjectMcpTools {
     private final ListProjects listProjects;
     private final ListAdoptableDatasets listAdoptableDatasets;
     private final ResolveProject resolveProject;
+    private final StaleTranslationHint staleTranslations;
 
     /**
      * Creates the adapter with its eight driving in-ports.
@@ -179,6 +191,8 @@ public final class ProjectMcpTools {
      *                              anchor, so {@code project_attach_anchor}, {@code project_rename}
      *                              and {@code project_update} never need a project identity as a
      *                              caller-facing parameter
+     * @param staleTranslations     renders {@code project_update}'s stale-translation signal
+     *                              (kogn-io/arknet#474)
      */
     public ProjectMcpTools(
             final RegisterProject registerProject,
@@ -188,7 +202,8 @@ public final class ProjectMcpTools {
             final UpdateProject updateProject,
             final ListProjects listProjects,
             final ListAdoptableDatasets listAdoptableDatasets,
-            final ResolveProject resolveProject) {
+            final ResolveProject resolveProject,
+            final StaleTranslationHint staleTranslations) {
         this.registerProject = Objects.requireNonNull(registerProject, "registerProject");
         this.adoptProject = Objects.requireNonNull(adoptProject, "adoptProject");
         this.attachAnchor = Objects.requireNonNull(attachAnchor, "attachAnchor");
@@ -197,6 +212,7 @@ public final class ProjectMcpTools {
         this.listProjects = Objects.requireNonNull(listProjects, "listProjects");
         this.listAdoptableDatasets = Objects.requireNonNull(listAdoptableDatasets, "listAdoptableDatasets");
         this.resolveProject = Objects.requireNonNull(resolveProject, "resolveProject");
+        this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
     }
 
     /**
@@ -351,7 +367,8 @@ public final class ProjectMcpTools {
             + "removing the declared set. Unlike project_rename, this never touches the project's label "
             + "or anchors. A default language and a maintained set cannot contradict each other: if the "
             + "resulting set is non-empty, the resulting default language has to be one of its members, "
-            + "and a call that would break that is refused whichever of the two it moves.")
+            + "and a call that would break that is refused whichever of the two it moves."
+            + STALE_TRANSLATION_NOTE)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "New description (optional, unchanged if omitted). Replaces only "
@@ -379,7 +396,7 @@ public final class ProjectMcpTools {
         final Project caller = resolveCaller(context, callerAnchor);
         final Project updated = updateProject.update(caller.id(), blankToNull(description), blankToNull(language),
                 blankToNull(defaultLanguage), languages);
-        return format(updated);
+        return format(updated) + staleTranslationHint(updated, blankToNull(description), blankToNull(language));
     }
 
     @McpTool(name = "project_adopt", description = "Claim an EXISTING dataset as the project this "
@@ -489,4 +506,28 @@ public final class ProjectMcpTools {
     private static String blankToNull(final String value) {
         return isBlank(value) ? null : value;
     }
+
+    /**
+     * The stale-translation signal for a {@code project_update} (kogn-io/arknet#474): whether the
+     * description this call corrected still carries a maintained language it did not write.
+     *
+     * <p>Two things are unlike every other bounded context's version of this. The record read is
+     * the project's <em>registry</em> record, which lives in the reserved system dataset rather
+     * than in the project's own (see {@link StaleTranslationHint#forProjectRegistration}). And an
+     * omitted {@code language} means an untagged write here, not a fall back to the project's
+     * default the way every model-writing tool resolves it - so such a call names no language and
+     * gets no signal, which is exactly what an untagged literal deserves.</p>
+     *
+     * <p>The language set compared against is the one this very call may have just changed:
+     * {@code updated} carries the promise now in force, which is the only one a reader can act
+     * on.</p>
+     */
+    private String staleTranslationHint(final Project updated, final String description, final String language) {
+        if (description == null) {
+            return "";
+        }
+        return staleTranslations.forProjectRegistration(updated.label(), language,
+                updated.maintainedLanguages(), List.of("description"));
+    }
+
 }

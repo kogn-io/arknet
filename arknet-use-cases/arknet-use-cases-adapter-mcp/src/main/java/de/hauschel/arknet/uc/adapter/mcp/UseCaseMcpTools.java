@@ -15,9 +15,11 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.actor.application.port.in.ResolveRoles;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
@@ -100,6 +102,16 @@ public final class UseCaseMcpTools {
             + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
             + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
 
+    /**
+     * The stale-translation signal, announced on every update tool that writes a multilingual
+     * field (kogn-io/arknet#474). It belongs in the tool description for the same reason
+     * {@link #PROSE_MARKUP} does: the writing agent reads the tool schema and nothing else, and a
+     * signal it does not expect is a signal it does not act on.
+     */
+    private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
+            + " the answer names the fields that still carry a maintained language this call did not"
+            + " write; repeat the call under each of those languages to keep the translations in step.";
+
     private final AddUseCase addUseCase;
     private final ListUseCases listUseCases;
     private final DescribeUseCaseDisplayFallback describeUseCaseDisplayFallback;
@@ -109,6 +121,7 @@ public final class UseCaseMcpTools {
     private final LinkConstraint linkConstraint;
     private final ProjectResolver projects;
     private final UseCasePresenter presenter;
+    private final StaleTranslationHint staleTranslations;
 
     /**
      * Creates the adapter with its seven driving in-ports, the four borrowed sibling-hexagon
@@ -132,6 +145,8 @@ public final class UseCaseMcpTools {
      * @param resolveConstraints  requirements driving port used only to render a linked
      *                            constraint's business code instead of its bare IRI
      * @param projects          resolves each call's target project from its origin directory
+     * @param staleTranslations   renders {@code uc_update}'s stale-translation signal
+     *                            (kogn-io/arknet#474)
      */
     public UseCaseMcpTools(
             final AddUseCase addUseCase,
@@ -145,7 +160,8 @@ public final class UseCaseMcpTools {
             final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements,
             final ResolveConstraints resolveConstraints,
-            final ProjectResolver projects) {
+            final ProjectResolver projects,
+            final StaleTranslationHint staleTranslations) {
         this.addUseCase = Objects.requireNonNull(addUseCase, "addUseCase");
         this.listUseCases = Objects.requireNonNull(listUseCases, "listUseCases");
         this.describeUseCaseDisplayFallback =
@@ -156,6 +172,7 @@ public final class UseCaseMcpTools {
         this.linkConstraint = Objects.requireNonNull(linkConstraint, "linkConstraint");
         this.projects = Objects.requireNonNull(projects, "projects");
         this.presenter = new UseCasePresenter(resolveRoles, resolveTerms, resolveRequirements, resolveConstraints);
+        this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
     }
 
     /**
@@ -413,7 +430,8 @@ public final class UseCaseMcpTools {
                     + "price of a new use-case code and no inbound references carried over. The role "
                     + "references are correctable too: a given primaryRole replaces the current one (it "
                     + "cannot be cleared - a use case always has exactly one), and a given supportingRoles "
-                    + "array replaces the current list wholesale, an empty array clearing it." + PROSE_MARKUP)
+                    + "array replaces the current list wholesale, an empty array clearing it."
+                    + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
@@ -512,7 +530,8 @@ public final class UseCaseMcpTools {
                 .language(blankToNull(language))
                 .build();
         final UseCase updated = updateUseCase.update(project.id(), code, correction, project.defaultLanguage());
-        return presenter.formatFull(project.id(), updated, null);
+        return presenter.formatFull(project.id(), updated, null)
+                + staleTranslationHint(project, code, correction, extensions, stepTextPatches, newMainSteps);
     }
 
     @McpTool(name = "uc_link_term",
@@ -661,4 +680,47 @@ public final class UseCaseMcpTools {
     private static String displayTag(final String tag) {
         return tag.isEmpty() ? "untagged" : tag;
     }
+
+    /**
+     * The stale-translation signal for a {@code uc_update} (kogn-io/arknet#474): the multilingual
+     * fields this call actually wrote, named as {@code store_check} names them - the six prose
+     * fields of the use case itself, plus the two step lists, each keyed by the edge that owns
+     * them, because a step's text lives on its own resource.
+     *
+     * <p>{@code stepRealisesPatches}, {@code removeMainStepPositions} and the two role references
+     * are deliberately absent: none of them writes text under a language, so none leaves anything
+     * behind to go stale.</p>
+     */
+    private String staleTranslationHint(final ResolvedProject project, final UseCaseCode code,
+            final UseCaseCorrection correction, final List<String> extensions,
+            final List<StepPatchInput> stepTextPatches, final List<NewMainStepInput> newMainSteps) {
+        final List<String> fieldsWritten = new ArrayList<>();
+        addIfWritten(fieldsWritten, "title", correction.title());
+        addIfWritten(fieldsWritten, "useCaseGoal", correction.goal());
+        addIfWritten(fieldsWritten, "designScope", correction.scope());
+        addIfWritten(fieldsWritten, "trigger", correction.trigger());
+        addIfWritten(fieldsWritten, "useCasePrecondition", correction.precondition());
+        addIfWritten(fieldsWritten, "useCasePostcondition", correction.postcondition());
+        if (stepTextPatches != null && !stepTextPatches.isEmpty()
+                || newMainSteps != null && !newMainSteps.isEmpty()) {
+            fieldsWritten.add("mainStep");
+        }
+        if (extensions != null && !extensions.isEmpty()) {
+            fieldsWritten.add("extensionStep");
+        }
+        if (fieldsWritten.isEmpty()) {
+            return "";
+        }
+        return staleTranslations.forResource(project.id(), code.value(),
+                LanguageTag.writtenLanguage(correction.language(), project.defaultLanguage()),
+                project.maintainedLanguages(), fieldsWritten);
+    }
+
+    /** Records {@code field} as written when the correction actually carries a value for it. */
+    private static void addIfWritten(final List<String> fieldsWritten, final String field, final String value) {
+        if (value != null) {
+            fieldsWritten.add(field);
+        }
+    }
+
 }

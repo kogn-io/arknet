@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,8 @@ import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.ConstraintId;
 import de.hauschel.arknet.req.domain.ConstraintType;
+import de.hauschel.arknet.kernel.FieldLanguageLookup;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 
 /**
  * Scaffold-level check that the adapter declares exactly the five constraint tools and guards
@@ -40,6 +43,28 @@ import de.hauschel.arknet.req.domain.ConstraintType;
  * result - mirrors {@code RequirementMcpToolsTest} in shape.
  */
 class ConstraintMcpToolsTest {
+
+    /**
+     * The stale-translation signal over an empty store (kogn-io/arknet#474): every test that sets
+     * up no language inventory keeps the answer it always had, because a field that carries no
+     * other language has nothing to report.
+     */
+    private static final StaleTranslationHint NO_TRANSLATIONS = hints(Map.of());
+
+    /** A lookup answering the same field-to-tags inventory for every resource. */
+    private static StaleTranslationHint hints(Map<String, Set<String>> byField) {
+        return new StaleTranslationHint(new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                return byField;
+            }
+        });
+    }
 
     private static final ConstraintId ID =
             new ConstraintId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
@@ -55,7 +80,7 @@ class ConstraintMcpToolsTest {
 
     private final Stub stub = new Stub();
     private final ConstraintMcpTools adapter =
-            new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS);
+            new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS);
 
     @Test
     void declaresTheFiveConstraintTools() {
@@ -73,23 +98,23 @@ class ConstraintMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(null, stub, stub, stub, stub, stub, PROJECTS));
+                () -> new ConstraintMcpTools(null, stub, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, null, stub, stub, stub, stub, PROJECTS));
+                () -> new ConstraintMcpTools(stub, null, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, stub, null, stub, stub, stub, PROJECTS));
+                () -> new ConstraintMcpTools(stub, stub, null, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, stub, stub, null, stub, stub, PROJECTS));
+                () -> new ConstraintMcpTools(stub, stub, stub, null, stub, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, stub, stub, stub, null, stub, PROJECTS));
+                () -> new ConstraintMcpTools(stub, stub, stub, stub, null, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, stub, stub, stub, stub, null, PROJECTS));
+                () -> new ConstraintMcpTools(stub, stub, stub, stub, stub, null, PROJECTS, NO_TRANSLATIONS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, null));
+                () -> new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, null, NO_TRANSLATIONS));
     }
 
     /** {@code constraint_add} passes title/statement/type through and renders the created constraint. */
@@ -113,7 +138,7 @@ class ConstraintMcpToolsTest {
      */
     @Test
     void addPassesABlankLanguageAsNullAndForwardsTheProjectDefault() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE, NO_TRANSLATIONS);
 
         withDefault.add(null, "t", "s", "TECHNICAL", "  ", null);
 
@@ -147,7 +172,7 @@ class ConstraintMcpToolsTest {
      */
     @Test
     void listReadsUnderTheProjectsDefaultLanguage() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE, NO_TRANSLATIONS);
 
         withDefault.list(null, null, null);
 
@@ -160,7 +185,7 @@ class ConstraintMcpToolsTest {
      */
     @Test
     void listPassesAnExplicitDisplayLocaleArgumentThrough() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE, NO_TRANSLATIONS);
 
         withDefault.list(null, "fr", null);
 
@@ -223,7 +248,7 @@ class ConstraintMcpToolsTest {
     /** An explicit {@code displayLocale} wins over the project's configured default. */
     @Test
     void getPrefersAnExplicitDisplayLocaleOverTheProjectDefault() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE, NO_TRANSLATIONS);
         stub.nextGetResult = Optional.of(constraint("TCON-1", ConstraintType.TECHNICAL, "a", "statement a"));
 
         withDefault.get(null, "TCON-1", "en", null);
@@ -234,7 +259,7 @@ class ConstraintMcpToolsTest {
     /** ... and an omitted one falls back to it. */
     @Test
     void getFallsBackToTheProjectDefaultDisplayLocale() {
-        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE);
+        ConstraintMcpTools withDefault = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_DEFAULT_DE, NO_TRANSLATIONS);
         stub.nextGetResult = Optional.of(constraint("TCON-1", ConstraintType.TECHNICAL, "a", "statement a"));
 
         withDefault.get(null, "TCON-1", null, null);
@@ -287,6 +312,32 @@ class ConstraintMcpToolsTest {
         return new Constraint(ID, new ConstraintCode(code), title, statement, type);
     }
 
+
+    // --- stale-translation signal (kogn-io/arknet#474) ------------------------
+
+    /** The corrected statement still carries the other maintained language, from an earlier write. */
+    @Test
+    void updateReportsTheOtherMaintainedLanguageTheCorrectedFieldsStillCarry() {
+        ConstraintMcpTools bilingual = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
+                hints(Map.of("constraintStatement", Set.of("en", "de"), "title", Set.of("en"))));
+
+        String rendered = bilingual.update(null, "TCON-1", "JVM only", "Must run on the JVM.", "en", null);
+
+        assertTrue(rendered.contains("de: constraintStatement"), rendered);
+    }
+
+    /** A project maintaining a single language has no other language to warn about. */
+    @Test
+    void updateStaysSilentForASingleLanguageProject() {
+        ConstraintMcpTools monolingual = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en")),
+                hints(Map.of("constraintStatement", Set.of("en", "de"))));
+
+        String rendered = monolingual.update(null, "TCON-1", null, "Must run on the JVM.", "en", null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
     /** Structural stub implementing the five driving in-ports. */
     private static final class Stub
             implements AddConstraint, ListConstraints, DescribeConstraintDisplayFallback, GetConstraint,

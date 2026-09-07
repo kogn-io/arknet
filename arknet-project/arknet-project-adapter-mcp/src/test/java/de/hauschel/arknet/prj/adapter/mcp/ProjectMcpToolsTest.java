@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
@@ -34,6 +35,8 @@ import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
+import de.hauschel.arknet.kernel.FieldLanguageLookup;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 
 /**
  * Scaffold-level check that the adapter declares exactly the six project tools, resolves the
@@ -41,6 +44,28 @@ import de.hauschel.arknet.prj.domain.UnknownAnchorException;
  * ProjectResolver} workspace, and never turns an unknown-anchor situation into a silent default.
  */
 class ProjectMcpToolsTest {
+
+    /**
+     * The stale-translation signal over an empty store (kogn-io/arknet#474): every test that sets
+     * up no language inventory keeps the answer it always had, because a field that carries no
+     * other language has nothing to report.
+     */
+    private static final StaleTranslationHint NO_TRANSLATIONS = hints(Map.of());
+
+    /** A lookup answering the same field-to-tags inventory for every resource. */
+    private static StaleTranslationHint hints(Map<String, Set<String>> byField) {
+        return new StaleTranslationHint(new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                return byField;
+            }
+        });
+    }
 
     private final FakeRegisterProject registerProject = new FakeRegisterProject();
     private final FakeAttachAnchor attachAnchor = new FakeAttachAnchor();
@@ -51,7 +76,7 @@ class ProjectMcpToolsTest {
     private final FakeListAdoptableDatasets listAdoptable = new FakeListAdoptableDatasets();
     private final FakeResolveProject resolveProject = new FakeResolveProject();
     private final ProjectMcpTools adapter = new ProjectMcpTools(registerProject, adoptProject,
-            attachAnchor, renameProject, updateProject, listProjects, listAdoptable, resolveProject);
+            attachAnchor, renameProject, updateProject, listProjects, listAdoptable, resolveProject, NO_TRANSLATIONS);
 
     @Test
     void declaresTheSixProjectTools() {
@@ -70,28 +95,28 @@ class ProjectMcpToolsTest {
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
                 null, adoptProject, attachAnchor, renameProject, updateProject, listProjects, listAdoptable,
-                resolveProject));
+                resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
                 registerProject, null, attachAnchor, renameProject, updateProject, listProjects, listAdoptable,
-                resolveProject));
+                resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
                 registerProject, adoptProject, null, renameProject, updateProject, listProjects, listAdoptable,
-                resolveProject));
+                resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
                 registerProject, adoptProject, attachAnchor, null, updateProject, listProjects, listAdoptable,
-                resolveProject));
+                resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
                 registerProject, adoptProject, attachAnchor, renameProject, null, listProjects, listAdoptable,
-                resolveProject));
+                resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
                 registerProject, adoptProject, attachAnchor, renameProject, updateProject, null, listAdoptable,
-                resolveProject));
+                resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
                 registerProject, adoptProject, attachAnchor, renameProject, updateProject, listProjects, null,
-                resolveProject));
+                resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
                 registerProject, adoptProject, attachAnchor, renameProject, updateProject, listProjects,
-                listAdoptable, null));
+                listAdoptable, null, NO_TRANSLATIONS));
     }
 
     @Test
@@ -346,6 +371,69 @@ class ProjectMcpToolsTest {
         return contextWithOriginDir(originDir);
     }
 
+
+    // --- stale-translation signal (kogn-io/arknet#474) ------------------------
+
+    /**
+     * Correcting the description in German says that the English one is still there from an
+     * earlier write. The language set compared against is the one this very call left in force.
+     */
+    @Test
+    void updateReportsTheOtherMaintainedLanguageTheCorrectedDescriptionStillCarries() {
+        final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor));
+        resolveProject.register(callerAnchor, target);
+        updateProject.result = new Project(target.id(), target.label(), target.anchors(),
+                "Ein Beispielprojekt.", "de", List.of("de", "en"));
+        final ProjectMcpTools bilingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
+                renameProject, updateProject, listProjects, listAdoptable, resolveProject,
+                hints(Map.of("description", Set.of("de", "en"))));
+
+        final String rendered = bilingual.update(contextWithOrigin("/home/f/DEV/arknet"),
+                "Ein Beispielprojekt.", "de", null, null, null);
+
+        assertTrue(rendered.contains("en: description"), rendered);
+    }
+
+    /** A project maintaining a single language has no other language to warn about. */
+    @Test
+    void updateStaysSilentForASingleLanguageProject() {
+        final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor));
+        resolveProject.register(callerAnchor, target);
+        updateProject.result = new Project(target.id(), target.label(), target.anchors(),
+                "Ein Beispielprojekt.", "de", List.of("de"));
+        final ProjectMcpTools monolingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
+                renameProject, updateProject, listProjects, listAdoptable, resolveProject,
+                hints(Map.of("description", Set.of("de", "en"))));
+
+        final String rendered = monolingual.update(contextWithOrigin("/home/f/DEV/arknet"),
+                "Ein Beispielprojekt.", "de", null, null, null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    /**
+     * An omitted {@code language} writes an untagged description here rather than falling back to
+     * the project's default the way every model-writing tool does - such a call names no language
+     * and so gets no signal.
+     */
+    @Test
+    void updateStaysSilentForAnUntaggedDescription() {
+        final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor));
+        resolveProject.register(callerAnchor, target);
+        updateProject.result = new Project(target.id(), target.label(), target.anchors(),
+                "Ein Beispielprojekt.", "de", List.of("de", "en"));
+        final ProjectMcpTools bilingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
+                renameProject, updateProject, listProjects, listAdoptable, resolveProject,
+                hints(Map.of("description", Set.of("de", "en"))));
+
+        final String rendered = bilingual.update(contextWithOrigin("/home/f/DEV/arknet"),
+                "Ein Beispielprojekt.", null, null, null, null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
     /** Structural fake implementing {@link RegisterProject}. */
     private static final class FakeRegisterProject implements RegisterProject {
         private String lastLabel;

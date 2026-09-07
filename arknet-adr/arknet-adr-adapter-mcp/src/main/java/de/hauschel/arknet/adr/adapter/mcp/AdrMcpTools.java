@@ -57,8 +57,10 @@ import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts.ResolvedBoundedContext;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
@@ -150,7 +152,18 @@ public final class AdrMcpTools {
     private final ResolveRequirements resolveRequirements;
     private final ResolveBoundedContexts resolveBoundedContexts;
     private final ResolveTerms resolveTerms;
+    /**
+     * The stale-translation signal, announced on every update tool that writes a multilingual
+     * field (kogn-io/arknet#474). It belongs in the tool description for the same reason
+     * {@link #PROSE_MARKUP} does: the writing agent reads the tool schema and nothing else, and a
+     * signal it does not expect is a signal it does not act on.
+     */
+    private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
+            + " the answer names the fields that still carry a maintained language this call did not"
+            + " write; repeat the call under each of those languages to keep the translations in step.";
+
     private final ProjectResolver projects;
+    private final StaleTranslationHint staleTranslations;
 
     /**
      * Creates the adapter with its eleven driving in-ports, the three borrowed display ports and the
@@ -178,6 +191,8 @@ public final class AdrMcpTools {
      * @param resolveTerms           ubiquitous-language driving port used only to render a used
      *                               term's business code instead of its bare IRI (kogn-io/arknet#393)
      * @param projects               resolves each call's target project from its anchor
+     * @param staleTranslations      renders {@code adr_update}'s stale-translation signal
+     *                               (kogn-io/arknet#474)
      */
     public AdrMcpTools(
             final AddAdr addAdr,
@@ -195,7 +210,8 @@ public final class AdrMcpTools {
             final ResolveRequirements resolveRequirements,
             final ResolveBoundedContexts resolveBoundedContexts,
             final ResolveTerms resolveTerms,
-            final ProjectResolver projects) {
+            final ProjectResolver projects,
+            final StaleTranslationHint staleTranslations) {
         this.addAdr = Objects.requireNonNull(addAdr, "addAdr");
         this.listAdrs = Objects.requireNonNull(listAdrs, "listAdrs");
         this.countSkippedAdrs = Objects.requireNonNull(countSkippedAdrs, "countSkippedAdrs");
@@ -213,6 +229,7 @@ public final class AdrMcpTools {
         this.resolveBoundedContexts = Objects.requireNonNull(resolveBoundedContexts, "resolveBoundedContexts");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.projects = Objects.requireNonNull(projects, "projects");
+        this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
     }
 
     /**
@@ -531,7 +548,7 @@ public final class AdrMcpTools {
             + "reference lists stay correctable in EVERY status: passing a list replaces that relation "
             + "wholesale, passing an empty list removes every edge of it, omitting it leaves it "
             + "untouched. Status and the supersededBy relation are not changed here - use "
-            + "adr_set_status and adr_supersede." + PROSE_MARKUP)
+            + "adr_set_status and adr_supersede." + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,
@@ -601,9 +618,11 @@ public final class AdrMcpTools {
                 .usesTermCodes(usesTerms)
                 .relatedToCodes(relatedTo)
                 .build();
-        final AdrDetail updated =
-                updateAdr.update(project.id(), new AdrCode(id), correction, project.defaultLanguage());
-        return format(project, updated) + missingContentWarnings(updated.adr());
+        final AdrCode code = new AdrCode(id);
+        final AdrDetail updated = updateAdr.update(project.id(), code, correction, project.defaultLanguage());
+        return format(project, updated) + missingContentWarnings(updated.adr())
+                + staleTranslationHint(project, code, correction, newConsequences, consequenceCorrections,
+                        newConsideredOptions, consideredOptionCorrections);
     }
 
     @McpTool(name = "adr_set_status", description = "Change the lifecycle status of an architecture "
@@ -913,4 +932,50 @@ public final class AdrMcpTools {
             throw translated;
         }
     }
+
+    /**
+     * The stale-translation signal for an {@code adr_update} (kogn-io/arknet#474): the multilingual
+     * fields this call actually wrote, named as {@code store_check} names them - the three prose
+     * fields of the record itself, plus the two child lists, each keyed by the edge that owns them,
+     * because a consequence's and an option's text live on their own resources.
+     *
+     * <p>The four reference lists, the two classification fields and the two removal lists are
+     * deliberately absent: none of them writes text under a language, so none leaves anything
+     * behind to go stale.</p>
+     */
+    private String staleTranslationHint(final ResolvedProject project, final AdrCode code,
+            final AdrCorrection correction, final List<NewConsequenceInput> newConsequences,
+            final List<ConsequenceCorrectionInput> consequenceCorrections,
+            final List<NewConsideredOptionInput> newConsideredOptions,
+            final List<ConsideredOptionCorrectionInput> consideredOptionCorrections) {
+        final List<String> fieldsWritten = new ArrayList<>();
+        addIfWritten(fieldsWritten, "name", correction.name());
+        addIfWritten(fieldsWritten, "adrContext", correction.context());
+        addIfWritten(fieldsWritten, "adrDecision", correction.decision());
+        if (isNotEmpty(newConsequences) || isNotEmpty(consequenceCorrections)) {
+            fieldsWritten.add("consequence");
+        }
+        if (isNotEmpty(newConsideredOptions) || isNotEmpty(consideredOptionCorrections)) {
+            fieldsWritten.add("consideredOption");
+        }
+        if (fieldsWritten.isEmpty()) {
+            return "";
+        }
+        return staleTranslations.forResource(project.id(), code.value(),
+                LanguageTag.writtenLanguage(correction.language(), project.defaultLanguage()),
+                project.maintainedLanguages(), fieldsWritten);
+    }
+
+    /** Records {@code field} as written when the correction actually carries a value for it. */
+    private static void addIfWritten(final List<String> fieldsWritten, final String field, final String value) {
+        if (value != null) {
+            fieldsWritten.add(field);
+        }
+    }
+
+    /** Whether a caller-supplied list actually carries an entry (a {@code null} list is "omitted"). */
+    private static boolean isNotEmpty(final List<?> values) {
+        return values != null && !values.isEmpty();
+    }
+
 }

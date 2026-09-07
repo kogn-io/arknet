@@ -24,9 +24,11 @@ import de.hauschel.arknet.actor.application.port.in.RoleDetail;
 import de.hauschel.arknet.actor.application.port.in.UpdateRole;
 import de.hauschel.arknet.actor.domain.RoleCode;
 import de.hauschel.arknet.actor.domain.RoleDisplayFallback;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 
 /**
  * Driving (in) adapter of the role resource type: exposes the role use-cases as MCP tools
@@ -56,6 +58,16 @@ public final class RoleMcpTools {
             + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
             + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
 
+    /**
+     * The stale-translation signal, announced on every update tool that writes a multilingual
+     * field (kogn-io/arknet#474). It belongs in the tool description for the same reason
+     * {@link #PROSE_MARKUP} does: the writing agent reads the tool schema and nothing else, and a
+     * signal it does not expect is a signal it does not act on.
+     */
+    private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
+            + " the answer names the fields that still carry a maintained language this call did not"
+            + " write; repeat the call under each of those languages to keep the translations in step.";
+
     private final AddRole addRole;
     private final ListRoles listRoles;
     private final DescribeRoleDisplayFallback describeRoleDisplayFallback;
@@ -64,6 +76,7 @@ public final class RoleMcpTools {
     private final DeleteRole deleteRole;
     private final ProjectResolver projects;
     private final RolePresenter presenter = new RolePresenter();
+    private final StaleTranslationHint staleTranslations;
 
     /**
      * Creates the adapter with its six driving in-ports and the resolver that maps each call's
@@ -78,6 +91,8 @@ public final class RoleMcpTools {
      * @param deleteRole                  in-port backing {@code role_delete}
      * @param projects                    resolves each call's target project from the anchor it
      *                                    carries
+     * @param staleTranslations           renders {@code role_update}'s stale-translation signal
+     *                                    (kogn-io/arknet#474)
      */
     public RoleMcpTools(
             final AddRole addRole,
@@ -86,7 +101,8 @@ public final class RoleMcpTools {
             final GetRole getRole,
             final UpdateRole updateRole,
             final DeleteRole deleteRole,
-            final ProjectResolver projects) {
+            final ProjectResolver projects,
+            final StaleTranslationHint staleTranslations) {
         this.addRole = Objects.requireNonNull(addRole, "addRole");
         this.listRoles = Objects.requireNonNull(listRoles, "listRoles");
         this.describeRoleDisplayFallback =
@@ -95,6 +111,7 @@ public final class RoleMcpTools {
         this.updateRole = Objects.requireNonNull(updateRole, "updateRole");
         this.deleteRole = Objects.requireNonNull(deleteRole, "deleteRole");
         this.projects = Objects.requireNonNull(projects, "projects");
+        this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
     }
 
     /** Mirrors {@link ActorMcpTools#contextAnchor} exactly. */
@@ -214,7 +231,7 @@ public final class RoleMcpTools {
                     + "filledBy uses its own tri-state: passing a list replaces the occupancy wholesale, "
                     + "passing an empty list removes every occupant, omitting it leaves it untouched. Cannot "
                     + "change the role's code (ROLE-N): it is fixed at creation, and everything already "
-                    + "referring to the role refers to that code." + PROSE_MARKUP)
+                    + "referring to the role refers to that code." + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Role identity, e.g. ROLE-1") final String id,
@@ -247,7 +264,8 @@ public final class RoleMcpTools {
         final RoleCode code = new RoleCode(id);
         final RoleDetail updated = updateRole.update(project.id(), code, blankToNull(name), blankToNull(description),
                 filledBy, blankToNull(language), project.defaultLanguage());
-        return presenter.format(updated);
+        return presenter.format(updated) + staleTranslationHint(project, code, blankToNull(language),
+                blankToNull(name), blankToNull(description));
     }
 
     @McpTool(name = "role_delete",
@@ -300,4 +318,31 @@ public final class RoleMcpTools {
     private static String blankToNull(final String value) {
         return (value == null || value.isBlank()) ? null : value;
     }
+
+    /**
+     * The stale-translation signal for a {@code role_update} (kogn-io/arknet#474): the multilingual
+     * fields this call actually wrote, named as {@code store_check} names them.
+     *
+     * <p>{@code filledBy} is deliberately absent: an occupancy edge carries no text under any
+     * language and so leaves nothing behind to go stale. This is also the line between the two
+     * resource types of this hexagon - an {@code actor_update} gets no signal at all, because an
+     * actor's name is an untagged proper noun by design, not a translated one.</p>
+     */
+    private String staleTranslationHint(final ResolvedProject project, final RoleCode code,
+            final String language, final String name, final String description) {
+        final List<String> fieldsWritten = new ArrayList<>();
+        if (name != null) {
+            fieldsWritten.add("name");
+        }
+        if (description != null) {
+            fieldsWritten.add("description");
+        }
+        if (fieldsWritten.isEmpty()) {
+            return "";
+        }
+        return staleTranslations.forResource(project.id(), code.value(),
+                LanguageTag.writtenLanguage(language, project.defaultLanguage()),
+                project.maintainedLanguages(), fieldsWritten);
+    }
+
 }

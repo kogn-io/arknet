@@ -22,6 +22,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 import de.hauschel.arknet.mcp.dataset.DaemonStorageLock;
 import de.hauschel.arknet.mcp.dataset.LockConflictReportingDatasetLifecycle;
 import de.hauschel.arknet.mcp.report.ActorCards;
@@ -72,6 +73,7 @@ import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.mcp.store.StoreExportTools;
 import de.hauschel.arknet.mcp.store.StoreExporter;
+import de.hauschel.arknet.mcp.store.StoreFieldLanguageLookup;
 import de.hauschel.arknet.mcp.store.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreReportController;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
@@ -416,10 +418,11 @@ public class ArknetMcpConfiguration {
     @Bean
     RequirementMcpTools requirementMcpTools(
             final RequirementService service, final ResolveTerms resolveTerms,
-            final ConstraintService constraintService, final ProjectResolver projectResolver) {
+            final ConstraintService constraintService, final ProjectResolver projectResolver,
+            final StaleTranslationHint staleTranslationHint) {
         return new RequirementMcpTools(
                 service, service, service, service, service, service, service, service, service, service,
-                resolveTerms, constraintService, projectResolver);
+                resolveTerms, constraintService, projectResolver, staleTranslationHint);
     }
 
     /**
@@ -430,8 +433,10 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     ConstraintMcpTools constraintMcpTools(
-            final ConstraintService service, final ProjectResolver projectResolver) {
-        return new ConstraintMcpTools(service, service, service, service, service, service, projectResolver);
+            final ConstraintService service, final ProjectResolver projectResolver,
+            final StaleTranslationHint staleTranslationHint) {
+        return new ConstraintMcpTools(service, service, service, service, service, service, projectResolver,
+                staleTranslationHint);
     }
 
     // --- Ubiquitous-language hexagon -------------------------------------------
@@ -469,8 +474,10 @@ public class ArknetMcpConfiguration {
 
     @Bean
     UbiquitousLanguageMcpTools ubiquitousLanguageMcpTools(
-            final TermService service, final ProjectResolver projectResolver) {
-        return new UbiquitousLanguageMcpTools(service, service, service, service, service, service, projectResolver);
+            final TermService service, final ProjectResolver projectResolver,
+            final StaleTranslationHint staleTranslationHint) {
+        return new UbiquitousLanguageMcpTools(service, service, service, service, service, service, projectResolver,
+                staleTranslationHint);
     }
 
     // --- Use-cases hexagon -----------------------------------------------------
@@ -567,9 +574,9 @@ public class ArknetMcpConfiguration {
     UseCaseMcpTools useCaseMcpTools(
             final UseCaseService service, final ResolveRoles resolveRoles, final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements, final ConstraintService constraintService,
-            final ProjectResolver projectResolver) {
+            final ProjectResolver projectResolver, final StaleTranslationHint staleTranslationHint) {
         return new UseCaseMcpTools(service, service, service, service, service, service, service, resolveRoles,
-                resolveTerms, resolveRequirements, constraintService, projectResolver);
+                resolveTerms, resolveRequirements, constraintService, projectResolver, staleTranslationHint);
     }
 
     // --- Bounded-context hexagon -----------------------------------------------
@@ -712,10 +719,10 @@ public class ArknetMcpConfiguration {
     AdrMcpTools adrMcpTools(
             final AdrService service, final ResolveRequirements resolveRequirements,
             final ResolveBoundedContexts resolveBoundedContexts, final ResolveTerms resolveTerms,
-            final ProjectResolver projectResolver) {
+            final ProjectResolver projectResolver, final StaleTranslationHint staleTranslationHint) {
         return new AdrMcpTools(service, service, service, service, service, service, service, service,
                 service, service, service, service, resolveRequirements, resolveBoundedContexts, resolveTerms,
-                projectResolver);
+                projectResolver, staleTranslationHint);
     }
 
     /**
@@ -816,8 +823,10 @@ public class ArknetMcpConfiguration {
 
     /** No borrowed neighbour port here either - mirrors {@link #actorMcpTools}'s own note. */
     @Bean
-    RoleMcpTools roleMcpTools(final RoleService service, final ProjectResolver projectResolver) {
-        return new RoleMcpTools(service, service, service, service, service, service, projectResolver);
+    RoleMcpTools roleMcpTools(final RoleService service, final ProjectResolver projectResolver,
+            final StaleTranslationHint staleTranslationHint) {
+        return new RoleMcpTools(service, service, service, service, service, service, projectResolver,
+                staleTranslationHint);
     }
 
     // --- Project hexagon (the registry) -------------------------------
@@ -890,8 +899,10 @@ public class ArknetMcpConfiguration {
      * mechanism for all project-scoped tool calls.</p>
      */
     @Bean
-    ProjectMcpTools projectMcpTools(final ProjectService service) {
-        return new ProjectMcpTools(service, service, service, service, service, service, service, service);
+    ProjectMcpTools projectMcpTools(final ProjectService service,
+            final StaleTranslationHint staleTranslationHint) {
+        return new ProjectMcpTools(service, service, service, service, service, service, service, service,
+                staleTranslationHint);
     }
 
     // --- Store read path: generic query, model-shaped report -------------------
@@ -904,6 +915,21 @@ public class ArknetMcpConfiguration {
     @Bean
     StoreReader storeReader(final DatasetLifecycle datasetLifecycle) {
         return new StoreReader(datasetLifecycle);
+    }
+
+    /**
+     * The stale-translation signal every {@code *_update} tool that writes a multilingual field
+     * appends to its answer (kogn-io/arknet#474) - one mechanism for all seven of them, wired here
+     * rather than copied into each bounded context.
+     *
+     * <p>It sits in the composition root for the same reason {@link #projectResolver} does: the
+     * question "which languages does this field already carry" is answered generically, out of
+     * {@link StoreReader}'s domain-agnostic read path, and only this class may know that a project
+     * registry record lives in a different dataset than a model resource does.</p>
+     */
+    @Bean
+    StaleTranslationHint staleTranslationHint(final StoreReader storeReader) {
+        return new StaleTranslationHint(new StoreFieldLanguageLookup(storeReader));
     }
 
     /**

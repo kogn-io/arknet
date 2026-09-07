@@ -4,6 +4,7 @@
 package de.hauschel.arknet.ul.adapter.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
@@ -19,7 +21,9 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.FieldLanguageLookup;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
 import de.hauschel.arknet.ul.application.port.in.DescribeTermDisplayFallback;
@@ -51,9 +55,35 @@ class UbiquitousLanguageMcpToolsTest {
      */
     private static final ProjectResolver PROJECTS_WITH_GERMAN_DEFAULT = anchor -> new ResolvedProject(PROJECT, "de");
 
+    /**
+     * The stale-translation signal over an empty store (kogn-io/arknet#474): every existing test
+     * keeps the answer it always had, because a field that carries no other language has nothing
+     * to report.
+     */
+    private static final StaleTranslationHint NO_TRANSLATIONS = hints(Map.of());
+
+    /** A project that promises both languages - the only setting in which a hint can appear. */
+    private static final ProjectResolver PROJECTS_BILINGUAL =
+            anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en"));
+
+    /** A lookup answering the same field/tag inventory for every resource. */
+    private static StaleTranslationHint hints(Map<String, Set<String>> byField) {
+        return new StaleTranslationHint(new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                return byField;
+            }
+        });
+    }
+
     private final Stub stub = new Stub();
     private final UbiquitousLanguageMcpTools adapter =
-            new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS);
+            new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS);
 
     @Test
     void declaresTheFiveTermTools() {
@@ -71,19 +101,19 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(null, stub, stub, stub, stub, stub, PROJECTS));
+                () -> new UbiquitousLanguageMcpTools(null, stub, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, null, stub, stub, stub, PROJECTS));
+                () -> new UbiquitousLanguageMcpTools(stub, stub, null, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, null, stub, PROJECTS));
+                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, null, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, null, PROJECTS));
+                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, null, PROJECTS, NO_TRANSLATIONS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, null));
+                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, null, NO_TRANSLATIONS));
     }
 
     /** {@code term_delete} passes the parsed code straight through to the in-port. */
@@ -301,7 +331,7 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void listPassesTheProjectsDefaultLanguageThrough() {
         UbiquitousLanguageMcpTools adapterWithGermanDefault =
-                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT);
+                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT, NO_TRANSLATIONS);
 
         adapterWithGermanDefault.list(null, null, null);
 
@@ -317,7 +347,7 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void listPassesAnExplicitDisplayLocaleArgumentThrough() {
         UbiquitousLanguageMcpTools adapterWithGermanDefault =
-                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT);
+                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT, NO_TRANSLATIONS);
 
         adapterWithGermanDefault.list(null, "fr", null);
 
@@ -355,6 +385,47 @@ class UbiquitousLanguageMcpToolsTest {
         String rendered = adapter.list(null, "de", null);
 
         assertEquals("TERM-1 Kunde - def de", rendered);
+    }
+
+    // --- stale-translation signal (kogn-io/arknet#474) ------------------------
+
+    /**
+     * Correcting the German definition of a term whose English definition is already there says
+     * so: the English variant was written earlier and this call did not touch it.
+     */
+    @Test
+    void updateReportsTheOtherMaintainedLanguageTheCorrectedDefinitionStillCarries() {
+        UbiquitousLanguageMcpTools bilingual = new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub,
+                PROJECTS_BILINGUAL, hints(Map.of("definition", Set.of("de", "en"))));
+
+        String rendered = bilingual.update(null, "TERM-1", null, "neue Definition", null, null, "de", null);
+
+        assertTrue(rendered.contains("en: definition"), rendered);
+    }
+
+    /** A project maintaining a single language has no other language to warn about. */
+    @Test
+    void updateStaysSilentForASingleLanguageProject() {
+        UbiquitousLanguageMcpTools monolingual = new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub,
+                PROJECTS_WITH_GERMAN_DEFAULT, hints(Map.of("definition", Set.of("de", "en"))));
+
+        String rendered = monolingual.update(null, "TERM-1", null, "neue Definition", null, null, "de", null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    /**
+     * A rename leaves nothing older behind - {@code prefLabel} carries the same word under every
+     * tag, so it never takes part in the signal even when the definition would.
+     */
+    @Test
+    void updateStaysSilentWhenOnlyTheLabelWasCorrected() {
+        UbiquitousLanguageMcpTools bilingual = new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub,
+                PROJECTS_BILINGUAL, hints(Map.of("definition", Set.of("de", "en"), "prefLabel", Set.of("de", "en"))));
+
+        String rendered = bilingual.update(null, "TERM-1", "Kunde", null, null, null, "de", null);
+
+        assertFalse(rendered.contains("stale"), rendered);
     }
 
     /** Structural stub implementing the six driving in-ports. */

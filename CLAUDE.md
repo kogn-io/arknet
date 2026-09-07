@@ -146,7 +146,7 @@ vorhandene einsprachige nicht nachtraeglich vereinheitlichen. Was **in den Store
 geschrieben wird, ist fuer die zentralen benannten/beschreibenden Felder nativ
 **mehrsprachig**: Glossarbegriffe (`term_add`/`term_update`), die optionale
 Projektbeschreibung (`project_add`/`project_update`), Requirement-`title`/
-`description`/AcceptanceCriterion-`text` (`req_add`/`req_update`),
+`description`/`rationale`/AcceptanceCriterion-`text` (`req_add`/`req_update`),
 UseCase-`title`/`goal`/`scope`/`trigger`/`precondition`/`postcondition`/
 Step-`text`/Extension-`text` (`uc_add`/`uc_update`), Constraint-`title`/
 `constraintStatement` (`constraint_add`/`constraint_update`), Role-`name`/
@@ -168,7 +168,17 @@ gleichrangig: eine inhaltliche Aenderung an einem mehrsprachigen Feld ist erst
 vollstaendig, wenn beide Sprachen sie tragen (ein Schreibaufruf traegt genau
 eine Sprache, also zwei Aufrufe je Aenderung). Das ist eine Projektregel fuer
 diesen Bestand, keine Werkzeugregel -- andere Projekte im selben Store duerfen
-einsprachig bleiben. Andere Freitext-Felder
+einsprachig bleiben. Die Werkzeugseite dieses Umstands ist ein Signal, kein
+Zwang: jedes `*_update`, das ein mehrsprachiges Feld schreibt, haengt an seine
+Antwort, welche der vom Projekt gefuehrten Sprachen (`arkprj:maintainedLanguage`)
+das geschriebene Feld noch traegt, ohne dass dieser Aufruf sie geschrieben haette
+-- also vermutlich veraltet ist. Der Mechanismus dahinter (`StaleTranslationHint`
++ `FieldLanguageLookup` im Shared Kernel, im Composition Root ueber den
+generischen Store-Lesepfad bedient) ist einer fuer alle sieben Tools; er blockt
+nie und behauptet keine Revision je Sprachvariante -- der WriteFunnel fuehrt
+Revisionen je Ressource, nicht je Literal. Das Gegenstueck dazu ist
+`store_check LANGUAGE`: dort fehlt eine Sprache ganz, hier ist sie da, aber
+alt. Andere Freitext-Felder
 (z.B. BoundedContext-`name`/`description`) bleiben einfache, ungetaggte
 Literale ohne diesen Mechanismus. Quer dazu akzeptiert **jedes**
 Prosa-Feld ein enges Markdown-Subset (`**fett**`, `*kursiv*`, `` `code` ``,

@@ -77,6 +77,28 @@ public final class LanguageTag {
      * @throws MissingDefaultLanguageException if {@code explicit} is {@code null} and {@code
      *                                          projectDefaultLanguage} is {@code null} too
      */
+    /**
+     * The tag a write actually landed under, decided the same way {@link #resolveWriteLanguage}
+     * decides it but never rejecting: {@code explicit} if the caller named one, otherwise {@code
+     * projectDefaultLanguage}, otherwise {@code null}.
+     *
+     * <p>The non-throwing sibling exists for a reader that only wants to <em>name</em> the language
+     * a write already used - kogn-io/arknet#474's stale-translation signal, rendered after the
+     * write has been made. Re-deciding the write's admissibility at that point would turn a hint
+     * into a second, later rejection of a call that already succeeded; a {@code null} here simply
+     * means "this write named no language", which is exactly what such a signal has nothing to say
+     * about.</p>
+     *
+     * @param explicit               the caller-supplied {@code language} argument, or {@code null}
+     * @param projectDefaultLanguage the resolved project's configured default language, or
+     *                               {@code null}
+     * @return the canonicalized tag the write used, or {@code null} if it used none
+     * @throws InvalidLanguageTagException if the winning tag is not a well-formed BCP-47 tag
+     */
+    public static String writtenLanguage(String explicit, String projectDefaultLanguage) {
+        return canonicalize(explicit != null ? explicit : projectDefaultLanguage);
+    }
+
     public static String resolveWriteLanguage(String explicit, String projectDefaultLanguage) {
         if (explicit != null) {
             return canonicalize(explicit);

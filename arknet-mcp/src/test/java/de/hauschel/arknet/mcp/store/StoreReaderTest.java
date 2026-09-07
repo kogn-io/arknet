@@ -526,4 +526,45 @@ class StoreReaderTest {
 
         assertThat(storeReader.history(PROJECT, blankNodeHandle)).isEmpty();
     }
+    // --- languageTagsByField (kogn-io/arknet#474) -----------------------------
+
+    /**
+     * The store side of the stale-translation signal: after a German create and an English
+     * correction, the requirement's title carries both tags - and so does its acceptance
+     * criterion, whose text lives on a child resource and is therefore reported under the edge
+     * that owns it.
+     *
+     * <p>This is the one place the per-field tags are visible at all: every layer above collapses
+     * a field to a single {@link String} through the display-language fallback chain, which is
+     * exactly why the signal needs its own read rather than the answer the tool already has.</p>
+     */
+    @Test
+    void languageTagsByFieldReportsEveryTagAFieldCarriesIncludingAChildResources() {
+        DatasetId dataset = new DatasetId(PROJECT.value());
+        replaceViaCompareAndUpdateUnder(requirementTitled("Anmelden"), "de");
+        replaceViaCompareAndUpdateUnder(requirementTitled("Sign in"), "en");
+
+        Map<String, Set<String>> byField = storeReader.languageTagsByField(dataset, "FR-1");
+
+        assertThat(byField.get("title")).containsExactlyInAnyOrder("de", "en");
+        assertThat(byField.get("acceptanceCriterion")).containsExactlyInAnyOrder("de", "en");
+    }
+
+    /** An identifier nothing in the dataset carries yields an empty map, not an error. */
+    @Test
+    void languageTagsByFieldAnswersEmptyForAnUnknownIdentifier() {
+        assertThat(storeReader.languageTagsByField(new DatasetId(PROJECT.value()), "FR-999")).isEmpty();
+    }
+
+    /** Applies {@code updated} through the CAS guard, tagging every text field with {@code language}. */
+    private void replaceViaCompareAndUpdateUnder(Requirement updated, String language) {
+        RevisionToken head = requirements.findCurrentByCode(PROJECT, updated.code(), null)
+                .map(RequirementRepository.CurrentRequirement::head)
+                .orElse(null);
+        Map<Integer, String> criteriaLanguages = new LinkedHashMap<>();
+        updated.acceptanceCriteria().forEach(criterion -> criteriaLanguages.put(criterion.position(), language));
+        requirements.compareAndUpdate(PROJECT, head, updated, language, language, language, criteriaLanguages,
+                null, language);
+    }
+
 }

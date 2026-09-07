@@ -95,3 +95,8 @@ Seit `constraint_delete` existiert, ist die im `constraintAssertedContext`-Absat
 Dasselbe Fenster hat `role_delete` gegen `uc_add` (`RoleLookup` laeuft ebenfalls ausserhalb der Transaktion); es ist keine Eigenheit dieses BCs, sondern die Bauart des Gate-Kontexts, und `orphan_check`/`trace_matrix` machen die haengende Kante sichtbar.
 `KognioRdfConstraintRepository#delete` laeuft wie beim Actor ueber den geteilten `WriteFunnel#delete`: Tombstone statt neuer Revision, der geloeschte Code haengt als `dcterms:identifier` an der tombstoned Revision und bleibt damit dauerhaft vergeben.
 `ConstraintRepository#findRetainedCodes` liest ihn ueber drei `WriteFunnel#findRetainedCodes`-Aufrufe zurueck (ein Aufruf je `TCON-`/`BCON-`/`RCON-`-Praefix, der Trichter selbst nimmt nur ein Praefix), `ConstraintService#nextCode` bildet je Subtyp das Maximum aus lebenden (`findAllCodes`) und aufbewahrten (`findRetainedCodes`) Codes, damit `constraint_add` die Nummer eines geloeschten Constraints nicht ein zweites Mal vergibt.
+
+**Hinweis auf veraltete Uebersetzungen (kogn-io/arknet#474).**
+`req_update` und `constraint_update` haengen an ihre Antwort, welche der vom Projekt gefuehrten Sprachen die geschriebenen Felder noch tragen, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus dem Shared Kernel, blockt nie.
+Gemeldet werden `title`/`description`/`rationale` sowie, unter der besitzenden Kante `acceptanceCriterion`, die Kriterientexte; bei Constraints `title` und `constraintStatement`.
+`removeAcceptanceCriterionPositions` und die reinen Status-/Prioritaetsaenderungen bleiben aussen vor: sie schreiben keinen Text unter einer Sprache und lassen darum nichts zurueck, das veralten koennte.

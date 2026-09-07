@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,8 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.FieldLanguageLookup;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 
 /**
  * Scaffold-level check that the adapter declares exactly the five role tools and guards its
@@ -41,6 +44,28 @@ import de.hauschel.arknet.kernel.ResourceId;
  * {@code ConstraintMcpToolsTest} carries for its own multilingual fields.
  */
 class RoleMcpToolsTest {
+
+    /**
+     * The stale-translation signal over an empty store (kogn-io/arknet#474): every test that sets
+     * up no language inventory keeps the answer it always had, because a field that carries no
+     * other language has nothing to report.
+     */
+    private static final StaleTranslationHint NO_TRANSLATIONS = hints(Map.of());
+
+    /** A lookup answering the same field-to-tags inventory for every resource. */
+    private static StaleTranslationHint hints(Map<String, Set<String>> byField) {
+        return new StaleTranslationHint(new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                return byField;
+            }
+        });
+    }
 
     private static final RoleId ID =
             new RoleId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
@@ -54,7 +79,7 @@ class RoleMcpToolsTest {
     private static final ProjectResolver GERMAN_PROJECTS = anchor -> new ResolvedProject(PROJECT, "de");
 
     private final Stub stub = new Stub();
-    private final RoleMcpTools adapter = new RoleMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS);
+    private final RoleMcpTools adapter = new RoleMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS);
 
     @Test
     void declaresTheFiveRoleTools() {
@@ -72,23 +97,23 @@ class RoleMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new RoleMcpTools(null, stub, stub, stub, stub, stub, PROJECTS));
+                () -> new RoleMcpTools(null, stub, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new RoleMcpTools(stub, null, stub, stub, stub, stub, PROJECTS));
+                () -> new RoleMcpTools(stub, null, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new RoleMcpTools(stub, stub, null, stub, stub, stub, PROJECTS));
+                () -> new RoleMcpTools(stub, stub, null, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new RoleMcpTools(stub, stub, stub, null, stub, stub, PROJECTS));
+                () -> new RoleMcpTools(stub, stub, stub, null, stub, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new RoleMcpTools(stub, stub, stub, stub, null, stub, PROJECTS));
+                () -> new RoleMcpTools(stub, stub, stub, stub, null, stub, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
-                () -> new RoleMcpTools(stub, stub, stub, stub, stub, null, PROJECTS));
+                () -> new RoleMcpTools(stub, stub, stub, stub, stub, null, PROJECTS, NO_TRANSLATIONS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new RoleMcpTools(stub, stub, stub, stub, stub, stub, null));
+                () -> new RoleMcpTools(stub, stub, stub, stub, stub, stub, null, NO_TRANSLATIONS));
     }
 
     @Test
@@ -122,7 +147,7 @@ class RoleMcpToolsTest {
     /** {@code role_add}'s {@code language} argument reaches the in-port, and the project's default too. */
     @Test
     void addPassesTheLanguageAndTheProjectDefaultThrough() {
-        RoleMcpTools germanAdapter = new RoleMcpTools(stub, stub, stub, stub, stub, stub, GERMAN_PROJECTS);
+        RoleMcpTools germanAdapter = new RoleMcpTools(stub, stub, stub, stub, stub, stub, GERMAN_PROJECTS, NO_TRANSLATIONS);
 
         germanAdapter.add(null, "Requirements Engineer", null, null, "en", null);
 
@@ -183,7 +208,7 @@ class RoleMcpToolsTest {
     /** {@code role_get}'s {@code displayLocale} argument reaches the in-port, overriding the project default. */
     @Test
     void getPassesAnExplicitDisplayLocaleOverridingTheProjectDefault() {
-        RoleMcpTools germanAdapter = new RoleMcpTools(stub, stub, stub, stub, stub, stub, GERMAN_PROJECTS);
+        RoleMcpTools germanAdapter = new RoleMcpTools(stub, stub, stub, stub, stub, stub, GERMAN_PROJECTS, NO_TRANSLATIONS);
         stub.nextGetResult = Optional.of(roleDetail("ROLE-1", "Requirements Engineer", null));
 
         germanAdapter.get(null, "ROLE-1", "en", null);
@@ -194,7 +219,7 @@ class RoleMcpToolsTest {
     /** Omitting {@code displayLocale} falls back to the project's configured default language. */
     @Test
     void getFallsBackToTheProjectDefaultDisplayLocaleWhenOmitted() {
-        RoleMcpTools germanAdapter = new RoleMcpTools(stub, stub, stub, stub, stub, stub, GERMAN_PROJECTS);
+        RoleMcpTools germanAdapter = new RoleMcpTools(stub, stub, stub, stub, stub, stub, GERMAN_PROJECTS, NO_TRANSLATIONS);
         stub.nextGetResult = Optional.of(roleDetail("ROLE-1", "Requirements Engineer", null));
 
         germanAdapter.get(null, "ROLE-1", null, null);
@@ -253,6 +278,49 @@ class RoleMcpToolsTest {
         return new RoleDetail(new Role(ID, new RoleCode(code), name, description, List.of()), List.of());
     }
 
+
+    // --- stale-translation signal (kogn-io/arknet#474) ------------------------
+
+    /** The corrected role name still carries the other maintained language, from an earlier write. */
+    @Test
+    void updateReportsTheOtherMaintainedLanguageTheCorrectedFieldsStillCarry() {
+        RoleMcpTools bilingual = new RoleMcpTools(stub, stub, stub, stub, stub, stub,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
+                hints(Map.of("name", Set.of("en", "de"), "description", Set.of("en"))));
+
+        stub.nextUpdateResult = roleDetail("ROLE-1", "Senior Requirements Engineer", "New description.");
+        String rendered = bilingual.update(null, "ROLE-1", "Senior Requirements Engineer", "New description.",
+                null, "en", null);
+
+        assertTrue(rendered.contains("de: name"), rendered);
+    }
+
+    /** A project maintaining a single language has no other language to warn about. */
+    @Test
+    void updateStaysSilentForASingleLanguageProject() {
+        RoleMcpTools monolingual = new RoleMcpTools(stub, stub, stub, stub, stub, stub,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en")),
+                hints(Map.of("name", Set.of("en", "de"))));
+
+        stub.nextUpdateResult = roleDetail("ROLE-1", "Senior Requirements Engineer", "New description.");
+        String rendered = monolingual.update(null, "ROLE-1", "Senior Requirements Engineer", null, null,
+                "en", null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    /** Correcting only the occupancy writes no text under any language. */
+    @Test
+    void updateStaysSilentWhenOnlyTheOccupancyChanged() {
+        RoleMcpTools bilingual = new RoleMcpTools(stub, stub, stub, stub, stub, stub,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
+                hints(Map.of("name", Set.of("en", "de"))));
+
+        stub.nextUpdateResult = roleDetail("ROLE-1", "Senior Requirements Engineer", "New description.");
+        String rendered = bilingual.update(null, "ROLE-1", null, null, List.of("ACTOR-2"), null, null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
     /** Structural stub implementing the six driving in-ports. */
     private static final class Stub
             implements AddRole, ListRoles, DescribeRoleDisplayFallback, GetRole, UpdateRole, DeleteRole {

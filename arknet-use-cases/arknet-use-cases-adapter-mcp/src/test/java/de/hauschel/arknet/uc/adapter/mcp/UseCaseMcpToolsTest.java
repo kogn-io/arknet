@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,8 @@ import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.kernel.FieldLanguageLookup;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 
 /**
  * Behaviour of the use-case MCP tools against an in-port fake: tool declaration, mapping of
@@ -71,6 +74,28 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * the opaque {@link UseCaseId} - and {@code uc_get} looks a use case up by that code.</p>
  */
 class UseCaseMcpToolsTest {
+
+    /**
+     * The stale-translation signal over an empty store (kogn-io/arknet#474): every test that sets
+     * up no language inventory keeps the answer it always had, because a field that carries no
+     * other language has nothing to report.
+     */
+    private static final StaleTranslationHint NO_TRANSLATIONS = hints(Map.of());
+
+    /** A lookup answering the same field-to-tags inventory for every resource. */
+    private static StaleTranslationHint hints(Map<String, Set<String>> byField) {
+        return new StaleTranslationHint(new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                return byField;
+            }
+        });
+    }
 
     private static UseCaseId opaqueId(String slug) {
         return new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/" + slug));
@@ -88,7 +113,7 @@ class UseCaseMcpToolsTest {
     private final RecordingResolveRequirements resolveRequirements = new RecordingResolveRequirements();
     private final RecordingResolveConstraints resolveConstraints = new RecordingResolveConstraints();
     private final UseCaseMcpTools adapter = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
-            resolveRoles, resolveTerms, resolveRequirements, resolveConstraints, PROJECTS);
+            resolveRoles, resolveTerms, resolveRequirements, resolveConstraints, PROJECTS, NO_TRANSLATIONS);
 
     @Test
     void declaresTheSixUseCaseTools() {
@@ -117,32 +142,32 @@ class UseCaseMcpToolsTest {
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
                 () -> new UseCaseMcpTools(null, stub, stub, stub, stub, stub, stub, resolveRoles, resolveTerms,
-                        resolveRequirements, resolveConstraints, PROJECTS));
+                        resolveRequirements, resolveConstraints, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new UseCaseMcpTools(stub, null, stub, stub, stub, stub, stub, resolveRoles, resolveTerms,
-                        resolveRequirements, resolveConstraints, PROJECTS));
+                        resolveRequirements, resolveConstraints, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new UseCaseMcpTools(stub, stub, null, stub, stub, stub, stub, resolveRoles, resolveTerms,
-                        resolveRequirements, resolveConstraints, PROJECTS));
+                        resolveRequirements, resolveConstraints, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new UseCaseMcpTools(stub, stub, stub, null, stub, stub, stub, resolveRoles, resolveTerms,
-                        resolveRequirements, resolveConstraints, PROJECTS));
+                        resolveRequirements, resolveConstraints, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new UseCaseMcpTools(stub, stub, stub, stub, null, stub, stub, resolveRoles, resolveTerms,
-                        resolveRequirements, resolveConstraints, PROJECTS));
+                        resolveRequirements, resolveConstraints, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, null, stub, resolveRoles, resolveTerms,
-                        resolveRequirements, resolveConstraints, PROJECTS));
+                        resolveRequirements, resolveConstraints, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class,
                 () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, null, resolveRoles, resolveTerms,
-                        resolveRequirements, resolveConstraints, PROJECTS));
+                        resolveRequirements, resolveConstraints, PROJECTS, NO_TRANSLATIONS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
                 () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveRoles, resolveTerms,
-                        resolveRequirements, resolveConstraints, null));
+                        resolveRequirements, resolveConstraints, null, NO_TRANSLATIONS));
     }
 
     @Test
@@ -209,7 +234,7 @@ class UseCaseMcpToolsTest {
                 null, null, List.of(new Step(1, "select items", List.of())), List.of(), List.of(), List.of()));
         UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
                 resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
-                anchor -> new ResolvedProject(PROJECT, "de"));
+                anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
 
         adapterWithDefault.get(null, "UC1", "en", null);
 
@@ -224,7 +249,7 @@ class UseCaseMcpToolsTest {
                 null, null, List.of(new Step(1, "select items", List.of())), List.of(), List.of(), List.of()));
         UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
                 resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
-                anchor -> new ResolvedProject(PROJECT, "de"));
+                anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
 
         adapterWithDefault.get(null, "UC1", null, null);
 
@@ -245,7 +270,7 @@ class UseCaseMcpToolsTest {
     void listPassesTheProjectsDefaultLanguageThrough() {
         UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
                 resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
-                anchor -> new ResolvedProject(PROJECT, "de"));
+                anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
 
         adapterWithGermanDefault.list(null, null, null);
 
@@ -260,7 +285,7 @@ class UseCaseMcpToolsTest {
     void listPassesAnExplicitDisplayLocaleArgumentThrough() {
         UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
                 resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
-                anchor -> new ResolvedProject(PROJECT, "de"));
+                anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
 
         adapterWithGermanDefault.list(null, "fr", null);
 
@@ -375,7 +400,7 @@ class UseCaseMcpToolsTest {
     void ucLinkTermPassesTheProjectsDefaultLanguageThrough() {
         UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
                 resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
-                anchor -> new ResolvedProject(PROJECT, "de"));
+                anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
 
         adapterWithGermanDefault.linkTerm(null, "UC1", "TERM-1", null);
 
@@ -386,7 +411,7 @@ class UseCaseMcpToolsTest {
     void ucLinkConstraintPassesTheProjectsDefaultLanguageThrough() {
         UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
                 resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
-                anchor -> new ResolvedProject(PROJECT, "de"));
+                anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
 
         adapterWithGermanDefault.linkConstraint(null, "UC1", "TCON-1", null);
 
@@ -625,6 +650,56 @@ class UseCaseMcpToolsTest {
                 .annotations().readOnlyHint();
     }
 
+
+    // --- stale-translation signal (kogn-io/arknet#474) ------------------------
+
+    /**
+     * Correcting a use case in German names every field whose English variant this call left
+     * standing - including the flow, whose step texts live on child resources and are therefore
+     * reported under the edge that owns them.
+     */
+    @Test
+    void updateReportsTheOtherMaintainedLanguageTheCorrectedFieldsStillCarry() {
+        UseCaseMcpTools bilingual = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
+                anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
+                hints(Map.of("title", Set.of("de", "en"), "useCaseGoal", Set.of("de"),
+                        "mainStep", Set.of("de", "en"))));
+
+        String rendered = bilingual.update(null, "UC1", "Neuer Titel", "Neues Ziel", null, null, null, null,
+                null, null, null, List.of(new UseCaseMcpTools.StepPatchInput(1, "korrigiert")), null, null, null,
+                "de", null);
+
+        assertTrue(rendered.contains("en: title, mainStep"), rendered);
+    }
+
+    /** A project maintaining a single language has no other language to warn about. */
+    @Test
+    void updateStaysSilentForASingleLanguageProject() {
+        UseCaseMcpTools monolingual = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
+                anchor -> new ResolvedProject(PROJECT, "de", List.of("de")),
+                hints(Map.of("title", Set.of("de", "en"))));
+
+        String rendered = monolingual.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null,
+                null, null, null, null, null, null, "de", null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    /** Correcting only the role references writes no text under any language. */
+    @Test
+    void updateStaysSilentWhenOnlyTheRoleReferencesChanged() {
+        UseCaseMcpTools bilingual = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
+                anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
+                hints(Map.of("title", Set.of("de", "en"))));
+
+        String rendered = bilingual.update(null, "UC1", null, null, null, null, "ROLE-1", List.of("ROLE-2"),
+                null, null, null, null, null, null, null, null, null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
     /** Structural stub implementing the six driving in-ports. */
     private static final class Stub
             implements AddUseCase, ListUseCases, DescribeUseCaseDisplayFallback, GetUseCase, UpdateUseCase, LinkTerm,
