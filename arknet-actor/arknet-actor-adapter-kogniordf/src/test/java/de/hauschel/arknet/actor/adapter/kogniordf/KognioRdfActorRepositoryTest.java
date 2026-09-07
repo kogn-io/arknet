@@ -75,6 +75,9 @@ class KognioRdfActorRepositoryTest {
     private static final String IDENTIFIER_PROPERTY = "http://purl.org/dc/terms/identifier";
     private static final String NAME_PROPERTY = "https://w3id.org/arknet/core#name";
     private static final String DESCRIPTION_PROPERTY = "https://w3id.org/arknet/core#description";
+    // The pre-ADR-37 use-case edge, deliberately NOT taken from ArkreqVocabulary: the ontology no
+    // longer declares it, mirroring KognioRdfUseCaseRepository's own LEGACY_PRIMARY_ACTOR_PROPERTY.
+    private static final String LEGACY_PRIMARY_ACTOR_PROPERTY = "https://w3id.org/arknet/requirements#primaryActor";
 
     /**
      * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
@@ -776,6 +779,38 @@ class KognioRdfActorRepositoryTest {
 
         assertTrue(repository.findByCode(PROJECT_A, stored.code()).isEmpty(),
                 "a primaryRole edge must no longer block the delete");
+    }
+
+    /**
+     * {@link ActorReferencedException} blocks the delete while a use case written before
+     * ADR-37/kogn-io/arknet#405 Part C still carries the retired {@code arkreq:primaryActor} edge
+     * pointing at the actor. {@code KognioRdfUseCaseRepository} in {@code arknet-use-cases} keeps
+     * reading that edge transitionally (its {@code scalarWhereClause}'s {@code COALESCE} /
+     * {@code readSupportingRoles}' {@code UNION}), so a not-yet-migrated use case still resolves it
+     * against this actor - {@code actor_delete} must keep rejecting it, or {@code uc_get} and the
+     * HTML report would show the bare IRI of a deleted actor until someone migrates the use case.
+     * A hand-inserted triple, since no current write path produces this predicate any more.
+     * Mutation check: removing the {@code
+     * primaryActor}/{@code supportingActor} entries {@link KognioRdfActorRepository} added to
+     * {@code REFERENCING_PREDICATES} turns this test red with an unexpected missing
+     * {@link ActorReferencedException}.
+     */
+    @Test
+    void deleteRejectsAnActorStillReferencedAsPrimaryActor() {
+        Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
+        repository.create(PROJECT_A, stored);
+        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
+                + LEGACY_PRIMARY_ACTOR_PROPERTY + "> <" + stored.id().value().value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(reference);
+                return null;
+            });
+        }
+
+        assertThrows(ActorReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
+        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isPresent(),
+                "a rejected delete must leave the actor untouched");
     }
 
     /**

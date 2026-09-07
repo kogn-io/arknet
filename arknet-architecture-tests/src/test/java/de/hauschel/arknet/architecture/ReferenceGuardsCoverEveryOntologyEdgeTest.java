@@ -114,7 +114,16 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
                         + " - add them to KognioRdfTermRepository.REFERENCING_PREDICATES");
     }
 
-    /** The actor-side counterpart, guarding {@code actor_delete} the same way. */
+    /**
+     * The actor-side counterpart, guarding {@code actor_delete} the same way. The same
+     * {@code containsAll} slack described on {@link #everyPropertyRangingOverAGlossaryTermBlocksTheTermsDeletion}
+     * now holds a compatibility entry here too: {@code KognioRdfActorRepository.REFERENCING_PREDICATES}
+     * carries {@code arkreq:primaryActor}/{@code supportingActor}, the two pre-ADR-37 edges the
+     * shipped ontology no longer declares (they now range over {@link #ROLE_CLASS}), kept only
+     * because {@code KognioRdfUseCaseRepository} still reads them transitionally from data written
+     * before kogn-io/arknet#405 Part C. This test only demands that every range the ontology
+     * declares is covered; an entry beyond that set neither satisfies nor fails it.
+     */
     @Test
     void everyPropertyRangingOverAnActorBlocksTheActorsDeletion() {
         Set<String> pointingAtActors = propertiesRangingOver(ACTOR_CLASS);
