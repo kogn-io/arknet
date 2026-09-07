@@ -160,7 +160,25 @@ public final class AdrMcpTools {
      */
     private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
             + " the answer names the fields that still carry a maintained language this call did not"
-            + " write; repeat the call under each of those languages to keep the translations in step.";
+            + " write; repeat the call under each of those languages to keep the translations in step."
+            + " A field that did not carry the written language yet is being translated, not corrected,"
+            + " and is not reported.";
+
+    private static final String NAME_FIELD = "name";
+    private static final String CONTEXT_FIELD = "adrContext";
+    private static final String DECISION_FIELD = "adrDecision";
+    private static final String CONSEQUENCE_FIELD = "consequence";
+    private static final String CONSIDERED_OPTION_FIELD = "consideredOption";
+
+    /**
+     * The multilingual fields {@code adr_update} can write, as {@code FieldLanguageLookup} keys - the
+     * local names of the predicates behind them, or of the edge owning a child resource's text.
+     * {@code arknet-architecture-tests} reads this list reflectively and holds it against the
+     * {@code sh:uniqueLang} properties the shipped shapes declare for this resource, so a typo or
+     * a renamed predicate fails a build instead of silently muting the signal for that field.
+     */
+    private static final List<String> MULTILINGUAL_FIELDS =
+            List.of(NAME_FIELD, CONTEXT_FIELD, DECISION_FIELD, CONSEQUENCE_FIELD, CONSIDERED_OPTION_FIELD);
 
     private final ProjectResolver projects;
     private final StaleTranslationHint staleTranslations;
@@ -619,10 +637,10 @@ public final class AdrMcpTools {
                 .relatedToCodes(relatedTo)
                 .build();
         final AdrCode code = new AdrCode(id);
+        final String staleHint = staleTranslationHint(project, code, correction, newConsequences,
+                consequenceCorrections, newConsideredOptions, consideredOptionCorrections);
         final AdrDetail updated = updateAdr.update(project.id(), code, correction, project.defaultLanguage());
-        return format(project, updated) + missingContentWarnings(updated.adr())
-                + staleTranslationHint(project, code, correction, newConsequences, consequenceCorrections,
-                        newConsideredOptions, consideredOptionCorrections);
+        return format(project, updated) + missingContentWarnings(updated.adr()) + staleHint;
     }
 
     @McpTool(name = "adr_set_status", description = "Change the lifecycle status of an architecture "
@@ -935,9 +953,14 @@ public final class AdrMcpTools {
 
     /**
      * The stale-translation signal for an {@code adr_update} (kogn-io/arknet#474): the multilingual
-     * fields this call actually wrote, named as {@code store_check} names them - the three prose
+     * fields this call is about to write, named as {@code store_check} names them - the three prose
      * fields of the record itself, plus the two child lists, each keyed by the edge that owns them,
      * because a consequence's and an option's text live on their own resources.
+     *
+     * <p>Asked before the write and appended after it: only the state before tells a correction
+     * from a translation, and here that distinction carries the aggregate's own rule - outside
+     * {@code PROPOSED} a text field accepts nothing but a language it never carried, so a hint
+     * after such a write would recommend the very call {@code Adr} rejects.</p>
      *
      * <p>The four reference lists, the two classification fields and the two removal lists are
      * deliberately absent: none of them writes text under a language, so none leaves anything
@@ -949,14 +972,14 @@ public final class AdrMcpTools {
             final List<NewConsideredOptionInput> newConsideredOptions,
             final List<ConsideredOptionCorrectionInput> consideredOptionCorrections) {
         final List<String> fieldsWritten = new ArrayList<>();
-        addIfWritten(fieldsWritten, "name", correction.name());
-        addIfWritten(fieldsWritten, "adrContext", correction.context());
-        addIfWritten(fieldsWritten, "adrDecision", correction.decision());
+        addIfWritten(fieldsWritten, NAME_FIELD, correction.name());
+        addIfWritten(fieldsWritten, CONTEXT_FIELD, correction.context());
+        addIfWritten(fieldsWritten, DECISION_FIELD, correction.decision());
         if (isNotEmpty(newConsequences) || isNotEmpty(consequenceCorrections)) {
-            fieldsWritten.add("consequence");
+            fieldsWritten.add(CONSEQUENCE_FIELD);
         }
         if (isNotEmpty(newConsideredOptions) || isNotEmpty(consideredOptionCorrections)) {
-            fieldsWritten.add("consideredOption");
+            fieldsWritten.add(CONSIDERED_OPTION_FIELD);
         }
         if (fieldsWritten.isEmpty()) {
             return "";

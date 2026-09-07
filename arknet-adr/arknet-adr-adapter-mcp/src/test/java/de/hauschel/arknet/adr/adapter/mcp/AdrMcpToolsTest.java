@@ -926,6 +926,27 @@ class AdrMcpToolsTest {
         assertTrue(rendered.contains("de: name, consequence"), rendered);
     }
 
+    /**
+     * The second call of a two-language workflow - the field so far carries only the other
+     * language, and this call adds the written one - is a translation, not a correction: the
+     * variant already there is its source, and nothing is stale. For a record outside PROPOSED
+     * this is the only text write the aggregate still accepts, so a hint here would recommend a
+     * call that is rejected. The lookup must therefore see the state before the write.
+     */
+    @Test
+    void updateStaysSilentWhenTheCallAddsATranslation() {
+        AdrMcpTools bilingual = new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                stub, stub, requirements, contexts, terms,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
+                new StaleTranslationHint(lookupBeforeTheWrite(Map.of("name", Set.of("en"),
+                        "adrContext", Set.of("en")))));
+
+        String rendered = bilingual.update(null, "ADR-1", "Ein besserer Titel", "Schaerferer Kontext", null,
+                null, null, null, null, null, null, "de", null, null, null, null, ANCHOR);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
     /** A project maintaining a single language has no other language to warn about. */
     @Test
     void updateStaysSilentForASingleLanguageProject() {
@@ -953,6 +974,27 @@ class AdrMcpToolsTest {
 
         assertFalse(rendered.contains("stale"), rendered);
     }
+    /**
+     * A lookup answering {@code byField} as the state <em>before</em> the write - and failing the
+     * test if the write has already happened when it is asked, because only that state tells a
+     * correction from a translation (kogn-io/arknet#474).
+     */
+    private FieldLanguageLookup lookupBeforeTheWrite(Map<String, Set<String>> byField) {
+        return new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                assertNull(stub.lastUpdatedCode, "the lookup must run before the write");
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                assertNull(stub.lastUpdatedCode, "the lookup must run before the write");
+                return byField;
+            }
+        };
+    }
+
     /** Structural stub implementing the nine driving in-ports. */
     private static final class Stub
             implements AddAdr, ListAdrs, CountSkippedAdrs, DescribeAdrDisplayFallback, GetAdr, UpdateAdr, AcceptAdr,

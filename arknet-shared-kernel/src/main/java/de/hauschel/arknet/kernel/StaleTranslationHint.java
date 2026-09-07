@@ -16,9 +16,9 @@ import java.util.Set;
  * standing - without an error and, before this, without a word. This renders that word, once,
  * for all seven update tools that touch a multilingual field.
  *
- * <p><strong>Never blocks, never guesses.</strong> The write has already happened when this runs;
- * the result is a block appended to the tool's answer, nothing more. A hint is produced only where
- * all three of its inputs actually say something:</p>
+ * <p><strong>Never blocks, never guesses.</strong> The result is a block the tool appends to its
+ * answer once the write has succeeded, nothing more. A hint is produced only where all four of
+ * its inputs actually say something:</p>
  *
  * <ul>
  *   <li>the call wrote a language (a write that resolved to no tag at all - {@code
@@ -26,10 +26,25 @@ import java.util.Set;
  *   <li>the project maintains a language other than the one written (an empty or single-entry
  *       set is no promise, and without a promise incompleteness is undefined - the whole point of
  *       kogn-io/arknet#412);</li>
- *   <li>the field being written actually carries that other language. A field that does not is a
+ *   <li>the field being written already carried the written language <em>before</em> the call.
+ *       A field that did not is being <em>translated</em>, not corrected: the other variant is
+ *       the source the caller just rendered into a further language, and nothing about it is
+ *       out of date. This is the second half of this repository's own two-call workflow, and
+ *       for an ADR outside {@code PROPOSED} it is the only write its text fields still accept -
+ *       a hint there would recommend the very call the aggregate rejects;</li>
+ *   <li>the field actually carries that other language. A field that does not is a
  *       <em>gap</em>, which {@code store_check}'s LANGUAGE check reports; calling it stale here
  *       would report the same thing twice and get it wrong once.</li>
  * </ul>
+ *
+ * <h2>Before the write, not after</h2>
+ *
+ * <p>The third rule is only decidable from the state <em>before</em> the write - afterwards the
+ * field carries the written language whether the call corrected it or added it. So a tool asks
+ * this class before it calls its service and appends the answer after the service returned:
+ * one store read more when the write then fails, and a snapshot a concurrent writer may age by
+ * the time it is shown, both of which a hint can afford. A write never removes another
+ * language's variant, so the tags the other rules need are the same before and after.</p>
  *
  * <h2>What the store can and cannot say</h2>
  *
@@ -59,15 +74,16 @@ public final class StaleTranslationHint {
     }
 
     /**
-     * The hint for a write to a model resource, ready to append to that tool's answer.
+     * The hint for a write to a model resource, to be asked <em>before</em> the write and
+     * appended to that tool's answer after it succeeded (see the class comment for why).
      *
-     * @param projectId           the project the write targeted
-     * @param code                the written resource's business code (e.g. {@code FR-3})
-     * @param writtenLanguage     the BCP-47 tag this call actually wrote under, or {@code null}
-     *                            if it wrote none
+     * @param projectId           the project the write targets
+     * @param code                the resource's business code (e.g. {@code FR-3})
+     * @param writtenLanguage     the BCP-47 tag this call writes under, or {@code null} if it
+     *                            writes none
      * @param maintainedLanguages the project's declared language set
      *                            ({@link ResolvedProject#maintainedLanguages()})
-     * @param fieldsWritten       the multilingual fields this call actually wrote, as
+     * @param fieldsWritten       the multilingual fields this call is about to write, as
      *                            {@link FieldLanguageLookup} keys, in the order they should be
      *                            reported
      * @return the block to append - empty when there is nothing to report, otherwise separated
@@ -84,16 +100,17 @@ public final class StaleTranslationHint {
 
     /**
      * The hint for a write to a project's own registry record ({@code project_update}) - same
-     * rules, different lookup, because that record lives in the reserved system dataset rather
-     * than in the project's own (see {@link FieldLanguageLookup#ofProjectRegistration}).
+     * rules and the same timing, different lookup, because that record lives in the reserved
+     * system dataset rather than in the project's own (see
+     * {@link FieldLanguageLookup#ofProjectRegistration}).
      *
      * @param projectLabel        the project's label, as its registry record carries it
-     * @param writtenLanguage     the BCP-47 tag this call actually wrote under, or {@code null}
-     * @param maintainedLanguages the project's declared language set <em>after</em> this call -
-     *                            {@code project_update} can change the set in the same breath as
-     *                            the description, and the promise that counts is the one now in
-     *                            force
-     * @param fieldsWritten       the multilingual fields this call actually wrote
+     * @param writtenLanguage     the BCP-47 tag this call writes under, or {@code null}
+     * @param maintainedLanguages the project's declared language set as this call will
+     *                            <em>leave</em> it - {@code project_update} can change the set in
+     *                            the same breath as the description, and the promise that counts
+     *                            is the one in force once it returns
+     * @param fieldsWritten       the multilingual fields this call is about to write
      * @return the block to append, as in {@link #forResource}
      */
     public String forProjectRegistration(final String projectLabel, final String writtenLanguage,
@@ -109,12 +126,14 @@ public final class StaleTranslationHint {
      * Renders the hint from the three facts it needs, with no lookup involved - the whole rule
      * set of this class, and the seam the rules are tested through.
      *
-     * @param writtenLanguage     the BCP-47 tag this call wrote under, or {@code null}/blank if
-     *                            it wrote none
+     * @param writtenLanguage     the BCP-47 tag this call writes under, or {@code null}/blank if
+     *                            it writes none
      * @param maintainedLanguages the project's declared language set, in the order the project
      *                            declared it (the order the hint lists them in)
-     * @param languagesByField    the fields this call wrote, in reporting order, each mapped to
-     *                            the tags that field carries in the store
+     * @param languagesByField    the fields this call writes, in reporting order, each mapped to
+     *                            the tags that field carries in the store <em>before</em> the
+     *                            write - a field not yet carrying the written language is being
+     *                            translated and never reported
      * @return the hint, or the empty string when nothing qualifies
      */
     public static String render(final String writtenLanguage, final List<String> maintainedLanguages,
@@ -128,6 +147,7 @@ public final class StaleTranslationHint {
         final SequencedMap<String, List<String>> fieldsByLanguage = new LinkedHashMap<>();
         for (final String language : otherLanguages) {
             final List<String> fields = languagesByField.entrySet().stream()
+                    .filter(field -> containsIgnoringCase(field.getValue(), writtenLanguage))
                     .filter(field -> containsIgnoringCase(field.getValue(), language))
                     .map(Map.Entry::getKey)
                     .toList();
@@ -169,9 +189,9 @@ public final class StaleTranslationHint {
     }
 
     /**
-     * Restricts the lookup's answer to the fields this call wrote, in the order the caller named
-     * them, and renders the hint over that - a field the lookup knows nothing about contributes
-     * an empty tag set and therefore never a line.
+     * Restricts the lookup's answer to the fields this call is about to write, in the order the
+     * caller named them, and renders the hint over that - a field the lookup knows nothing about
+     * contributes an empty tag set and therefore never a line.
      */
     private static String section(final Map<String, Set<String>> inStore, final String writtenLanguage,
             final List<String> maintainedLanguages, final List<String> fieldsWritten) {

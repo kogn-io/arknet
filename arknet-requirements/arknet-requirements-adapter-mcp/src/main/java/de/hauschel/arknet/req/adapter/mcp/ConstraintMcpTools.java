@@ -79,7 +79,21 @@ public final class ConstraintMcpTools {
      */
     private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
             + " the answer names the fields that still carry a maintained language this call did not"
-            + " write; repeat the call under each of those languages to keep the translations in step.";
+            + " write; repeat the call under each of those languages to keep the translations in step."
+            + " A field that did not carry the written language yet is being translated, not corrected,"
+            + " and is not reported.";
+
+    private static final String TITLE_FIELD = "title";
+    private static final String STATEMENT_FIELD = "constraintStatement";
+
+    /**
+     * The multilingual fields {@code constraint_update} can write, as {@code FieldLanguageLookup} keys - the
+     * local names of the predicates behind them, or of the edge owning a child resource's text.
+     * {@code arknet-architecture-tests} reads this list reflectively and holds it against the
+     * {@code sh:uniqueLang} properties the shipped shapes declare for this resource, so a typo or
+     * a renamed predicate fails a build instead of silently muting the signal for that field.
+     */
+    private static final List<String> MULTILINGUAL_FIELDS = List.of(TITLE_FIELD, STATEMENT_FIELD);
 
     private final AddConstraint addConstraint;
     private final ListConstraints listConstraints;
@@ -281,11 +295,11 @@ public final class ConstraintMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ConstraintCode code = new ConstraintCode(id);
+        final String staleHint = staleTranslationHint(project, code, blankToNull(language), blankToNull(title),
+                blankToNull(statement));
         final Constraint updated = updateConstraint.update(project.id(), code, blankToNull(title),
                 blankToNull(statement), blankToNull(language), project.defaultLanguage());
-        return presenter.format(updated)
-                + staleTranslationHint(project, code, blankToNull(language), blankToNull(title),
-                        blankToNull(statement));
+        return presenter.format(updated) + staleHint;
     }
 
     @McpTool(name = "constraint_delete",
@@ -338,16 +352,18 @@ public final class ConstraintMcpTools {
 
     /**
      * The stale-translation signal for a {@code constraint_update} (kogn-io/arknet#474): the
-     * multilingual fields this call actually wrote, named as {@code store_check} names them.
+     * multilingual fields this call is about to write, named as {@code store_check} names them.
+     * Asked before the write and appended after it, because only the state before tells a
+     * correction from a translation (see {@link StaleTranslationHint}).
      */
     private String staleTranslationHint(final ResolvedProject project, final ConstraintCode code,
             final String language, final String title, final String statement) {
         final List<String> fieldsWritten = new ArrayList<>();
         if (title != null) {
-            fieldsWritten.add("title");
+            fieldsWritten.add(TITLE_FIELD);
         }
         if (statement != null) {
-            fieldsWritten.add("constraintStatement");
+            fieldsWritten.add(STATEMENT_FIELD);
         }
         if (fieldsWritten.isEmpty()) {
             return "";

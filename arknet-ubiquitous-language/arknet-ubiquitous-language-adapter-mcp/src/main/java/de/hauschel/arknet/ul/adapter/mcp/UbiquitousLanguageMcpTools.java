@@ -87,7 +87,9 @@ public final class UbiquitousLanguageMcpTools {
      */
     private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
             + " the answer names the fields that still carry a maintained language this call did not"
-            + " write; repeat the call under each of those languages to keep the translations in step.";
+            + " write; repeat the call under each of those languages to keep the translations in step."
+            + " A field that did not carry the written language yet is being translated, not corrected,"
+            + " and is not reported.";
 
     private static final String PROJECT_ANCHOR_DESCRIPTION = "Optional anchor identifying the project this call "
             + "targets, used INSTEAD of the anchor your transport sends in the "
@@ -103,6 +105,18 @@ public final class UbiquitousLanguageMcpTools {
     private final UpdateTerm updateTerm;
     private final DeleteTerm deleteTerm;
     private final ProjectResolver projects;
+    private static final String DEFINITION_FIELD = "definition";
+
+    /**
+     * The multilingual fields {@code term_update} reports, as {@code FieldLanguageLookup} keys -
+     * the local names of the predicates behind them. {@code prefLabel} is multilingual too but
+     * deliberately absent (see {@link #staleTranslationHint}). {@code arknet-architecture-tests}
+     * reads this list reflectively and holds it against the {@code sh:uniqueLang} properties the
+     * shipped shapes declare for a term, so a typo or a renamed predicate fails a build instead
+     * of silently muting the signal for that field.
+     */
+    private static final List<String> MULTILINGUAL_FIELDS = List.of(DEFINITION_FIELD);
+
     private final StaleTranslationHint staleTranslations;
 
     /**
@@ -339,9 +353,10 @@ public final class UbiquitousLanguageMcpTools {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
         final Optional<TermCode> broaderPatch = parseBroaderPatch(broader);
+        final String staleHint = staleTranslationHint(project, code, blankToNull(definition), blankToNull(language));
         final Term updated = updateTerm.update(project.id(), code, blankToNull(label), blankToNull(definition),
                 blankToNull(language), project.defaultLanguage(), broaderPatch, toTermCodes(related));
-        return format(updated) + staleTranslationHint(project, code, blankToNull(definition), blankToNull(language));
+        return format(updated) + staleHint;
     }
 
     @McpTool(name = "term_delete",
@@ -434,7 +449,9 @@ public final class UbiquitousLanguageMcpTools {
 
     /**
      * The stale-translation signal for a {@code term_update} (kogn-io/arknet#474): which other
-     * maintained language the corrected definition still carries from an earlier write.
+     * maintained language the corrected definition still carries from an earlier write. Asked
+     * before the write and appended after it, because only the state before tells a correction
+     * from a translation (see {@link StaleTranslationHint}).
      *
      * <p><strong>Only the definition takes part.</strong> A glossary term is the same word under
      * every language (kogn-io/arknet#502, FR-10), so {@code prefLabel} cannot go stale in the
@@ -449,7 +466,7 @@ public final class UbiquitousLanguageMcpTools {
         }
         return staleTranslations.forResource(project.id(), code.value(),
                 LanguageTag.writtenLanguage(language, project.defaultLanguage()),
-                project.maintainedLanguages(), List.of("definition"));
+                project.maintainedLanguages(), MULTILINGUAL_FIELDS);
     }
 
 }

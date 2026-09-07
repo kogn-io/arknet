@@ -6,6 +6,7 @@ package de.hauschel.arknet.prj.adapter.mcp;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
@@ -376,15 +377,15 @@ class ProjectMcpToolsTest {
 
     /**
      * Correcting the description in German says that the English one is still there from an
-     * earlier write. The language set compared against is the one this very call left in force.
+     * earlier write.
      */
     @Test
     void updateReportsTheOtherMaintainedLanguageTheCorrectedDescriptionStillCarries() {
         final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
-        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor));
-        resolveProject.register(callerAnchor, target);
-        updateProject.result = new Project(target.id(), target.label(), target.anchors(),
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor),
                 "Ein Beispielprojekt.", "de", List.of("de", "en"));
+        resolveProject.register(callerAnchor, target);
+        updateProject.result = target;
         final ProjectMcpTools bilingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
                 renameProject, updateProject, listProjects, listAdoptable, resolveProject,
                 hints(Map.of("description", Set.of("de", "en"))));
@@ -395,14 +396,60 @@ class ProjectMcpToolsTest {
         assertTrue(rendered.contains("en: description"), rendered);
     }
 
+    /**
+     * The language set compared against is the one this very call leaves in force: a call that
+     * declares the set and corrects the description in the same breath is measured against the
+     * set it declares, not against the one the caller had before.
+     */
+    @Test
+    void updateComparesAgainstTheLanguageSetTheCallItselfDeclares() {
+        final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor),
+                "Ein Beispielprojekt.", "de", List.of("de"));
+        resolveProject.register(callerAnchor, target);
+        updateProject.result = new Project(target.id(), target.label(), target.anchors(),
+                "Ein Beispielprojekt.", "de", List.of("de", "en"));
+        final ProjectMcpTools bilingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
+                renameProject, updateProject, listProjects, listAdoptable, resolveProject,
+                hints(Map.of("description", Set.of("de", "en"))));
+
+        final String rendered = bilingual.update(contextWithOrigin("/home/f/DEV/arknet"),
+                "Ein Beispielprojekt.", "de", null, List.of("de", "en"), null);
+
+        assertTrue(rendered.contains("en: description"), rendered);
+    }
+
+    /**
+     * The second call of a two-language workflow - the field so far carries only the other
+     * language, and this call adds the written one - is a translation, not a correction: the
+     * variant already there is its source, and nothing is stale. The lookup must therefore see
+     * the state before the write.
+     */
+    @Test
+    void updateStaysSilentWhenTheCallAddsATranslation() {
+        final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor),
+                "Ein Beispielprojekt.", "de", List.of("de", "en"));
+        resolveProject.register(callerAnchor, target);
+        updateProject.result = target;
+        final ProjectMcpTools bilingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
+                renameProject, updateProject, listProjects, listAdoptable, resolveProject,
+                new StaleTranslationHint(lookupBeforeTheWrite(Map.of("description", Set.of("de")))));
+
+        final String rendered = bilingual.update(contextWithOrigin("/home/f/DEV/arknet"),
+                "An example project.", "en", null, null, null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
     /** A project maintaining a single language has no other language to warn about. */
     @Test
     void updateStaysSilentForASingleLanguageProject() {
         final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
-        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor));
-        resolveProject.register(callerAnchor, target);
-        updateProject.result = new Project(target.id(), target.label(), target.anchors(),
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor),
                 "Ein Beispielprojekt.", "de", List.of("de"));
+        resolveProject.register(callerAnchor, target);
+        updateProject.result = target;
         final ProjectMcpTools monolingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
                 renameProject, updateProject, listProjects, listAdoptable, resolveProject,
                 hints(Map.of("description", Set.of("de", "en"))));
@@ -421,10 +468,10 @@ class ProjectMcpToolsTest {
     @Test
     void updateStaysSilentForAnUntaggedDescription() {
         final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
-        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor));
-        resolveProject.register(callerAnchor, target);
-        updateProject.result = new Project(target.id(), target.label(), target.anchors(),
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor),
                 "Ein Beispielprojekt.", "de", List.of("de", "en"));
+        resolveProject.register(callerAnchor, target);
+        updateProject.result = target;
         final ProjectMcpTools bilingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
                 renameProject, updateProject, listProjects, listAdoptable, resolveProject,
                 hints(Map.of("description", Set.of("de", "en"))));
@@ -434,6 +481,27 @@ class ProjectMcpToolsTest {
 
         assertFalse(rendered.contains("stale"), rendered);
     }
+    /**
+     * A lookup answering {@code byField} as the state <em>before</em> the write - and failing the
+     * test if the write has already happened when it is asked, because only that state tells a
+     * correction from a translation (kogn-io/arknet#474).
+     */
+    private FieldLanguageLookup lookupBeforeTheWrite(final Map<String, Set<String>> byField) {
+        return new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(final ProjectId projectId, final String code) {
+                assertNull(updateProject.lastProjectId, "the lookup must run before the write");
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(final String projectLabel) {
+                assertNull(updateProject.lastProjectId, "the lookup must run before the write");
+                return byField;
+            }
+        };
+    }
+
     /** Structural fake implementing {@link RegisterProject}. */
     private static final class FakeRegisterProject implements RegisterProject {
         private String lastLabel;

@@ -66,7 +66,21 @@ public final class RoleMcpTools {
      */
     private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
             + " the answer names the fields that still carry a maintained language this call did not"
-            + " write; repeat the call under each of those languages to keep the translations in step.";
+            + " write; repeat the call under each of those languages to keep the translations in step."
+            + " A field that did not carry the written language yet is being translated, not corrected,"
+            + " and is not reported.";
+
+    private static final String NAME_FIELD = "name";
+    private static final String DESCRIPTION_FIELD = "description";
+
+    /**
+     * The multilingual fields {@code role_update} can write, as {@code FieldLanguageLookup} keys - the
+     * local names of the predicates behind them, or of the edge owning a child resource's text.
+     * {@code arknet-architecture-tests} reads this list reflectively and holds it against the
+     * {@code sh:uniqueLang} properties the shipped shapes declare for this resource, so a typo or
+     * a renamed predicate fails a build instead of silently muting the signal for that field.
+     */
+    private static final List<String> MULTILINGUAL_FIELDS = List.of(NAME_FIELD, DESCRIPTION_FIELD);
 
     private final AddRole addRole;
     private final ListRoles listRoles;
@@ -262,10 +276,11 @@ public final class RoleMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final RoleCode code = new RoleCode(id);
+        final String staleHint = staleTranslationHint(project, code, blankToNull(language), blankToNull(name),
+                blankToNull(description));
         final RoleDetail updated = updateRole.update(project.id(), code, blankToNull(name), blankToNull(description),
                 filledBy, blankToNull(language), project.defaultLanguage());
-        return presenter.format(updated) + staleTranslationHint(project, code, blankToNull(language),
-                blankToNull(name), blankToNull(description));
+        return presenter.format(updated) + staleHint;
     }
 
     @McpTool(name = "role_delete",
@@ -321,7 +336,9 @@ public final class RoleMcpTools {
 
     /**
      * The stale-translation signal for a {@code role_update} (kogn-io/arknet#474): the multilingual
-     * fields this call actually wrote, named as {@code store_check} names them.
+     * fields this call is about to write, named as {@code store_check} names them. Asked before
+     * the write and appended after it, because only the state before tells a correction from a
+     * translation (see {@link StaleTranslationHint}).
      *
      * <p>{@code filledBy} is deliberately absent: an occupancy edge carries no text under any
      * language and so leaves nothing behind to go stale. This is also the line between the two
@@ -332,10 +349,10 @@ public final class RoleMcpTools {
             final String language, final String name, final String description) {
         final List<String> fieldsWritten = new ArrayList<>();
         if (name != null) {
-            fieldsWritten.add("name");
+            fieldsWritten.add(NAME_FIELD);
         }
         if (description != null) {
-            fieldsWritten.add("description");
+            fieldsWritten.add(DESCRIPTION_FIELD);
         }
         if (fieldsWritten.isEmpty()) {
             return "";

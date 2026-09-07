@@ -403,6 +403,22 @@ class UbiquitousLanguageMcpToolsTest {
         assertTrue(rendered.contains("en: definition"), rendered);
     }
 
+    /**
+     * The second call of a two-language workflow - the field so far carries only the other
+     * language, and this call adds the written one - is a translation, not a correction: the
+     * variant already there is its source, and nothing is stale. The lookup must therefore see
+     * the state before the write.
+     */
+    @Test
+    void updateStaysSilentWhenTheCallAddsATranslation() {
+        UbiquitousLanguageMcpTools bilingual = new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub,
+                PROJECTS_BILINGUAL, new StaleTranslationHint(lookupBeforeTheWrite(Map.of("definition", Set.of("de")))));
+
+        String rendered = bilingual.update(null, "TERM-1", null, "new definition", null, null, "en", null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
     /** A project maintaining a single language has no other language to warn about. */
     @Test
     void updateStaysSilentForASingleLanguageProject() {
@@ -426,6 +442,27 @@ class UbiquitousLanguageMcpToolsTest {
         String rendered = bilingual.update(null, "TERM-1", "Kunde", null, null, null, "de", null);
 
         assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    /**
+     * A lookup answering {@code byField} as the state <em>before</em> the write - and failing the
+     * test if the write has already happened when it is asked, because only that state tells a
+     * correction from a translation (kogn-io/arknet#474).
+     */
+    private FieldLanguageLookup lookupBeforeTheWrite(Map<String, Set<String>> byField) {
+        return new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                assertNull(stub.lastUpdatedTerm, "the lookup must run before the write");
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                assertNull(stub.lastUpdatedTerm, "the lookup must run before the write");
+                return byField;
+            }
+        };
     }
 
     /** Structural stub implementing the six driving in-ports. */

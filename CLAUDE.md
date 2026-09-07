@@ -66,7 +66,7 @@ Details: `arknet-mcp/CLAUDE.md`
 Details: `arknet-persistence-support/CLAUDE.md`
 - **arknet-persistence-test-support**: Test-Support derselben kognio-rdf-Out-Adapter -- die geteilten Dekoratoren GuardedLifecycle/GuardedHandle/GuardSyncTx fuer DatasetLifecycle/DatasetHandle/DatasetTx, mit denen die `*RealStoreConcurrencyTest` der BCs eine gewaehlte Verschraenkung zweier Schreiber gegen den echten On-Disk-Store festnageln; gewoehnliches main-Scope-Artefakt (kein `test-jar`-Classifier), von den Konsumenten im test-Scope gezogen.
 Details: `arknet-persistence-test-support/CLAUDE.md`
-- **arknet-architecture-tests**: Invarianten, die der Modulschnitt nicht erzwingen kann -- ArchUnit-Dependency-Regeln, der beidseitige Abgleich von `ArkprovVocabulary`/`ArkprjVocabulary`/`ArkarchVocabulary`/`ArkdddVocabulary`/`ArkprocVocabulary` gegen die ausgelieferte Provenance-, Projekt-, Architektur-, DDD- bzw. Actor-Ontologie plus der Abgleich der Loeschschutz-Listen von `term_delete`/`actor_delete`/`constraint_delete` gegen jede Ontologie-Property, die auf einen Term, Actor bzw. Constraint zeigt, und der Abgleich des Ontologie-Versions-Scans von `arknet-mcp`s `OntologyVersions` gegen einen echten Parse derselben Dateien. Details: `arknet-architecture-tests/CLAUDE.md`
+- **arknet-architecture-tests**: Invarianten, die der Modulschnitt nicht erzwingen kann -- ArchUnit-Dependency-Regeln, der beidseitige Abgleich von `ArkprovVocabulary`/`ArkprjVocabulary`/`ArkarchVocabulary`/`ArkdddVocabulary`/`ArkprocVocabulary` gegen die ausgelieferte Provenance-, Projekt-, Architektur-, DDD- bzw. Actor-Ontologie plus der Abgleich der Loeschschutz-Listen von `term_delete`/`actor_delete`/`constraint_delete` gegen jede Ontologie-Property, die auf einen Term, Actor bzw. Constraint zeigt, der Abgleich der Feldschluessel des Stale-Translation-Signals jedes `*_update` gegen die `sh:uniqueLang`-Properties der Shapes und der Abgleich des Ontologie-Versions-Scans von `arknet-mcp`s `OntologyVersions` gegen einen echten Parse derselben Dateien. Details: `arknet-architecture-tests/CLAUDE.md`
 - **arknet-requirements**: erste hexagonale BC -- Requirement-Lifecycle (`req_*`-Tools), usesTerm-Kante ins Glossar (`arkreq:usesTerm`, seit Issue #329 auch von UseCase aus setzbar, die Kante bleibt aber requirements-BC-eigen), opake Identitaet, acceptanceCriterion.
 Traegt zusaetzlich Constraint als zweiten Ressourcentyp desselben Hexagons (`constraint_add`/`constraint_get`/`constraint_list`/`constraint_update`/`constraint_delete`, `req_link_constraint` fuer die `oslc_rm:constrainedBy`-Kante) -- technische/geschaeftliche/regulatorische Randbedingungen, TCON-/BCON-/RCON-Codes; Typ und Code stehen mit der Anlage fest, Titel und Statement sind korrigierbar und mehrsprachig.
 Details: `arknet-requirements/CLAUDE.md`
@@ -172,7 +172,10 @@ einsprachig bleiben. Die Werkzeugseite dieses Umstands ist ein Signal, kein
 Zwang: jedes `*_update`, das ein mehrsprachiges Feld schreibt, haengt an seine
 Antwort, welche der vom Projekt gefuehrten Sprachen (`arkprj:maintainedLanguage`)
 das geschriebene Feld noch traegt, ohne dass dieser Aufruf sie geschrieben haette
--- also vermutlich veraltet ist. Der Mechanismus dahinter (`StaleTranslationHint`
+-- also moeglicherweise veraltet ist. Ein Feld, das die geschriebene Sprache
+vorher nicht trug, wird uebersetzt, nicht korrigiert, und bekommt keinen
+Hinweis; darum wird der Bestand vor dem Schreiben nachgeschlagen. Der
+Mechanismus dahinter (`StaleTranslationHint`
 + `FieldLanguageLookup` im Shared Kernel, im Composition Root ueber den
 generischen Store-Lesepfad bedient) ist einer fuer alle sieben Tools; er blockt
 nie und behauptet keine Revision je Sprachvariante -- der WriteFunnel fuehrt

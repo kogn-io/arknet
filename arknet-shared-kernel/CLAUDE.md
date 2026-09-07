@@ -110,21 +110,34 @@ Sortier- und Zaehl-Parse nicht auseinanderdriften koennen.
 Seit kogn-io/arknet#474 traegt `LanguageTag` zusaetzlich `writtenLanguage(String explicit, String
 projectDefaultLanguage)` -- dieselbe Entscheidung wie `resolveWriteLanguage`, aber ohne Ablehnung:
 sie liefert `null`, wo jene `MissingDefaultLanguageException` wirft.
-Der Unterschied ist der Zeitpunkt: `resolveWriteLanguage` entscheidet, ob ein Schreiben stattfinden
-darf, `writtenLanguage` benennt nachtraeglich nur, unter welchem Tag ein bereits erfolgtes Schreiben
-gelandet ist -- dort nochmals abzulehnen machte aus einem Hinweis eine zweite, spaetere Absage eines
-Aufrufs, der schon durch ist.
+Der Unterschied ist die Zustaendigkeit: `resolveWriteLanguage` entscheidet, ob ein Schreiben
+stattfinden darf, `writtenLanguage` benennt nur, unter welchem Tag es landet -- dort nochmals
+abzulehnen liesse einen Hinweis den Aufruf ein zweites Mal absagen, vor dem Service, dem die
+Entscheidung gehoert.
 
-Denselben Zeitpunkt bedient das Paar `FieldLanguageLookup` (Port) und `StaleTranslationHint`
+Dieselbe Zustaendigkeit hat das Paar `FieldLanguageLookup` (Port) und `StaleTranslationHint`
 (Mechanismus), das Signal aus kogn-io/arknet#474.
-`StaleTranslationHint` beantwortet nach jedem `*_update`, das ein mehrsprachiges Feld schreibt, die
+`StaleTranslationHint` beantwortet fuer jedes `*_update`, das ein mehrsprachiges Feld schreibt, die
 Frage "welche vom Projekt gefuehrte Sprache traegt dieses Feld noch, die dieser Aufruf nicht
-geschrieben hat" -- ein Hinweisblock an der Antwort, nie eine Ablehnung.
-Ein Hinweis entsteht nur, wenn alle drei Eingaben etwas sagen: der Aufruf hat eine Sprache
-geschrieben, das Projekt fuehrt eine andere (`ResolvedProject#maintainedLanguages`), und das
-geschriebene Feld traegt diese andere tatsaechlich -- traegt es sie nicht, ist das eine **Luecke**,
-die `store_check LANGUAGE` meldet, und sie hier "veraltet" zu nennen waere dieselbe Aussage doppelt
-und einmal falsch.
+schreibt" -- ein Hinweisblock an der Antwort, nie eine Ablehnung.
+Ein Hinweis entsteht nur, wenn alle vier Eingaben etwas sagen: der Aufruf schreibt eine Sprache, das
+Projekt fuehrt eine andere (`ResolvedProject#maintainedLanguages`), das Feld trug die geschriebene
+Sprache schon vorher, und es traegt die andere tatsaechlich.
+Traegt es die andere nicht, ist das eine **Luecke**, die `store_check LANGUAGE` meldet, und sie hier
+"veraltet" zu nennen waere dieselbe Aussage doppelt und einmal falsch.
+Trug es die geschriebene Sprache vorher nicht, wird **uebersetzt**, nicht korrigiert: die vorhandene
+Variante ist die Quelle der Uebersetzung, nichts ist veraltet -- der zweite Aufruf des eigenen
+Zwei-Aufrufe-Workflows endet ohne Hinweis, und bei einer ADR ausserhalb `PROPOSED` ist genau dieser
+Write der einzige, den die Textfelder noch annehmen (ein Hinweis dort empfoehle den Aufruf, den
+`Adr` ablehnt).
+Diese dritte Bedingung ist nur am Zustand **vor** dem Write entscheidbar -- danach traegt das Feld
+die Sprache so oder so.
+Darum fragt der In-Adapter den Hinweis vor dem Service-Aufruf ab und haengt ihn nach dessen Rueckkehr
+an: ein Store-Read mehr, wenn der Write scheitert, und ein Schnappschuss, den ein nebenlaeufiger
+Schreiber altern lassen kann -- beides traegt ein Hinweis.
+Die Feldschluessel jedes Adapters stehen in einer privaten `MULTILINGUAL_FIELDS`-Liste, die
+`arknet-architecture-tests` (`StaleTranslationFieldsMatchShapesTest`) reflektiv gegen die
+`sh:uniqueLang`-Properties der ausgelieferten Shapes haelt.
 Die Formulierung bleibt bewusst bei "dieser Aufruf hat sie nicht geschrieben": der WriteFunnel
 zeichnet je Write **eine** Revision pro Ressource auf, nie eine pro Literal, also gibt es keine
 Revision je Sprachvariante, an der sich "aelter" belegen liesse; belegbar ist allein, dass ein Write

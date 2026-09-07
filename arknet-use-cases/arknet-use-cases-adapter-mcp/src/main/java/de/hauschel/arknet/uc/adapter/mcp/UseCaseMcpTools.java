@@ -110,7 +110,28 @@ public final class UseCaseMcpTools {
      */
     private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
             + " the answer names the fields that still carry a maintained language this call did not"
-            + " write; repeat the call under each of those languages to keep the translations in step.";
+            + " write; repeat the call under each of those languages to keep the translations in step."
+            + " A field that did not carry the written language yet is being translated, not corrected,"
+            + " and is not reported.";
+
+    private static final String TITLE_FIELD = "title";
+    private static final String GOAL_FIELD = "useCaseGoal";
+    private static final String SCOPE_FIELD = "designScope";
+    private static final String TRIGGER_FIELD = "trigger";
+    private static final String PRECONDITION_FIELD = "useCasePrecondition";
+    private static final String POSTCONDITION_FIELD = "useCasePostcondition";
+    private static final String MAIN_STEP_FIELD = "mainStep";
+    private static final String EXTENSION_STEP_FIELD = "extensionStep";
+
+    /**
+     * The multilingual fields {@code uc_update} can write, as {@code FieldLanguageLookup} keys - the
+     * local names of the predicates behind them, or of the edge owning a child resource's text.
+     * {@code arknet-architecture-tests} reads this list reflectively and holds it against the
+     * {@code sh:uniqueLang} properties the shipped shapes declare for this resource, so a typo or
+     * a renamed predicate fails a build instead of silently muting the signal for that field.
+     */
+    private static final List<String> MULTILINGUAL_FIELDS = List.of(TITLE_FIELD, GOAL_FIELD, SCOPE_FIELD,
+            TRIGGER_FIELD, PRECONDITION_FIELD, POSTCONDITION_FIELD, MAIN_STEP_FIELD, EXTENSION_STEP_FIELD);
 
     private final AddUseCase addUseCase;
     private final ListUseCases listUseCases;
@@ -529,9 +550,10 @@ public final class UseCaseMcpTools {
                 .removeMainStepPositions(toRemovedPositions(removeMainStepPositions))
                 .language(blankToNull(language))
                 .build();
+        final String staleHint = staleTranslationHint(project, code, correction, extensions, stepTextPatches,
+                newMainSteps);
         final UseCase updated = updateUseCase.update(project.id(), code, correction, project.defaultLanguage());
-        return presenter.formatFull(project.id(), updated, null)
-                + staleTranslationHint(project, code, correction, extensions, stepTextPatches, newMainSteps);
+        return presenter.formatFull(project.id(), updated, null) + staleHint;
     }
 
     @McpTool(name = "uc_link_term",
@@ -683,9 +705,11 @@ public final class UseCaseMcpTools {
 
     /**
      * The stale-translation signal for a {@code uc_update} (kogn-io/arknet#474): the multilingual
-     * fields this call actually wrote, named as {@code store_check} names them - the six prose
+     * fields this call is about to write, named as {@code store_check} names them - the six prose
      * fields of the use case itself, plus the two step lists, each keyed by the edge that owns
-     * them, because a step's text lives on its own resource.
+     * them, because a step's text lives on its own resource. Asked before the write and appended
+     * after it, because only the state before tells a correction from a translation (see
+     * {@link StaleTranslationHint}).
      *
      * <p>{@code stepRealisesPatches}, {@code removeMainStepPositions} and the two role references
      * are deliberately absent: none of them writes text under a language, so none leaves anything
@@ -695,18 +719,18 @@ public final class UseCaseMcpTools {
             final UseCaseCorrection correction, final List<String> extensions,
             final List<StepPatchInput> stepTextPatches, final List<NewMainStepInput> newMainSteps) {
         final List<String> fieldsWritten = new ArrayList<>();
-        addIfWritten(fieldsWritten, "title", correction.title());
-        addIfWritten(fieldsWritten, "useCaseGoal", correction.goal());
-        addIfWritten(fieldsWritten, "designScope", correction.scope());
-        addIfWritten(fieldsWritten, "trigger", correction.trigger());
-        addIfWritten(fieldsWritten, "useCasePrecondition", correction.precondition());
-        addIfWritten(fieldsWritten, "useCasePostcondition", correction.postcondition());
+        addIfWritten(fieldsWritten, TITLE_FIELD, correction.title());
+        addIfWritten(fieldsWritten, GOAL_FIELD, correction.goal());
+        addIfWritten(fieldsWritten, SCOPE_FIELD, correction.scope());
+        addIfWritten(fieldsWritten, TRIGGER_FIELD, correction.trigger());
+        addIfWritten(fieldsWritten, PRECONDITION_FIELD, correction.precondition());
+        addIfWritten(fieldsWritten, POSTCONDITION_FIELD, correction.postcondition());
         if (stepTextPatches != null && !stepTextPatches.isEmpty()
                 || newMainSteps != null && !newMainSteps.isEmpty()) {
-            fieldsWritten.add("mainStep");
+            fieldsWritten.add(MAIN_STEP_FIELD);
         }
         if (extensions != null && !extensions.isEmpty()) {
-            fieldsWritten.add("extensionStep");
+            fieldsWritten.add(EXTENSION_STEP_FIELD);
         }
         if (fieldsWritten.isEmpty()) {
             return "";

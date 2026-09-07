@@ -165,7 +165,20 @@ public final class ProjectMcpTools {
      */
     private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
             + " the answer names the fields that still carry a maintained language this call did not"
-            + " write; repeat the call under each of those languages to keep the translations in step.";
+            + " write; repeat the call under each of those languages to keep the translations in step."
+            + " A field that did not carry the written language yet is being translated, not corrected,"
+            + " and is not reported.";
+
+    private static final String DESCRIPTION_FIELD = "description";
+
+    /**
+     * The multilingual fields {@code project_update} can write, as {@code FieldLanguageLookup} keys - the
+     * local names of the predicates behind them, or of the edge owning a child resource's text.
+     * {@code arknet-architecture-tests} reads this list reflectively and holds it against the
+     * {@code sh:uniqueLang} properties the shipped shapes declare for this resource, so a typo or
+     * a renamed predicate fails a build instead of silently muting the signal for that field.
+     */
+    private static final List<String> MULTILINGUAL_FIELDS = List.of(DESCRIPTION_FIELD);
 
     private final RegisterProject registerProject;
     private final AdoptProject adoptProject;
@@ -394,9 +407,11 @@ public final class ProjectMcpTools {
                     + "looked up, and lookup matches on its value alone.", required = false)
             final String callerAnchor) {
         final Project caller = resolveCaller(context, callerAnchor);
+        final String staleHint = staleTranslationHint(caller, blankToNull(description), blankToNull(language),
+                languages);
         final Project updated = updateProject.update(caller.id(), blankToNull(description), blankToNull(language),
                 blankToNull(defaultLanguage), languages);
-        return format(updated) + staleTranslationHint(updated, blankToNull(description), blankToNull(language));
+        return format(updated) + staleHint;
     }
 
     @McpTool(name = "project_adopt", description = "Claim an EXISTING dataset as the project this "
@@ -518,16 +533,21 @@ public final class ProjectMcpTools {
      * default the way every model-writing tool resolves it - so such a call names no language and
      * gets no signal, which is exactly what an untagged literal deserves.</p>
      *
-     * <p>The language set compared against is the one this very call may have just changed:
-     * {@code updated} carries the promise now in force, which is the only one a reader can act
-     * on.</p>
+     * <p>Asked before the write and appended after it, because only the state before tells a
+     * correction from a translation (see {@link StaleTranslationHint}). The language set compared
+     * against is nevertheless the one this very call leaves in force - {@code languages} if the
+     * call replaces the set, the caller's current one otherwise, the same reading {@code
+     * ProjectService#update} applies - because that is the only promise a reader can act on.</p>
      */
-    private String staleTranslationHint(final Project updated, final String description, final String language) {
+    private String staleTranslationHint(final Project caller, final String description, final String language,
+            final List<String> languages) {
         if (description == null) {
             return "";
         }
-        return staleTranslations.forProjectRegistration(updated.label(), language,
-                updated.maintainedLanguages(), List.of("description"));
+        final List<String> languagesInForce =
+                languages == null ? caller.maintainedLanguages() : Project.canonicalLanguages(languages);
+        return staleTranslations.forProjectRegistration(caller.label(), language, languagesInForce,
+                MULTILINGUAL_FIELDS);
     }
 
 }

@@ -116,7 +116,24 @@ public final class RequirementMcpTools {
      */
     private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
             + " the answer names the fields that still carry a maintained language this call did not"
-            + " write; repeat the call under each of those languages to keep the translations in step.";
+            + " write; repeat the call under each of those languages to keep the translations in step."
+            + " A field that did not carry the written language yet is being translated, not corrected,"
+            + " and is not reported.";
+
+    private static final String TITLE_FIELD = "title";
+    private static final String DESCRIPTION_FIELD = "description";
+    private static final String RATIONALE_FIELD = "rationale";
+    private static final String ACCEPTANCE_CRITERION_FIELD = "acceptanceCriterion";
+
+    /**
+     * The multilingual fields {@code req_update} can write, as {@code FieldLanguageLookup} keys - the
+     * local names of the predicates behind them, or of the edge owning a child resource's text.
+     * {@code arknet-architecture-tests} reads this list reflectively and holds it against the
+     * {@code sh:uniqueLang} properties the shipped shapes declare for this resource, so a typo or
+     * a renamed predicate fails a build instead of silently muting the signal for that field.
+     */
+    private static final List<String> MULTILINGUAL_FIELDS =
+            List.of(TITLE_FIELD, DESCRIPTION_FIELD, RATIONALE_FIELD, ACCEPTANCE_CRITERION_FIELD);
 
     private final AddRequirement addRequirement;
     private final ListRequirements listRequirements;
@@ -507,16 +524,16 @@ public final class RequirementMcpTools {
         final Priority requirementPriority = blankToNull(priority) == null
                 ? null
                 : Priority.valueOf(priority.trim());
+        final String staleHint = staleTranslationHint(project, code, blankToNull(language), blankToNull(title),
+                blankToNull(description), blankToNull(rationale), newAcceptanceCriteria,
+                acceptanceCriteriaTextPatches);
         final Requirement updated = updateRequirement.update(project.id(), code, blankToNull(title),
                 blankToNull(description), blankToNull(rationale),
                 newAcceptanceCriteria == null ? null : List.copyOf(newAcceptanceCriteria),
                 toAcceptanceCriteriaTextPatches(acceptanceCriteriaTextPatches),
                 toRemovedPositions(removeAcceptanceCriterionPositions),
                 requirementPriority, blankToNull(language), project.defaultLanguage());
-        return presenter.format(project.id(), updated)
-                + staleTranslationHint(project, code, blankToNull(language), blankToNull(title),
-                        blankToNull(description), blankToNull(rationale), newAcceptanceCriteria,
-                        acceptanceCriteriaTextPatches);
+        return presenter.format(project.id(), updated) + staleHint;
     }
 
     /**
@@ -585,8 +602,10 @@ public final class RequirementMcpTools {
 
     /**
      * The stale-translation signal for a {@code req_update} (kogn-io/arknet#474): the multilingual
-     * fields this call actually wrote, named as {@code store_check} names them, so the answer can
-     * say which of them still carry a maintained language this write did not touch.
+     * fields this call is about to write, named as {@code store_check} names them, so the answer
+     * can say which of them still carry a maintained language this write did not touch. Asked
+     * before the write and appended after it, because only the state before tells a correction
+     * from a translation (see {@link StaleTranslationHint}).
      *
      * <p>{@code removeAcceptanceCriterionPositions} is deliberately absent: taking a criterion out
      * writes no text under any language, so it leaves nothing behind to go stale.</p>
@@ -597,17 +616,17 @@ public final class RequirementMcpTools {
             final List<AcceptanceCriterionPatchInput> acceptanceCriteriaTextPatches) {
         final List<String> fieldsWritten = new ArrayList<>();
         if (title != null) {
-            fieldsWritten.add("title");
+            fieldsWritten.add(TITLE_FIELD);
         }
         if (description != null) {
-            fieldsWritten.add("description");
+            fieldsWritten.add(DESCRIPTION_FIELD);
         }
         if (rationale != null) {
-            fieldsWritten.add("rationale");
+            fieldsWritten.add(RATIONALE_FIELD);
         }
         if (newAcceptanceCriteria != null && !newAcceptanceCriteria.isEmpty()
                 || acceptanceCriteriaTextPatches != null && !acceptanceCriteriaTextPatches.isEmpty()) {
-            fieldsWritten.add("acceptanceCriterion");
+            fieldsWritten.add(ACCEPTANCE_CRITERION_FIELD);
         }
         if (fieldsWritten.isEmpty()) {
             return "";

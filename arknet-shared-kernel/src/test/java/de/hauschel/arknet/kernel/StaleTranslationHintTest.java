@@ -86,6 +86,38 @@ class StaleTranslationHintTest {
                 fields("definition", Set.of("de"))));
     }
 
+    /**
+     * The tags are the state before the write: a field that does not yet carry the written
+     * language is being translated, and the variant it does carry is the source of that
+     * translation, not something out of date - the second call of this repository's own
+     * two-call workflow must end without a hint.
+     */
+    @Test
+    void staysSilentWhenTheCallAddsATranslation() {
+        assertEquals("", StaleTranslationHint.render("en", List.of("de", "en"),
+                fields("definition", Set.of("de"))));
+    }
+
+    /** A field that never carried anything is being written for the first time - nothing is stale. */
+    @Test
+    void staysSilentForAFieldWrittenForTheFirstTime() {
+        assertEquals("", StaleTranslationHint.render("en", List.of("de", "en"),
+                fields("rationale", Set.of())));
+    }
+
+    /**
+     * One call can correct one field and translate another: only the field that already carried
+     * the written language is reported.
+     */
+    @Test
+    void reportsOnlyTheFieldsThatAlreadyCarriedTheWrittenLanguage() {
+        final String hint = StaleTranslationHint.render("en", List.of("de", "en"),
+                fields("title", Set.of("de", "en"), "description", Set.of("de")));
+
+        assertTrue(hint.contains("de: title"), hint);
+        assertFalse(hint.contains("description"), hint);
+    }
+
     /** A language the field carries but the project does not maintain is nobody's promise. */
     @Test
     void ignoresALanguageTheProjectDoesNotMaintain() {
@@ -111,6 +143,8 @@ class StaleTranslationHintTest {
     void comparesLanguageTagsCaseInsensitively() {
         assertEquals("", StaleTranslationHint.render("DE", List.of("de", "en"),
                 fields("definition", Set.of("de"))));
+        assertTrue(StaleTranslationHint.render("DE", List.of("de", "en"),
+                fields("definition", Set.of("de", "en"))).contains("en: definition"));
         assertTrue(StaleTranslationHint.render("de", List.of("de", "EN"),
                 fields("definition", Set.of("de", "en"))).contains("EN: definition"));
     }

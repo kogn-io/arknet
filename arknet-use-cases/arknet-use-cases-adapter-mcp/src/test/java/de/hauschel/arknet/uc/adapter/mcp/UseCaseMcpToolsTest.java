@@ -673,6 +673,27 @@ class UseCaseMcpToolsTest {
         assertTrue(rendered.contains("en: title, mainStep"), rendered);
     }
 
+    /**
+     * The second call of a two-language workflow - the field so far carries only the other
+     * language, and this call adds the written one - is a translation, not a correction: the
+     * variant already there is its source, and nothing is stale. The lookup must therefore see
+     * the state before the write.
+     */
+    @Test
+    void updateStaysSilentWhenTheCallAddsATranslation() {
+        UseCaseMcpTools bilingual = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
+                anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
+                new StaleTranslationHint(lookupBeforeTheWrite(Map.of("title", Set.of("de"),
+                        "mainStep", Set.of("de")))));
+
+        String rendered = bilingual.update(null, "UC1", "New title", null, null, null, null, null,
+                null, null, null, List.of(new UseCaseMcpTools.StepPatchInput(1, "translated")), null, null, null,
+                "en", null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
     /** A project maintaining a single language has no other language to warn about. */
     @Test
     void updateStaysSilentForASingleLanguageProject() {
@@ -700,6 +721,27 @@ class UseCaseMcpToolsTest {
 
         assertFalse(rendered.contains("stale"), rendered);
     }
+    /**
+     * A lookup answering {@code byField} as the state <em>before</em> the write - and failing the
+     * test if the write has already happened when it is asked, because only that state tells a
+     * correction from a translation (kogn-io/arknet#474).
+     */
+    private FieldLanguageLookup lookupBeforeTheWrite(Map<String, Set<String>> byField) {
+        return new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                assertNull(stub.lastUpdatedUseCase, "the lookup must run before the write");
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                assertNull(stub.lastUpdatedUseCase, "the lookup must run before the write");
+                return byField;
+            }
+        };
+    }
+
     /** Structural stub implementing the six driving in-ports. */
     private static final class Stub
             implements AddUseCase, ListUseCases, DescribeUseCaseDisplayFallback, GetUseCase, UpdateUseCase, LinkTerm,
