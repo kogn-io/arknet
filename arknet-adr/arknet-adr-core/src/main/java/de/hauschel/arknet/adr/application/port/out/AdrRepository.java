@@ -302,7 +302,8 @@ public interface AdrRepository {
      * @param projectId the project (architecture model) the decision lives in
      * @param code      the ADR code, e.g. {@code ADR-1}
      * @throws AdrNotFoundException     if no decision with this code exists
-     * @throws AdrNotDeletableException if the decision is no longer {@link AdrStatus#PROPOSED}
+     * @throws AdrNotDeletableException if {@link AdrStatus#isDeletable()} is {@code false} for the
+     *                                   decision's current status
      * @throws AdrReferencedException   if another decision still points at it
      */
     void delete(ProjectId projectId, AdrCode code);

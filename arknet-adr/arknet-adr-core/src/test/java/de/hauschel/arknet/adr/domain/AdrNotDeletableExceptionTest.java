@@ -17,16 +17,6 @@ class AdrNotDeletableExceptionTest {
 
     private static final AdrCode CODE = new AdrCode("ADR-1");
 
-    @Test
-    void anAcceptedDecisionIsPointedAtItsSuccessorPaths() {
-        AdrNotDeletableException thrown = new AdrNotDeletableException(CODE, AdrStatus.ACCEPTED);
-
-        assertEquals(AdrStatus.ACCEPTED, thrown.status());
-        assertEquals(CODE, thrown.adrCode());
-        assertTrue(thrown.getMessage().contains("adr_supersede"), thrown.getMessage());
-        assertTrue(thrown.getMessage().contains("adr_set_status DEPRECATED"), thrown.getMessage());
-    }
-
     /**
      * The distinction the whole staging exists for: rejecting an option is a verdict on the option,
      * not a way to get rid of a record recorded by accident.
@@ -62,10 +52,23 @@ class AdrNotDeletableExceptionTest {
         assertTrue(thrown.getMessage().contains("adr_unsupersede"), thrown.getMessage());
     }
 
-    /** A proposal is deletable, so constructing this refusal for one is a caller bug, not a message. */
+    /**
+     * A proposal is deletable, so constructing this refusal for one is a caller bug, not a message.
+     */
     @Test
     void refusesToBeConstructedForAProposedDecision() {
         assertThrows(IllegalArgumentException.class,
                 () -> new AdrNotDeletableException(CODE, AdrStatus.PROPOSED));
+    }
+
+    /**
+     * Since kogn-io/arknet#528 an unreferenced ACCEPTED decision is deletable too - constructing
+     * this refusal for it is now a caller bug in exactly the same way as for PROPOSED, not a message
+     * about a successor or DEPRECATED path any more.
+     */
+    @Test
+    void refusesToBeConstructedForAnAcceptedDecision() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new AdrNotDeletableException(CODE, AdrStatus.ACCEPTED));
     }
 }
