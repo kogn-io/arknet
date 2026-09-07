@@ -227,7 +227,7 @@ TERM-12 [Concept] &quot;Architecture Model&quot;  -&gt; resource_get(&quot;TERM-
 TERM-15 [Concept] &quot;Business Code&quot;  -&gt; resource_get(&quot;TERM-15&quot;)
 TERM-24 [Concept] &quot;Commit&quot;  -&gt; resource_get(&quot;TERM-24&quot;)
 TERM-17 [Concept] &quot;Project&quot;  -&gt; resource_get(&quot;TERM-17&quot;)
-TERM-5 [Concept] &quot;Legal Person&quot;  -&gt; resource_get(&quot;TERM-5&quot;)
+TERM-5 [Concept] &quot;Legal Actor&quot;  -&gt; resource_get(&quot;TERM-5&quot;)
 
 ## skos:ConceptScheme (1)
 https://w3id.org/arknet/model/glossary [ConceptScheme]  -&gt; resource_get(&quot;https://w3id.org/arknet/model/glossary&quot;)
@@ -3456,7 +3456,7 @@ The core of this decision is the distinction between &quot;unbuilt&quot; and &qu
               <div class="body">
               <div class="block b-definition">
                 <span class="blabel">Definition</span>
-                <div class="lang-group" data-default-lang="de"><div class="lang-variant" data-lang="de"><div class="prose-body"><p class="prose">Ein Actor ist jemand oder etwas außerhalb von arknet, das handeln kann, ein Interesse daran haben kann, oder beides. Ein Actor ist der Träger einer Rolle, nicht die Rolle selbst: er existiert unabhängig davon, ob und welche Rolle er gerade ausfüllt.</p></div></div><div class="lang-variant" data-lang="en" hidden><div class="prose-body"><p class="prose">An Actor is someone or something outside arknet that can act, can hold an interest in it, or both. An Actor is the bearer of a role, not the role itself: it exists regardless of whether and which role it currently fills.</p></div></div></div>
+                <div class="lang-group" data-default-lang="de"><div class="lang-variant" data-lang="de"><div class="prose-body"><p class="prose">Ein Actor ist jemand oder etwas, das auf das beschriebene System einwirken kann, ein Interesse daran haben kann, oder beides. Ein Actor ist der Träger einer Rolle, nicht die Rolle selbst: er existiert unabhängig davon, ob und welche Rolle er gerade ausfüllt.</p></div></div><div class="lang-variant" data-lang="en" hidden><div class="prose-body"><p class="prose">An Actor is someone or something that can act on the system under description, can hold an interest in it, or both. An Actor is the bearer of a role, not the role itself: it exists regardless of whether and which role it currently fills.</p></div></div></div>
               </div>
               </div>
             <details class="referenced-by">
@@ -3465,7 +3465,7 @@ The core of this decision is the distinction between &quot;unbuilt&quot; and &qu
                 <tr><td class="pred">skos:broader</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5534b165-fa1e-4a74-b725-73058fcb4853-f809cc64010f1001" title="Human Actor">TERM-3</a></td></tr>
                 <tr><td class="pred">skos:broader</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-d725f1e3-922c-4597-a58b-4b5060de1e48-a196a1282db1ddbc" title="Group Actor">TERM-16</a></td></tr>
                 <tr><td class="pred">skos:broader</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-d92fadcd-2213-4e54-a1fc-2ae5cc508466-3bf280409694f986" title="System Actor">TERM-4</a></td></tr>
-                <tr><td class="pred">skos:broader</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-f244f238-5f56-4e7c-b20e-8c7473bc0637-721dccf9e40e2e62" title="Legal Person">TERM-5</a></td></tr>
+                <tr><td class="pred">skos:broader</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-f244f238-5f56-4e7c-b20e-8c7473bc0637-721dccf9e40e2e62" title="Legal Actor">TERM-5</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-18b97932-77b7-4ec1-9f4c-0bb33e9e69bd-c149781603e721f6">ADR-46</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-1b5ba6e9-4c93-4afd-b35a-86affc89d44c-0dbb674752c88643">ADR-4</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-7777a2c0-87ff-48fa-ba58-6d6e3e4c2834-87e3d4c7bf616e31">ADR-37</a></td></tr>
@@ -3481,8 +3481,8 @@ The core of this decision is the distinction between &quot;unbuilt&quot; and &qu
                 <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-model-glossary-afd6502e0558826c">https://w3id.org/arknet/model/glossary</a></td></tr>
                 <tr><td class="pred">skos:prefLabel</td><td class="obj"><span class="lit str">"Actor"</span><span class="dt">@de</span></td></tr>
                 <tr><td class="pred">skos:prefLabel</td><td class="obj"><span class="lit str">"Actor"</span><span class="dt">@en</span></td></tr>
-                <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"Ein Actor ist jemand oder etwas außerhalb von arknet, das handeln kann, ein Interesse daran haben kann, oder beides. Ein Actor ist der Träger einer Rolle, nicht die Rolle selbst: er existiert unabhängig davon, ob und welche Rolle er gerade ausfüllt."</span><span class="dt">@de</span></td></tr>
-                <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"An Actor is someone or something outside arknet that can act, can hold an interest in it, or both. An Actor is the bearer of a role, not the role itself: it exists regardless of whether and which role it currently fills."</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"Ein Actor ist jemand oder etwas, das auf das beschriebene System einwirken kann, ein Interesse daran haben kann, oder beides. Ein Actor ist der Träger einer Rolle, nicht die Rolle selbst: er existiert unabhängig davon, ob und welche Rolle er gerade ausfüllt."</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"An Actor is someone or something that can act on the system under description, can hold an interest in it, or both. An Actor is the bearer of a role, not the role itself: it exists regardless of whether and which role it currently fills."</span><span class="dt">@en</span></td></tr>
               </table>
             </details>
             </details>
@@ -3936,13 +3936,13 @@ The core of this decision is the distinction between &quot;unbuilt&quot; and &qu
             <details class="fold">
               <summary class="head">
                 <span class="code">TERM-5</span>
-                <h3><span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Legal Person</span><span class="lang-variant" data-lang="de" hidden>Legal Person</span></span></h3>
+                <h3><span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Legal Actor</span><span class="lang-variant" data-lang="de" hidden>Legal Actor</span></span></h3>
                 <a class="anchor" href="#r-https-w3id-org-arknet-id-f244f238-5f56-4e7c-b20e-8c7473bc0637-721dccf9e40e2e62">#</a>
               </summary>
               <div class="body">
               <div class="block b-definition">
                 <span class="blabel">Definition</span>
-                <div class="lang-group" data-default-lang="de"><div class="lang-variant" data-lang="de"><div class="prose-body"><p class="prose">Eine Juristische Person ist ein Actor, der eine Organisation (z. B. ein Unternehmen) ist, die selbst Trägerin von Rechten und Pflichten ist — im Unterschied zu einer natürlichen Person (Human Actor) oder einem externen System (System Actor).</p></div></div><div class="lang-variant" data-lang="en" hidden><div class="prose-body"><p class="prose">A Legal Person is an Actor that is an organisation (e.g. a company) which is itself a bearer of rights and obligations — as distinct from a natural person (Human Actor) or an external system (System Actor).</p></div></div></div>
+                <div class="lang-group" data-default-lang="de"><div class="lang-variant" data-lang="de"><div class="prose-body"><p class="prose">Ein Legal Actor ist ein Actor, der eine juristische Person ist — eine Organisation, ein Unternehmen oder ein Verein, die selbst Trägerin von Rechten und Pflichten ist —, im Unterschied zu einer natürlichen Person (Human Actor) oder einem externen System (System Actor).</p></div></div><div class="lang-variant" data-lang="en" hidden><div class="prose-body"><p class="prose">A Legal Actor is an Actor that is a legal person — an organisation, company or association that is itself a bearer of rights and obligations — as distinct from a natural person (Human Actor) or an external system (System Actor).</p></div></div></div>
               </div>
               </div>
             <details class="raw">
@@ -3951,10 +3951,10 @@ The core of this decision is the distinction between &quot;unbuilt&quot; and &qu
                 <tr><td class="pred">rdf:type</td><td class="obj"><span class="lit">skos:Concept</span></td></tr>
                 <tr><td class="pred">dcterms:identifier</td><td class="obj"><span class="lit str">"TERM-5"</span></td></tr>
                 <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-model-glossary-afd6502e0558826c">https://w3id.org/arknet/model/glossary</a></td></tr>
-                <tr><td class="pred">skos:prefLabel</td><td class="obj"><span class="lit str">"Legal Person"</span><span class="dt">@en</span></td></tr>
-                <tr><td class="pred">skos:prefLabel</td><td class="obj"><span class="lit str">"Legal Person"</span><span class="dt">@de</span></td></tr>
-                <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"Eine Juristische Person ist ein Actor, der eine Organisation (z. B. ein Unternehmen) ist, die selbst Trägerin von Rechten und Pflichten ist — im Unterschied zu einer natürlichen Person (Human Actor) oder einem externen System (System Actor)."</span><span class="dt">@de</span></td></tr>
-                <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"A Legal Person is an Actor that is an organisation (e.g. a company) which is itself a bearer of rights and obligations — as distinct from a natural person (Human Actor) or an external system (System Actor)."</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">skos:prefLabel</td><td class="obj"><span class="lit str">"Legal Actor"</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">skos:prefLabel</td><td class="obj"><span class="lit str">"Legal Actor"</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"Ein Legal Actor ist ein Actor, der eine juristische Person ist — eine Organisation, ein Unternehmen oder ein Verein, die selbst Trägerin von Rechten und Pflichten ist —, im Unterschied zu einer natürlichen Person (Human Actor) oder einem externen System (System Actor)."</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"A Legal Actor is an Actor that is a legal person — an organisation, company or association that is itself a bearer of rights and obligations — as distinct from a natural person (Human Actor) or an external system (System Actor)."</span><span class="dt">@en</span></td></tr>
                 <tr><td class="pred">skos:broader</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-803ccddc-e007-40f8-bf43-57485cdca551-08703fead5f3ccd8">https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551</a></td></tr>
               </table>
             </details>
@@ -4335,7 +4335,7 @@ The core of this decision is the distinction between &quot;unbuilt&quot; and &qu
                 <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-e4942ed2-d1f7-4a1e-9322-9c5f323d767d-d0018996863d8620" title="Business Code">TERM-15</a></td></tr>
                 <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-e61c91ce-5a7b-44b1-af34-58cde80a5143-5f718686d21b7470" title="Commit">TERM-24</a></td></tr>
                 <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-ebdd226f-5b5d-46b6-a41a-53ec10c2090c-ce5b7cba02fd64f1" title="Project">TERM-17</a></td></tr>
-                <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-f244f238-5f56-4e7c-b20e-8c7473bc0637-721dccf9e40e2e62" title="Legal Person">TERM-5</a></td></tr>
+                <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-f244f238-5f56-4e7c-b20e-8c7473bc0637-721dccf9e40e2e62" title="Legal Actor">TERM-5</a></td></tr>
               </table>
             </details>
               </details>
