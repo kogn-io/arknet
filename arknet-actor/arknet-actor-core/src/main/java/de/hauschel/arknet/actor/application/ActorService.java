@@ -146,9 +146,7 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             ActorRepository.CurrentActor current = repository.findCurrentByCode(projectId, code)
                     .orElseThrow(() -> new ActorNotFoundException(projectId, code));
-            Actor updated = new Actor(current.value().id(), current.value().code(), current.value().type(),
-                    name != null ? name : current.value().name(),
-                    description != null ? description : current.value().description());
+            Actor updated = current.value().withUpdates(name, description);
             if (updated.equals(current.value())) {
                 return current.value();
             }

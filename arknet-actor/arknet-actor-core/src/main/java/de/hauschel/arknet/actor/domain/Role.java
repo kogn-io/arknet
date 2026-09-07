@@ -86,4 +86,24 @@ public record Role(
                 .sorted(Comparator.comparing(occupant -> occupant.value().value()))
                 .toList();
     }
+
+    /**
+     * Returns a new role with {@code name}/{@code description}/{@code filledBy} replaced where a
+     * non-{@code null} argument is given, leaving {@link #id()}/{@link #code()} untouched -
+     * mirrors {@link Actor#withUpdates(String, String)}, extended with the occupancy field this
+     * aggregate carries and {@link Actor} does not. The compact constructor still canonicalises
+     * {@code filledBy} (dedup + order), so callers never need to.
+     *
+     * @param name        the new name, or {@code null} to keep {@link #name()} unchanged
+     * @param description the new description, or {@code null} to keep {@link #description()}
+     *                    unchanged
+     * @param filledBy    the new occupancy, or {@code null} to keep {@link #filledBy()} unchanged
+     * @return a new role reflecting the requested correction
+     */
+    public Role withUpdates(String name, String description, List<ActorId> filledBy) {
+        return new Role(id, code,
+                name != null ? name : this.name,
+                description != null ? description : this.description,
+                filledBy != null ? filledBy : this.filledBy);
+    }
 }

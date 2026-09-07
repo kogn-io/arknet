@@ -59,4 +59,22 @@ public record Actor(
             throw new IllegalArgumentException("description must not be blank when present");
         }
     }
+
+    /**
+     * Returns a new actor with {@code name}/{@code description} replaced where a non-{@code null}
+     * argument is given, leaving {@link #id()}/{@link #code()}/{@link #type()} untouched - the
+     * derivation step behind {@code ActorService#updateWithOptimisticRetry}, isolated here so that
+     * retry loop reads only "read, derive, compare, write" instead of also inlining the field-level
+     * null handling.
+     *
+     * @param name        the new name, or {@code null} to keep {@link #name()} unchanged
+     * @param description the new description, or {@code null} to keep {@link #description()}
+     *                    unchanged
+     * @return a new actor reflecting the requested correction
+     */
+    public Actor withUpdates(String name, String description) {
+        return new Actor(id, code, type,
+                name != null ? name : this.name,
+                description != null ? description : this.description);
+    }
 }

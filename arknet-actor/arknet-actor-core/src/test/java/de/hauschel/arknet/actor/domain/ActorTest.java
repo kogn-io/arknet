@@ -65,4 +65,33 @@ class ActorTest {
             assertEquals(type, actor.type());
         }
     }
+
+    @Test
+    void withUpdatesReplacesOnlyTheNamedFields() {
+        Actor original = new Actor(ID, CODE, ActorType.HUMAN, "Sachbearbeiter", "Bearbeitet Antraege.");
+
+        Actor bothChanged = original.withUpdates("Antragsbearbeiter", "Neue Beschreibung.");
+        assertEquals("Antragsbearbeiter", bothChanged.name());
+        assertEquals("Neue Beschreibung.", bothChanged.description());
+        assertEquals(ID, bothChanged.id());
+        assertEquals(CODE, bothChanged.code());
+        assertEquals(ActorType.HUMAN, bothChanged.type());
+    }
+
+    /** {@code null} means "leave this field as is", never "clear it" - see {@code UpdateActor}. */
+    @Test
+    void withUpdatesTreatsANullArgumentAsLeaveUnchanged() {
+        Actor original = new Actor(ID, CODE, ActorType.HUMAN, "Sachbearbeiter", "Bearbeitet Antraege.");
+
+        Actor nameOnly = original.withUpdates("Antragsbearbeiter", null);
+        assertEquals("Antragsbearbeiter", nameOnly.name());
+        assertEquals("Bearbeitet Antraege.", nameOnly.description());
+
+        Actor descriptionOnly = original.withUpdates(null, "Neue Beschreibung.");
+        assertEquals("Sachbearbeiter", descriptionOnly.name());
+        assertEquals("Neue Beschreibung.", descriptionOnly.description());
+
+        Actor unchanged = original.withUpdates(null, null);
+        assertEquals(original, unchanged);
+    }
 }

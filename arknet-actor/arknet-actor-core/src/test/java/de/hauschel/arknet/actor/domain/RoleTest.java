@@ -104,4 +104,34 @@ class RoleTest {
         assertEquals(2, role.filledBy().size());
         assertTrue(role.filledBy().containsAll(List.of(ACTOR_1, ACTOR_2)));
     }
+
+    @Test
+    void withUpdatesReplacesOnlyTheNamedFields() {
+        Role original = new Role(ID, CODE, "Requirements Engineer", "Writes requirements.", List.of(ACTOR_1));
+
+        Role allChanged = original.withUpdates("Senior Requirements Engineer", "New description.",
+                List.of(ACTOR_2));
+        assertEquals("Senior Requirements Engineer", allChanged.name());
+        assertEquals("New description.", allChanged.description());
+        assertEquals(List.of(ACTOR_2), allChanged.filledBy());
+        assertEquals(ID, allChanged.id());
+        assertEquals(CODE, allChanged.code());
+    }
+
+    /** {@code null} means "leave this field as is", never "clear it" - mirrors {@code ActorTest}. */
+    @Test
+    void withUpdatesTreatsANullArgumentAsLeaveUnchanged() {
+        Role original = new Role(ID, CODE, "Requirements Engineer", "Writes requirements.", List.of(ACTOR_1));
+
+        Role nameOnly = original.withUpdates("Senior Requirements Engineer", null, null);
+        assertEquals("Senior Requirements Engineer", nameOnly.name());
+        assertEquals("Writes requirements.", nameOnly.description());
+        assertEquals(List.of(ACTOR_1), nameOnly.filledBy());
+
+        Role unfilled = original.withUpdates(null, null, List.of());
+        assertTrue(unfilled.filledBy().isEmpty());
+
+        Role unchanged = original.withUpdates(null, null, null);
+        assertEquals(original, unchanged);
+    }
 }
