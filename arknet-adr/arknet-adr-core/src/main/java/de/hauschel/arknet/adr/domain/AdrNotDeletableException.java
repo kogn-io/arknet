@@ -18,9 +18,9 @@ import java.util.Objects;
  * (kogn-io/arknet#528). It is not a lifecycle step. Once a decision has been superseded or
  * deprecated, or was deliberately turned down, somebody decided something, and that is precisely
  * what a decision record exists to keep (Nygard) - so this exception refuses and names the path
- * that fits each of those statuses instead: {@code adr_unsupersede} to undo a wrong successor,
- * {@code adr_set_status DEPRECATED} for a decision that became obsolete, or simply nothing for a
- * rejected option, which stays rejected.</p>
+ * that fits each of those statuses instead: {@code adr_unsupersede} to undo a wrong successor for
+ * {@link AdrStatus#SUPERSEDED}, or simply nothing for {@link AdrStatus#DEPRECATED} and a rejected
+ * option, both of which stay as they are.</p>
  *
  * <p><strong>{@link AdrStatus#REJECTED} is not the way out either.</strong> "Considered and turned
  * down" is a documented decision with value - it is what stops the same option being proposed again

@@ -101,8 +101,9 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * rules; this service only fills the caller's untouched fields from the current state, resolves the
  * language each touched multilingual field is written under, and hands the result to the same CAS
  * helper every other write path uses. {@link #delete} is the one path that removes a decision instead
- * of changing it, and it is staged by status as well - only a {@link AdrStatus#PROPOSED} one may go,
- * because what this lifecycle protects is a decision and not a draft (Nygard); every other status is
+ * of changing it, and it is staged by status as well - only one for which
+ * {@link AdrStatus#isDeletable()} holds may go, because what this lifecycle protects is a decision
+ * and not a draft (Nygard); every other status is
  * refused with {@link AdrNotDeletableException} and pointed at the path that fits it. While another
  * decision points at it, the delete is refused outright with {@link AdrReferencedException} rather
  * than orphaning that edge, and the code of a deleted decision stays out of circulation -
