@@ -730,8 +730,14 @@ public class KognioRdfAdrRepository implements AdrRepository {
         String subject = SparqlTerms.iriRef(subjectIri);
         String query = "SELECT ?status WHERE { GRAPH <" + ADR_GRAPH + "> { "
                 + subject + " <" + STATUS_PROPERTY + "> ?status } }";
-        AdrStatus status = tx.select(query).findFirst().map(KognioRdfAdrRepository::statusOf).orElse(null);
-        if (status == null || !status.isDeletable()) {
+        // A stored record always carries exactly one arkarch:adrStatus out of the five known ones:
+        // the SHACL write gate makes it mandatory (ashapes:ADR-status, sh:minCount 1 / sh:maxCount 1
+        // / sh:in, sh:severity sh:Violation), so an absent or unknown status is a broken store, not
+        // a caller mistake, and gets no didactic refusal.
+        AdrStatus status = tx.select(query).findFirst().map(KognioRdfAdrRepository::statusOf)
+                .orElseThrow(() -> new IllegalStateException(
+                        "ADR " + code.value() + " carries no known " + STATUS_PROPERTY));
+        if (!status.isDeletable()) {
             throw new AdrNotDeletableException(code, status);
         }
     }

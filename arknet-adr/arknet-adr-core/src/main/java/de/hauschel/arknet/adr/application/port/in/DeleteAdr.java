@@ -19,8 +19,9 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <p><strong>A mistaken record is deletable, a real decision is not (kogn-io/arknet#528).</strong>
  * A decision may be deleted while it is {@link AdrStatus#PROPOSED} or, undoing a mistaken
- * acceptance, while it is {@link AdrStatus#ACCEPTED} without a successor and without an incoming
- * {@code relatedTo} edge - see {@link AdrStatus#isDeletable()}. What is protected is a decision, not
+ * acceptance, while it is {@link AdrStatus#ACCEPTED}, as long as no other decision names it as its
+ * own successor and none points at it via {@code relatedTo} - see {@link AdrStatus#isDeletable()}
+ * for the status half of that condition. What is protected is a decision, not
  * a draft (Nygard): once a record has been superseded, deprecated or turned down, or once it serves
  * as another decision's named successor, the record is the history an ADR exists to keep, and
  * removing it erases the reasoning a later reader needs. Retiring a record that really was decided
