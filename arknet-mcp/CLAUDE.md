@@ -138,6 +138,17 @@ genuegt ein Port fuer alle Projekte. Ein HTTP-Eintrag in `.mcp.json` ist bei Cla
 (nur Verbindungsaufbau, kein Prozess-Spawn/-Management) -- Start und Betrieb des Daemons sind Sache
 des Menschen, siehe `README.md`.
 
+Der geteilte Daemon aktualisiert sich nach einem Merge oder Release nicht selbst.
+Er laeuft auf dem Image weiter, das beim letzten Start geladen war.
+Neu bauen und ersetzen im Repo-Root mit `docker compose up --build -d --force-recreate`; ohne
+`--force-recreate` bleibt der alte Container trotz neuem Image stehen.
+Welchen Stand der Daemon tatsaechlich faehrt, zeigt `serverInfo.version` aus der MCP-`initialize`-
+Antwort (siehe `README.md`, Abschnitt "Which build is running?"; ein lokaler Compose-Build ohne
+`ARKNET_VERSION`-Build-Arg meldet `dev`), ersatzweise die Tool-Zahl in
+`docker logs <container> | grep "Registered tools"`.
+Ein bereits geladenes Tool-Schema in einer laufenden Client-Session kann veraltet sein; ein echter
+Tool-Aufruf zeigt das neue Serververhalten sofort, `ToolSearch` erst nach erneutem Abruf.
+
 `RegisteredAnchorProjectResolver` ist bewusst **ohne Cache**: die Aufloesung ist ein lokaler
 Store-Read auf ein Subjekt, das die Registry direkt indiziert -- billig genug, dass ein Cache wenig
 brauechte und Korrektheit genau an der Kante koestete, die am meisten zaehlt. Ein eben angelegtes
