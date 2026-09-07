@@ -15,6 +15,7 @@ import de.hauschel.arknet.actor.application.port.in.DeleteRole;
 import de.hauschel.arknet.actor.application.port.in.DescribeRoleDisplayFallback;
 import de.hauschel.arknet.actor.application.port.in.GetRole;
 import de.hauschel.arknet.actor.application.port.in.ListRoles;
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles;
 import de.hauschel.arknet.actor.application.port.in.RoleDetail;
 import de.hauschel.arknet.actor.application.port.in.RoleDetail.FilledByActor;
 import de.hauschel.arknet.actor.application.port.in.UpdateRole;
@@ -65,7 +66,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * see {@link RoleCode}'s own javadoc.</p>
  */
 public class RoleService
-        implements AddRole, ListRoles, DescribeRoleDisplayFallback, GetRole, UpdateRole, DeleteRole {
+        implements AddRole, ListRoles, DescribeRoleDisplayFallback, GetRole, UpdateRole, DeleteRole, ResolveRoles {
 
     private static final String CODE_PREFIX = "ROLE";
 
@@ -147,6 +148,16 @@ public class RoleService
         Objects.requireNonNull(code, "code");
         // The reference check is the out-adapter's business, mirroring ActorService#delete.
         repository.delete(projectId, code);
+    }
+
+    @Override
+    public List<ResolvedRole> resolveExisting(ProjectId projectId, String displayLocale, ResourceId... ids) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.length == 0) {
+            return List.of();
+        }
+        return repository.findByIds(projectId, displayLocale, List.of(ids));
     }
 
     /**

@@ -178,7 +178,7 @@ rshapes:UseCaseShape
     sh:property rshapes:UseCase-trigger-uniqueLang ;
     sh:property rshapes:UseCase-precondition-uniqueLang ;
     sh:property rshapes:UseCase-postcondition-uniqueLang ;
-    sh:property rshapes:UseCase-primaryActor ;
+    sh:property rshapes:UseCase-primaryRole ;
     sh:property rshapes:UseCase-satisfies ;
     sh:property rshapes:UseCase-mainStep ;
     sh:property rshapes:UseCase-usesTerm ;
@@ -245,13 +245,13 @@ rshapes:UseCase-postcondition-uniqueLang
     sh:message  "sh:uniqueLang allows at most one arkreq:useCasePostcondition per non-empty language tag - two postconditions sharing the same tag are not allowed, but DIFFERENT language tags are (the postcondition, itself optional, may be stated in several languages)."@en , "sh:uniqueLang erlaubt hoechstens eine arkreq:useCasePostcondition je nicht-leerem Sprach-Tag - zwei Postconditions mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (die optionale Postcondition darf mehrsprachig formuliert sein)."@de ;
     sh:severity sh:Violation .
 
-rshapes:UseCase-primaryActor
+rshapes:UseCase-primaryRole
     a sh:PropertyShape ;
-    sh:path     arkreq:primaryActor ;
+    sh:path     arkreq:primaryRole ;
     sh:minCount 1 ;
     sh:maxCount 1 ;
-    sh:class    arkproc:Actor ;
-    sh:message  "A Use Case needs exactly one arkreq:primaryActor."@en , "Use Case braucht genau einen arkreq:primaryActor."@de ;
+    sh:class    arkproc:Role ;
+    sh:message  "A Use Case needs exactly one arkreq:primaryRole."@en , "Use Case braucht genau eine arkreq:primaryRole."@de ;
     sh:severity sh:Violation .
 
 rshapes:UseCase-satisfies

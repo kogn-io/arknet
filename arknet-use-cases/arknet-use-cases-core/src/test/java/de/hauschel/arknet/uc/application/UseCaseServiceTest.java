@@ -26,7 +26,7 @@ import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepRealisesPatch;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
-import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
@@ -39,7 +39,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 /**
  * Policy tests for {@link UseCaseService}: opaque identity minting, code assignment, listing,
  * lookup and reference resolution, exercised against an in-memory fake repository, deterministic
- * fake {@link ResourceIdFactory} and fake {@code ActorLookup}/{@code RequirementLookup}.
+ * fake {@link ResourceIdFactory} and fake {@code RoleLookup}/{@code RequirementLookup}.
  */
 class UseCaseServiceTest {
 
@@ -51,10 +51,10 @@ class UseCaseServiceTest {
      */
     private static final String DEFAULT_LANGUAGE = "en";
 
-    private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
+    private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/role-1");
     private static final ResourceId PAYMENT_PROVIDER_ID =
-            ResourceId.of("https://w3id.org/arknet/id/actor-payment-provider");
-    private static final ResourceId WAREHOUSE_ID = ResourceId.of("https://w3id.org/arknet/id/actor-warehouse");
+            ResourceId.of("https://w3id.org/arknet/id/role-2");
+    private static final ResourceId WAREHOUSE_ID = ResourceId.of("https://w3id.org/arknet/id/role-3");
     private static final ResourceId FR5_ID = ResourceId.of("https://w3id.org/arknet/id/req-fr5");
     private static final ResourceId TERM_1_ID = ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2_ID = ResourceId.of("https://w3id.org/arknet/id/term-2");
@@ -63,7 +63,7 @@ class UseCaseServiceTest {
     private InMemoryUseCaseRepository repository;
     private FakeResourceIdFactory resourceIdFactory;
     private InMemoryRequirementLookup requirementLookup;
-    private InMemoryActorLookup actorLookup;
+    private InMemoryRoleLookup roleLookup;
     private InMemoryTermLookup termLookup;
     private InMemoryConstraintLookup constraintLookup;
     private UseCaseService service;
@@ -73,22 +73,22 @@ class UseCaseServiceTest {
         repository = new InMemoryUseCaseRepository();
         resourceIdFactory = new FakeResourceIdFactory();
         requirementLookup = new InMemoryRequirementLookup();
-        actorLookup = new InMemoryActorLookup();
+        roleLookup = new InMemoryRoleLookup();
         termLookup = new InMemoryTermLookup();
         constraintLookup = new InMemoryConstraintLookup();
-        actorLookup.register("Customer", CUSTOMER_ID);
-        actorLookup.register("PaymentProvider", PAYMENT_PROVIDER_ID);
-        actorLookup.register("Warehouse", WAREHOUSE_ID);
+        roleLookup.register("ROLE-1", CUSTOMER_ID);
+        roleLookup.register("ROLE-2", PAYMENT_PROVIDER_ID);
+        roleLookup.register("ROLE-3", WAREHOUSE_ID);
         requirementLookup.register("FR5", FR5_ID);
         termLookup.register("TERM-1", TERM_1_ID);
         termLookup.register("TERM-2", TERM_2_ID);
         constraintLookup.register("TCON-1", TCON_1_ID);
         service = new UseCaseService(
-                repository, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
+                repository, resourceIdFactory, requirementLookup, roleLookup, termLookup, constraintLookup);
     }
 
     private static NewUseCase newUseCase(String title) {
-        return new NewUseCase(title, "goal of " + title, null, null, "Customer",
+        return new NewUseCase(title, "goal of " + title, null, null, "ROLE-1",
                 List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of(), null);
     }
 
@@ -264,10 +264,10 @@ class UseCaseServiceTest {
     }
 
     @Test
-    void addResolvesActorAndRequirementReferencesViaTheLookupPorts() {
+    void addResolvesRoleAndRequirementReferencesViaTheLookupPorts() {
         NewUseCase command = new NewUseCase("Place order", "Customer places an order", "Webshop",
-                "Customer opens the cart", "Customer",
-                List.of("PaymentProvider"), "Customer is logged in", "Order is recorded",
+                "Customer opens the cart", "ROLE-1",
+                List.of("ROLE-2"), "Customer is logged in", "Order is recorded",
                 List.of(new NewStep(1, "select items", List.of("FR5")),
                         new NewStep(2, "confirm", List.of())),
                 List.of("2a. Payment declined -> abort"), null);
@@ -276,8 +276,8 @@ class UseCaseServiceTest {
 
         assertEquals("Webshop", added.scope());
         assertEquals("Customer opens the cart", added.trigger());
-        assertEquals(new ActorRef(CUSTOMER_ID), added.primaryActor());
-        assertEquals(List.of(new ActorRef(PAYMENT_PROVIDER_ID)), added.supportingActors());
+        assertEquals(new RoleRef(CUSTOMER_ID), added.primaryRole());
+        assertEquals(List.of(new RoleRef(PAYMENT_PROVIDER_ID)), added.supportingRoles());
         assertEquals("Customer is logged in", added.precondition());
         assertEquals("Order is recorded", added.postcondition());
         assertEquals(2, added.steps().size());
@@ -286,8 +286,8 @@ class UseCaseServiceTest {
     }
 
     @Test
-    void addPropagatesAnUnknownActorReferenceFromTheLookupPort() {
-        NewUseCase command = new NewUseCase("Broken", "goal", null, null, "Unknown",
+    void addPropagatesAnUnknownRoleReferenceFromTheLookupPort() {
+        NewUseCase command = new NewUseCase("Broken", "goal", null, null, "ROLE-UNKNOWN",
                 List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of(), null);
 
         assertThrows(NoSuchElementException.class, () -> service.add(WS, command, DEFAULT_LANGUAGE));
@@ -296,7 +296,7 @@ class UseCaseServiceTest {
 
     @Test
     void addPropagatesAnUnknownRequirementReferenceFromTheLookupPort() {
-        NewUseCase command = new NewUseCase("Broken", "goal", null, null, "Customer",
+        NewUseCase command = new NewUseCase("Broken", "goal", null, null, "ROLE-1",
                 List.of(), null, null,
                 List.of(new NewStep(1, "do something", List.of("FR-UNKNOWN"))), List.of(), null);
 
@@ -422,132 +422,132 @@ class UseCaseServiceTest {
     }
 
     /**
-     * Issue #343: a use case's primary actor is correctable in place, resolved through the very
-     * same {@code ActorLookup} {@link UseCaseService#add} resolves against - without the
+     * Issue #343: a use case's primary role is correctable in place, resolved through the very
+     * same {@code RoleLookup} {@link UseCaseService#add} resolves against - without the
      * delete-and-recreate round trip that would mint a new {@link UseCaseCode} and break every
      * inbound reference to the use case.
      */
     @Test
-    void updateReplacesThePrimaryActor() {
+    void updateReplacesThePrimaryRole() {
         UseCase added = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE);
 
         UseCase updated = service.update(WS, added.code(), UseCaseCorrection.builder()
-                .primaryActor("PaymentProvider")
+                .primaryRole("ROLE-2")
                 .build(), DEFAULT_LANGUAGE);
 
-        assertEquals(new ActorRef(PAYMENT_PROVIDER_ID), updated.primaryActor());
+        assertEquals(new RoleRef(PAYMENT_PROVIDER_ID), updated.primaryRole());
         assertEquals(added.id(), updated.id());
         assertEquals(added.code(), updated.code());
         assertEquals(updated, service.get(WS, added.code(), null).orElseThrow());
     }
 
     /**
-     * The counterpart of {@link #updateReplacesThePrimaryActor}: neither actor argument given
+     * The counterpart of {@link #updateReplacesThePrimaryRole}: neither role argument given
      * leaves both references exactly as they were - the tri-state's "leave it" arm (issue #343).
      */
     @Test
-    void updateWithoutActorArgumentsLeavesBothReferencesUnchanged() {
-        UseCaseCode code = service.add(WS, useCaseWithSupportingActor(), DEFAULT_LANGUAGE).code();
+    void updateWithoutRoleArgumentsLeavesBothReferencesUnchanged() {
+        UseCaseCode code = service.add(WS, useCaseWithSupportingRole(), DEFAULT_LANGUAGE).code();
 
         UseCase updated = service.update(WS, code, UseCaseCorrection.builder()
                 .title("New title")
                 .build(), DEFAULT_LANGUAGE);
 
-        assertEquals(new ActorRef(CUSTOMER_ID), updated.primaryActor());
-        assertEquals(List.of(new ActorRef(PAYMENT_PROVIDER_ID)), updated.supportingActors());
+        assertEquals(new RoleRef(CUSTOMER_ID), updated.primaryRole());
+        assertEquals(List.of(new RoleRef(PAYMENT_PROVIDER_ID)), updated.supportingRoles());
     }
 
     /**
-     * {@code supportingActors} is a wholesale replace, not a merge (issue #343) - mirroring
+     * {@code supportingRoles} is a wholesale replace, not a merge (issue #343) - mirroring
      * {@code extensions} and a step's {@code realises} set.
      */
     @Test
-    void updateReplacesSupportingActorsWholesale() {
-        UseCaseCode code = service.add(WS, useCaseWithSupportingActor(), DEFAULT_LANGUAGE).code();
+    void updateReplacesSupportingRolesWholesale() {
+        UseCaseCode code = service.add(WS, useCaseWithSupportingRole(), DEFAULT_LANGUAGE).code();
 
         UseCase updated = service.update(WS, code, UseCaseCorrection.builder()
-                .supportingActors(List.of("Warehouse"))
+                .supportingRoles(List.of("ROLE-3"))
                 .build(), DEFAULT_LANGUAGE);
 
-        assertEquals(List.of(new ActorRef(WAREHOUSE_ID)), updated.supportingActors());
+        assertEquals(List.of(new RoleRef(WAREHOUSE_ID)), updated.supportingRoles());
     }
 
     /**
-     * The third arm of {@code supportingActors}' tri-state (issue #343): an empty list is the
+     * The third arm of {@code supportingRoles}' tri-state (issue #343): an empty list is the
      * explicit, unambiguous clear, distinct from omitting the argument altogether. Unlike
-     * {@code primaryActor}, which carries {@code sh:minCount 1} and therefore has no clear at
-     * all, supporting actors may legally drop to none.
+     * {@code primaryRole}, which carries {@code sh:minCount 1} and therefore has no clear at
+     * all, supporting roles may legally drop to none.
      */
     @Test
-    void updateWithAnEmptySupportingActorListClearsThem() {
-        UseCaseCode code = service.add(WS, useCaseWithSupportingActor(), DEFAULT_LANGUAGE).code();
+    void updateWithAnEmptySupportingRoleListClearsThem() {
+        UseCaseCode code = service.add(WS, useCaseWithSupportingRole(), DEFAULT_LANGUAGE).code();
 
         UseCase updated = service.update(WS, code, UseCaseCorrection.builder()
-                .supportingActors(List.of())
+                .supportingRoles(List.of())
                 .build(), DEFAULT_LANGUAGE);
 
-        assertEquals(List.of(), updated.supportingActors());
+        assertEquals(List.of(), updated.supportingRoles());
     }
 
     /**
-     * An unresolvable actor name is rejected before anything is written, exactly as in
-     * {@link UseCaseService#add} - so a correction naming a typo'd actor leaves the use case
+     * An unresolvable role code is rejected before anything is written, exactly as in
+     * {@link UseCaseService#add} - so a correction naming a typo'd role leaves the use case
      * untouched rather than half-applying the fields it could resolve (issue #343).
      */
     @Test
-    void updateWithAnUnknownPrimaryActorIsRejectedAndWritesNothing() {
+    void updateWithAnUnknownPrimaryRoleIsRejectedAndWritesNothing() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
         UseCase before = service.get(WS, code, null).orElseThrow();
 
         assertThrows(NoSuchElementException.class, () -> service.update(WS, code, UseCaseCorrection.builder()
                 .title("New title")
-                .primaryActor("Ghost")
+                .primaryRole("ROLE-GHOST")
                 .build(), DEFAULT_LANGUAGE));
 
         assertEquals(before, service.get(WS, code, null).orElseThrow());
     }
 
-    /** Mirrors {@link #updateWithAnUnknownPrimaryActorIsRejectedAndWritesNothing} for a supporting actor. */
+    /** Mirrors {@link #updateWithAnUnknownPrimaryRoleIsRejectedAndWritesNothing} for a supporting role. */
     @Test
-    void updateWithAnUnknownSupportingActorIsRejectedAndWritesNothing() {
+    void updateWithAnUnknownSupportingRoleIsRejectedAndWritesNothing() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
         UseCase before = service.get(WS, code, null).orElseThrow();
 
         assertThrows(NoSuchElementException.class, () -> service.update(WS, code, UseCaseCorrection.builder()
                 .title("New title")
-                .supportingActors(List.of("Customer", "Ghost"))
+                .supportingRoles(List.of("ROLE-1", "ROLE-GHOST"))
                 .build(), DEFAULT_LANGUAGE));
 
         assertEquals(before, service.get(WS, code, null).orElseThrow());
     }
 
     /**
-     * Issue #343: neither {@code primaryActor} nor {@code supportingActors} carries a
-     * language-tagged literal, so an actor-only correction feeds no touched signal into
+     * Issue #343: neither {@code primaryRole} nor {@code supportingRoles} carries a
+     * language-tagged literal, so a role-only correction feeds no touched signal into
      * {@code updateWithOptimisticRetry} and therefore never resolves a write language - the call
      * goes through even when the caller supplies neither {@code language} nor
-     * {@code defaultLanguage}. This is exactly what lets the actor migration land in a project
+     * {@code defaultLanguage}. This is exactly what lets the role migration land in a project
      * with no configured default language at all; complements {@link
      * #updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite}, whose
      * title field is language-tagged and therefore does need one once actually changed.
      */
     @Test
-    void updateWithOnlyActorFieldsAndNeitherLanguageNorDefaultLanguageGoesThrough() {
-        UseCaseCode code = service.add(WS, useCaseWithSupportingActor(), DEFAULT_LANGUAGE).code();
+    void updateWithOnlyRoleFieldsAndNeitherLanguageNorDefaultLanguageGoesThrough() {
+        UseCaseCode code = service.add(WS, useCaseWithSupportingRole(), DEFAULT_LANGUAGE).code();
 
         UseCase updated = service.update(WS, code, UseCaseCorrection.builder()
-                .primaryActor("PaymentProvider")
-                .supportingActors(List.of("Warehouse"))
+                .primaryRole("ROLE-2")
+                .supportingRoles(List.of("ROLE-3"))
                 .build(), null);
 
-        assertEquals(new ActorRef(PAYMENT_PROVIDER_ID), updated.primaryActor());
-        assertEquals(List.of(new ActorRef(WAREHOUSE_ID)), updated.supportingActors());
+        assertEquals(new RoleRef(PAYMENT_PROVIDER_ID), updated.primaryRole());
+        assertEquals(List.of(new RoleRef(WAREHOUSE_ID)), updated.supportingRoles());
     }
 
-    /** A use case that starts out with one supporting actor, for the actor-correction tests above. */
-    private static NewUseCase useCaseWithSupportingActor() {
-        return new NewUseCase("Place order", "goal of Place order", null, null, "Customer",
-                List.of("PaymentProvider"), null, null, List.of(new NewStep(1, "do something", List.of())),
+    /** A use case that starts out with one supporting role, for the role-correction tests above. */
+    private static NewUseCase useCaseWithSupportingRole() {
+        return new NewUseCase("Place order", "goal of Place order", null, null, "ROLE-1",
+                List.of("ROLE-2"), null, null, List.of(new NewStep(1, "do something", List.of())),
                 List.of(), null);
     }
 
@@ -637,9 +637,9 @@ class UseCaseServiceTest {
     }
 
     @Test
-    void updatePreservesPrimaryActorSupportingActorsAndSteps() {
+    void updatePreservesPrimaryRoleSupportingRolesAndSteps() {
         NewUseCase command = new NewUseCase("Place order", "Customer places an order", "Webshop",
-                "Customer opens the cart", "Customer", List.of("PaymentProvider"),
+                "Customer opens the cart", "ROLE-1", List.of("ROLE-2"),
                 "Customer is logged in", "Order is recorded",
                 List.of(new NewStep(1, "select items", List.of("FR5"))), List.of(), null);
         UseCaseCode code = service.add(WS, command, DEFAULT_LANGUAGE).code();
@@ -649,8 +649,8 @@ class UseCaseServiceTest {
                 .title("New title")
                 .build(), DEFAULT_LANGUAGE);
 
-        assertEquals(before.primaryActor(), updated.primaryActor());
-        assertEquals(before.supportingActors(), updated.supportingActors());
+        assertEquals(before.primaryRole(), updated.primaryRole());
+        assertEquals(before.supportingRoles(), updated.supportingRoles());
         assertEquals(before.steps(), updated.steps());
     }
 
@@ -667,7 +667,7 @@ class UseCaseServiceTest {
 
     @Test
     void updateCorrectsAnExistingStepsTextWithoutTouchingItsRealisesOrOtherSteps() {
-        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "Customer", List.of(),
+        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "ROLE-1", List.of(),
                 null, null,
                 List.of(new NewStep(1, "select items", List.of("FR5")),
                         new NewStep(2, "confirm", List.of())),
@@ -685,7 +685,7 @@ class UseCaseServiceTest {
 
     @Test
     void updateCanPatchSeveralStepsAtOnce() {
-        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "Customer", List.of(),
+        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "ROLE-1", List.of(),
                 null, null,
                 List.of(new NewStep(1, "select items", List.of()),
                         new NewStep(2, "confirm", List.of())),
@@ -743,7 +743,7 @@ class UseCaseServiceTest {
     void updateWithStepRealisesPatchesResolvesEachCodeAndReplacesTheNamedStepsRealises() {
         ResourceId fr7Id = ResourceId.of("https://w3id.org/arknet/id/req-fr7");
         requirementLookup.register("FR7", fr7Id);
-        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "Customer", List.of(),
+        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "ROLE-1", List.of(),
                 null, null,
                 List.of(new NewStep(1, "select items", List.of("FR5")),
                         new NewStep(2, "confirm", List.of())),
@@ -772,7 +772,7 @@ class UseCaseServiceTest {
 
     @Test
     void updateWithStepRealisesPatchesClearsAnExistingRealisesSetWhenGivenAnEmptyList() {
-        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "Customer", List.of(),
+        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "ROLE-1", List.of(),
                 null, null, List.of(new NewStep(1, "select items", List.of("FR5"))), List.of(), null);
         UseCaseCode code = service.add(WS, command, DEFAULT_LANGUAGE).code();
 
@@ -787,7 +787,7 @@ class UseCaseServiceTest {
     void updateAppliesStepTextPatchesAndStepRealisesPatchesIndependently() {
         ResourceId fr7Id = ResourceId.of("https://w3id.org/arknet/id/req-fr7");
         requirementLookup.register("FR7", fr7Id);
-        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "Customer", List.of(),
+        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "ROLE-1", List.of(),
                 null, null,
                 List.of(new NewStep(1, "select items", List.of("FR5")),
                         new NewStep(2, "confirm", List.of())),

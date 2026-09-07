@@ -223,6 +223,12 @@ class RoleServiceConcurrencyTest {
         public List<RoleCode> findRetainedCodes(ProjectId projectId) {
             return delegate.findRetainedCodes(projectId);
         }
+
+        @Override
+        public List<de.hauschel.arknet.actor.application.port.in.ResolveRoles.ResolvedRole> findByIds(
+                ProjectId projectId, String displayLocale, List<ResourceId> ids) {
+            return delegate.findByIds(projectId, displayLocale, ids);
+        }
     }
 
     /**
@@ -292,6 +298,12 @@ class RoleServiceConcurrencyTest {
         public List<RoleCode> findRetainedCodes(ProjectId projectId) {
             return delegate.findRetainedCodes(projectId);
         }
+
+        @Override
+        public List<de.hauschel.arknet.actor.application.port.in.ResolveRoles.ResolvedRole> findByIds(
+                ProjectId projectId, String displayLocale, List<ResourceId> ids) {
+            return delegate.findByIds(projectId, displayLocale, ids);
+        }
     }
 
     /** A repository whose {@code compareAndUpdate} always reports a conflict, never applying. */
@@ -349,6 +361,12 @@ class RoleServiceConcurrencyTest {
         @Override
         public List<RoleCode> findRetainedCodes(ProjectId projectId) {
             return delegate.findRetainedCodes(projectId);
+        }
+
+        @Override
+        public List<de.hauschel.arknet.actor.application.port.in.ResolveRoles.ResolvedRole> findByIds(
+                ProjectId projectId, String displayLocale, List<ResourceId> ids) {
+            return delegate.findByIds(projectId, displayLocale, ids);
         }
     }
 }

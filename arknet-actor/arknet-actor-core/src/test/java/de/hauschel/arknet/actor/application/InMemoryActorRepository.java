@@ -12,7 +12,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.domain.Actor;
@@ -151,15 +150,6 @@ final class InMemoryActorRepository implements ActorRepository {
     @Override
     public List<ActorCode> findRetainedCodes(ProjectId projectId) {
         return List.copyOf(retainedByProject.getOrDefault(projectId, List.of()));
-    }
-
-    @Override
-    public List<ResolveActors.ResolvedActor> findByIds(ProjectId projectId, List<ResourceId> ids) {
-        Set<ResourceId> wanted = Set.copyOf(ids);
-        return byProject.getOrDefault(projectId, Map.of()).values().stream()
-                .filter(actor -> wanted.contains(actor.id().value()))
-                .map(actor -> new ResolveActors.ResolvedActor(actor.id().value(), actor.code()))
-                .toList();
     }
 
     @Override

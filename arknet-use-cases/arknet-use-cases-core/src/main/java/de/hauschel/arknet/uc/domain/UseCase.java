@@ -36,10 +36,12 @@ import de.hauschel.arknet.kernel.ProjectId;
  *                          {@code null})
  * @param trigger           the event that starts the use case; optional (may be
  *                          {@code null})
- * @param primaryActor      the actor whose goal the use case serves, carried as the
- *                          actor term's opaque subject identity - not as a business label
- * @param supportingActors  further participating actors; {@code 0..n}, each carried as
- *                          the actor term's opaque subject identity - not as a business
+ * @param primaryRole       the role whose goal the use case serves (ADR-37/
+ *                          kogn-io/arknet#405 Part C - formerly the actor playing that role),
+ *                          carried as the role resource's opaque subject identity - not as a
+ *                          business label
+ * @param supportingRoles   further roles the system calls upon; {@code 0..n}, each carried as
+ *                          the role resource's opaque subject identity - not as a business
  *                          label (never {@code null}; a {@code null} argument is
  *                          normalised to an empty list)
  * @param precondition      what must hold before the use case runs; optional
@@ -70,8 +72,8 @@ public record UseCase(
         String goal,
         String scope,
         String trigger,
-        ActorRef primaryActor,
-        List<ActorRef> supportingActors,
+        RoleRef primaryRole,
+        List<RoleRef> supportingRoles,
         String precondition,
         String postcondition,
         List<Step> steps,
@@ -84,7 +86,7 @@ public record UseCase(
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(title, "title");
         Objects.requireNonNull(goal, "goal");
-        Objects.requireNonNull(primaryActor, "primaryActor");
+        Objects.requireNonNull(primaryRole, "primaryRole");
         Objects.requireNonNull(steps, "steps");
         if (title.isBlank()) {
             throw new IllegalArgumentException("title must not be blank");
@@ -92,7 +94,7 @@ public record UseCase(
         if (goal.isBlank()) {
             throw new IllegalArgumentException("goal must not be blank");
         }
-        supportingActors = supportingActors == null ? List.of() : List.copyOf(supportingActors);
+        supportingRoles = supportingRoles == null ? List.of() : List.copyOf(supportingRoles);
         extensions = extensions == null ? List.of() : List.copyOf(extensions);
         usesTerms = usesTerms == null ? List.of() : List.copyOf(usesTerms);
         constrainedBy = constrainedBy == null ? List.of() : List.copyOf(constrainedBy);
@@ -137,7 +139,7 @@ public record UseCase(
             int unmatchedPosition = textByPosition.keySet().iterator().next();
             throw new StepPositionNotFoundException(projectId, code, unmatchedPosition);
         }
-        return new UseCase(id, code, title, goal, scope, trigger, primaryActor, supportingActors,
+        return new UseCase(id, code, title, goal, scope, trigger, primaryRole, supportingRoles,
                 precondition, postcondition, patched, extensions, usesTerms, constrainedBy);
     }
 
@@ -177,7 +179,7 @@ public record UseCase(
             int unmatchedPosition = remaining.keySet().iterator().next();
             throw new StepPositionNotFoundException(projectId, code, unmatchedPosition);
         }
-        return new UseCase(id, code, title, goal, scope, trigger, primaryActor, supportingActors,
+        return new UseCase(id, code, title, goal, scope, trigger, primaryRole, supportingRoles,
                 precondition, postcondition, patched, extensions, usesTerms, constrainedBy);
     }
 

@@ -30,6 +30,7 @@ class HtmlReportRendererTest {
 
     private static final ProjectId PROJECT = new ProjectId("report-test");
     private static final String ARKREQ = "https://w3id.org/arknet/requirements#";
+    private static final String ARKPROC = "https://w3id.org/arknet/process#";
     private static final String ID = "https://w3id.org/arknet/id/";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 
@@ -63,18 +64,21 @@ class HtmlReportRendererTest {
     }
 
     /**
-     * The primary actor shows the term itself and links to the actor's own resource; its running
-     * number is the tooltip, and the opaque identity stays in the raw triples. Split out from
-     * {@link #rendersAUseCaseAsAFlowRatherThanAsItsTriples()} (issue #118): the actor chip is not
-     * part of the flow, it is a card-level reference like any other.
+     * The primary role shows its resolved display name and links to the role's own resource; its
+     * running number is the tooltip, and the opaque identity stays in the raw triples. Split out
+     * from {@link #rendersAUseCaseAsAFlowRatherThanAsItsTriples()} (issue #118): the role chip is
+     * not part of the flow, it is a card-level reference like any other. Since ADR-37/
+     * kogn-io/arknet#405 Part C the chip is resolved through {@code ResolveRoles}, not
+     * {@link Glossary} - the fixture types the target {@code arkproc:Role}, not
+     * {@code skos:Concept}, to match.
      */
     @Test
-    void linksThePrimaryActorAsAChipToItsOwnResource() {
+    void linksThePrimaryRoleAsAChipToItsOwnResource() {
         final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
-        assertThat(html).contains("<span class=\"blabel\">Primary actor</span>");
-        assertThat(html).contains("<a class=\"chip\" href=\"#r-" + anchorOf(ID + "actor-1")
-                + "\" title=\"TERM-1\">Kunde</a>");
+        assertThat(html).contains("<span class=\"blabel\">Primary role</span>");
+        assertThat(html).contains("<a class=\"chip\" href=\"#r-" + anchorOf(ID + "role-1")
+                + "\" title=\"ROLE-1\">Kunde</a>");
     }
 
     /**
@@ -993,31 +997,43 @@ class HtmlReportRendererTest {
     }
 
     private static ModelSection useCaseSection() {
-        return new ModelSection("Use Cases", "use-cases", "goal, actors and the ordered main flow", List.of(
+        return new ModelSection("Use Cases", "use-cases", "goal, roles and the ordered main flow", List.of(
                 new ModelCard("UC1", "Bestellung aufgeben", UC_1, List.of(), List.of(
                         Block.Prose.plain("Goal", "Der Kunde bestellt Artikel."),
-                        new Block.Refs("Primary actor",
-                                List.of(new Ref("Kunde", "TERM-1", ID + "actor-1"))),
+                        new Block.Refs("Primary role",
+                                List.of(new Ref("Kunde", "ROLE-1", ID + "role-1"))),
                         new Block.Flow("Main flow", List.of(
                                 new FlowStep(1, RichText.plain("Kunde legt Artikel in den Warenkorb"),
                                         List.of(Ref.of("FR-1", FR_1))),
                                 new FlowStep(2, RichText.plain("System bestaetigt die Bestellung"), List.of())))))));
     }
 
-    /** A use case with two steps, one requirement, one actor and one unclaimed resource. */
+    /**
+     * A use case with two steps, one requirement, one role and two unclaimed resources. The role
+     * is typed {@code arkproc:Role} with a language-tagged {@code arknet:name} (ADR-37/
+     * kogn-io/arknet#405 Part C) - not {@code skos:Concept}, which is what an actor/role reference
+     * resolved through {@link Glossary} used to require before {@link UseCaseCards} was fixed to
+     * resolve {@code primaryRole}/{@code supportingRole} through {@code ResolveRoles} instead.
+     * {@code ID + "actor-1"} stays a plain, otherwise-unreferenced {@code skos:Concept} here too:
+     * several independent {@link Span.TermLink}/{@link Span.CodeRef} rendering tests below reuse
+     * it as an arbitrary linkable target and need a raw-section card to link to, unrelated to the
+     * use case's own role reference.
+     */
     private static StoreSnapshot snapshot() {
         return StoreSnapshot.of(List.of(
                 iri(UC_1, RDF_TYPE, ARKREQ + "UseCase"),
                 literal(UC_1, "http://purl.org/dc/terms/identifier", "UC1"),
                 iri(UC_1, ARKREQ + "mainStep", STEP_1),
                 iri(UC_1, ARKREQ + "mainStep", STEP_2),
-                iri(UC_1, ARKREQ + "primaryActor", ID + "actor-1"),
+                iri(UC_1, ARKREQ + "primaryRole", ID + "role-1"),
                 iri(STEP_1, RDF_TYPE, ARKREQ + "Step"),
                 literal(STEP_1, ARKREQ + "stepText", "Kunde legt Artikel in den Warenkorb"),
                 iri(STEP_2, RDF_TYPE, ARKREQ + "Step"),
                 literal(STEP_2, ARKREQ + "stepText", "System bestaetigt die Bestellung"),
                 iri(FR_1, RDF_TYPE, ARKREQ + "Requirement"),
                 literal(FR_1, "http://purl.org/dc/terms/identifier", "FR-1"),
+                iri(ID + "role-1", RDF_TYPE, ARKPROC + "Role"),
+                literalLang(ID + "role-1", "https://w3id.org/arknet/core#name", "Kunde", "de"),
                 iri(ID + "actor-1", RDF_TYPE, "http://www.w3.org/2004/02/skos/core#Concept"),
                 iri(REVISION, RDF_TYPE, "https://w3id.org/arknet/provenance#Revision")));
     }

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles;
 import de.hauschel.arknet.actor.domain.DuplicateRoleCodeException;
 import de.hauschel.arknet.actor.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.actor.domain.Role;
@@ -16,6 +17,7 @@ import de.hauschel.arknet.actor.domain.RoleDisplayFallback;
 import de.hauschel.arknet.actor.domain.RoleNotFoundException;
 import de.hauschel.arknet.actor.domain.RoleReferencedException;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResourceId;
 
 /**
  * Driven port: persistence capability the role resource type needs from the outside - mirrors
@@ -184,4 +186,26 @@ public interface RoleRepository {
      * @return the retained codes, never {@code null}
      */
     List<RoleCode> findRetainedCodes(ProjectId projectId);
+
+    /**
+     * Finds every role in a project whose identity is among {@code ids}, in one store round-trip
+     * - backs {@link ResolveRoles}. Not a per-id existence check: an id absent from
+     * the project (or not a role at all) is simply absent from the result, never an error.
+     *
+     * <p>Returns the slim {@link ResolveRoles.ResolvedRole} projection, not the full {@link Role}
+     * aggregate: the only consumer of this method is {@link ResolveRoles}, which exists purely to
+     * answer "what code and name identify this identity" for display. Unlike a bare code-only
+     * projection, the projection here also carries the resolved {@code name} - a role's name is
+     * language-tagged, so {@code displayLocale} selects which variant a caller sees, the same
+     * fallback chain {@link #findByCode} already applies.</p>
+     *
+     * @param projectId     the project (architecture model) to look up roles in
+     * @param displayLocale the BCP-47 language tag the caller wants each role's resolved
+     *                      {@code name} shown in, overriding this repository's own configured
+     *                      display-language preference for this one call, or {@code null} to use
+     *                      that preference unchanged
+     * @param ids           the opaque identities to resolve; an empty list yields an empty result
+     * @return the resolved roles found, in no particular order, never {@code null}
+     */
+    List<ResolveRoles.ResolvedRole> findByIds(ProjectId projectId, String displayLocale, List<ResourceId> ids);
 }

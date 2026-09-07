@@ -18,9 +18,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
 
-import de.hauschel.arknet.actor.application.port.in.ResolveActors;
-import de.hauschel.arknet.actor.application.port.in.ResolveActors.ResolvedActor;
-import de.hauschel.arknet.actor.domain.ActorCode;
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles;
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles.ResolvedRole;
+import de.hauschel.arknet.actor.domain.RoleCode;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
@@ -41,9 +41,9 @@ import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
-import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
+import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
@@ -60,9 +60,10 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * Behaviour of the use-case MCP tools against an in-port fake: tool declaration, mapping of
  * the nested {@code uc_add} payload onto the {@link AddUseCase.NewUseCase} command (now raw
  * human-typed strings), the {@code uc_get}/{@code uc_list} response shape - including
- * the actor/requirement display-resolution contract borrowed from {@link ResolveActors}/
- * {@link ResolveRequirements} (issue #336: actor resolution moved from {@link ResolveTerms} to
- * {@link ResolveActors} when the register replaced the glossary actor facet) - and verbatim
+ * the role/requirement display-resolution contract borrowed from {@link ResolveRoles}/
+ * {@link ResolveRequirements} (ADR-37/kogn-io/arknet#405 Part C: role resolution repointed from
+ * {@code arkproc:Actor} to {@code arkproc:Role}, mirroring issue #336's own move from
+ * {@link ResolveTerms} to the actor register's driving port) - and verbatim
  * propagation of a didactic in-port error (which Spring AI turns into a tool error result).
  *
  * <p>The rendered id a caller sees is the human-readable {@link UseCaseCode} ({@code UC1}), not
@@ -81,12 +82,12 @@ class UseCaseMcpToolsTest {
     private static final ProjectResolver PROJECTS = anchor -> new ResolvedProject(PROJECT, null);
 
     private final Stub stub = new Stub();
-    private final RecordingResolveActors resolveActors = new RecordingResolveActors();
+    private final RecordingResolveRoles resolveRoles = new RecordingResolveRoles();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RecordingResolveRequirements resolveRequirements = new RecordingResolveRequirements();
     private final RecordingResolveConstraints resolveConstraints = new RecordingResolveConstraints();
     private final UseCaseMcpTools adapter = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
-            resolveActors, resolveTerms, resolveRequirements, resolveConstraints, PROJECTS);
+            resolveRoles, resolveTerms, resolveRequirements, resolveConstraints, PROJECTS);
 
     @Test
     void declaresTheSixUseCaseTools() {
@@ -114,39 +115,39 @@ class UseCaseMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(null, stub, stub, stub, stub, stub, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(null, stub, stub, stub, stub, stub, stub, resolveRoles, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, null, stub, stub, stub, stub, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, null, stub, stub, stub, stub, stub, resolveRoles, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, null, stub, stub, stub, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, stub, null, stub, stub, stub, stub, resolveRoles, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, null, stub, stub, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, stub, stub, null, stub, stub, stub, resolveRoles, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, stub, null, stub, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, null, stub, stub, resolveRoles, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, null, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, null, stub, resolveRoles, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, null, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, null, resolveRoles, resolveTerms,
                         resolveRequirements, resolveConstraints, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveActors, resolveTerms,
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveRoles, resolveTerms,
                         resolveRequirements, resolveConstraints, null));
     }
 
     @Test
     void addMapsNestedStepsAndReferencesToCommand() {
         adapter.add(null, "Place order", "Customer places an order", "Webshop", "Customer opens the cart",
-                "Customer", List.of("PaymentProvider"), "Customer is logged in", "Order is recorded",
+                "ROLE-1", List.of("ROLE-2"), "Customer is logged in", "Order is recorded",
                 List.of(new StepInput(1, "Customer selects items", List.of("FR-1")),
                         new StepInput(2, "Customer confirms and pays", List.of())),
                 List.of("2a. Payment declined -> use case ends in failure"), null, null);
@@ -156,8 +157,8 @@ class UseCaseMcpToolsTest {
         assertEquals("Customer places an order", command.goal());
         assertEquals("Webshop", command.scope());
         assertEquals("Customer opens the cart", command.trigger());
-        assertEquals("Customer", command.primaryActor());
-        assertEquals(List.of("PaymentProvider"), command.supportingActors());
+        assertEquals("ROLE-1", command.primaryRole());
+        assertEquals(List.of("ROLE-2"), command.supportingRoles());
         assertEquals("Customer is logged in", command.precondition());
         assertEquals("Order is recorded", command.postcondition());
         assertEquals(2, command.steps().size());
@@ -168,7 +169,7 @@ class UseCaseMcpToolsTest {
 
     @Test
     void addNormalizesOmittedOptionalsToNullAndEmpty() {
-        adapter.add(null, "Reset password", "User resets password", null, null, "Customer", null, null, null,
+        adapter.add(null, "Reset password", "User resets password", null, null, "ROLE-1", null, null, null,
                 List.of(new StepInput(1, "User requests a reset link", null)), null, null, null);
 
         AddUseCase.NewUseCase command = stub.lastCommand;
@@ -176,7 +177,7 @@ class UseCaseMcpToolsTest {
         assertNull(command.trigger());
         assertNull(command.precondition());
         assertNull(command.postcondition());
-        assertTrue(command.supportingActors().isEmpty());
+        assertTrue(command.supportingRoles().isEmpty());
         assertTrue(command.extensions().isEmpty());
         assertTrue(command.steps().get(0).realises().isEmpty());
     }
@@ -184,7 +185,7 @@ class UseCaseMcpToolsTest {
     /** {@code uc_add}'s {@code language} argument reaches {@link AddUseCase.NewUseCase} unchanged. */
     @Test
     void addPassesTheLanguageThrough() {
-        adapter.add(null, "Place order", "Customer places an order", null, null, "Customer", null, null, null,
+        adapter.add(null, "Place order", "Customer places an order", null, null, "ROLE-1", null, null, null,
                 List.of(new StepInput(1, "Customer selects items", List.of())), null, "de", null);
 
         assertEquals("de", stub.lastCommand.language());
@@ -193,7 +194,7 @@ class UseCaseMcpToolsTest {
     /** A blank {@code language} is treated as omitted (untagged), mirroring every other optional field. */
     @Test
     void addTreatsABlankLanguageAsOmitted() {
-        adapter.add(null, "Place order", "Customer places an order", null, null, "Customer", null, null, null,
+        adapter.add(null, "Place order", "Customer places an order", null, null, "ROLE-1", null, null, null,
                 List.of(new StepInput(1, "Customer selects items", List.of())), null, "  ", null);
 
         assertEquals(null, stub.lastCommand.language());
@@ -203,10 +204,10 @@ class UseCaseMcpToolsTest {
     @Test
     void getPassesAnExplicitDisplayLocaleThrough() {
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order", "goal",
-                null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(),
+                null, null, new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer")), List.of(),
                 null, null, List.of(new Step(1, "select items", List.of())), List.of(), List.of(), List.of()));
         UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithDefault.get(null, "UC1", "en", null);
@@ -218,10 +219,10 @@ class UseCaseMcpToolsTest {
     @Test
     void getFallsBackToTheProjectsDefaultLanguageWhenDisplayLocaleIsOmitted() {
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order", "goal",
-                null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(),
+                null, null, new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer")), List.of(),
                 null, null, List.of(new Step(1, "select items", List.of())), List.of(), List.of(), List.of()));
         UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithDefault.get(null, "UC1", null, null);
@@ -242,7 +243,7 @@ class UseCaseMcpToolsTest {
     @Test
     void listPassesTheProjectsDefaultLanguageThrough() {
         UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithGermanDefault.list(null, null, null);
@@ -257,7 +258,7 @@ class UseCaseMcpToolsTest {
     @Test
     void listPassesAnExplicitDisplayLocaleArgumentThrough() {
         UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithGermanDefault.list(null, "fr", null);
@@ -272,7 +273,7 @@ class UseCaseMcpToolsTest {
     @Test
     void listMarksAUseCaseWhoseDisplayedLanguageFellBack() {
         UseCase uc = new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order", "goal", null, null,
-                new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(), null, null,
+                new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer")), List.of(), null, null,
                 List.of(new Step(1, "select items", List.of())), List.of(), List.of(), List.of());
         stub.listResult = List.of(uc);
         stub.fallbacksForList = Map.of(uc.code(), new UseCaseDisplayFallback("en", null));
@@ -290,7 +291,7 @@ class UseCaseMcpToolsTest {
     @Test
     void listLeavesAUseCaseWithNoFallbackUnmarked() {
         UseCase uc = new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Bestellung aufgeben", "Ziel", null, null,
-                new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(), null, null,
+                new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer")), List.of(), null, null,
                 List.of(new Step(1, "Artikel auswaehlen", List.of())), List.of(), List.of(), List.of());
         stub.listResult = List.of(uc);
         stub.fallbacksForList = Map.of();
@@ -311,20 +312,20 @@ class UseCaseMcpToolsTest {
 
     @Test
     void ucGetRendersAllFieldsStepsAndExtensions() {
-        ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
-        ActorRef supportingActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-payment-provider"));
+        RoleRef primaryRole = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer"));
+        RoleRef supportingRole = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-payment-provider"));
         RequirementRef fr1 = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/req-fr1"));
         TermRef term1 = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-1"));
         ConstraintRef tcon1 = new ConstraintRef(ResourceId.of("https://w3id.org/arknet/id/constraint-1"));
-        resolveActors.register(primaryActor.value(), new ActorCode("Customer"));
-        resolveActors.register(supportingActor.value(), new ActorCode("PaymentProvider"));
+        resolveRoles.register(primaryRole.value(), new RoleCode("ROLE-1"));
+        resolveRoles.register(supportingRole.value(), new RoleCode("ROLE-2"));
         resolveTerms.register(term1.value(), new TermCode("TERM-1"));
         resolveRequirements.register(fr1.value(), new RequirementCode("FR-1"));
         resolveConstraints.register(tcon1.value(), new ConstraintCode("TCON-1"));
 
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
-                "Customer places an order", "Webshop", "Customer opens the cart", primaryActor,
-                List.of(supportingActor), "Customer is logged in", "Order is recorded",
+                "Customer places an order", "Webshop", "Customer opens the cart", primaryRole,
+                List.of(supportingRole), "Customer is logged in", "Order is recorded",
                 List.of(new Step(1, "Customer selects items", List.of(fr1)),
                         new Step(2, "Customer confirms and pays", List.of())),
                 List.of("2a. Payment declined -> use case ends in failure"), List.of(term1), List.of(tcon1)));
@@ -332,8 +333,8 @@ class UseCaseMcpToolsTest {
         String rendered = adapter.get(null, "UC1", null, null);
 
         assertTrue(rendered.contains("UC1 Place order"));
-        assertTrue(rendered.contains("primaryActor: Customer"));
-        assertTrue(rendered.contains("supportingActors: PaymentProvider"));
+        assertTrue(rendered.contains("primaryRole: ROLE-1"));
+        assertTrue(rendered.contains("supportingRoles: ROLE-2"));
         assertTrue(rendered.contains("1. Customer selects items -> realises FR-1"));
         assertTrue(rendered.contains("2. Customer confirms and pays"));
         assertTrue(rendered.contains("2a. Payment declined -> use case ends in failure"));
@@ -372,7 +373,7 @@ class UseCaseMcpToolsTest {
     @Test
     void ucLinkTermPassesTheProjectsDefaultLanguageThrough() {
         UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithGermanDefault.linkTerm(null, "UC1", "TERM-1", null);
@@ -383,7 +384,7 @@ class UseCaseMcpToolsTest {
     @Test
     void ucLinkConstraintPassesTheProjectsDefaultLanguageThrough() {
         UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                resolveActors, resolveTerms, resolveRequirements, resolveConstraints,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithGermanDefault.linkConstraint(null, "UC1", "TCON-1", null);
@@ -393,24 +394,24 @@ class UseCaseMcpToolsTest {
 
     /**
      * Hard invariant (mirrors {@code RequirementMcpToolsTest}): an id neither
-     * {@link ResolveActors} nor {@link ResolveRequirements} can resolve must never make
+     * {@link ResolveRoles} nor {@link ResolveRequirements} can resolve must never make
      * rendering throw - it falls back to the bare IRI.
      */
     @Test
     void ucGetFallsBackToTheBareIriWhenResolutionCannotResolveIt() {
-        ActorRef unresolvableActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/unknown-actor"));
+        RoleRef unresolvableRole = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/unknown-role"));
         RequirementRef unresolvableRequirement =
                 new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/unknown-req"));
-        // Deliberately not registered with either resolver - simulates a missing/deleted actor/requirement.
+        // Deliberately not registered with either resolver - simulates a missing/deleted role/requirement.
 
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
-                "Customer places an order", null, null, unresolvableActor, List.of(), null, null,
+                "Customer places an order", null, null, unresolvableRole, List.of(), null, null,
                 List.of(new Step(1, "select items", List.of(unresolvableRequirement))), List.of(), List.of(),
                 List.of()));
 
         String rendered = adapter.get(null, "UC1", null, null);
 
-        assertTrue(rendered.contains("primaryActor: https://w3id.org/arknet/id/unknown-actor"), rendered);
+        assertTrue(rendered.contains("primaryRole: https://w3id.org/arknet/id/unknown-role"), rendered);
         assertTrue(rendered.contains("realises https://w3id.org/arknet/id/unknown-req"), rendered);
     }
 
@@ -422,7 +423,7 @@ class UseCaseMcpToolsTest {
 
     @Test
     void ucListRendersCompactLines() {
-        ActorRef customer = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
+        RoleRef customer = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer"));
         stub.listResult = List.of(
                 new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
                         "Customer places an order", null, null,
@@ -452,7 +453,7 @@ class UseCaseMcpToolsTest {
                         + "Create it first with req_add before a use-case step realises it.");
 
         RuntimeException thrown = assertThrows(RuntimeException.class,
-                () -> adapter.add(null, "Place order", "goal", null, null, "Customer", null, null, null,
+                () -> adapter.add(null, "Place order", "goal", null, null, "ROLE-1", null, null, null,
                         List.of(new StepInput(1, "select items", List.of("FR-1"))), null, null, null));
 
         assertTrue(thrown.getMessage().contains("FR-1"));
@@ -479,41 +480,41 @@ class UseCaseMcpToolsTest {
     }
 
     /**
-     * Issue #343: {@code uc_update} hands both actor arguments to the in-port as the raw,
-     * human-typed labels {@code uc_add} already takes - resolving them against the actor register
-     * is the application service's job, not this adapter's.
+     * Issue #343: {@code uc_update} hands both role arguments to the in-port as the raw,
+     * human-typed business codes {@code uc_add} already takes - resolving them against the role
+     * register is the application service's job, not this adapter's.
      */
     @Test
-    void updatePassesTheActorArgumentsThroughToTheInPort() {
-        adapter.update(null, "UC1", null, null, null, null, "Customer", List.of("PaymentProvider"), null, null,
+    void updatePassesTheRoleArgumentsThroughToTheInPort() {
+        adapter.update(null, "UC1", null, null, null, null, "ROLE-1", List.of("ROLE-2"), null, null,
                 null, null, null, null, null);
 
-        assertEquals("Customer", stub.lastUpdatePrimaryActor);
-        assertEquals(List.of("PaymentProvider"), stub.lastUpdateSupportingActors);
+        assertEquals("ROLE-1", stub.lastUpdatePrimaryRole);
+        assertEquals(List.of("ROLE-2"), stub.lastUpdateSupportingRoles);
     }
 
     /**
      * The two arms an omitted-vs-empty mix-up would silently swap (issue #343): an omitted
-     * {@code supportingActors} must reach the port as {@code null} ("leave them"), an explicitly
+     * {@code supportingRoles} must reach the port as {@code null} ("leave them"), an explicitly
      * empty array as an empty list ("clear them"). Collapsing the first into the second would
-     * wipe every supporting actor off any use case corrected for an unrelated field.
+     * wipe every supporting role off any use case corrected for an unrelated field.
      */
     @Test
-    void updateDistinguishesAnOmittedSupportingActorArrayFromAnEmptyOne() {
+    void updateDistinguishesAnOmittedSupportingRoleArrayFromAnEmptyOne() {
         adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null, null, null);
-        assertEquals(null, stub.lastUpdateSupportingActors);
+        assertEquals(null, stub.lastUpdateSupportingRoles);
 
         adapter.update(null, "UC1", null, null, null, null, null, List.of(), null, null, null, null, null, null,
                 null);
-        assertEquals(List.of(), stub.lastUpdateSupportingActors);
+        assertEquals(List.of(), stub.lastUpdateSupportingRoles);
     }
 
-    /** A blank {@code primaryActor} is treated as omitted, the same tolerance every other field gets. */
+    /** A blank {@code primaryRole} is treated as omitted, the same tolerance every other field gets. */
     @Test
-    void updateTreatsABlankPrimaryActorAsOmitted() {
+    void updateTreatsABlankPrimaryRoleAsOmitted() {
         adapter.update(null, "UC1", null, null, null, null, "  ", null, null, null, null, null, null, null, null);
 
-        assertEquals(null, stub.lastUpdatePrimaryActor);
+        assertEquals(null, stub.lastUpdatePrimaryRole);
     }
 
     /** {@code uc_update} maps {@code stepRealisesPatches} to {@link UpdateUseCase.StepRealisesPatch}. */
@@ -620,8 +621,8 @@ class UseCaseMcpToolsTest {
         private String lastUpdateGoal;
         private String lastUpdateScope;
         private String lastUpdateTrigger;
-        private String lastUpdatePrimaryActor;
-        private List<String> lastUpdateSupportingActors;
+        private String lastUpdatePrimaryRole;
+        private List<String> lastUpdateSupportingRoles;
         private String lastUpdatePrecondition;
         private String lastUpdatePostcondition;
         private List<String> lastUpdateExtensions;
@@ -635,10 +636,10 @@ class UseCaseMcpToolsTest {
             if (addFailure != null) {
                 throw addFailure;
             }
-            ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-"
-                    + command.primaryActor()));
-            List<ActorRef> supportingActors = command.supportingActors().stream()
-                    .map(name -> new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-" + name)))
+            RoleRef primaryRole = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-"
+                    + command.primaryRole()));
+            List<RoleRef> supportingRoles = command.supportingRoles().stream()
+                    .map(name -> new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-" + name)))
                     .toList();
             List<Step> steps = command.steps().stream()
                     .map(step -> new Step(step.position(), step.text(),
@@ -648,7 +649,7 @@ class UseCaseMcpToolsTest {
                                     .toList()))
                     .toList();
             return new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), command.title(), command.goal(),
-                    command.scope(), command.trigger(), primaryActor, supportingActors,
+                    command.scope(), command.trigger(), primaryRole, supportingRoles,
                     command.precondition(), command.postcondition(), steps, command.extensions(), List.of(), List.of());
         }
 
@@ -686,18 +687,18 @@ class UseCaseMcpToolsTest {
             lastUpdateGoal = correction.goal();
             lastUpdateScope = correction.scope();
             lastUpdateTrigger = correction.trigger();
-            lastUpdatePrimaryActor = correction.primaryActor();
-            lastUpdateSupportingActors = correction.supportingActors();
+            lastUpdatePrimaryRole = correction.primaryRole();
+            lastUpdateSupportingRoles = correction.supportingRoles();
             lastUpdatePrecondition = correction.precondition();
             lastUpdatePostcondition = correction.postcondition();
             lastUpdateExtensions = correction.extensions();
             lastUpdateStepTextPatches = correction.stepTextPatches();
             lastUpdateStepRealisesPatches = correction.stepRealisesPatches();
             lastUpdateLanguage = correction.language();
-            ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
+            RoleRef primaryRole = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer"));
             return new UseCase(opaqueId("uc-1"), code, correction.title() != null ? correction.title() : "t",
                     correction.goal() != null ? correction.goal() : "goal", correction.scope(), correction.trigger(),
-                    primaryActor, List.of(), correction.precondition(), correction.postcondition(),
+                    primaryRole, List.of(), correction.precondition(), correction.postcondition(),
                     List.of(new Step(1, "do something", List.of())),
                     correction.extensions() != null ? correction.extensions() : List.of(), List.of(), List.of());
         }
@@ -707,9 +708,9 @@ class UseCaseMcpToolsTest {
             lastLinkTermUseCase = code;
             lastLinkedTermCode = termCode;
             lastLinkTermDefaultLanguage = defaultLanguage;
-            ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
+            RoleRef primaryRole = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer"));
             TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-" + termCode));
-            return new UseCase(opaqueId("uc-1"), code, "t", "goal", null, null, primaryActor, List.of(), null, null,
+            return new UseCase(opaqueId("uc-1"), code, "t", "goal", null, null, primaryRole, List.of(), null, null,
                     List.of(new Step(1, "do something", List.of())), List.of(), List.of(term), List.of());
         }
 
@@ -719,30 +720,33 @@ class UseCaseMcpToolsTest {
             lastLinkConstraintUseCase = code;
             lastLinkedConstraintCode = constraintCode;
             lastLinkConstraintDefaultLanguage = defaultLanguage;
-            ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
+            RoleRef primaryRole = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer"));
             ConstraintRef constraint =
                     new ConstraintRef(ResourceId.of("https://w3id.org/arknet/id/constraint-" + constraintCode));
-            return new UseCase(opaqueId("uc-1"), code, "t", "goal", null, null, primaryActor, List.of(), null, null,
+            return new UseCase(opaqueId("uc-1"), code, "t", "goal", null, null, primaryRole, List.of(), null, null,
                     List.of(new Step(1, "do something", List.of())), List.of(), List.of(), List.of(constraint));
         }
     }
 
     /**
-     * Fake {@link ResolveActors} (issue #336): resolves only what was {@link #register}
-     * registered - like the real port, never throws for an id it cannot resolve.
+     * Fake {@link ResolveRoles} (ADR-37/kogn-io/arknet#405 Part C): resolves only what was
+     * {@link #register}ed - like the real port, never throws for an id it cannot resolve. The
+     * registered {@code name} is never asserted on by a test here - rendering only ever reads
+     * {@link ResolvedRole#code()} (see {@link UseCasePresenter#renderRole}) - so a fixed
+     * placeholder is enough.
      */
-    private static final class RecordingResolveActors implements ResolveActors {
+    private static final class RecordingResolveRoles implements ResolveRoles {
 
-        private final List<ResolvedActor> known = new ArrayList<>();
+        private final List<ResolvedRole> known = new ArrayList<>();
 
-        void register(ResourceId id, ActorCode code) {
-            known.add(new ResolvedActor(id, code));
+        void register(ResourceId id, RoleCode code) {
+            known.add(new ResolvedRole(id, code, "unused"));
         }
 
         @Override
-        public List<ResolvedActor> resolveExisting(ProjectId projectId, ResourceId... ids) {
+        public List<ResolvedRole> resolveExisting(ProjectId projectId, String displayLocale, ResourceId... ids) {
             List<ResourceId> wanted = Arrays.asList(ids);
-            return known.stream().filter(a -> wanted.contains(a.id())).toList();
+            return known.stream().filter(r -> wanted.contains(r.id())).toList();
         }
     }
 

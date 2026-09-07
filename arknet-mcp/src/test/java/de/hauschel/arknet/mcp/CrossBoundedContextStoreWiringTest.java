@@ -16,9 +16,9 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
-import de.hauschel.arknet.actor.application.ActorService;
-import de.hauschel.arknet.actor.application.port.in.AddActor.NewActor;
-import de.hauschel.arknet.actor.domain.ActorType;
+import de.hauschel.arknet.actor.application.RoleService;
+import de.hauschel.arknet.actor.application.port.in.AddRole.NewRole;
+import de.hauschel.arknet.actor.application.port.in.RoleDetail;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
@@ -41,7 +41,10 @@ import de.hauschel.arknet.ul.domain.Term;
  * The regression proof: four bounded contexts (requirements,
  * ubiquitous-language, use-cases, actor) wired by {@link ArknetMcpConfiguration} must share the
  * <em>single</em> {@link DatasetLifecycle} bean, so a use case can strictly resolve its
- * requirement/actor references against the very resources the other contexts wrote.
+ * requirement/role references against the very resources the other contexts wrote (ADR-37/
+ * kogn-io/arknet#405 Part C - a use case's role reference used to be an actor reference resolved
+ * by name; the proof now goes through {@code role_add} and {@code RoleLookup} instead, since that
+ * is the port whose cross-graph resolution over the shared lifecycle actually needs pinning).
  *
  * <p>Every earlier adapter test ran each context on its own in-memory lifecycle, which is
  * exactly what hid the store-lock/isolation bug: cross-context lookup was never exercised over
@@ -81,11 +84,11 @@ class CrossBoundedContextStoreWiringTest {
 
     /**
      * Shared setup for the domain-resolution assertions below: {@code req_add} (FR) and {@code
-     * actor_add} (actor) into the same shared project store, then {@code uc_add} referencing that
-     * FR (by its code) and that actor (by name) - the service resolves both raw strings to opaque
-     * identities via ActorLookup/RequirementLookup before the real UseCase is constructed. {@code
-     * uc_get} reads the resolved cross-context edges back (looked up by code), so the resolved
-     * identity, not a label, is what the reference carries.
+     * role_add} (role) into the same shared project store, then {@code uc_add} referencing that
+     * FR (by its code) and that role (by its {@code ROLE-N} code) - the service resolves both raw
+     * strings to opaque identities via RoleLookup/RequirementLookup before the real UseCase is
+     * constructed. {@code uc_get} reads the resolved cross-context edges back (looked up by
+     * code), so the resolved identity, not a label, is what the reference carries.
      *
      * <p>Split from a formerly bundled test (issue #118) that mixed this domain-resolution proof
      * with the wiring assertions now in {@link #wiresASingleSharedDatasetLifecycleAndUseCaseMcpTools()}.</p>
@@ -98,17 +101,17 @@ class CrossBoundedContextStoreWiringTest {
                     assertThat(context).hasNotFailed();
 
                     RequirementService requirements = context.getBean(RequirementService.class);
-                    ActorService actors = context.getBean(ActorService.class);
+                    RoleService roles = context.getBean(RoleService.class);
                     UseCaseService useCases = context.getBean(UseCaseService.class);
 
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.", null,
                             RequirementType.FUNCTIONAL, null, null,
                             List.of("An order is placed and confirmed"), null), "en");
-                    actors.add(PROJECT, new NewActor(ActorType.HUMAN, "Customer", null));
+                    RoleDetail role = roles.add(PROJECT, new NewRole("Customer", null, List.of(), "en"), "en");
 
                     UseCase created = useCases.add(PROJECT, new NewUseCase("Place order",
-                            "Customer places an order", null, null, "Customer",
+                            "Customer places an order", null, null, role.role().code().value(),
                             List.of(), null, null,
                             List.of(new NewStep(1, "Customer selects items and confirms",
                                     List.of(fr.code().value()))),
@@ -123,9 +126,9 @@ class CrossBoundedContextStoreWiringTest {
     private record ResolvedUseCaseRoundTrip(UseCase created, UseCase reloaded, ResourceId requirementId) { }
 
     @Test
-    void useCaseResolvesTheActorWrittenByTheOtherContextOverTheSharedStore() {
+    void useCaseResolvesTheRoleWrittenByTheOtherContextOverTheSharedStore() {
         assertOnResolvedUseCaseRoundTrip(roundTrip ->
-                assertThat(roundTrip.reloaded().primaryActor()).isEqualTo(roundTrip.created().primaryActor()));
+                assertThat(roundTrip.reloaded().primaryRole()).isEqualTo(roundTrip.created().primaryRole()));
     }
 
     @Test
@@ -144,16 +147,16 @@ class CrossBoundedContextStoreWiringTest {
                         "arknet.rdf.storage=" + storageDir)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    ActorService actors = context.getBean(ActorService.class);
+                    RoleService roles = context.getBean(RoleService.class);
                     UseCaseService useCases = context.getBean(UseCaseService.class);
 
-                    // The actor exists, but the referenced requirement FR-1 was never created:
+                    // The role exists, but the referenced requirement FR-1 was never created:
                     // strict step-realises resolution must abort on the unknown FR (order in the
-                    // out-adapter resolves the primary actor first, hence seed it).
-                    actors.add(PROJECT, new NewActor(ActorType.HUMAN, "Customer", null));
+                    // application service resolves the primary role first, hence seed it).
+                    RoleDetail role = roles.add(PROJECT, new NewRole("Customer", null, List.of(), "en"), "en");
 
                     NewUseCase danglingFr = new NewUseCase("Broken", "Unresolvable requirement",
-                            null, null, "Customer", List.of(), null, null,
+                            null, null, role.role().code().value(), List.of(), null, null,
                             List.of(new NewStep(1, "does something", List.of("FR-1"))),
                             List.of(), null);
 

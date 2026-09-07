@@ -14,7 +14,7 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 
-import de.hauschel.arknet.actor.application.port.in.ResolveActors;
+import de.hauschel.arknet.actor.application.port.in.ResolveRoles;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
@@ -51,12 +51,12 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  * automatically.</p>
  *
  * <p><strong>Coarse-grained write.</strong> {@code uc_add} takes the complete use case -
- * including its ordered step list and its label references to requirements and actors - in a
+ * including its ordered step list and its label references to requirements and roles - in a
  * single call. The nested {@link StepInput} shape mirrors the domain
- * {@link de.hauschel.arknet.uc.domain.Step}; requirement/actor references are passed as bare
- * labels (e.g. {@code FR-1}, {@code Customer}) straight into {@link NewUseCase}/{@link NewStep} -
- * resolving them to opaque identities is the application service's job, not this
- * adapter's.</p>
+ * {@link de.hauschel.arknet.uc.domain.Step}; requirement/role references are passed as bare
+ * business codes (e.g. {@code FR-1}, {@code ROLE-4}) straight into {@link NewUseCase}/
+ * {@link NewStep} - resolving them to opaque identities is the application service's job, not
+ * this adapter's.</p>
  *
  * <p><strong>Error hand-off.</strong> This adapter deliberately does not catch domain or
  * adapter exceptions. Spring AI maps any thrown exception to an error {@code CallToolResult}
@@ -78,8 +78,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  *
  * <p><strong>Rendering.</strong> This class only dispatches tool calls to their in-port and
  * turns the result into the returned string via {@link UseCasePresenter} - it holds no
- * rendering logic of its own (issue #96). See {@link UseCasePresenter} for the actor/requirement/
- * term/constraint display resolution that borrows {@link ResolveActors}/{@link ResolveTerms}/
+ * rendering logic of its own (issue #96). See {@link UseCasePresenter} for the role/requirement/
+ * term/constraint display resolution that borrows {@link ResolveRoles}/{@link ResolveTerms}/
  * {@link ResolveRequirements}/{@link ResolveConstraints} purely for display.</p>
  */
 public final class UseCaseMcpTools {
@@ -121,9 +121,9 @@ public final class UseCaseMcpTools {
      * @param updateUseCase       in-port backing {@code uc_update}
      * @param linkTerm            in-port backing {@code uc_link_term}
      * @param linkConstraint      in-port backing {@code uc_link_constraint}
-     * @param resolveActors       the actor register's driving port used only to render a
-     *                            referenced actor's business code instead of its bare IRI
-     *                            (issue #336)
+     * @param resolveRoles        the actor register's driving port used only to render a
+     *                            referenced role's business code instead of its bare IRI
+     *                            (ADR-37/kogn-io/arknet#405 Part C)
      * @param resolveTerms        ubiquitous-language driving port used only to render a linked
      *                            glossary term's business code instead of its bare IRI
      * @param resolveRequirements requirements driving port used only to render a referenced
@@ -140,7 +140,7 @@ public final class UseCaseMcpTools {
             final UpdateUseCase updateUseCase,
             final LinkTerm linkTerm,
             final LinkConstraint linkConstraint,
-            final ResolveActors resolveActors,
+            final ResolveRoles resolveRoles,
             final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements,
             final ResolveConstraints resolveConstraints,
@@ -154,7 +154,7 @@ public final class UseCaseMcpTools {
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
         this.linkConstraint = Objects.requireNonNull(linkConstraint, "linkConstraint");
         this.projects = Objects.requireNonNull(projects, "projects");
-        this.presenter = new UseCasePresenter(resolveActors, resolveTerms, resolveRequirements, resolveConstraints);
+        this.presenter = new UseCasePresenter(resolveRoles, resolveTerms, resolveRequirements, resolveConstraints);
     }
 
     /**
@@ -258,9 +258,9 @@ public final class UseCaseMcpTools {
 
     @McpTool(name = "uc_add",
             description = "Register a complete use case (Cockburn-style, goal + ordered main flow) in a "
-                    + "single call. Requirement and actor references are given as bare labels that must "
-                    + "already exist in this project (create requirements with req_add, actors with "
-                    + "actor_add first)." + PROSE_MARKUP)
+                    + "single call. Requirement and role references are given as bare business codes that "
+                    + "must already exist in this project (create requirements with req_add, roles with "
+                    + "role_add first; role_list shows what is registered)." + PROSE_MARKUP)
     public String add(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Short human-readable name of the use case, e.g. 'Place order'")
@@ -271,12 +271,13 @@ public final class UseCaseMcpTools {
             final String scope,
             @McpToolParam(description = "Optional: the event that triggers the use case", required = false)
             final String trigger,
-            @McpToolParam(description = "Label of the primary actor whose goal this use case serves, e.g. "
-                    + "'Customer'. Must be an existing actor (actor_add).")
-            final String primaryActor,
-            @McpToolParam(description = "Optional: labels of supporting (secondary) actors; each must be an "
-                    + "existing actor", required = false)
-            final List<String> supportingActors,
+            @McpToolParam(description = "Business code of the primary role whose goal this use case serves, "
+                    + "e.g. 'ROLE-4'. Must be an existing role (role_add) - see role_list for what is "
+                    + "registered.")
+            final String primaryRole,
+            @McpToolParam(description = "Optional: business codes of supporting (secondary) roles; each must "
+                    + "be an existing role (role_list)", required = false)
+            final List<String> supportingRoles,
             @McpToolParam(description = "Optional: state that must hold before the use case runs",
                     required = false)
             final String precondition,
@@ -309,15 +310,15 @@ public final class UseCaseMcpTools {
                 goal,
                 blankToNull(scope),
                 blankToNull(trigger),
-                primaryActor,
-                supportingActors == null ? List.of() : List.copyOf(supportingActors),
+                primaryRole,
+                supportingRoles == null ? List.of() : List.copyOf(supportingRoles),
                 blankToNull(precondition),
                 blankToNull(postcondition),
                 toNewSteps(steps),
                 extensions == null ? List.of() : List.copyOf(extensions),
                 blankToNull(language));
         final UseCase created = addUseCase.add(project.id(), command, project.defaultLanguage());
-        return presenter.formatFull(project.id(), created);
+        return presenter.formatFull(project.id(), created, null);
     }
 
     @McpTool(name = "uc_list", description = "List all use cases in this project (id, title, goal). A use "
@@ -379,7 +380,7 @@ public final class UseCaseMcpTools {
         final UseCaseCode code = new UseCaseCode(id);
         final String effective = effectiveDisplayLocale(project, displayLocale);
         return getUseCase.get(project.id(), code, effective)
-                .map(uc -> presenter.formatFull(project.id(), uc))
+                .map(uc -> presenter.formatFull(project.id(), uc, effective))
                 .orElse("Use case not found: " + code.value());
     }
 
@@ -392,9 +393,9 @@ public final class UseCaseMcpTools {
                     + "stepRealisesPatches replaces a step's entire realises set wholesale (an empty array "
                     + "clears it) - a position omitted from either list is left untouched, and a position with "
                     + "no matching step is rejected in either list. Neither can add, remove or reorder steps. "
-                    + "The actor references are correctable too: a given primaryActor replaces the current "
+                    + "The role references are correctable too: a given primaryRole replaces the current "
                     + "one (it cannot be cleared - a use case always has exactly one), and a given "
-                    + "supportingActors array replaces the current list wholesale, an empty array clearing "
+                    + "supportingRoles array replaces the current list wholesale, an empty array clearing "
                     + "it. Does not touch the step list's structure; use uc_add to create a replacement use "
                     + "case if the flow itself needs restructuring - note that this mints a new use-case code "
                     + "and does not carry over inbound references." + PROSE_MARKUP)
@@ -412,16 +413,17 @@ public final class UseCaseMcpTools {
             final String scope,
             @McpToolParam(description = "New triggering event (optional, unchanged if omitted)", required = false)
             final String trigger,
-            @McpToolParam(description = "Label of the actor that should be this use case's primary actor "
-                    + "going forward, e.g. 'Customer'. Must be an existing actor (actor_add). Replaces the "
-                    + "current primary actor; it cannot be cleared, since a use case always has exactly one "
-                    + "(optional, unchanged if omitted)", required = false)
-            final String primaryActor,
-            @McpToolParam(description = "Labels of the supporting (secondary) actors this use case should "
-                    + "carry going forward, each an existing actor (actor_add), replacing the current list "
-                    + "wholesale - an empty array explicitly clears every supporting actor (optional, "
+            @McpToolParam(description = "Business code of the role that should be this use case's primary "
+                    + "role going forward, e.g. 'ROLE-4'. Must be an existing role (role_add) - see role_list "
+                    + "for what is registered. Replaces the current primary role; it cannot be cleared, "
+                    + "since a use case always has exactly one (optional, unchanged if omitted)",
+                    required = false)
+            final String primaryRole,
+            @McpToolParam(description = "Business codes of the supporting (secondary) roles this use case "
+                    + "should carry going forward, each an existing role (role_list), replacing the current "
+                    + "list wholesale - an empty array explicitly clears every supporting role (optional, "
                     + "unchanged if omitted)", required = false)
-            final List<String> supportingActors,
+            final List<String> supportingRoles,
             @McpToolParam(description = "New precondition (optional, unchanged if omitted)", required = false)
             final String precondition,
             @McpToolParam(description = "New postcondition (optional, unchanged if omitted)", required = false)
@@ -471,8 +473,8 @@ public final class UseCaseMcpTools {
                 .goal(blankToNull(goal))
                 .scope(blankToNull(scope))
                 .trigger(blankToNull(trigger))
-                .primaryActor(blankToNull(primaryActor))
-                .supportingActors(supportingActors == null ? null : List.copyOf(supportingActors))
+                .primaryRole(blankToNull(primaryRole))
+                .supportingRoles(supportingRoles == null ? null : List.copyOf(supportingRoles))
                 .precondition(blankToNull(precondition))
                 .postcondition(blankToNull(postcondition))
                 .extensions(extensions == null ? null : List.copyOf(extensions))
@@ -481,7 +483,7 @@ public final class UseCaseMcpTools {
                 .language(blankToNull(language))
                 .build();
         final UseCase updated = updateUseCase.update(project.id(), code, correction, project.defaultLanguage());
-        return presenter.formatFull(project.id(), updated);
+        return presenter.formatFull(project.id(), updated, null);
     }
 
     @McpTool(name = "uc_link_term",
@@ -508,7 +510,7 @@ public final class UseCaseMcpTools {
         // rather than the process default (issue #468).
         final UseCase updated =
                 linkTerm.linkTerm(projectId, new UseCaseCode(id), termId, project.defaultLanguage());
-        return presenter.formatFull(projectId, updated);
+        return presenter.formatFull(projectId, updated, null);
     }
 
     @McpTool(name = "uc_link_constraint",
@@ -534,7 +536,7 @@ public final class UseCaseMcpTools {
         // rather than the process default (issue #468).
         final UseCase updated = linkConstraint.linkConstraint(
                 projectId, new UseCaseCode(id), constraintId, project.defaultLanguage());
-        return presenter.formatFull(projectId, updated);
+        return presenter.formatFull(projectId, updated, null);
     }
 
     // --- mapping helpers -------------------------------------------------------

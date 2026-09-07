@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.uc.adapter.kogniordf;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -36,12 +37,14 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
+import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
-import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
 import de.hauschel.arknet.uc.domain.RequirementRef;
@@ -56,19 +59,19 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
 /**
  * Integration test for {@link KognioRdfUseCaseRepository} against an in-memory RDF4J-backed
- * kognio-rdf store. Requirement and actor resources referenced by a use case are seeded
- * directly into the same project graphs (as the requirements / actor adapters would write
+ * kognio-rdf store. Requirement and role resources referenced by a use case are seeded
+ * directly into the same project graphs (as the requirements / role adapters would write
  * them), so the write path can be exercised without a cross-bounded-context test dependency.
  *
  * <p>Identity is opaque: the use-case subject IRI is minted above the store and
  * carried on the {@link UseCase}; the human-readable {@link UseCaseCode} ({@code UC1}) is a
  * separate {@code dcterms:identifier} triple and is what a caller looks up by.</p>
  *
- * <p><strong>References arrive pre-resolved.</strong> {@link ActorRef}/
+ * <p><strong>References arrive pre-resolved.</strong> {@link RoleRef}/
  * {@link RequirementRef} now carry the referenced resource's opaque {@link ResourceId} directly
  * - resolving a human-typed label against the shared store is no longer this repository's job
- * (it moved to {@code KognioRdfActorLookup}/{@code KognioRdfRequirementLookup}, exercised in
- * {@code KognioRdfActorLookupTest}/{@code KognioRdfRequirementLookupTest}). This test therefore no
+ * (it moved to {@code KognioRdfRoleLookup}/{@code KognioRdfRequirementLookup}, exercised in
+ * {@code KognioRdfRoleLookupTest}/{@code KognioRdfRequirementLookupTest}). This test therefore no
  * longer pins unknown/ambiguous-label rejection at the repository level - that behaviour now
  * lives exclusively in the two lookup adapter tests, mirroring how
  * {@code KognioRdfRequirementRepositoryTest} dropped its own resolution-rejection tests once
@@ -82,7 +85,7 @@ class KognioRdfUseCaseRepositoryTest {
     private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
-    private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
+    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
     private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
 
     private static final UseCaseId ID_1 = new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-1"));
@@ -91,9 +94,9 @@ class KognioRdfUseCaseRepositoryTest {
     private static final UseCaseCode CODE_2 = new UseCaseCode("UC2");
 
     private static final ResourceId FR_1 = ResourceId.of("https://w3id.org/arknet/model/requirement/FR-1");
-    private static final ActorRef CUSTOMER = new ActorRef(ResourceId.of("https://w3id.org/arknet/model/term/customer"));
-    private static final ActorRef PAYMENT_PROVIDER =
-            new ActorRef(ResourceId.of("https://w3id.org/arknet/model/term/payment-provider"));
+    private static final RoleRef CUSTOMER = new RoleRef(ResourceId.of("https://w3id.org/arknet/model/role/customer"));
+    private static final RoleRef PAYMENT_PROVIDER =
+            new RoleRef(ResourceId.of("https://w3id.org/arknet/model/role/payment-provider"));
     private static final RequirementRef FR_1_REF = new RequirementRef(FR_1);
     private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/model/term/term-1");
     private static final TermRef TERM_1_REF = new TermRef(TERM_1);
@@ -164,24 +167,18 @@ class KognioRdfUseCaseRepositoryTest {
                         + "<http://purl.org/dc/terms/identifier> \"" + label + "\" .");
     }
 
-    private void seedHumanActor(ProjectId project, String slug, String name) {
-        seed(project, ACTOR_GRAPH,
-                "<https://w3id.org/arknet/model/term/" + slug + "> "
-                        + "a <https://w3id.org/arknet/process#HumanActor> ; "
-                        + "<https://w3id.org/arknet/core#name> \"" + name + "\" .");
-    }
-
-    private void seedSystemActor(ProjectId project, String slug, String name) {
-        seed(project, ACTOR_GRAPH,
-                "<https://w3id.org/arknet/model/term/" + slug + "> "
-                        + "a <https://w3id.org/arknet/process#SystemActor> ; "
-                        + "<https://w3id.org/arknet/core#name> \"" + name + "\" .");
+    private void seedRole(ProjectId project, String slug, String name) {
+        seed(project, ROLE_GRAPH,
+                "<https://w3id.org/arknet/model/role/" + slug + "> "
+                        + "a <https://w3id.org/arknet/process#Role> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"ROLE-" + slug + "\" ; "
+                        + "<https://w3id.org/arknet/core#name> \"" + name + "\"@en .");
     }
 
     private void seedReferences(ProjectId project) {
         seedRequirement(project, "FR-1");
-        seedHumanActor(project, "customer", "Customer");
-        seedSystemActor(project, "payment-provider", "PaymentProvider");
+        seedRole(project, "customer", "Customer");
+        seedRole(project, "payment-provider", "PaymentProvider");
     }
 
     private void seedTerm(ProjectId project, String slug, String prefLabel) {
@@ -229,8 +226,8 @@ class KognioRdfUseCaseRepositoryTest {
         assertEquals("Customer places an order", uc.goal());
         assertEquals("Webshop", uc.scope());
         assertEquals("Customer opens the cart", uc.trigger());
-        assertEquals(CUSTOMER, uc.primaryActor());
-        assertEquals(List.of(PAYMENT_PROVIDER), uc.supportingActors());
+        assertEquals(CUSTOMER, uc.primaryRole());
+        assertEquals(List.of(PAYMENT_PROVIDER), uc.supportingRoles());
         assertEquals("Customer is logged in", uc.precondition());
         assertEquals("Order is recorded", uc.postcondition());
         assertEquals(2, uc.steps().size());
@@ -274,7 +271,7 @@ class KognioRdfUseCaseRepositoryTest {
         UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
         assertEquals("Place order (revised)", found.title());
         assertEquals(1, found.steps().size());
-        assertTrue(found.supportingActors().isEmpty());
+        assertTrue(found.supportingRoles().isEmpty());
         assertTrue(found.extensions().isEmpty());
         // The old opaque step resources must be gone - delete follows mainStep/extensionStep edges.
         assertEquals(1, countSteps(PROJECT_A));
@@ -410,14 +407,14 @@ class KognioRdfUseCaseRepositoryTest {
 
     /**
      * Regression test: a use case whose primary
-     * actor's {@code arknet:name} is deleted after creation must still be readable in full -
+     * role's {@code arknet:name} is deleted after creation must still be readable in full -
      * the reference no longer depends on the name at all, unlike the old read path (pre-#336),
      * which mandatorily joined into the terms graph on {@code skos:prefLabel} and silently
      * dropped the whole use case ({@code findByCode} returned empty, {@code findAll} dropped it
      * via {@code Optional::ifPresent}) the moment that join failed to bind.
      */
     @Test
-    void useCaseSurvivesItsPrimaryActorsNameBeingDeleted() {
+    void useCaseSurvivesItsPrimaryRolesNameBeingDeleted() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
 
@@ -425,31 +422,31 @@ class KognioRdfUseCaseRepositoryTest {
 
         Optional<UseCase> byCode = repository.findByCode(PROJECT_A, CODE_1, null);
         assertTrue(byCode.isPresent(), "findByCode must still return the use case");
-        assertEquals(CUSTOMER, byCode.orElseThrow().primaryActor());
+        assertEquals(CUSTOMER, byCode.orElseThrow().primaryRole());
 
         List<UseCase> all = repository.findAll(PROJECT_A, null);
         assertEquals(1, all.size(), "findAll must not silently drop the use case");
-        assertEquals(CUSTOMER, all.get(0).primaryActor());
+        assertEquals(CUSTOMER, all.get(0).primaryRole());
     }
 
     /**
-     * Same regression, but for a rename rather than a deletion: renaming the actor after the
+     * Same regression, but for a rename rather than a deletion: renaming the role after the
      * use case was created must not affect the reference, since the edge's target IRI - not the
-     * name - is the {@link ActorRef}.
+     * name - is the {@link RoleRef}.
      */
     @Test
-    void useCaseSurvivesItsPrimaryActorBeingRenamed() {
+    void useCaseSurvivesItsPrimaryRoleBeingRenamed() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
 
-        renameActor(PROJECT_A, CUSTOMER.value(), "Customer", "Kunde");
+        renameRole(PROJECT_A, CUSTOMER.value(), "Customer", "Kunde");
 
         UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
-        assertEquals(CUSTOMER, found.primaryActor());
+        assertEquals(CUSTOMER, found.primaryRole());
     }
 
     private void deleteName(ProjectId project, ResourceId subject) {
-        String delete = "DELETE WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+        String delete = "DELETE WHERE { GRAPH <" + ROLE_GRAPH + "> { "
                 + "<" + subject.value() + "> <https://w3id.org/arknet/core#name> ?name } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
             handle.transactor().inTransaction(tx -> {
@@ -459,10 +456,10 @@ class KognioRdfUseCaseRepositoryTest {
         }
     }
 
-    private void renameActor(ProjectId project, ResourceId subject, String oldName, String newName) {
-        String update = "DELETE { GRAPH <" + ACTOR_GRAPH + "> { <" + subject.value()
+    private void renameRole(ProjectId project, ResourceId subject, String oldName, String newName) {
+        String update = "DELETE { GRAPH <" + ROLE_GRAPH + "> { <" + subject.value()
                 + "> <https://w3id.org/arknet/core#name> \"" + oldName + "\" } } "
-                + "INSERT { GRAPH <" + ACTOR_GRAPH + "> { <" + subject.value()
+                + "INSERT { GRAPH <" + ROLE_GRAPH + "> { <" + subject.value()
                 + "> <https://w3id.org/arknet/core#name> \"" + newName + "\" } } WHERE {}";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
             handle.transactor().inTransaction(tx -> {
@@ -473,16 +470,16 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Regression test for the {@code primaryActor} blank-node bug:
-     * {@code arkreq:primaryActor} carries no {@code sh:nodeKind} constraint, so a store-first
+     * Regression test for the {@code primaryRole} blank-node bug:
+     * {@code arkreq:primaryRole} carries no {@code sh:nodeKind} constraint, so a store-first
      * use case may legally target a blank node with it. Reading such a use case back
      * must not throw a {@link ClassCastException} out of {@code readBySubject} - and, because
-     * {@code primaryActor} is a required (non-{@code OPTIONAL}) triple pattern in the scalar
+     * {@code primaryRole} is a required (non-{@code OPTIONAL}) triple pattern in the scalar
      * read, the malformed use case is treated as "not found" rather than crashing the rest of
      * {@link UseCaseRepository#findAll}'s result list.
      */
     @Test
-    void findAllSkipsUseCaseWithBlankNodePrimaryActorInsteadOfFailingTheWholeList() {
+    void findAllSkipsUseCaseWithBlankNodePrimaryRoleInsteadOfFailingTheWholeList() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
 
@@ -492,7 +489,7 @@ class KognioRdfUseCaseRepositoryTest {
                         + "a <https://w3id.org/arknet/requirements#UseCase> ; "
                         + "<http://purl.org/dc/terms/title> \"Orphan use case\" ; "
                         + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Some goal\" ; "
-                        + "<https://w3id.org/arknet/requirements#primaryActor> _:orphanActor ; "
+                        + "<https://w3id.org/arknet/requirements#primaryRole> _:orphanRole ; "
                         + "<http://purl.org/dc/terms/identifier> \"" + orphanCode.value() + "\" .");
 
         List<UseCase> all = repository.findAll(PROJECT_A, null);
@@ -508,7 +505,7 @@ class KognioRdfUseCaseRepositoryTest {
      * {@link ShaclWriteGate#enforce} lets a store-first use case with zero main-step
      * triples through. Reading such a use case back must not let {@link UseCase}'s "at least one
      * step" invariant throw out of {@code readBySubject} - mirroring the blank-node
-     * {@code primaryActor} guard, the malformed use case is treated as "not found" rather than
+     * {@code primaryRole} guard, the malformed use case is treated as "not found" rather than
      * crashing the rest of {@link UseCaseRepository#findAll}'s result list.
      */
     @Test
@@ -522,7 +519,7 @@ class KognioRdfUseCaseRepositoryTest {
                         + "a <https://w3id.org/arknet/requirements#UseCase> ; "
                         + "<http://purl.org/dc/terms/title> \"No steps use case\" ; "
                         + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Some goal\" ; "
-                        + "<https://w3id.org/arknet/requirements#primaryActor> "
+                        + "<https://w3id.org/arknet/requirements#primaryRole> "
                         + "<" + CUSTOMER.value().value() + "> ; "
                         + "<http://purl.org/dc/terms/identifier> \"" + noStepsCode.value() + "\" .");
 
@@ -537,7 +534,7 @@ class KognioRdfUseCaseRepositoryTest {
      * What {@link UseCaseRepository#findAllCodes} exists for (kogn-io/arknet#360), pinned against
      * the real store: the query joins the type and {@code dcterms:identifier} and nothing else, so a
      * {@code UCn} stays taken even by a subject {@link UseCaseRepository#findAll} cannot materialise
-     * at all. Deliberately the barest such subject there is - no title, no goal, no primary actor,
+     * at all. Deliberately the barest such subject there is - no title, no goal, no primary role,
      * no step - so that it trips every mandatory join the listing read makes; any field joined into
      * {@code findAllCodes} later (the tempting "the identifier alone is not enough") goes red here
      * rather than quietly letting {@code UseCaseService#nextCode} hand the same number out twice.
@@ -629,7 +626,7 @@ class KognioRdfUseCaseRepositoryTest {
      * requirement references under one key, then throw a duplicate-position
      * {@link IllegalArgumentException} out of {@link UseCase}'s constructor - crashing the rest
      * of {@link UseCaseRepository#findAll}'s result list, the same class of bug already
-     * fixed for {@code supportingActor}/{@code stepRealises} elsewhere in this adapter.
+     * fixed for {@code supportingRole}/{@code stepRealises} elsewhere in this adapter.
      */
     @Test
     void findAllSkipsUseCaseWithDuplicateStepPositionsInsteadOfFailingTheWholeList() {
@@ -642,7 +639,7 @@ class KognioRdfUseCaseRepositoryTest {
                         + "a <https://w3id.org/arknet/requirements#UseCase> ; "
                         + "<http://purl.org/dc/terms/title> \"Duplicate position use case\" ; "
                         + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Some goal\" ; "
-                        + "<https://w3id.org/arknet/requirements#primaryActor> "
+                        + "<https://w3id.org/arknet/requirements#primaryRole> "
                         + "<" + CUSTOMER.value().value() + "> ; "
                         + "<https://w3id.org/arknet/requirements#mainStep> "
                         + "<https://w3id.org/arknet/id/uc-dup-position-step-1> , "
@@ -672,7 +669,7 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void createRejectsStepViolatingShaclShapes() {
         seedRequirement(PROJECT_A, "FR-1");
-        seedHumanActor(PROJECT_A, "customer", "Customer");
+        seedRole(PROJECT_A, "customer", "Customer");
 
         // stepText "ok" is non-blank (valid domain) but below the shape's minLength of 3.
         UseCase invalid = new UseCase(ID_1, CODE_1, "Bad", "Some goal", null, null,
@@ -685,34 +682,101 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Regression test: {@code rshapes:UseCase-primaryActor} carries
-     * {@code sh:maxCount 1}. A second {@code primaryActor} is unreachable through
-     * {@link UseCaseRepository#create} - {@link UseCase#primaryActor()} is a single-valued
+     * Regression test: {@code rshapes:UseCase-primaryRole} carries
+     * {@code sh:maxCount 1}. A second {@code primaryRole} is unreachable through
+     * {@link UseCaseRepository#create} - {@link UseCase#primaryRole()} is a single-valued
      * field - so this exercises the wired gate directly against a synthetic candidate graph, the
      * way a store-first write could still produce two triples.
      */
     @Test
-    void gateRejectsUseCaseWithTwoPrimaryActors() {
+    void gateRejectsUseCaseWithTwoPrimaryRoles() {
         ValueFactory vf = SimpleValueFactory.getInstance();
-        IRI useCase = vf.createIRI("https://w3id.org/arknet/id/uc-two-primary-actors");
-        IRI actor1 = vf.createIRI("https://w3id.org/arknet/model/term/actor-1");
-        IRI actor2 = vf.createIRI("https://w3id.org/arknet/model/term/actor-2");
+        IRI useCase = vf.createIRI("https://w3id.org/arknet/id/uc-two-primary-roles");
+        IRI role1 = vf.createIRI("https://w3id.org/arknet/model/role/role-1");
+        IRI role2 = vf.createIRI("https://w3id.org/arknet/model/role/role-2");
         IRI useCaseClass = vf.createIRI("https://w3id.org/arknet/requirements#UseCase");
-        IRI actorClass = vf.createIRI("https://w3id.org/arknet/process#Actor");
-        IRI primaryActor = vf.createIRI("https://w3id.org/arknet/requirements#primaryActor");
+        IRI roleClass = vf.createIRI("https://w3id.org/arknet/process#Role");
+        IRI primaryRole = vf.createIRI("https://w3id.org/arknet/requirements#primaryRole");
 
-        Model twoPrimaryActors = new LinkedHashModel();
-        twoPrimaryActors.add(useCase, RDF.TYPE, useCaseClass);
-        twoPrimaryActors.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-TWO-PRIMARY-ACTORS"));
-        twoPrimaryActors.add(useCase, primaryActor, actor1);
-        twoPrimaryActors.add(useCase, primaryActor, actor2);
-        twoPrimaryActors.add(actor1, RDF.TYPE, actorClass);
-        twoPrimaryActors.add(actor2, RDF.TYPE, actorClass);
+        Model twoPrimaryRoles = new LinkedHashModel();
+        twoPrimaryRoles.add(useCase, RDF.TYPE, useCaseClass);
+        twoPrimaryRoles.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-TWO-PRIMARY-ROLES"));
+        twoPrimaryRoles.add(useCase, primaryRole, role1);
+        twoPrimaryRoles.add(useCase, primaryRole, role2);
+        twoPrimaryRoles.add(role1, RDF.TYPE, roleClass);
+        twoPrimaryRoles.add(role2, RDF.TYPE, roleClass);
 
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         assertThrows(WriteConstraintViolationException.class,
-                () -> gate.enforce(new RDF4JGraph(twoPrimaryActors)));
+                () -> gate.enforce(new RDF4JGraph(twoPrimaryRoles)));
+    }
+
+    /**
+     * Belegs the plan's Beleg 1: {@code rshapes:UseCase-primaryRole} carries {@code sh:minCount 1}
+     * (ADR-37/kogn-io/arknet#405 Part C) - a use case with no {@code primaryRole} triple at all is
+     * rejected by the real gate. {@link UseCase#primaryRole()} is mandatory at the domain level
+     * too ({@code Objects.requireNonNull} in its compact constructor), so - like
+     * {@link #gateRejectsUseCaseWithTwoPrimaryRoles} - this is unreachable through
+     * {@link UseCaseRepository#create} and is exercised directly against a synthetic candidate
+     * graph, the way a store-first write could still omit the triple entirely.
+     */
+    @Test
+    void gateRejectsUseCaseWithNoPrimaryRole() {
+        ValueFactory vf = SimpleValueFactory.getInstance();
+        IRI useCase = vf.createIRI("https://w3id.org/arknet/id/uc-no-primary-role");
+        IRI useCaseClass = vf.createIRI("https://w3id.org/arknet/requirements#UseCase");
+
+        Model noPrimaryRole = new LinkedHashModel();
+        noPrimaryRole.add(useCase, RDF.TYPE, useCaseClass);
+        noPrimaryRole.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-NO-PRIMARY-ROLE"));
+        noPrimaryRole.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order"));
+
+        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+
+        assertThrows(WriteConstraintViolationException.class,
+                () -> gate.enforce(new RDF4JGraph(noPrimaryRole)));
+    }
+
+    /**
+     * Belegs the other half of the plan's Beleg 1: the same gate accepts a {@code primaryRole}
+     * edge whose target actually carries {@code a arkproc:Role} - confirmation (not the decision
+     * basis, see {@code KognioRdfUseCaseRepositoryFactory#loadUseCaseShapes}'s own javadoc) that
+     * {@code sh:class arkproc:Role} fires through this adapter's filtered gate the same way
+     * {@code sh:class arkproc:Actor} did before Part C. {@link #createsAndFindsUseCaseByCodeWithStepsAndReferences}
+     * already proves this end-to-end through the real repository; this pins it directly against
+     * the gate, mirroring {@link #gateRejectsUseCaseWithNoPrimaryRole}'s synthetic graph shape.
+     */
+    @Test
+    void gateAcceptsUseCaseWithAPrimaryRoleTargetTypedAsRole() {
+        ValueFactory vf = SimpleValueFactory.getInstance();
+        IRI useCase = vf.createIRI("https://w3id.org/arknet/id/uc-with-primary-role");
+        IRI role = vf.createIRI("https://w3id.org/arknet/model/role/role-1");
+        IRI useCaseClass = vf.createIRI("https://w3id.org/arknet/requirements#UseCase");
+        IRI roleClass = vf.createIRI("https://w3id.org/arknet/process#Role");
+        IRI primaryRole = vf.createIRI("https://w3id.org/arknet/requirements#primaryRole");
+        IRI useCaseGoal = vf.createIRI("https://w3id.org/arknet/requirements#useCaseGoal");
+        IRI mainStep = vf.createIRI("https://w3id.org/arknet/requirements#mainStep");
+        IRI stepClass = vf.createIRI("https://w3id.org/arknet/requirements#Step");
+        IRI position = vf.createIRI("https://w3id.org/arknet/requirements#position");
+        IRI stepText = vf.createIRI("https://w3id.org/arknet/requirements#stepText");
+        IRI step = vf.createIRI("https://w3id.org/arknet/id/uc-with-primary-role-step-1");
+
+        Model withPrimaryRole = new LinkedHashModel();
+        withPrimaryRole.add(useCase, RDF.TYPE, useCaseClass);
+        withPrimaryRole.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-WITH-PRIMARY-ROLE"));
+        withPrimaryRole.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order"));
+        withPrimaryRole.add(useCase, useCaseGoal, vf.createLiteral("Customer places an order"));
+        withPrimaryRole.add(useCase, primaryRole, role);
+        withPrimaryRole.add(useCase, mainStep, step);
+        withPrimaryRole.add(step, RDF.TYPE, stepClass);
+        withPrimaryRole.add(step, position, vf.createLiteral("1", XSD.INTEGER));
+        withPrimaryRole.add(step, stepText, vf.createLiteral("Customer selects items"));
+        withPrimaryRole.add(role, RDF.TYPE, roleClass);
+
+        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+
+        assertDoesNotThrow(() -> gate.enforce(new RDF4JGraph(withPrimaryRole)));
     }
 
     /**
@@ -720,7 +784,7 @@ class KognioRdfUseCaseRepositoryTest {
      * {@code sh:maxCount 1}): two language-tagged titles sharing the exact same non-empty tag are
      * rejected, but {@link UseCase#title()} stays single-valued at the domain level - a second
      * title is unreachable through {@link UseCaseRepository#create}, same rationale as
-     * {@link #gateRejectsUseCaseWithTwoPrimaryActors}. Two plain, <em>untagged</em> titles are
+     * {@link #gateRejectsUseCaseWithTwoPrimaryRoles}. Two plain, <em>untagged</em> titles are
      * deliberately <strong>not</strong> covered here: {@code sh:uniqueLang} per the SHACL spec only
      * ever compares literals that carry a non-empty language tag (mirroring the sibling
      * requirements adapter's identical note).
@@ -729,18 +793,18 @@ class KognioRdfUseCaseRepositoryTest {
     void gateRejectsUseCaseWithTwoTitlesSharingTheSameLanguageTag() {
         ValueFactory vf = SimpleValueFactory.getInstance();
         IRI useCase = vf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
-        IRI actor = vf.createIRI("https://w3id.org/arknet/model/term/actor-1");
+        IRI role = vf.createIRI("https://w3id.org/arknet/model/role/role-1");
         IRI useCaseClass = vf.createIRI("https://w3id.org/arknet/requirements#UseCase");
-        IRI actorClass = vf.createIRI("https://w3id.org/arknet/process#Actor");
-        IRI primaryActor = vf.createIRI("https://w3id.org/arknet/requirements#primaryActor");
+        IRI roleClass = vf.createIRI("https://w3id.org/arknet/process#Role");
+        IRI primaryRole = vf.createIRI("https://w3id.org/arknet/requirements#primaryRole");
 
         Model twoTitles = new LinkedHashModel();
         twoTitles.add(useCase, RDF.TYPE, useCaseClass);
         twoTitles.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-1"));
         twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order", "en"));
         twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Submit order", "en"));
-        twoTitles.add(useCase, primaryActor, actor);
-        twoTitles.add(actor, RDF.TYPE, actorClass);
+        twoTitles.add(useCase, primaryRole, role);
+        twoTitles.add(role, RDF.TYPE, roleClass);
 
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
@@ -761,18 +825,18 @@ class KognioRdfUseCaseRepositoryTest {
     void gateSelectsMessageLanguageAccordingToDisplayLocale() {
         ValueFactory vf = SimpleValueFactory.getInstance();
         IRI useCase = vf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
-        IRI actor = vf.createIRI("https://w3id.org/arknet/model/term/actor-1");
+        IRI role = vf.createIRI("https://w3id.org/arknet/model/role/role-1");
         IRI useCaseClass = vf.createIRI("https://w3id.org/arknet/requirements#UseCase");
-        IRI actorClass = vf.createIRI("https://w3id.org/arknet/process#Actor");
-        IRI primaryActor = vf.createIRI("https://w3id.org/arknet/requirements#primaryActor");
+        IRI roleClass = vf.createIRI("https://w3id.org/arknet/process#Role");
+        IRI primaryRole = vf.createIRI("https://w3id.org/arknet/requirements#primaryRole");
 
         Model twoTitles = new LinkedHashModel();
         twoTitles.add(useCase, RDF.TYPE, useCaseClass);
         twoTitles.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-1"));
         twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order", "en"));
         twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Submit order", "en"));
-        twoTitles.add(useCase, primaryActor, actor);
-        twoTitles.add(actor, RDF.TYPE, actorClass);
+        twoTitles.add(useCase, primaryRole, role);
+        twoTitles.add(role, RDF.TYPE, roleClass);
 
         ShaclWriteGate englishGate = KognioRdfUseCaseRepositoryFactory
                 .buildGate(new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH));
@@ -799,10 +863,10 @@ class KognioRdfUseCaseRepositoryTest {
     void gateRejectsUseCaseWithTwoGoalsSharingTheSameLanguageTag() {
         ValueFactory vf = SimpleValueFactory.getInstance();
         IRI useCase = vf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
-        IRI actor = vf.createIRI("https://w3id.org/arknet/model/term/actor-1");
+        IRI role = vf.createIRI("https://w3id.org/arknet/model/role/role-1");
         IRI useCaseClass = vf.createIRI("https://w3id.org/arknet/requirements#UseCase");
-        IRI actorClass = vf.createIRI("https://w3id.org/arknet/process#Actor");
-        IRI primaryActor = vf.createIRI("https://w3id.org/arknet/requirements#primaryActor");
+        IRI roleClass = vf.createIRI("https://w3id.org/arknet/process#Role");
+        IRI primaryRole = vf.createIRI("https://w3id.org/arknet/requirements#primaryRole");
         IRI useCaseGoal = vf.createIRI("https://w3id.org/arknet/requirements#useCaseGoal");
 
         Model twoGoals = new LinkedHashModel();
@@ -811,8 +875,8 @@ class KognioRdfUseCaseRepositoryTest {
         twoGoals.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order"));
         twoGoals.add(useCase, useCaseGoal, vf.createLiteral("Customer wants the order placed quickly", "en"));
         twoGoals.add(useCase, useCaseGoal, vf.createLiteral("Customer wants a confirmation email", "en"));
-        twoGoals.add(useCase, primaryActor, actor);
-        twoGoals.add(actor, RDF.TYPE, actorClass);
+        twoGoals.add(useCase, primaryRole, role);
+        twoGoals.add(role, RDF.TYPE, roleClass);
 
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
@@ -902,20 +966,20 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Issue #343: correcting a use case's actor references through {@code compareAndUpdate} must
-     * leave the store with exactly the new edges - the old {@code primaryActor} gone rather than
-     * lingering next to the new one (which would breach {@code arkreq:primaryActor}'s
-     * {@code sh:maxCount 1} on the next write), and a cleared {@code supportingActors} list gone
+     * Issue #343: correcting a use case's role references through {@code compareAndUpdate} must
+     * leave the store with exactly the new edges - the old {@code primaryRole} gone rather than
+     * lingering next to the new one (which would breach {@code arkreq:primaryRole}'s
+     * {@code sh:maxCount 1} on the next write), and a cleared {@code supportingRoles} list gone
      * entirely. The subject is rebuilt by identity, so this is what {@code deleteExisting} is for;
      * the test pins it because {@code uc_update} is now a caller that actually changes these two.
      */
     @Test
-    void compareAndUpdateReplacesThePrimaryActorAndClearsSupportingActors() {
+    void compareAndUpdateReplacesThePrimaryRoleAndClearsSupportingRoles() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
         UseCase current = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
-        assertEquals(CUSTOMER, current.primaryActor());
-        assertEquals(List.of(PAYMENT_PROVIDER), current.supportingActors());
+        assertEquals(CUSTOMER, current.primaryRole());
+        assertEquals(List.of(PAYMENT_PROVIDER), current.supportingRoles());
 
         UseCase revised = new UseCase(current.id(), current.code(), current.title(), current.goal(),
                 current.scope(), current.trigger(), PAYMENT_PROVIDER, List.of(), current.precondition(),
@@ -924,11 +988,11 @@ class KognioRdfUseCaseRepositoryTest {
         replaceViaCompareAndUpdate(PROJECT_A, revised);
 
         UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
-        assertEquals(PAYMENT_PROVIDER, found.primaryActor());
-        assertEquals(List.of(), found.supportingActors());
-        assertEquals(1, countEdges(PROJECT_A, "https://w3id.org/arknet/requirements#primaryActor"),
-                "the superseded primaryActor edge must be gone, not lingering beside the new one");
-        assertEquals(0, countEdges(PROJECT_A, "https://w3id.org/arknet/requirements#supportingActor"));
+        assertEquals(PAYMENT_PROVIDER, found.primaryRole());
+        assertEquals(List.of(), found.supportingRoles());
+        assertEquals(1, countEdges(PROJECT_A, "https://w3id.org/arknet/requirements#primaryRole"),
+                "the superseded primaryRole edge must be gone, not lingering beside the new one");
+        assertEquals(0, countEdges(PROJECT_A, "https://w3id.org/arknet/requirements#supportingRole"));
     }
 
     /** Counts the edges {@link #ID_1} carries under {@code predicateIri} in the use-cases graph. */
@@ -944,7 +1008,7 @@ class KognioRdfUseCaseRepositoryTest {
     private static UseCase placeOrderWithTermAndConstraint() {
         UseCase base = placeOrder();
         return new UseCase(base.id(), base.code(), base.title(), base.goal(), base.scope(), base.trigger(),
-                base.primaryActor(), base.supportingActors(), base.precondition(), base.postcondition(),
+                base.primaryRole(), base.supportingRoles(), base.precondition(), base.postcondition(),
                 base.steps(), base.extensions(), List.of(TERM_1_REF), List.of(TCON_1_REF));
     }
 
@@ -975,7 +1039,7 @@ class KognioRdfUseCaseRepositoryTest {
         UseCase current = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
 
         UseCase revised = new UseCase(current.id(), current.code(), "Place order (revised)", current.goal(),
-                current.scope(), current.trigger(), current.primaryActor(), current.supportingActors(),
+                current.scope(), current.trigger(), current.primaryRole(), current.supportingRoles(),
                 current.precondition(), current.postcondition(), current.steps(), current.extensions(),
                 current.usesTerms(), current.constrainedBy());
         replaceViaCompareAndUpdate(PROJECT_A, revised);
@@ -1007,7 +1071,7 @@ class KognioRdfUseCaseRepositoryTest {
         assertTrue(current.constrainedBy().isEmpty());
 
         UseCase revised = new UseCase(current.id(), current.code(), "Place order (revised)", current.goal(),
-                current.scope(), current.trigger(), current.primaryActor(), current.supportingActors(),
+                current.scope(), current.trigger(), current.primaryRole(), current.supportingRoles(),
                 current.precondition(), current.postcondition(), current.steps(), current.extensions(),
                 current.usesTerms(), current.constrainedBy());
         replaceViaCompareAndUpdate(PROJECT_A, revised);
@@ -1053,7 +1117,7 @@ class KognioRdfUseCaseRepositoryTest {
         ResourceId danglingConstraint = ResourceId.of("https://w3id.org/arknet/model/constraint/does-not-exist");
         UseCase base = placeOrder();
         UseCase withDanglingConstraint = new UseCase(base.id(), base.code(), base.title(), base.goal(),
-                base.scope(), base.trigger(), base.primaryActor(), base.supportingActors(), base.precondition(),
+                base.scope(), base.trigger(), base.primaryRole(), base.supportingRoles(), base.precondition(),
                 base.postcondition(), base.steps(), base.extensions(), List.of(),
                 List.of(new ConstraintRef(danglingConstraint)));
 
@@ -1061,5 +1125,115 @@ class KognioRdfUseCaseRepositoryTest {
 
         UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
         assertEquals(List.of(new ConstraintRef(danglingConstraint)), found.constrainedBy());
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Transitional read of the pre-ADR-37 arkreq:primaryActor/supportingActor edges
+    // (kogn-io/arknet#524 review). Everything below lapses with that read path.
+    // ---------------------------------------------------------------------------------------
+
+    private static final String LEGACY_UC_IRI = "https://w3id.org/arknet/id/uc-legacy";
+    private static final String LEGACY_ACTOR_IRI = "https://w3id.org/arknet/model/actor/actor-1";
+    private static final String LEGACY_SUPPORTING_ACTOR_IRI = "https://w3id.org/arknet/model/actor/actor-2";
+    private static final UseCaseCode LEGACY_CODE = new UseCaseCode("UC9");
+    private static final String PRIMARY_ACTOR = "https://w3id.org/arknet/requirements#primaryActor";
+    private static final String SUPPORTING_ACTOR = "https://w3id.org/arknet/requirements#supportingActor";
+    private static final String PRIMARY_ROLE = "https://w3id.org/arknet/requirements#primaryRole";
+
+    /**
+     * Writes a use case exactly as this adapter wrote it before the role split: the two edges
+     * carry their old IRIs and point at ACTOR resources. Store-first on purpose - the current
+     * write path cannot produce this state, which is the whole point of the transitional read.
+     */
+    private void seedPreRoleSplitUseCase(ProjectId project) {
+        seed(project, USE_CASES_GRAPH,
+                "<" + LEGACY_UC_IRI + "> a <https://w3id.org/arknet/requirements#UseCase> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"" + LEGACY_CODE.value() + "\" ; "
+                        + "<http://purl.org/dc/terms/title> \"Place order\" ; "
+                        + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Customer places an order\" ; "
+                        + "<" + PRIMARY_ACTOR + "> <" + LEGACY_ACTOR_IRI + "> ; "
+                        + "<" + SUPPORTING_ACTOR + "> <" + LEGACY_SUPPORTING_ACTOR_IRI + "> ; "
+                        + "<https://w3id.org/arknet/requirements#mainStep> <" + LEGACY_UC_IRI + "-step-1> . "
+                        + "<" + LEGACY_UC_IRI + "-step-1> a <https://w3id.org/arknet/requirements#Step> ; "
+                        + "<https://w3id.org/arknet/requirements#position> "
+                        + "\"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; "
+                        + "<https://w3id.org/arknet/requirements#stepText> \"Customer selects items\" .");
+    }
+
+    /** Counts the edges the seeded pre-role-split record carries under {@code predicate}. */
+    private long countLegacyRecordEdges(ProjectId project, String predicate) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
+            return handle.sparqlQuery().select("SELECT ?o WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                    + "<" + LEGACY_UC_IRI + "> <" + predicate + "> ?o } }").count();
+        }
+    }
+
+    /**
+     * A use case written before ADR-37/kogn-io/arknet#405 Part C stays readable. Without the
+     * transitional {@code COALESCE} in {@code scalarWhereClause} the required triple pattern
+     * would not match, and {@code uc_get}/{@code uc_list} would skip the record silently while
+     * {@code findAllCodes} keeps its code taken - unreachable through the whole tool surface.
+     * The old edge's target is handed back as it stands (an actor IRI); making it a real role is
+     * what the migrating update below is for.
+     */
+    @Test
+    void findsAUseCaseThatStillCarriesThePreRoleSplitPrimaryActorEdge() {
+        seedPreRoleSplitUseCase(PROJECT_A);
+
+        UseCase found = repository.findByCode(PROJECT_A, LEGACY_CODE, null).orElseThrow();
+
+        assertEquals(new RoleRef(ResourceId.of(LEGACY_ACTOR_IRI)), found.primaryRole());
+        assertEquals(List.of(new RoleRef(ResourceId.of(LEGACY_SUPPORTING_ACTOR_IRI))), found.supportingRoles());
+    }
+
+    /**
+     * The migration is an ordinary {@code uc_update} passing {@code ROLE-N} codes: the record is
+     * found (transitional read), rewritten wholesale, and the legacy triples are gone afterwards -
+     * no migration script, no store surgery. This is the step the PR's own "after the merge" list
+     * describes, pinned end to end.
+     */
+    @Test
+    void anUpdateWithRealRolesMigratesTheRecordAndDropsTheLegacyEdges() {
+        seedPreRoleSplitUseCase(PROJECT_A);
+        seedReferences(PROJECT_A);
+
+        // Not decoration: without the transitional read this is empty, and the update below fails
+        // with UseCaseNotFoundException instead of migrating - the blocker this test pins.
+        assertTrue(repository.findCurrentByCode(PROJECT_A, LEGACY_CODE, null).isPresent());
+        replaceViaCompareAndUpdate(PROJECT_A,
+                placeOrder(new UseCaseId(ResourceId.of(LEGACY_UC_IRI)), LEGACY_CODE));
+
+        UseCase migrated = repository.findByCode(PROJECT_A, LEGACY_CODE, null).orElseThrow();
+        assertEquals(CUSTOMER, migrated.primaryRole());
+        assertEquals(List.of(PAYMENT_PROVIDER), migrated.supportingRoles());
+        assertEquals(0, countLegacyRecordEdges(PROJECT_A, PRIMARY_ACTOR));
+        assertEquals(0, countLegacyRecordEdges(PROJECT_A, SUPPORTING_ACTOR));
+        assertEquals(1, countLegacyRecordEdges(PROJECT_A, PRIMARY_ROLE));
+    }
+
+    /**
+     * The guard that keeps the transitional read from becoming a silent mis-migration: an update
+     * that does not pass {@code primaryRole} carries the read-back target forward
+     * ({@code UseCaseService#update} keeps {@code current.primaryRole()}), which for a legacy
+     * record is an actor. Nothing else would notice - the adapter asserts the target's type
+     * itself for the SHACL gate, and {@code RoleLookup} only ever sees codes a caller passes.
+     * Rejected here instead, with the migration step named in the message.
+     */
+    @Test
+    void anUpdateCarryingTheLegacyActorTargetForwardIsRejected() {
+        seedPreRoleSplitUseCase(PROJECT_A);
+        seedReferences(PROJECT_A);
+        UseCase base = placeOrder(new UseCaseId(ResourceId.of(LEGACY_UC_IRI)), LEGACY_CODE);
+        UseCase carriedForward = new UseCase(base.id(), base.code(), base.title(), base.goal(),
+                base.scope(), base.trigger(), new RoleRef(ResourceId.of(LEGACY_ACTOR_IRI)),
+                List.of(), base.precondition(), base.postcondition(), base.steps(),
+                base.extensions(), List.of(), List.of());
+
+        UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
+                () -> replaceViaCompareAndUpdate(PROJECT_A, carriedForward));
+
+        assertTrue(ex.getMessage().contains(LEGACY_ACTOR_IRI), ex.getMessage());
+        assertTrue(ex.getMessage().contains("primaryRole"), ex.getMessage());
+        assertEquals(1, countLegacyRecordEdges(PROJECT_A, PRIMARY_ACTOR));
     }
 }

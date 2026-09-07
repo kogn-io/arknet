@@ -161,7 +161,8 @@ class StoreReportToolsTest {
     private ModelViews modelViews() {
         return new ModelViews(
                 (projectId, displayLocale) -> PROJECT.equals(projectId) ? List.of(term1) : List.of(),
-                new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of()),
+                new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of(),
+                        (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards(
                         (projectId, displayLocale) -> PROJECT.equals(projectId) ? List.of(fr1) : List.of()),
                 new ConstraintCards((projectId, displayLocale) -> List.of()),
@@ -573,7 +574,8 @@ class StoreReportToolsTest {
                 ANCHOR.equals(anchor) ? new ResolvedProject(PROJECT, "de") : resolveTestAnchor(anchor);
         final ModelViews modelViewsWithRealTerms = new ModelViews(
                 termService,
-                new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of()),
+                new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of(),
+                        (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
                 new ConstraintCards((projectId, displayLocale) -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),

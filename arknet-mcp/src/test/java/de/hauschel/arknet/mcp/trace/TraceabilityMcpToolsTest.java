@@ -13,10 +13,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
-import de.hauschel.arknet.actor.application.ActorService;
-import de.hauschel.arknet.actor.application.port.in.AddActor.NewActor;
-import de.hauschel.arknet.actor.domain.Actor;
-import de.hauschel.arknet.actor.domain.ActorType;
+import de.hauschel.arknet.actor.application.RoleService;
+import de.hauschel.arknet.actor.application.port.in.AddRole.NewRole;
+import de.hauschel.arknet.actor.application.port.in.RoleDetail;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.ArknetMcpConfiguration;
 import de.hauschel.arknet.req.application.RequirementService;
@@ -37,7 +36,7 @@ import de.hauschel.arknet.ul.domain.Term;
  * End-to-end tests of the five traceability tools against a real kognio-rdf store
  * shared by all four bounded contexts - proving {@link TraceabilityMcpTools} is wired into
  * {@link ArknetMcpConfiguration} and actually reads what {@code req_add}/{@code term_add}/{@code
- * actor_add}/{@code uc_add} wrote. Seeds data exclusively through the real application services
+ * role_add}/{@code uc_add} wrote. Seeds data exclusively through the real application services
  * (the same path {@link de.hauschel.arknet.mcp.CrossBoundedContextStoreWiringTest} uses), never
  * via raw triples.
  */
@@ -101,12 +100,12 @@ class TraceabilityMcpToolsTest {
             ProjectId project = registerProject(context);
             RequirementService requirements = context.getBean(RequirementService.class);
             TermService terms = context.getBean(TermService.class);
-            ActorService actors = context.getBean(ActorService.class);
+            RoleService roles = context.getBean(RoleService.class);
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
             Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null), "en");
-            actors.add(project, new NewActor(ActorType.HUMAN, "Customer", null));
+            RoleDetail role = roles.add(project, new NewRole("Customer", null, List.of(), "en"), "en");
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null,
@@ -116,7 +115,8 @@ class TraceabilityMcpToolsTest {
                     "The system shall let a user log out.", null, RequirementType.FUNCTIONAL, null, null,
                     List.of("Logout succeeds"), null), "en");
 
-            useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
+            useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null,
+                    role.role().code().value(),
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
                     List.of(), null), "en");
@@ -134,18 +134,18 @@ class TraceabilityMcpToolsTest {
     }
 
     @Test
-    void orphanCheckListsUnrealisedRequirementsAndUnusedTermsButNotTheActor() {
+    void orphanCheckListsUnrealisedRequirementsAndUnusedTermsButNotTheRole() {
         runner().run(context -> {
             assertThat(context).hasNotFailed();
             ProjectId project = registerProject(context);
             RequirementService requirements = context.getBean(RequirementService.class);
             TermService terms = context.getBean(TermService.class);
-            ActorService actors = context.getBean(ActorService.class);
+            RoleService roles = context.getBean(RoleService.class);
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
             terms.add(project, new NewTerm("Passwort", "A secret credential.", null), "en");
-            actors.add(project, new NewActor(ActorType.HUMAN, "Customer", null));
+            RoleDetail role = roles.add(project, new NewRole("Customer", null, List.of(), "en"), "en");
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null,
@@ -154,7 +154,8 @@ class TraceabilityMcpToolsTest {
                     "The system shall let a user log out.", null, RequirementType.FUNCTIONAL, null, null,
                     List.of("Logout succeeds"), null), "en");
 
-            useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
+            useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null,
+                    role.role().code().value(),
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
                     List.of(), null), "en");
@@ -181,19 +182,20 @@ class TraceabilityMcpToolsTest {
             ProjectId project = registerProject(context);
             RequirementService requirements = context.getBean(RequirementService.class);
             TermService terms = context.getBean(TermService.class);
-            ActorService actors = context.getBean(ActorService.class);
+            RoleService roles = context.getBean(RoleService.class);
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
             Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null), "en");
-            actors.add(project, new NewActor(ActorType.HUMAN, "Customer", null));
+            RoleDetail role = roles.add(project, new NewRole("Customer", null, List.of(), "en"), "en");
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null,
                     List.of("Login succeeds with valid credentials"), null), "en");
             requirements.linkTerm(project, fr1.code(), term.code().value(), "en");
 
-            useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
+            useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null,
+                    role.role().code().value(),
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
                     List.of(), null), "en");
@@ -243,27 +245,28 @@ class TraceabilityMcpToolsTest {
     }
 
     @Test
-    void actorUseCaseMatrixReportsTheActorAndItsUseCaseInBothDirections() {
+    void roleUseCaseMatrixReportsTheRoleAndItsUseCaseInBothDirections() {
         runner().run(context -> {
             assertThat(context).hasNotFailed();
             ProjectId ws = registerProject(context);
-            ActorService actors = context.getBean(ActorService.class);
+            RoleService roles = context.getBean(RoleService.class);
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            Actor actor = actors.add(ws, new NewActor(ActorType.HUMAN, "Customer", null));
-            useCases.add(ws, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
+            RoleDetail role = roles.add(ws, new NewRole("Customer", null, List.of(), "en"), "en");
+            useCases.add(ws, new NewUseCase("Log in", "Customer authenticates", null, null,
+                    role.role().code().value(),
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of())),
                     List.of(), null), "en");
 
-            String matrix = tools.actorUseCaseMatrix(null, ANCHOR);
+            String matrix = tools.roleUseCaseMatrix(null, ANCHOR);
 
-            assertThat(matrix).contains("# Actor/use-case matrix -- project " + ws.value());
-            String actorsSection = matrix.substring(matrix.indexOf("## Actors"), matrix.indexOf("## Use cases"));
-            assertThat(actorsSection).contains(actor.code().value()).contains("use cases : UC1");
+            assertThat(matrix).contains("# Role/use-case matrix -- project " + ws.value());
+            String rolesSection = matrix.substring(matrix.indexOf("## Roles"), matrix.indexOf("## Use cases"));
+            assertThat(rolesSection).contains(role.role().code().value()).contains("use cases : UC1");
             String useCasesSection = matrix.substring(matrix.indexOf("## Use cases"));
-            assertThat(useCasesSection).contains("UC1").contains("actors    : " + actor.code().value());
+            assertThat(useCasesSection).contains("UC1").contains("roles     : " + role.role().code().value());
         });
     }
 
@@ -274,16 +277,16 @@ class TraceabilityMcpToolsTest {
             ProjectId ws = registerProject(context);
             RequirementService requirements = context.getBean(RequirementService.class);
             TermService terms = context.getBean(TermService.class);
-            ActorService actors = context.getBean(ActorService.class);
+            RoleService roles = context.getBean(RoleService.class);
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
             // "Kunde" is registered both as a term (so term_cooccurrence's text matching finds
-            // it) and, separately, as the actor "Kunde" (so uc_add below can resolve it as the
-            // use case's primary actor) - two distinct resources sharing a label, legal since
-            // issue #336 decoupled the two.
+            // it) and, separately, as the role "Kunde" (so uc_add below can resolve it as the
+            // use case's primary role) - two distinct resources sharing a label, legal since
+            // issue #336/ADR-37 kept the two identity spaces disjoint.
             Term kunde = terms.add(ws, new NewTerm("Kunde", "A customer.", null), "en");
-            actors.add(ws, new NewActor(ActorType.HUMAN, "Kunde", null));
+            RoleDetail role = roles.add(ws, new NewRole("Kunde", null, List.of(), "en"), "en");
             Term bestellung = terms.add(ws, new NewTerm("Bestellung", "An order.", null), "en");
             terms.add(ws, new NewTerm("Vertrag", "A binding agreement.", null), "en");
 
@@ -291,7 +294,7 @@ class TraceabilityMcpToolsTest {
                     "Der Kunde sieht seine Bestellung ein.", null, RequirementType.FUNCTIONAL, null, null,
                     List.of("Die Bestandsdaten werden korrekt angezeigt"), null), "en");
             useCases.add(ws, new NewUseCase("View order", "Kunde bestaetigt die Bestellung", null, null,
-                    "Kunde", List.of(), null, null,
+                    role.role().code().value(), List.of(), null, null,
                     List.of(new NewStep(1, "Kunde ruft die Bestellung auf", List.of())),
                     List.of(), null), "en");
 

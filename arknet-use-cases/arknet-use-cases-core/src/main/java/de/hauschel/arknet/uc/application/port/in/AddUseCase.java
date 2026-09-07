@@ -47,12 +47,12 @@ public interface AddUseCase {
      * Input data for {@link #add(ProjectId, NewUseCase, String)}. Mirrors {@link UseCase} minus
      * the identity, which the service assigns.
      *
-     * <p><strong>Raw human-typed references.</strong> {@code primaryActor},
-     * {@code supportingActors} and each step's {@code realises} are plain business
-     * labels/codes here, not {@link de.hauschel.arknet.uc.domain.ActorRef}/
+     * <p><strong>Raw human-typed references.</strong> {@code primaryRole},
+     * {@code supportingRoles} and each step's {@code realises} are plain business
+     * labels/codes here, not {@link de.hauschel.arknet.uc.domain.RoleRef}/
      * {@link de.hauschel.arknet.uc.domain.RequirementRef}: resolving them to the referenced
      * resources' opaque identities happens in the application service, via the driven
-     * {@code ActorLookup}/{@code RequirementLookup} ports, before the real {@link UseCase} and
+     * {@code RoleLookup}/{@code RequirementLookup} ports, before the real {@link UseCase} and
      * its {@link de.hauschel.arknet.uc.domain.Step}s are constructed. The in-port boundary
      * therefore never sees an opaque identity - only what a human typed.</p>
      *
@@ -62,9 +62,9 @@ public interface AddUseCase {
      *                         {@code null})
      * @param trigger          the event that starts the use case; optional (may be
      *                         {@code null})
-     * @param primaryActor     name of the actor whose goal the use case serves (e.g.
-     *                         {@code Customer}), resolved by the service
-     * @param supportingActors further participating actors' names; {@code 0..n} (may be
+     * @param primaryRole      business code of the role whose goal the use case serves (e.g.
+     *                         {@code ROLE-4}, see {@code role_list}), resolved by the service
+     * @param supportingRoles  further roles' business codes; {@code 0..n} (may be
      *                         {@code null}, treated as empty), resolved by the service
      * @param precondition     what must hold before the use case runs; optional
      *                         (may be {@code null})
@@ -87,8 +87,8 @@ public interface AddUseCase {
             String goal,
             String scope,
             String trigger,
-            String primaryActor,
-            List<String> supportingActors,
+            String primaryRole,
+            List<String> supportingRoles,
             String precondition,
             String postcondition,
             List<NewStep> steps,

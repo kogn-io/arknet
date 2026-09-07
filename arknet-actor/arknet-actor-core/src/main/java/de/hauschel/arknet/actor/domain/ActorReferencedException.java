@@ -9,17 +9,19 @@ import java.util.Objects;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
- * Thrown when {@code actor_delete} is asked to remove an actor that a use case still points at via
- * {@code arkreq:primaryActor}/{@code supportingActor} (issue #335).
+ * Thrown when {@code actor_delete} is asked to remove an actor that something else in the project
+ * still points at via {@code arkproc:filledBy} - a role that has this actor among its occupants
+ * (ADR-37/kogn-io/arknet#405 Part B/{@link RoleReferencedException}'s own javadoc).
  *
- * <p>Reachable in practice since issue #336: {@code arknet-use-cases} resolves a use case's
- * {@code primaryActor}/{@code supportingActor} against this register (see the "erster Konsument
- * angeschlossen" note in {@code arknet-actor/CLAUDE.md}), and since issue #343 an
- * {@code uc_update} can put such an edge on an actor as well - so {@code actor_delete} on a
- * referenced actor is rejected rather than left to dangle. The guard predates that consumer: it
- * was written with issue #335, matching the wording of that issue's own scope ("an actor
- * {@code arkreq:primaryActor} points at"), so it was already in place rather than a second issue
- * away when the first consumer arrived.</p>
+ * <p><strong>No longer reachable via a use case.</strong> Between issue #336 and ADR-37/
+ * kogn-io/arknet#405 Part C, this guard also rejected a delete while a use case still pointed at
+ * the actor via {@code arkreq:primaryActor}/{@code supportingActor} (issue #335's original scope,
+ * reachable in practice once issue #336 pointed {@code arknet-use-cases}' actor resolution at this
+ * register, and since issue #343 also settable through {@code uc_update}). Part C repointed those
+ * two properties at {@code arkproc:Role} instead, renaming them to {@code arkreq:primaryRole}/
+ * {@code supportingRole} in the process - no use-case edge can range over an actor any more, so
+ * {@code KognioRdfActorRepository.REFERENCING_PREDICATES} carries only {@code arkproc:filledBy}
+ * today.</p>
  */
 public class ActorReferencedException extends RuntimeException {
 
@@ -36,7 +38,7 @@ public class ActorReferencedException extends RuntimeException {
      * @param code                   the actor the caller tried to delete
      * @param referencingPredicates  the predicate(s) found still pointing at the actor, in the
      *                               human-readable shorthand a caller would recognise (e.g.
-     *                               {@code "primaryActor"}), never empty
+     *                               {@code "filledBy"}), never empty
      */
     public ActorReferencedException(ProjectId projectId, ActorCode code, List<String> referencingPredicates) {
         super("actor " + Objects.requireNonNull(code, "code").value() + " in project "

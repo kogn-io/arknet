@@ -588,10 +588,13 @@ public class KognioRdfTermRepository implements TermRepository {
      * {@code arkarch:usesTerm} (kogn-io/arknet#399), a bounded context's
      * {@code arkddd:ubiquitousLanguageTerm}, another term's {@code skos:broader} or
      * {@code skos:related} (kogn-io/arknet#420 - symmetric, but only one direction is asserted, so
-     * an incoming edge is cleared by a {@code term_update} on the term that asserts it), and - still
-     * checked although issue #336 moved actor resolution off glossary terms, since a store filled
-     * before that cut can hold such an edge - a use case's {@code arkreq:primaryActor}/{@code
-     * supportingActor}. Keys
+     * an incoming edge is cleared by a {@code term_update} on the term that asserts it). The former
+     * pre-#336 compatibility entry for a use case's {@code arkreq:primaryActor}/{@code
+     * supportingActor} - kept only because a store filled before issue #336 moved actor resolution
+     * off glossary terms could still carry such an edge - is gone with ADR-37/kogn-io/arknet#405
+     * Part C: those two properties were renamed to {@code arkreq:primaryRole}/{@code supportingRole}
+     * and now range over {@code arkproc:Role}, not {@code skos:Concept}, so no edge of theirs can
+     * ever point at a term again, compatibility or not. Keys
      * are the absolute predicate IRIs this adapter and its siblings write; values are the
      * human-readable shorthand {@link de.hauschel.arknet.ul.domain.TermReferencedException} names
      * a caller by.
@@ -613,9 +616,7 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
             ArkreqVocabulary.USES_TERM, "arkreq:usesTerm",
             ArkarchVocabulary.USES_TERM, "arkarch:usesTerm",
-            ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM, "arkddd:ubiquitousLanguageTerm",
-            ArkreqVocabulary.PRIMARY_ACTOR, "arkreq:primaryActor",
-            ArkreqVocabulary.SUPPORTING_ACTOR, "arkreq:supportingActor");
+            ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM, "arkddd:ubiquitousLanguageTerm");
 
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still

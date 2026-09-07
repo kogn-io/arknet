@@ -39,6 +39,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
@@ -46,9 +47,9 @@ import de.hauschel.arknet.uc.application.UseCaseService;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
-import de.hauschel.arknet.uc.application.port.out.ActorLookup;
 import de.hauschel.arknet.uc.application.port.out.ConstraintLookup;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
+import de.hauschel.arknet.uc.application.port.out.RoleLookup;
 import de.hauschel.arknet.uc.application.port.out.TermLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.UseCase;
@@ -88,10 +89,10 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
 class UseCaseServiceRealStoreConcurrencyTest {
 
     private static final ProjectId WS = new ProjectId("test-project");
-    private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
-    private static final ActorLookup CUSTOMER_ACTOR_LOOKUP = (projectId, actorName) -> {
-        if (!"Customer".equals(actorName)) {
-            throw new IllegalArgumentException("unexpected actor name in this test: " + actorName);
+    private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/role-customer");
+    private static final RoleLookup CUSTOMER_ROLE_LOOKUP = (projectId, roleCode) -> {
+        if (!"ROLE-1".equals(roleCode)) {
+            throw new IllegalArgumentException("unexpected role code in this test: " + roleCode);
         }
         return CUSTOMER_ID;
     };
@@ -122,6 +123,25 @@ class UseCaseServiceRealStoreConcurrencyTest {
     @BeforeEach
     void setUp() {
         realLifecycle = new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageRoot);
+        seedCustomerRole();
+    }
+
+    /**
+     * Puts {@code ROLE-1} into the roles graph for real, not just into {@link #CUSTOMER_ROLE_LOOKUP}.
+     * The update path verifies its role targets against that graph before writing
+     * ({@code KognioRdfUseCaseRepository#assertRoleTargetsAreTypedRoles}, the guard keeping the
+     * transitional {@code primaryActor} read from becoming a silent mis-migration), so a role that
+     * exists only in a stubbed lookup would fail the write for a reason this race is not about.
+     */
+    private void seedCustomerRole() {
+        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update("INSERT DATA { GRAPH <" + ArkprocVocabulary.ROLES_GRAPH + "> { "
+                        + "<" + CUSTOMER_ID.value() + "> a <https://w3id.org/arknet/process#Role> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"ROLE-1\" } }");
+                return null;
+            });
+        }
     }
 
     @AfterEach
@@ -319,7 +339,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
     }
 
     private static NewUseCase newUseCase() {
-        return new NewUseCase("Place order", "goal of Place order", null, null, "Customer",
+        return new NewUseCase("Place order", "goal of Place order", null, null, "ROLE-1",
                 List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of(), null);
     }
 
@@ -361,11 +381,11 @@ class UseCaseServiceRealStoreConcurrencyTest {
         UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
                 guarded, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
         return new UseCaseService(repository, new UuidResourceIdFactory(), UNUSED_REQUIREMENT_LOOKUP,
-                CUSTOMER_ACTOR_LOOKUP, UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_LOOKUP);
+                CUSTOMER_ROLE_LOOKUP, UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_LOOKUP);
     }
 
     /**
-     * A service wired over {@code lifecycle} with the fixed {@code Customer} actor lookup - used
+     * A service wired over {@code lifecycle} with the fixed {@code ROLE-1} role lookup - used
      * by {@link #updateRetriesAndKeepsBothChangesWhenAConcurrentWriterAdvancedTheHead}, which
      * needs no requirement lookup either since neither racer's step realises one.
      */
@@ -373,7 +393,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
         UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
                 lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
         return new UseCaseService(repository, new UuidResourceIdFactory(), UNUSED_REQUIREMENT_LOOKUP,
-                CUSTOMER_ACTOR_LOOKUP, UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_LOOKUP);
+                CUSTOMER_ROLE_LOOKUP, UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_LOOKUP);
     }
 
     /**

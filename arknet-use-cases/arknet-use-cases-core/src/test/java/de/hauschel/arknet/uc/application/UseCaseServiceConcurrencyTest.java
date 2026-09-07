@@ -51,7 +51,7 @@ class UseCaseServiceConcurrencyTest {
     private static final ProjectId WS = new ProjectId("test-project");
     /** These races are orthogonal to issue #258's default-language resolution - always given explicitly. */
     private static final String DEFAULT_LANGUAGE = "en";
-    private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
+    private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/role-1");
     private static final ResourceId TERM_1_ID = ResourceId.of("https://w3id.org/arknet/id/term-1");
 
     private InMemoryUseCaseRepository store;
@@ -62,7 +62,7 @@ class UseCaseServiceConcurrencyTest {
      * added use cases, a test artefact this bug does not have.
      */
     private SequentialResourceIdFactory resourceIdFactory;
-    private InMemoryActorLookup actorLookup;
+    private InMemoryRoleLookup roleLookup;
     private InMemoryRequirementLookup requirementLookup;
     private InMemoryTermLookup termLookup;
     private InMemoryConstraintLookup constraintLookup;
@@ -73,14 +73,14 @@ class UseCaseServiceConcurrencyTest {
     void setUp() {
         store = new InMemoryUseCaseRepository();
         resourceIdFactory = new SequentialResourceIdFactory();
-        actorLookup = new InMemoryActorLookup();
-        actorLookup.register("Customer", CUSTOMER_ID);
+        roleLookup = new InMemoryRoleLookup();
+        roleLookup.register("ROLE-1", CUSTOMER_ID);
         requirementLookup = new InMemoryRequirementLookup();
         termLookup = new InMemoryTermLookup();
         termLookup.register("TERM-1", TERM_1_ID);
         constraintLookup = new InMemoryConstraintLookup();
         otherCaller = new UseCaseService(
-                store, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
+                store, resourceIdFactory, requirementLookup, roleLookup, termLookup, constraintLookup);
     }
 
     @Test
@@ -88,7 +88,7 @@ class UseCaseServiceConcurrencyTest {
         RaceOnFirstFindAllCodesRepository racing =
                 new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE));
         UseCaseService underTest = new UseCaseService(
-                racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
+                racing, resourceIdFactory, requirementLookup, roleLookup, termLookup, constraintLookup);
 
         UseCase result = underTest.add(WS, newUseCase(), DEFAULT_LANGUAGE);
 
@@ -114,7 +114,7 @@ class UseCaseServiceConcurrencyTest {
                         .trigger("Concurrent trigger")
                         .build(), DEFAULT_LANGUAGE));
         UseCaseService underTest = new UseCaseService(
-                racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
+                racing, resourceIdFactory, requirementLookup, roleLookup, termLookup, constraintLookup);
 
         UseCase result = underTest.update(WS, code, UseCaseCorrection.builder()
                 .precondition("Racing precondition")
@@ -139,7 +139,7 @@ class UseCaseServiceConcurrencyTest {
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE));
         UseCaseService underTest = new UseCaseService(
-                racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
+                racing, resourceIdFactory, requirementLookup, roleLookup, termLookup, constraintLookup);
 
         UseCase result = underTest.update(WS, code, UseCaseCorrection.builder()
                 .trigger("Concurrent trigger")
@@ -162,7 +162,7 @@ class UseCaseServiceConcurrencyTest {
         UseCaseCode code = otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE).code();
         AlwaysConflictingRepository racing = new AlwaysConflictingRepository(store);
         UseCaseService underTest = new UseCaseService(
-                racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
+                racing, resourceIdFactory, requirementLookup, roleLookup, termLookup, constraintLookup);
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
                 () -> underTest.update(WS, code, UseCaseCorrection.builder()
@@ -173,7 +173,7 @@ class UseCaseServiceConcurrencyTest {
     }
 
     private static NewUseCase newUseCase() {
-        return new NewUseCase("Place order", "goal of Place order", null, null, "Customer",
+        return new NewUseCase("Place order", "goal of Place order", null, null, "ROLE-1",
                 List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of(), null);
     }
 

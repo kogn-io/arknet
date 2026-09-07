@@ -36,7 +36,7 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
-import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -59,7 +59,7 @@ class ModelViewsTest {
                 (projectId, displayLocale) -> List.of(term()),
                 new UseCaseCards((projectId, displayLocale) -> {
                     throw new IllegalStateException("store closed");
-                }, (projectId, ids) -> List.of()),
+                }, (projectId, ids) -> List.of(), (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
                 emptyConstraintCards(),
                 new BoundedContextCards(projectId -> List.of()),
@@ -89,7 +89,8 @@ class ModelViewsTest {
                 (projectId, displayLocale) -> {
                     throw new IllegalStateException("glossary unreadable");
                 },
-                new UseCaseCards((projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of()),
+                new UseCaseCards((projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of(),
+                        (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
                 emptyConstraintCards(),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
@@ -112,7 +113,8 @@ class ModelViewsTest {
     void leavesOutEmptySections() {
         final ModelViews views = new ModelViews(
                 (projectId, displayLocale) -> List.of(term()),
-                new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of()),
+                new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of(),
+                        (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
                 emptyConstraintCards(),
                 new BoundedContextCards(projectId -> List.of()),
@@ -136,7 +138,8 @@ class ModelViewsTest {
     void ordersSectionsFromStrategicToDetailed() {
         final ModelViews views = new ModelViews(
                 (projectId, displayLocale) -> List.of(term()),
-                new UseCaseCards((projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of()),
+                new UseCaseCards((projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of(),
+                        (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
                 new ConstraintCards((projectId, displayLocale) -> List.of(constraint())),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
@@ -154,7 +157,7 @@ class ModelViewsTest {
         return new UseCase(
                 new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-1")),
                 new UseCaseCode("UC1"), "Bestellung aufgeben", "Der Kunde bestellt Artikel.",
-                null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-1")),
+                null, null, new RoleRef(ResourceId.of("https://w3id.org/arknet/id/actor-1")),
                 List.of(), null, null,
                 List.of(new Step(1, "Artikel in den Warenkorb legen", List.of())), List.of(), List.of(),
                 List.of());

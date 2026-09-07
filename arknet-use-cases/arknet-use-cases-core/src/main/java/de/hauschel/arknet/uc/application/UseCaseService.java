@@ -27,12 +27,12 @@ import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
-import de.hauschel.arknet.uc.application.port.out.ActorLookup;
+import de.hauschel.arknet.uc.application.port.out.RoleLookup;
 import de.hauschel.arknet.uc.application.port.out.ConstraintLookup;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
 import de.hauschel.arknet.uc.application.port.out.TermLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
-import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
 import de.hauschel.arknet.uc.domain.RequirementRef;
@@ -59,9 +59,9 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * the highest running number currently used in the target project (numbering is independent
  * per project, starting at 1).</p>
  *
- * <p><strong>Reference resolution.</strong> {@code NewUseCase}'s actor/requirement
+ * <p><strong>Reference resolution.</strong> {@code NewUseCase}'s role/requirement
  * fields are raw human-typed strings, not domain refs - resolving them to the referenced
- * resources' opaque identities is this service's job, via the driven {@link ActorLookup}/
+ * resources' opaque identities is this service's job, via the driven {@link RoleLookup}/
  * {@link RequirementLookup} ports, once per {@link #add}, before the real {@link UseCase} and its
  * {@link Step}s are constructed. An unknown or ambiguous reference propagates as a didactic
  * runtime exception from the lookup, rejecting the write; nothing is persisted.</p>
@@ -83,10 +83,10 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * the {@code text} of existing main-flow steps by position, never their {@code realises}
  * references, while the separate, independent {@code stepRealisesPatches} corrects only a named
  * step's {@code realises} set - replacing it wholesale, with an empty list explicitly clearing it
- * (issue #255). Neither mechanism adds, removes or reorders steps. {@code primaryActor} and
- * {@code supportingActors} are correctable too (issue #343), by name and through the very same
- * {@link ActorLookup} {@link #add} resolves against - {@code primaryActor} replace-or-leave,
- * {@code supportingActors} a wholesale replace whose empty list clears them; full step-list
+ * (issue #255). Neither mechanism adds, removes or reorders steps. {@code primaryRole} and
+ * {@code supportingRoles} are correctable too (issue #343), by business code and through the very same
+ * {@link RoleLookup} {@link #add} resolves against - {@code primaryRole} replace-or-leave,
+ * {@code supportingRoles} a wholesale replace whose empty list clears them; full step-list
  * restructuring stays out of this port's scope - see {@link UpdateUseCase}.
  * Linking a glossary term or a constraint is idempotent, independent of
  * {@link #update}, and mirrors {@code RequirementService#linkTerm}/{@code #linkConstraint}
@@ -111,7 +111,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
     private final UseCaseRepository repository;
     private final ResourceIdFactory resourceIdFactory;
     private final RequirementLookup requirementLookup;
-    private final ActorLookup actorLookup;
+    private final RoleLookup roleLookup;
     private final TermLookup termLookup;
     private final ConstraintLookup constraintLookup;
 
@@ -123,7 +123,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
      *                          {@code null})
      * @param requirementLookup resolves a human-typed requirement code to its opaque identity
      *                          (must not be {@code null})
-     * @param actorLookup       resolves a human-typed actor name to its opaque identity (must
+     * @param roleLookup        resolves a human-typed role code to its opaque identity (must
      *                          not be {@code null})
      * @param termLookup        resolves a human-typed glossary term code to its opaque identity,
      *                          for {@link #linkTerm} (must not be {@code null})
@@ -134,12 +134,12 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
      *                          {@code null})
      */
     public UseCaseService(UseCaseRepository repository, ResourceIdFactory resourceIdFactory,
-            RequirementLookup requirementLookup, ActorLookup actorLookup, TermLookup termLookup,
+            RequirementLookup requirementLookup, RoleLookup roleLookup, TermLookup termLookup,
             ConstraintLookup constraintLookup) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.requirementLookup = Objects.requireNonNull(requirementLookup, "requirementLookup");
-        this.actorLookup = Objects.requireNonNull(actorLookup, "actorLookup");
+        this.roleLookup = Objects.requireNonNull(roleLookup, "roleLookup");
         this.termLookup = Objects.requireNonNull(termLookup, "termLookup");
         this.constraintLookup = Objects.requireNonNull(constraintLookup, "constraintLookup");
     }
@@ -149,7 +149,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Identity is opaque and stable, so it is minted once, outside the retry. Reference
-        // resolution likewise happens once, before the retry: an unknown/ambiguous actor or
+        // resolution likewise happens once, before the retry: an unknown role or
         // requirement must fail immediately and is not a code collision to retry on. Only the
         // business code is recomputed when a concurrent uc_add claims the same candidate first -
         // see CodeAssignment for why that race exists.
@@ -158,11 +158,11 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
         // use case is written under does not depend on which code candidate ultimately wins, and a
         // missing default must reject the call before any reference is even resolved (issue #258).
         String language = LanguageTag.resolveWriteLanguage(command.language(), defaultLanguage);
-        ActorRef primaryActor = new ActorRef(actorLookup.resolveByName(projectId, command.primaryActor()));
-        List<ActorRef> supportingActors = command.supportingActors() == null
+        RoleRef primaryRole = new RoleRef(roleLookup.resolveByCode(projectId, command.primaryRole()));
+        List<RoleRef> supportingRoles = command.supportingRoles() == null
                 ? List.of()
-                : command.supportingActors().stream()
-                        .map(name -> new ActorRef(actorLookup.resolveByName(projectId, name)))
+                : command.supportingRoles().stream()
+                        .map(roleCode -> new RoleRef(roleLookup.resolveByCode(projectId, roleCode)))
                         .toList();
         List<Step> steps = command.steps() == null
                 ? List.of()
@@ -172,7 +172,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
         return CodeAssignment.createRetryingOnCodeCollision(DuplicateUseCaseCodeException.class, () -> {
             UseCaseCode code = nextCode(projectId);
             UseCase useCase = new UseCase(id, code, command.title(), command.goal(), command.scope(),
-                    command.trigger(), primaryActor, supportingActors,
+                    command.trigger(), primaryRole, supportingRoles,
                     command.precondition(), command.postcondition(), steps,
                     command.extensions(), List.of(), List.of());
             repository.create(projectId, useCase, language);
@@ -215,19 +215,19 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(correction, "correction");
         // Reference resolution happens once, before the retry, mirroring add(): an unresolvable
-        // requirement or actor reference must fail immediately and is not a code-collision race to
+        // requirement or role reference must fail immediately and is not a code-collision race to
         // retry on.
         Map<Integer, List<RequirementRef>> realisesByPosition = correction.stepRealisesPatches() == null
                 ? null : toRealisesByPosition(projectId, correction.stepRealisesPatches());
-        // Null means "leave it" for both actor fields; the difference is that an empty
-        // supportingActors list is a legal, explicit clear, while primaryActor has no clear at all
+        // Null means "leave it" for both role fields; the difference is that an empty
+        // supportingRoles list is a legal, explicit clear, while primaryRole has no clear at all
         // (a use case always has exactly one) - see UpdateUseCase (issue #343).
-        ActorRef newPrimaryActor = correction.primaryActor() == null
-                ? null : new ActorRef(actorLookup.resolveByName(projectId, correction.primaryActor()));
-        List<ActorRef> newSupportingActors = correction.supportingActors() == null
+        RoleRef newPrimaryRole = correction.primaryRole() == null
+                ? null : new RoleRef(roleLookup.resolveByCode(projectId, correction.primaryRole()));
+        List<RoleRef> newSupportingRoles = correction.supportingRoles() == null
                 ? null
-                : correction.supportingActors().stream()
-                        .map(name -> new ActorRef(actorLookup.resolveByName(projectId, name)))
+                : correction.supportingRoles().stream()
+                        .map(roleCode -> new RoleRef(roleLookup.resolveByCode(projectId, roleCode)))
                         .toList();
         // Which step positions this call itself patches, and whether it touches extensions at
         // all (issue #271): the signal updateWithOptimisticRetry resolves a fresh language
@@ -235,8 +235,8 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
         // caller correcting a typo back to the project's already-current wording is still an
         // explicit write, not a no-op. `extensions` is a wholesale replace (not a per-position
         // patch), so a non-null `extensions` touches every position in the replacement list.
-        // The two actor fields deliberately feed no touched signal at all: neither carries a
-        // language-tagged literal, so an actor-only correction never resolves a write language and
+        // The two role fields deliberately feed no touched signal at all: neither carries a
+        // language-tagged literal, so a role-only correction never resolves a write language and
         // goes through even in a project with no defaultLanguage (issue #343).
         Set<Integer> touchedStepPositions = correction.stepTextPatches() == null
                 ? Set.of()
@@ -254,8 +254,8 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
                     correction.goal() != null ? correction.goal() : current.goal(),
                     correction.scope() != null ? correction.scope() : current.scope(),
                     correction.trigger() != null ? correction.trigger() : current.trigger(),
-                    newPrimaryActor != null ? newPrimaryActor : current.primaryActor(),
-                    newSupportingActors != null ? newSupportingActors : current.supportingActors(),
+                    newPrimaryRole != null ? newPrimaryRole : current.primaryRole(),
+                    newSupportingRoles != null ? newSupportingRoles : current.supportingRoles(),
                     correction.precondition() != null ? correction.precondition() : current.precondition(),
                     correction.postcondition() != null ? correction.postcondition() : current.postcondition(),
                     current.steps(),
@@ -290,7 +290,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
             List<TermRef> linked = new ArrayList<>(current.usesTerms());
             linked.add(term);
             return new UseCase(current.id(), current.code(), current.title(), current.goal(), current.scope(),
-                    current.trigger(), current.primaryActor(), current.supportingActors(),
+                    current.trigger(), current.primaryRole(), current.supportingRoles(),
                     current.precondition(), current.postcondition(), current.steps(), current.extensions(),
                     linked, current.constrainedBy());
         });
@@ -315,7 +315,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
             List<ConstraintRef> linked = new ArrayList<>(current.constrainedBy());
             linked.add(ref);
             return new UseCase(current.id(), current.code(), current.title(), current.goal(), current.scope(),
-                    current.trigger(), current.primaryActor(), current.supportingActors(),
+                    current.trigger(), current.primaryRole(), current.supportingRoles(),
                     current.precondition(), current.postcondition(), current.steps(), current.extensions(),
                     current.usesTerms(), linked);
         });

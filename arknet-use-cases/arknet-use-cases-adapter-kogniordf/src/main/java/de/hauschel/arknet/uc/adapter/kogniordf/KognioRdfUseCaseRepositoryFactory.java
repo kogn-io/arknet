@@ -82,10 +82,10 @@ public final class KognioRdfUseCaseRepositoryFactory {
      *
      * <p>This is the seam the composition root (arknet-mcp) uses: it passes the single shared
      * {@link DatasetLifecycle} bean so the use-case repository reads and writes the <em>same</em>
-     * per-project store as the requirements and ubiquitous-language repositories - which is
+     * per-project store as the requirements and actor repositories - which is
      * what makes the strict cross-bounded-context label resolution (a use-case step realising an
-     * {@code FR-1}, or naming an actor term) actually find those resources. Tests likewise supply
-     * their own (e.g. in-memory) lifecycle.</p>
+     * {@code FR-1}, or naming a {@code ROLE-N} role) actually find those resources. Tests likewise
+     * supply their own (e.g. in-memory) lifecycle.</p>
      *
      * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from
      * @param resourceIdFactory mints the opaque IRI of each derived step resource; the same
@@ -114,7 +114,7 @@ public final class KognioRdfUseCaseRepositoryFactory {
      *
      * <p>Package-private (not {@code private}) so {@code KognioRdfUseCaseRepositoryTest} can
      * exercise the wired gate directly against synthetic candidate graphs, without a
-     * {@link UseCaseRepository} round-trip the single-valued {@code primaryActor} domain field
+     * {@link UseCaseRepository} round-trip the single-valued {@code primaryRole} domain field
      * cannot produce.</p>
      *
      * <p>The {@code displayLocale} handed in is the same one the composition root configures
@@ -139,8 +139,8 @@ public final class KognioRdfUseCaseRepositoryFactory {
      * <p>The file bundles all requirements-context shapes. A use-case write must only be
      * validated against the use-case/step shapes - not against {@code RequirementShape},
      * {@code ConstraintShape}, ... The adapter supplies minimal {@code rdf:type} assertions for the
-     * referenced actor/requirement nodes so the {@code sh:class} constraints on
-     * {@code primaryActor}/{@code stepRealises} are satisfied; without disabling the foreign
+     * referenced role/requirement nodes so the {@code sh:class} constraints on
+     * {@code primaryRole}/{@code stepRealises} are satisfied; without disabling the foreign
      * node shapes, those very type assertions would (correctly) pull the referenced resources
      * into e.g. {@code RequirementShape} and fail validation on data this adapter neither owns
      * nor carries. Disabling is done generically by removing every {@code sh:targetClass}

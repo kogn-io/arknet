@@ -28,10 +28,10 @@ class UseCaseTest {
     private static final UseCaseId ID = new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-1"));
     private static final UseCaseCode CODE = new UseCaseCode("UC1");
 
-    private static final ActorRef CUSTOMER = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
-    private static final ActorRef PAYMENT_PROVIDER =
-            new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-payment-provider"));
-    private static final ActorRef ACTOR_A = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-a"));
+    private static final RoleRef CUSTOMER = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
+    private static final RoleRef PAYMENT_PROVIDER =
+            new RoleRef(ResourceId.of("https://w3id.org/arknet/id/actor-payment-provider"));
+    private static final RoleRef ROLE_A = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/actor-a"));
     private static final RequirementRef FR5 = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-5"));
 
     private static Step step(int position, String text) {
@@ -60,8 +60,8 @@ class UseCaseTest {
         assertEquals("Customer places an order", uc.goal());
         assertEquals("Webshop", uc.scope());
         assertEquals("Customer opens the cart", uc.trigger());
-        assertEquals(CUSTOMER, uc.primaryActor());
-        assertEquals(List.of(PAYMENT_PROVIDER), uc.supportingActors());
+        assertEquals(CUSTOMER, uc.primaryRole());
+        assertEquals(List.of(PAYMENT_PROVIDER), uc.supportingRoles());
         assertEquals("Customer is logged in", uc.precondition());
         assertEquals("Order is recorded", uc.postcondition());
         assertEquals(List.of(s1), uc.steps());
@@ -74,9 +74,9 @@ class UseCaseTest {
     @Test
     void optionalFieldsMayBeNullAndCollectionsDefaultToEmpty() {
         UseCase uc = new UseCase(ID, CODE, "t", "g", null, null,
-                ACTOR_A, null, null, null, List.of(step(1, "do")), null, null, null);
+                ROLE_A, null, null, null, List.of(step(1, "do")), null, null, null);
 
-        assertTrue(uc.supportingActors().isEmpty());
+        assertTrue(uc.supportingRoles().isEmpty());
         assertTrue(uc.extensions().isEmpty());
         assertTrue(uc.usesTerms().isEmpty());
         assertTrue(uc.constrainedBy().isEmpty());
@@ -86,29 +86,29 @@ class UseCaseTest {
     void rejectsNullMandatoryFields() {
         List<Step> steps = List.of(step(1, "do"));
         assertThrows(NullPointerException.class, () -> new UseCase(null, CODE, "t", "g", null, null,
-                ACTOR_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
+                ROLE_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
         assertThrows(NullPointerException.class, () -> new UseCase(ID, null, "t", "g", null, null,
-                ACTOR_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
+                ROLE_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
         assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, null, "g", null, null,
-                ACTOR_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
+                ROLE_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
         assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, "t", null, null, null,
-                ACTOR_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
+                ROLE_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
         assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, "t", "g", null, null,
                 null, List.of(), null, null, steps, List.of(), List.of(), List.of()));
         assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, "t", "g", null, null,
-                ACTOR_A, List.of(), null, null, null, List.of(), List.of(), List.of()));
+                ROLE_A, List.of(), null, null, null, List.of(), List.of(), List.of()));
     }
 
     @Test
     void rejectsBlankTitle() {
         assertThrows(IllegalArgumentException.class, () -> new UseCase(ID, CODE, "  ", "g",
-                null, null, ACTOR_A, List.of(), null, null, List.of(step(1, "do")), List.of(), List.of(), List.of()));
+                null, null, ROLE_A, List.of(), null, null, List.of(step(1, "do")), List.of(), List.of(), List.of()));
     }
 
     @Test
     void rejectsBlankGoal() {
         assertThrows(IllegalArgumentException.class, () -> new UseCase(ID, CODE, "t", "  ",
-                null, null, ACTOR_A, List.of(), null, null, List.of(step(1, "do")), List.of(), List.of(), List.of()));
+                null, null, ROLE_A, List.of(), null, null, List.of(step(1, "do")), List.of(), List.of(), List.of()));
     }
 
     @Test
@@ -260,8 +260,8 @@ class UseCaseTest {
     }
 
     @Test
-    void rejectsNullActorRefIdentity() {
-        assertThrows(NullPointerException.class, () -> new ActorRef(null));
+    void rejectsNullRoleRefIdentity() {
+        assertThrows(NullPointerException.class, () -> new RoleRef(null));
     }
 
     @Test

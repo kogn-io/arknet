@@ -282,7 +282,7 @@ class TraceabilityGraphAdrEdgesTest {
     /**
      * The negative case: an ADR that already carries {@code arkarch:usesTerm} to the term its prose
      * names must not be reported - the relationship is already recorded, mirroring how a use case's
-     * own {@code primaryActor} mention in its goal is not flagged either (issue #333).
+     * own {@code primaryRole} mention in its goal is not flagged either (issue #333).
      */
     @Test
     void unlinkedMentionsDoesNotFlagAnAdrsMentionOfItsOwnLinkedTerm() {

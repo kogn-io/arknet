@@ -211,12 +211,6 @@ class ActorServiceConcurrencyTest {
         }
 
         @Override
-        public List<de.hauschel.arknet.actor.application.port.in.ResolveActors.ResolvedActor> findByIds(
-                ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
-            return delegate.findByIds(projectId, ids);
-        }
-
-        @Override
         public List<Actor> findAllByIds(ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
             return delegate.findAllByIds(projectId, ids);
         }
@@ -286,12 +280,6 @@ class ActorServiceConcurrencyTest {
         }
 
         @Override
-        public List<de.hauschel.arknet.actor.application.port.in.ResolveActors.ResolvedActor> findByIds(
-                ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
-            return delegate.findByIds(projectId, ids);
-        }
-
-        @Override
         public List<Actor> findAllByIds(ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
             return delegate.findAllByIds(projectId, ids);
         }
@@ -347,12 +335,6 @@ class ActorServiceConcurrencyTest {
         @Override
         public List<ActorCode> findRetainedCodes(ProjectId projectId) {
             return delegate.findRetainedCodes(projectId);
-        }
-
-        @Override
-        public List<de.hauschel.arknet.actor.application.port.in.ResolveActors.ResolvedActor> findByIds(
-                ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
-            return delegate.findByIds(projectId, ids);
         }
 
         @Override
