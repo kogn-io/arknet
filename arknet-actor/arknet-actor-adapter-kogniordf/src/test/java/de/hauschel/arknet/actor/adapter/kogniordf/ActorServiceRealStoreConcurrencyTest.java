@@ -217,6 +217,43 @@ class ActorServiceRealStoreConcurrencyTest {
                 "both writers' corrections must survive - neither is silently lost");
     }
 
+    /**
+     * Lost-update guard against the real store for kogn-io/arknet#520's multilingual
+     * {@code actor_update}: two concurrent single-field, single-language writers on the same actor
+     * must not lose either party's language variant - one thread adds only a new German
+     * {@code name} variant, the other concurrently corrects only the already-stored English
+     * {@code description}. Mirrors {@code BoundedContextServiceRealStoreConcurrencyTest
+     * #updateOfNameAndUpdateOfDomainVisionByTwoConcurrentWritersDoesNotLoseEitherChange} exactly,
+     * one resource type over - the scenario {@link
+     * #updateRetriesAndKeepsBothCorrectionsWhenAConcurrentWriterAdvancedTheHead} above does not
+     * cover, since both its writers there share one language and never exercise the out-adapter's
+     * capture-before-delete/reattach of the <em>other</em> language variant.
+     */
+    @Test
+    void updateOfNameInGermanAndUpdateOfDescriptionInEnglishByTwoConcurrentWritersDoesNotLoseEitherLanguage() {
+        ActorService straightThrough = serviceOver(realLifecycle);
+        ActorCode code = straightThrough.add(WS, newActor("Sachbearbeiter"), "de").code();
+        straightThrough.update(WS, code, null, "Handles incoming applications in the back office.", "en", null);
+
+        AtomicBoolean pending = new AtomicBoolean(true);
+        ActorService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
+            if (pending.compareAndSet(true, false)) {
+                straightThrough.update(WS, code, null,
+                        "Handles incoming applications in the back office, corrected.", "en", null);
+            }
+        }));
+
+        racing.update(WS, code, "Antragsbearbeiter", null, "de", null);
+
+        assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
+        Actor asGerman = straightThrough.get(WS, code, "de").orElseThrow();
+        assertEquals("Antragsbearbeiter", asGerman.name(),
+                "the racer's own German name correction must not have been lost by its own retry");
+        Actor asEnglish = straightThrough.get(WS, code, "en").orElseThrow();
+        assertEquals("Handles incoming applications in the back office, corrected.", asEnglish.description(),
+                "the concurrent English description correction must not have been lost by the retry");
+    }
+
     private static NewActor newActor(String name) {
         return new NewActor(ActorType.HUMAN, name, "Bearbeitet eingehende Antraege im Backoffice.", "de");
     }
