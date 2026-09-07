@@ -42,6 +42,7 @@ import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
+import de.hauschel.arknet.uc.domain.RemovedPositions;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.Step;
@@ -304,7 +305,7 @@ class UseCaseMcpToolsTest {
     /** {@code uc_update}'s {@code language} argument reaches {@link UpdateUseCase} unchanged. */
     @Test
     void updatePassesTheLanguageThrough() {
-        adapter.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null, null, null, null, "de",
+        adapter.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null, null, null, null, null, null, "de",
                 null);
 
         assertEquals("de", stub.lastUpdateLanguage);
@@ -465,7 +466,7 @@ class UseCaseMcpToolsTest {
     void updatePassesAllGivenFieldsThroughToTheInPort() {
         String rendered = adapter.update(null, "UC1", "New title", "New goal", "New scope", "New trigger", null, null,
                 "New precondition", "New postcondition", List.of("2a. abort"),
-                List.of(new UseCaseMcpTools.StepPatchInput(1, "corrected text")), null, null, null);
+                List.of(new UseCaseMcpTools.StepPatchInput(1, "corrected text")), null, null, null, null, null);
 
         assertEquals(new UseCaseCode("UC1"), stub.lastUpdatedUseCase);
         assertEquals("New title", stub.lastUpdateTitle);
@@ -487,7 +488,7 @@ class UseCaseMcpToolsTest {
     @Test
     void updatePassesTheRoleArgumentsThroughToTheInPort() {
         adapter.update(null, "UC1", null, null, null, null, "ROLE-1", List.of("ROLE-2"), null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null, null);
 
         assertEquals("ROLE-1", stub.lastUpdatePrimaryRole);
         assertEquals(List.of("ROLE-2"), stub.lastUpdateSupportingRoles);
@@ -501,10 +502,10 @@ class UseCaseMcpToolsTest {
      */
     @Test
     void updateDistinguishesAnOmittedSupportingRoleArrayFromAnEmptyOne() {
-        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         assertEquals(null, stub.lastUpdateSupportingRoles);
 
-        adapter.update(null, "UC1", null, null, null, null, null, List.of(), null, null, null, null, null, null,
+        adapter.update(null, "UC1", null, null, null, null, null, List.of(), null, null, null, null, null, null, null, null,
                 null);
         assertEquals(List.of(), stub.lastUpdateSupportingRoles);
     }
@@ -512,7 +513,7 @@ class UseCaseMcpToolsTest {
     /** A blank {@code primaryRole} is treated as omitted, the same tolerance every other field gets. */
     @Test
     void updateTreatsABlankPrimaryRoleAsOmitted() {
-        adapter.update(null, "UC1", null, null, null, null, "  ", null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", null, null, null, null, "  ", null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(null, stub.lastUpdatePrimaryRole);
     }
@@ -522,7 +523,7 @@ class UseCaseMcpToolsTest {
     void updatePassesStepRealisesPatchesThroughMappedToThePort() {
         adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null,
                 List.of(new UseCaseMcpTools.StepRealisesPatchInput(1, List.of("FR-1", "FR-2")),
-                        new UseCaseMcpTools.StepRealisesPatchInput(2, List.of())),
+                        new UseCaseMcpTools.StepRealisesPatchInput(2, List.of())), null, null,
                 null, null);
 
         assertEquals(List.of(new UpdateUseCase.StepRealisesPatch(1, List.of("FR-1", "FR-2")),
@@ -540,10 +541,34 @@ class UseCaseMcpToolsTest {
     void updateRejectsAStepRealisesPatchWithOmittedRealises() {
         IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
                 () -> adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null,
-                        List.of(new UseCaseMcpTools.StepRealisesPatchInput(3, null)), null, null));
+                        List.of(new UseCaseMcpTools.StepRealisesPatchInput(3, null)), null, null, null, null));
 
         assertTrue(thrown.getMessage().contains("3"), thrown.getMessage());
         assertTrue(thrown.getMessage().contains("realises"), thrown.getMessage());
+    }
+
+    /**
+     * {@code uc_update}'s {@code newMainSteps} reaches {@link UpdateUseCase} mapped to
+     * {@link UpdateUseCase.NewMainStep} (kogn-io/arknet#513).
+     */
+    @Test
+    void updatePassesNewMainStepsThroughMappedToThePort() {
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null,
+                List.of(new UseCaseMcpTools.NewMainStepInput("pay", List.of("FR-1"))), null, null, null);
+
+        assertEquals(List.of(new UpdateUseCase.NewMainStep("pay", List.of("FR-1"))), stub.lastUpdateNewMainSteps);
+    }
+
+    /**
+     * {@code uc_update}'s {@code removeMainStepPositions} reaches {@link UpdateUseCase} as a
+     * {@link RemovedPositions} (kogn-io/arknet#513).
+     */
+    @Test
+    void updatePassesRemoveMainStepPositionsThroughToTheInPort() {
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null, null,
+                List.of(2), null, null);
+
+        assertEquals(new RemovedPositions(java.util.Set.of(2)), stub.lastUpdateRemoveMainStepPositions);
     }
 
     /**
@@ -552,7 +577,7 @@ class UseCaseMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(new UseCaseCode("UC1"), stub.lastUpdatedUseCase);
         assertEquals(null, stub.lastUpdateTitle);
@@ -569,7 +594,7 @@ class UseCaseMcpToolsTest {
     /** A blank string is treated as omitted, the same tolerance {@code uc_add} already applies. */
     @Test
     void updateTreatsABlankFieldAsOmitted() {
-        adapter.update(null, "UC1", "  ", null, null, null, null, null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", "  ", null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(null, stub.lastUpdateTitle);
     }
@@ -585,7 +610,7 @@ class UseCaseMcpToolsTest {
 
         RuntimeException thrown = assertThrows(RuntimeException.class,
                 () -> adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null,
-                        List.of(new UseCaseMcpTools.StepPatchInput(99, "does not exist")), null, null, null));
+                        List.of(new UseCaseMcpTools.StepPatchInput(99, "does not exist")), null, null, null, null, null));
 
         assertTrue(thrown.getMessage().contains("99"), thrown.getMessage());
     }
@@ -628,6 +653,8 @@ class UseCaseMcpToolsTest {
         private List<String> lastUpdateExtensions;
         private List<StepTextPatch> lastUpdateStepTextPatches;
         private List<UpdateUseCase.StepRealisesPatch> lastUpdateStepRealisesPatches;
+        private List<UpdateUseCase.NewMainStep> lastUpdateNewMainSteps;
+        private RemovedPositions lastUpdateRemoveMainStepPositions;
         private RuntimeException updateFailure;
 
         @Override
@@ -694,6 +721,8 @@ class UseCaseMcpToolsTest {
             lastUpdateExtensions = correction.extensions();
             lastUpdateStepTextPatches = correction.stepTextPatches();
             lastUpdateStepRealisesPatches = correction.stepRealisesPatches();
+            lastUpdateNewMainSteps = correction.newMainSteps();
+            lastUpdateRemoveMainStepPositions = correction.removeMainStepPositions();
             lastUpdateLanguage = correction.language();
             RoleRef primaryRole = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer"));
             return new UseCase(opaqueId("uc-1"), code, correction.title() != null ? correction.title() : "t",

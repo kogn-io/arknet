@@ -4,11 +4,13 @@
 package de.hauschel.arknet.uc.application;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -35,6 +37,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
+import de.hauschel.arknet.uc.domain.RemovedPositions;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
@@ -244,10 +247,18 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
                         .map(StepTextPatch::position)
                         .collect(Collectors.toUnmodifiableSet());
         boolean extensionsTouched = correction.extensions() != null;
+        // Raw human-typed realises codes are resolved once, before the retry, mirroring add()'s
+        // toStep - an unresolvable FR-9 must abort the whole call, not be retried as if it were a
+        // code collision (kogn-io/arknet#513).
+        List<de.hauschel.arknet.uc.domain.NewMainStep> newMainSteps = correction.newMainSteps().stream()
+                .map(draft -> toNewMainStep(projectId, draft))
+                .toList();
+        RemovedPositions removedMainStepPositions = correction.removeMainStepPositions();
         return updateWithOptimisticRetry(projectId, code, correction.language(), defaultLanguage, defaultLanguage,
                 correction.title() != null, correction.goal() != null, correction.scope() != null,
                 correction.trigger() != null, correction.precondition() != null,
-                correction.postcondition() != null, touchedStepPositions, extensionsTouched, current -> {
+                correction.postcondition() != null, touchedStepPositions, extensionsTouched,
+                removedMainStepPositions, current -> {
             UseCase base = new UseCase(
                     current.id(), current.code(),
                     correction.title() != null ? correction.title() : current.title(),
@@ -261,11 +272,26 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
                     current.steps(),
                     correction.extensions() != null ? List.copyOf(correction.extensions()) : current.extensions(),
                     current.usesTerms(), current.constrainedBy());
+            // Append, then correct, then remove (kogn-io/arknet#513, mirrors adr_update's own
+            // ordering): appends and corrections address the positions the caller saw via
+            // uc_get, and only the removal renumbers - so it must not run before anything that
+            // is addressed by position.
+            base = base.withAppendedMainSteps(newMainSteps);
             base = correction.stepTextPatches() != null
                     ? base.withStepTextPatches(projectId, correction.stepTextPatches())
                     : base;
-            return realisesByPosition != null ? base.withStepRealisesPatches(projectId, realisesByPosition) : base;
+            base = realisesByPosition != null ? base.withStepRealisesPatches(projectId, realisesByPosition) : base;
+            return base.withoutMainSteps(projectId, removedMainStepPositions);
         });
+    }
+
+    private de.hauschel.arknet.uc.domain.NewMainStep toNewMainStep(ProjectId projectId, NewMainStep draft) {
+        List<RequirementRef> realises = draft.realises() == null
+                ? List.of()
+                : draft.realises().stream()
+                        .map(code -> new RequirementRef(requirementLookup.resolveByCode(projectId, code)))
+                        .toList();
+        return new de.hauschel.arknet.uc.domain.NewMainStep(draft.text(), realises);
     }
 
     @Override
@@ -283,7 +309,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
         // READ-side language (issue #468), so an untouched field is echoed back under the
         // project's own language rather than the process default.
         return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false, false,
-                false, false, Set.of(), false, current -> {
+                false, false, Set.of(), false, RemovedPositions.NONE, current -> {
             if (current.usesTerms().contains(term)) {
                 return current;
             }
@@ -308,7 +334,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
         // same-module repository (see the class-level note).
         ConstraintRef ref = new ConstraintRef(constraintLookup.resolveByCode(projectId, constraintCode));
         return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false, false,
-                false, false, Set.of(), false, current -> {
+                false, false, Set.of(), false, RemovedPositions.NONE, current -> {
             if (current.constrainedBy().contains(ref)) {
                 return current;
             }
@@ -364,7 +390,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
             String defaultLanguage, String readDefaultLanguage, boolean titleTouched, boolean goalTouched,
             boolean scopeTouched, boolean triggerTouched, boolean preconditionTouched,
             boolean postconditionTouched, Set<Integer> touchedStepPositions, boolean extensionsTouched,
-            UnaryOperator<UseCase> mutation) {
+            RemovedPositions removedMainStepPositions, UnaryOperator<UseCase> mutation) {
         UseCaseConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             // The project's own default language, not the reading process's, decides which
@@ -410,16 +436,35 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
             String postconditionLanguage = resolveTouchedLanguage(postconditionTouched,
                     current.value().postcondition(), updated.postcondition(), current.postconditionLanguage(),
                     language, defaultLanguage);
-            Map<Integer, String> currentStepTextByPosition = new LinkedHashMap<>();
-            for (Step currentStep : current.value().steps()) {
-                currentStepTextByPosition.put(currentStep.position(), currentStep.text());
+            // Keyed by the post-removal position (kogn-io/arknet#513, mirrors
+            // RequirementService#acceptanceCriteriaLanguageByPosition): every position current
+            // carries that removedMainStepPositions does not take out is re-keyed via
+            // RemovedPositions#survivingPositionOf before it is looked up in updatedTextByPosition
+            // - a step's position can now shift, so a plain same-number lookup would compare the
+            // wrong pair of texts. Whatever position updated carries beyond what survived is a
+            // freshly appended one and always resolves fresh.
+            Map<Integer, String> updatedStepTextByPosition = new HashMap<>();
+            for (Step updatedStep : updated.steps()) {
+                updatedStepTextByPosition.put(updatedStep.position(), updatedStep.text());
             }
             Map<Integer, String> stepTextLanguageByPosition = new LinkedHashMap<>();
+            for (Step currentStep : current.value().steps()) {
+                OptionalInt survivingPosition = removedMainStepPositions.survivingPositionOf(currentStep.position());
+                if (survivingPosition.isEmpty()) {
+                    continue;
+                }
+                int newPosition = survivingPosition.getAsInt();
+                String stepLanguage = resolveTouchedLanguage(touchedStepPositions.contains(currentStep.position()),
+                        currentStep.text(), updatedStepTextByPosition.get(newPosition),
+                        current.stepTextLanguageByPosition().get(currentStep.position()), language, defaultLanguage);
+                stepTextLanguageByPosition.put(newPosition, stepLanguage);
+            }
             for (Step updatedStep : updated.steps()) {
-                String stepLanguage = resolveTouchedLanguage(touchedStepPositions.contains(updatedStep.position()),
-                        currentStepTextByPosition.get(updatedStep.position()), updatedStep.text(),
-                        current.stepTextLanguageByPosition().get(updatedStep.position()), language, defaultLanguage);
-                stepTextLanguageByPosition.put(updatedStep.position(), stepLanguage);
+                // Resolved lazily, not via a blind put: a lifecycle call passes no language at
+                // all and must not be asked for one on behalf of a position it merely carries
+                // through.
+                stepTextLanguageByPosition.computeIfAbsent(updatedStep.position(),
+                        position -> LanguageTag.resolveWriteLanguage(language, defaultLanguage));
             }
             Map<Integer, String> extensionTextLanguageByPosition = new LinkedHashMap<>();
             List<String> currentExtensions = current.value().extensions();
@@ -477,7 +522,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
                         titleLanguage, goalLanguage, scopeLanguage, triggerLanguage,
                         preconditionLanguage, postconditionLanguage,
                         stepTextLanguageByPosition, extensionTextLanguageByPosition, defaultLanguage,
-                        stableExtensionPrefixLength);
+                        stableExtensionPrefixLength, removedMainStepPositions);
                 return updated;
             } catch (UseCaseConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the use case between our read and our write -

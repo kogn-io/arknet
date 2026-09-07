@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetTx;
@@ -45,6 +46,7 @@ import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
+import de.hauschel.arknet.uc.domain.RemovedPositions;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.uc.domain.RoleRef;
@@ -257,7 +259,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             extensionTags.put(position, tag);
         }
         write(projectId, useCase, true, null, tag, tag, tag, tag, tag, tag, stepTags, extensionTags, null,
-                Integer.MAX_VALUE);
+                Integer.MAX_VALUE, RemovedPositions.NONE);
     }
 
     @Override
@@ -265,9 +267,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
             String preconditionLanguage, String postconditionLanguage,
             Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
-            String defaultLanguage, int stableExtensionPrefixLength) {
+            String defaultLanguage, int stableExtensionPrefixLength, RemovedPositions removedMainStepPositions) {
         Objects.requireNonNull(stepTextLanguageByPosition, "stepTextLanguageByPosition");
         Objects.requireNonNull(extensionTextLanguageByPosition, "extensionTextLanguageByPosition");
+        RemovedPositions removed = removedMainStepPositions == null ? RemovedPositions.NONE : removedMainStepPositions;
         Map<Integer, String> stepTags = new LinkedHashMap<>();
         stepTextLanguageByPosition.forEach((position, tag) -> stepTags.put(position, canonicalizeLenient(tag)));
         Map<Integer, String> extensionTags = new LinkedHashMap<>();
@@ -276,7 +279,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 canonicalizeLenient(titleLanguage), canonicalizeLenient(goalLanguage),
                 canonicalizeLenient(scopeLanguage), canonicalizeLenient(triggerLanguage),
                 canonicalizeLenient(preconditionLanguage), canonicalizeLenient(postconditionLanguage),
-                stepTags, extensionTags, canonicalizeLenient(defaultLanguage), stableExtensionPrefixLength);
+                stepTags, extensionTags, canonicalizeLenient(defaultLanguage), stableExtensionPrefixLength, removed);
     }
 
     /**
@@ -292,7 +295,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent, RevisionToken expectedHead,
             String titleTag, String goalTag, String scopeTag, String triggerTag, String preconditionTag,
             String postconditionTag, Map<Integer, String> stepTagByPosition,
-            Map<Integer, String> extensionTagByPosition, String defaultTag, int stableExtensionPrefixLength) {
+            Map<Integer, String> extensionTagByPosition, String defaultTag, int stableExtensionPrefixLength,
+            RemovedPositions removedMainStepPositions) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(useCase, "useCase");
 
@@ -481,7 +485,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                         List<Literal> preservedPostconditions = otherLanguageLiterals(
                                 tx, subject, POSTCONDITION_PROPERTY, postconditionTag, defaultTag);
                         Map<Integer, List<Literal>> preservedStepTextsByPosition = otherLanguageStepTexts(
-                                tx, subject, MAIN_STEP_PROPERTY, stepTagByPosition, defaultTag, Integer.MAX_VALUE);
+                                tx, subject, MAIN_STEP_PROPERTY, stepTagByPosition, defaultTag,
+                                removedMainStepPositions, Integer.MAX_VALUE);
                         // Beyond stableExtensionPrefixLength, this call's extensions list inserted,
                         // removed or reordered items relative to what was last read - position
                         // numbering no longer identifies "the same" extension across old and new, so
@@ -492,7 +497,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                         // keep ordinary position-based preservation.
                         Map<Integer, List<Literal>> preservedExtensionTextsByPosition = otherLanguageStepTexts(
                                 tx, subject, EXTENSION_STEP_PROPERTY, extensionTagByPosition, defaultTag,
-                                stableExtensionPrefixLength);
+                                RemovedPositions.NONE, stableExtensionPrefixLength);
 
                         tx.update(deleteExisting);
                         tx.add(graphIri, graph);
@@ -666,25 +671,39 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      *                   {@link #otherLanguageLiterals}'s own {@code defaultTag}, applied per
      *                   position: a position whose written tag equals {@code defaultTag} sweeps an
      *                   existing untagged step text at that position instead of preserving it
-     * @param maxPreservedPosition the highest position (inclusive) preservation is safe for -
-     *                   {@link Integer#MAX_VALUE} for main-flow steps, whose positions are always
-     *                   stable, or {@code UseCaseRepository#compareAndUpdate}'s
+     * @param removed    the stored main-flow-step positions this write drops (kogn-io/arknet#513) -
+     *                   the query yields the <em>stored</em> position, the result is keyed by the
+     *                   position the same entry holds after {@code removed} is applied via
+     *                   {@link RemovedPositions#survivingPositionOf}, and a removed position's
+     *                   texts are not carried over at all. {@link RemovedPositions#NONE} for
+     *                   extension steps, whose positions this method never renumbers on its own -
+     *                   {@code survivingPositionOf} is then the identity mapping, and
+     *                   {@code maxPreservedPosition} alone decides what is preserved
+     * @param maxPreservedPosition the highest <em>stored</em> position (inclusive) preservation is
+     *                   safe for - {@link Integer#MAX_VALUE} for main-flow steps, whose positions
+     *                   are stable up to exactly the shift {@code removed} describes, or
+     *                   {@code UseCaseRepository#compareAndUpdate}'s
      *                   {@code stableExtensionPrefixLength} for extension steps, whose positions
      *                   beyond a restructure's common prefix no longer identify "the same"
      *                   extension across old and new (see that parameter's own javadoc)
      */
     private Map<Integer, List<Literal>> otherLanguageStepTexts(
             DatasetTx tx, String subject, String edgeProperty, Map<Integer, String> stepTagByPosition,
-            String defaultTag, int maxPreservedPosition) {
+            String defaultTag, RemovedPositions removed, int maxPreservedPosition) {
         String query = "SELECT ?position ?text WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + subject + " <" + edgeProperty + "> ?step . "
                 + "?step <" + POSITION_PROPERTY + "> ?position ; <" + STEP_TEXT_PROPERTY + "> ?text } }";
         Map<Integer, List<Literal>> byPosition = new LinkedHashMap<>();
         tx.select(query).forEach(row -> {
-            int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
-            if (position > maxPreservedPosition) {
+            int storedPosition = Integer.parseInt(literalOf(row, "position").getLexicalForm());
+            if (storedPosition > maxPreservedPosition) {
                 return;
             }
+            OptionalInt survivingPosition = removed.survivingPositionOf(storedPosition);
+            if (survivingPosition.isEmpty()) {
+                return;
+            }
+            int position = survivingPosition.getAsInt();
             Literal text = literalOf(row, "text");
             String writtenTag = stepTagByPosition.get(position);
             String existingTag = canonicalizeLenient(text.getLanguageTag().orElse(null));

@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -23,11 +24,13 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.NewMainStep;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepRealisesPatch;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
+import de.hauschel.arknet.uc.domain.RemovedPositions;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
@@ -803,6 +806,106 @@ class UseCaseServiceTest {
         assertEquals(List.of(new RequirementRef(fr7Id)), updated.steps().get(0).realises());
         assertEquals("confirm and pay", updated.steps().get(1).text());
         assertEquals(List.of(), updated.steps().get(1).realises());
+    }
+
+    /**
+     * kogn-io/arknet#513: appending a main-flow step continues the position numbering from the
+     * current highest, mirroring {@code req_update}'s {@code newAcceptanceCriteria}.
+     */
+    @Test
+    void updateAppendsANewMainStepAfterTheExistingOnes() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        UseCase updated = service.update(WS, code, UseCaseCorrection.builder()
+                .newMainSteps(List.of(new NewMainStep("pay", List.of())))
+                .build(), DEFAULT_LANGUAGE);
+
+        assertEquals(2, updated.steps().size());
+        assertEquals("pay", updated.steps().get(1).text());
+    }
+
+    /**
+     * kogn-io/arknet#513: a main-flow step recorded by mistake can leave without a fresh
+     * {@code uc_add} and a new code - mirrors {@code adr_update}'s
+     * {@code removeConsequencePositions} (issue #483).
+     */
+    @Test
+    void updateRemovesAMainStepByPosition() {
+        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "ROLE-1", List.of(),
+                null, null,
+                List.of(new NewStep(1, "select items", List.of()), new NewStep(2, "confirm", List.of()),
+                        new NewStep(3, "pay", List.of())),
+                List.of(), null);
+        UseCaseCode code = service.add(WS, command, DEFAULT_LANGUAGE).code();
+
+        UseCase updated = service.update(WS, code, UseCaseCorrection.builder()
+                .removeMainStepPositions(new RemovedPositions(Set.of(2)))
+                .build(), DEFAULT_LANGUAGE);
+
+        assertEquals(List.of("select items", "pay"), updated.steps().stream().map(step -> step.text()).toList());
+        assertEquals(updated, service.get(WS, code, null).orElseThrow());
+    }
+
+    /** The survivors after a removed main-flow-step position renumber consecutively from 1. */
+    @Test
+    void updateRemovingAMainStepRenumbersTheSurvivors() {
+        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "ROLE-1", List.of(),
+                null, null,
+                List.of(new NewStep(1, "select items", List.of()), new NewStep(2, "confirm", List.of()),
+                        new NewStep(3, "pay", List.of())),
+                List.of(), null);
+        UseCaseCode code = service.add(WS, command, DEFAULT_LANGUAGE).code();
+
+        UseCase updated = service.update(WS, code, UseCaseCorrection.builder()
+                .removeMainStepPositions(new RemovedPositions(Set.of(1)))
+                .build(), DEFAULT_LANGUAGE);
+
+        assertEquals(1, updated.steps().get(0).position());
+        assertEquals("confirm", updated.steps().get(0).text());
+        assertEquals(2, updated.steps().get(1).position());
+        assertEquals("pay", updated.steps().get(1).text());
+    }
+
+    @Test
+    void updateMainStepRemovalRejectsAnUnknownPosition() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        assertThrows(StepPositionNotFoundException.class,
+                () -> service.update(WS, code, UseCaseCorrection.builder()
+                        .removeMainStepPositions(new RemovedPositions(Set.of(9)))
+                        .build(), DEFAULT_LANGUAGE));
+    }
+
+    /** A use case must have at least one step - removing the last one is refused. */
+    @Test
+    void updateRejectsRemovingTheOnlyMainStep() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.update(WS, code, UseCaseCorrection.builder()
+                        .removeMainStepPositions(new RemovedPositions(Set.of(1)))
+                        .build(), DEFAULT_LANGUAGE));
+    }
+
+    /**
+     * Correcting and removing the very same main-flow-step position in one call is a
+     * contradiction - rejected before anything is read or written, mirroring
+     * {@code AdrCorrection}'s own {@code rejectCorrectingARemovedPosition}.
+     */
+    @Test
+    void updateRejectsCorrectingAndRemovingTheSameMainStepPosition() {
+        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "ROLE-1", List.of(),
+                null, null,
+                List.of(new NewStep(1, "select items", List.of()), new NewStep(2, "confirm", List.of())),
+                List.of(), null);
+        UseCaseCode code = service.add(WS, command, DEFAULT_LANGUAGE).code();
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> service.update(WS, code, UseCaseCorrection.builder()
+                        .stepTextPatches(List.of(new StepTextPatch(1, "corrected")))
+                        .removeMainStepPositions(new RemovedPositions(Set.of(1)))
+                        .build(), DEFAULT_LANGUAGE));
+        assertTrue(exception.getMessage().contains("1"));
     }
 
     @Test

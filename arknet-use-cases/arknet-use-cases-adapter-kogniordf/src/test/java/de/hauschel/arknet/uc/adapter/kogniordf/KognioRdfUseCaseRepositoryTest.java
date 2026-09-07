@@ -139,7 +139,7 @@ class KognioRdfUseCaseRepositoryTest {
                 .map(UseCaseRepository.CurrentUseCase::head)
                 .orElse(null);
         repository.compareAndUpdate(projectId, head, updated, null, null, null, null, null, null,
-                java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE);
+                java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
     }
 
     private void seed(ProjectId project, String graph, String triples) {
@@ -331,7 +331,7 @@ class KognioRdfUseCaseRepositoryTest {
 
         assertThrows(UseCaseNotFoundException.class,
                 () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder(), null, null, null, null, null, null,
-                        java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE));
+                        java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE));
 
         assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
     }
@@ -348,7 +348,7 @@ class KognioRdfUseCaseRepositoryTest {
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of(), List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, head, revised, null, null, null, null, null, null,
-                java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE);
+                java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(Optional.of(revised), repository.findByCode(PROJECT_A, CODE_1, null));
     }
@@ -376,7 +376,7 @@ class KognioRdfUseCaseRepositoryTest {
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
                 () -> repository.compareAndUpdate(PROJECT_A, staleHead, staleAttempt, null, null, null, null, null, null,
-                        java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE));
+                        java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE));
         assertEquals(Optional.of(concurrentlyRevised), repository.findByCode(PROJECT_A, CODE_1, null));
     }
 
@@ -386,7 +386,7 @@ class KognioRdfUseCaseRepositoryTest {
 
         assertThrows(UseCaseNotFoundException.class,
                 () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder(), null, null, null, null, null, null,
-                        java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE));
+                        java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE));
         assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
         assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, CODE_1, null));
     }
@@ -938,7 +938,7 @@ class KognioRdfUseCaseRepositoryTest {
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of(), List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, headAfterCreate, revised, null, null, null, null, null, null,
-                java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE);
+                java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         List<String> revisions = revisionsOf(subject);
         assertEquals(2, revisions.size(), "compareAndUpdate must record exactly one more revision");
