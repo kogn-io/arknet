@@ -244,7 +244,8 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
         Thread writerThread = new Thread(() -> {
             awaitBarrier(readerPastMainQuery);
             try {
-                plainService.update(WS, code, NEW_TITLE, null, null, List.of(NEW_CRITERION), null, null, null, "en");
+                plainService.update(
+                        WS, code, NEW_TITLE, null, null, List.of(NEW_CRITERION), null, null, null, null, "en");
             } finally {
                 writerCommitted.countDown();
             }

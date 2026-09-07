@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import de.hauschel.arknet.kernel.ProjectId;
 
@@ -254,6 +255,61 @@ public record Requirement(
         }
         return new Requirement(id, code, title, description, rationale, type, status, priority,
                 qualityCategory, usesTerms, patched, constrainedBy);
+    }
+
+    /**
+     * Returns a new requirement with the acceptance criteria at {@code removed}'s positions taken
+     * out and the survivors renumbered consecutively from 1 (kogn-io/arknet#513, mirroring the ADR
+     * bounded context's own consequence removal, issue #483) - the one thing neither
+     * {@link #withAppendedAcceptanceCriteria} nor {@link #withAcceptanceCriteriaTextPatches} can
+     * do. Before this method, a criterion recorded by mistake could only leave with the whole
+     * requirement (a fresh {@code req_add} under a new code, orphaning every reference to the old
+     * one).
+     *
+     * <p><strong>No status gate, unlike the ADR precedent.</strong> {@link RequirementStatus} is a
+     * non-binding maturity signal (see {@link #accept()}), not the record-in-force protection
+     * {@code AdrStatus} enforces, so removing a criterion is unconditional here.</p>
+     *
+     * <p><strong>Never leaves the list empty.</strong> {@code acceptanceCriteria} is mandatory
+     * (the compact constructor rejects an empty list, mirroring the SHACL {@code sh:minCount 1}
+     * this record enforces on write), so removing every remaining criterion in one call is
+     * rejected the same way creating a requirement without one would be - there is always at least
+     * one done-when left standing.</p>
+     *
+     * <p><strong>The survivors move up, and their language variants must move with them.</strong>
+     * Position is a criterion's only identity, and the out-adapter carries every other-language
+     * variant of a criterion's text across a write keyed by that position. This method renumbers
+     * through {@link RemovedPositions#survivingPositionOf} and nothing else, so the write path
+     * ({@code RequirementService}, the out-adapter) can re-key each surviving position's language
+     * state by the very same rule.</p>
+     *
+     * @param projectId the project the removal is issued against, for the exception message only
+     * @param removed   the 1-based positions, as this record currently numbers them, to remove
+     * @return a new requirement without those criteria, or {@code this} if {@code removed} is empty
+     * @throws AcceptanceCriterionPositionNotFoundException if a removed position matches no
+     *                                                       criterion in {@link #acceptanceCriteria()}
+     * @throws IllegalArgumentException                     if removing every named position would
+     *                                                       leave {@link #acceptanceCriteria()}
+     *                                                       empty
+     */
+    public Requirement withoutAcceptanceCriteria(ProjectId projectId, RemovedPositions removed) {
+        Objects.requireNonNull(removed, "removed");
+        if (removed.isEmpty()) {
+            return this;
+        }
+        Set<Integer> present = new HashSet<>(acceptanceCriteria.stream().map(AcceptanceCriterion::position).toList());
+        for (Integer position : removed.positions()) {
+            if (!present.contains(position)) {
+                throw new AcceptanceCriterionPositionNotFoundException(projectId, code, position);
+            }
+        }
+        List<AcceptanceCriterion> surviving = acceptanceCriteria.stream()
+                .filter(criterion -> !removed.contains(criterion.position()))
+                .map(criterion -> new AcceptanceCriterion(
+                        removed.survivingPositionOf(criterion.position()).getAsInt(), criterion.text()))
+                .toList();
+        return new Requirement(id, code, title, description, rationale, type, status, priority,
+                qualityCategory, usesTerms, surviving, constrainedBy);
     }
 
     /**

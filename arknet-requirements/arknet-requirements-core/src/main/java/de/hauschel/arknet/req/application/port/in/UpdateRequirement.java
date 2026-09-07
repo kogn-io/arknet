@@ -9,6 +9,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.domain.AcceptanceCriterionPositionNotFoundException;
 import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
 import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.RemovedPositions;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 
@@ -25,17 +26,26 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  * un-setting a priority once set is out of scope, and would need a distinct signal rather than
  * overloading {@code null}.</p>
  *
- * <p><strong>Acceptance criteria are two independent, narrowly-scoped mechanisms (issue
- * #266).</strong> {@code newAcceptanceCriteria} appends new, non-blank criterion texts after the
- * existing ones (positions continuing from the current highest); {@code
- * acceptanceCriteriaTextPatches} instead corrects the wording of one or more existing criteria by
- * {@link de.hauschel.arknet.req.domain.AcceptanceCriterion#position() position}, leaving every
- * other criterion untouched. Mirrors {@code UpdateUseCase}'s {@code stepTextPatches}: mid-list
- * insert, delete-with-shift and reorder are all explicitly out of scope - position is a purely
- * technical write-ordering detail here, never a business identity a caller renumbers. Both may be
- * given in the same call (e.g. append two criteria while also fixing the wording of an existing
- * one); a patch naming a position with no matching criterion is rejected rather than silently
- * ignored.</p>
+ * <p><strong>Acceptance criteria are three independent, narrowly-scoped mechanisms (issue #266;
+ * removal added by kogn-io/arknet#513, mirroring {@code adr_update}'s
+ * {@code removeConsequencePositions}).</strong> {@code newAcceptanceCriteria} appends new,
+ * non-blank criterion texts after the existing ones (positions continuing from the current
+ * highest); {@code acceptanceCriteriaTextPatches} corrects the wording of one or more existing
+ * criteria by {@link de.hauschel.arknet.req.domain.AcceptanceCriterion#position() position},
+ * leaving every other criterion untouched; {@code removeAcceptanceCriterionPositions} takes one or
+ * more existing criteria out by that same position, and every criterion after a removed one moves
+ * up so the survivors stay gap-free. Position is a purely technical write-ordering detail here,
+ * never a business identity a caller renumbers - a removal never reorders, it only closes the gap
+ * it leaves. All three may be given in the same call (e.g. append one criterion, fix the wording
+ * of another, and remove a third); a patch or a removal naming a position with no matching
+ * criterion is rejected rather than silently ignored, and naming the very same position in both
+ * {@code acceptanceCriteriaTextPatches} and {@code removeAcceptanceCriterionPositions} is rejected
+ * too - correcting what is being removed is a contradiction, not a sequence. Removing every
+ * remaining criterion in one call is rejected as well: {@code acceptanceCriteria} is mandatory, so
+ * there is always at least one done-when left standing. Unlike the ADR precedent, there is no
+ * status gate on removal - {@link de.hauschel.arknet.req.domain.RequirementStatus} is a
+ * non-binding maturity signal, not the record-in-force protection {@code AdrStatus}
+ * enforces.</p>
  *
  * <p><strong>Language.</strong> {@code title}/{@code description}/{@code rationale}/each
  * acceptance criterion's {@code text} may each legally carry several language-tagged variants
@@ -96,6 +106,13 @@ public interface UpdateRequirement {
      * @param acceptanceCriteriaTextPatches text corrections for individual existing acceptance
      *                            criteria, addressed by their {@code position}, or {@code null} to
      *                            leave every existing criterion's text unchanged
+     * @param removeAcceptanceCriterionPositions the 1-based positions, as the requirement currently
+     *                            numbers them, of the acceptance criteria to remove
+     *                            (kogn-io/arknet#513), or {@code null}/{@link RemovedPositions#NONE}
+     *                            for none; the criteria after a removed one move up. Naming a
+     *                            position also named in {@code acceptanceCriteriaTextPatches} is
+     *                            rejected, and removing every remaining criterion is rejected too
+     *                            (see {@link de.hauschel.arknet.req.domain.Requirement#withoutAcceptanceCriteria})
      * @param priority            the new MoSCoW priority, or {@code null} to leave an already-set
      *                            one unchanged (never a request to remove it)
      * @param language            the BCP-47 language tag a non-{@code null} {@code title}/
@@ -114,7 +131,13 @@ public interface UpdateRequirement {
      *                            {@code language}
      * @return the updated requirement
      * @throws AcceptanceCriterionPositionNotFoundException if {@code acceptanceCriteriaTextPatches}
-     *                            names a position with no matching existing criterion
+     *                            or {@code removeAcceptanceCriterionPositions} names a position
+     *                            with no matching existing criterion
+     * @throws IllegalArgumentException if the same position is named in both
+     *                            {@code acceptanceCriteriaTextPatches} and
+     *                            {@code removeAcceptanceCriterionPositions}, or if
+     *                            {@code removeAcceptanceCriterionPositions} would leave no
+     *                            acceptance criterion behind
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if a changed field/
      *                            criterion ships no {@code language} and {@code defaultLanguage} is
      *                            {@code null} too
@@ -122,5 +145,6 @@ public interface UpdateRequirement {
     Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
             String rationale, List<String> newAcceptanceCriteria,
             List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
+            RemovedPositions removeAcceptanceCriterionPositions,
             Priority priority, String language, String defaultLanguage);
 }

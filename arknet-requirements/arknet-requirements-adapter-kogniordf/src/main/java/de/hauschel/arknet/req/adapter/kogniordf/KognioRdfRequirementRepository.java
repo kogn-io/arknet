@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -54,6 +55,7 @@ import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.RemovedPositions;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
@@ -354,10 +356,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
             String titleLanguage, String descriptionLanguage, String rationaleLanguage,
-            Map<Integer, String> acceptanceCriteriaLanguageByPosition, String defaultLanguage) {
+            Map<Integer, String> acceptanceCriteriaLanguageByPosition,
+            RemovedPositions removedAcceptanceCriterionPositions, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(updated, "updated");
         Objects.requireNonNull(acceptanceCriteriaLanguageByPosition, "acceptanceCriteriaLanguageByPosition");
+        RemovedPositions removed = removedAcceptanceCriterionPositions == null
+                ? RemovedPositions.NONE : removedAcceptanceCriterionPositions;
         String titleTag = canonicalizeLenient(titleLanguage);
         String descriptionTag = canonicalizeLenient(descriptionLanguage);
         String rationaleTag = canonicalizeLenient(rationaleLanguage);
@@ -392,7 +397,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 () -> new RequirementConcurrentlyModifiedException(projectId, updated.code()),
                 tx -> replaceTriplesForUpdate(tx, graphIri, subjectIri, subject, graph, titleTag, descriptionTag,
                         rationaleTag, updated.rationale() != null, criteriaTags, defaultTag,
-                        candidate.criterionIriByPosition()));
+                        candidate.criterionIriByPosition(), removed));
     }
 
     /**
@@ -556,15 +561,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@code newCriterionIriByPosition} extend the very same capture-before-delete/reattach-after-
      * write mechanism to each criterion's {@code arkreq:criterionText}, keyed by
      * {@code arkreq:position} rather than the (about-to-be-deleted) criterion IRI - exactly
-     * {@code KognioRdfUseCaseRepository#otherLanguageStepTexts}'s own reasoning, safe here without
-     * that class's extra {@code stableExtensionPrefixLength} guard because {@code req_update} never
-     * lets a criterion's position shift (append-only + in-place patch, never reorder/delete - see
-     * {@code Requirement#withAppendedAcceptanceCriteria}/{@code #withAcceptanceCriteriaTextPatches}).
+     * {@code KognioRdfAdrRepository#otherLanguageChildTexts}'s own reasoning. A position <em>can</em>
+     * shift since kogn-io/arknet#513: {@code req_update} may remove an existing criterion, and the
+     * survivors after it renumber consecutively from 1 - {@code removedAcceptanceCriterionPositions}
+     * carries that shift into {@link #otherLanguageAcceptanceCriterionTexts} via
+     * {@link RemovedPositions#survivingPositionOf}, exactly mirroring
+     * {@code KognioRdfAdrRepository}'s own consequence/considered-option removal (issue #483).
      */
     private void replaceTriplesForUpdate(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
             String titleTag, String descriptionTag, String rationaleTag, boolean rationaleWritten,
             Map<Integer, String> criteriaTagByPosition, String defaultTag,
-            Map<Integer, IRI> newCriterionIriByPosition) {
+            Map<Integer, IRI> newCriterionIriByPosition, RemovedPositions removedAcceptanceCriterionPositions) {
         String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
                 + "FILTER(!isIRI(?term)) }";
@@ -606,8 +613,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         List<Literal> preservedRationales = rationaleWritten
                 ? otherLanguageLiterals(tx, subject, RATIONALE_PROPERTY, rationaleTag, defaultTag)
                 : allLiterals(tx, subject, RATIONALE_PROPERTY);
-        Map<Integer, List<Literal>> preservedCriteriaTextsByPosition =
-                otherLanguageAcceptanceCriterionTexts(tx, subject, criteriaTagByPosition, defaultTag);
+        Map<Integer, List<Literal>> preservedCriteriaTextsByPosition = otherLanguageAcceptanceCriterionTexts(
+                tx, subject, criteriaTagByPosition, defaultTag, removedAcceptanceCriterionPositions);
         tx.update(deleteExisting);
         tx.add(graphIri, graph);
         // Re-attach the preserved edges only after the gate has already run and the rewritten
@@ -721,25 +728,38 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * criterion's own subject is re-minted on every write ({@link #mintCriterionIri}), so what
      * survives an update is the position's <em>other-language text</em>, re-attached to whichever
      * new criterion IRI ends up at that same position - not the old criterion IRI itself. Mirrors
-     * {@code KognioRdfUseCaseRepository#otherLanguageStepTexts} exactly, minus that method's
-     * {@code stableExtensionPrefixLength} restructuring guard: unreachable here, since
-     * {@code req_update} never reorders or removes an acceptance criterion (append-only + in-place
-     * patch), so every position this query finds is by construction still stable.
+     * {@code KognioRdfAdrRepository#otherLanguageChildTexts} exactly, plus the re-keying a removal
+     * needs (kogn-io/arknet#513): the query yields the <em>stored</em> position, the result is
+     * keyed by the position the same entry holds after {@code removedAcceptanceCriterionPositions}
+     * is applied, and a removed position's texts are not carried over at all.
      *
+     * @param criteriaTagByPosition the tag this write is about to (re)write at each position, keyed
+     *                   by the post-removal position like the result (see
+     *                   {@code RequirementService#acceptanceCriteriaLanguageByPosition})
      * @param defaultTag the target project's configured default language, canonicalized, or
      *                   {@code null} if it has none - same issue #258 sweep as
      *                   {@link #otherLanguageLiterals}'s own {@code defaultTag}, applied per
      *                   position: a position whose written tag equals {@code defaultTag} sweeps an
      *                   existing untagged criterion text at that position instead of preserving it
+     * @param removedAcceptanceCriterionPositions the stored positions this write drops
+     *                   (kogn-io/arknet#513), or {@link RemovedPositions#NONE} for a call that
+     *                   removes nothing - every position this call did not touch stays stable, as
+     *                   before
      */
     private Map<Integer, List<Literal>> otherLanguageAcceptanceCriterionTexts(
-            DatasetTx tx, String subject, Map<Integer, String> criteriaTagByPosition, String defaultTag) {
+            DatasetTx tx, String subject, Map<Integer, String> criteriaTagByPosition, String defaultTag,
+            RemovedPositions removedAcceptanceCriterionPositions) {
         String query = "SELECT ?position ?text WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + subject + " <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?criterion . "
                 + "?criterion <" + POSITION_PROPERTY + "> ?position ; <" + CRITERION_TEXT_PROPERTY + "> ?text } }";
         Map<Integer, List<Literal>> byPosition = new LinkedHashMap<>();
         tx.select(query).forEach(row -> {
-            int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
+            int storedPosition = Integer.parseInt(literalOf(row, "position").getLexicalForm());
+            OptionalInt survivingPosition = removedAcceptanceCriterionPositions.survivingPositionOf(storedPosition);
+            if (survivingPosition.isEmpty()) {
+                return;
+            }
+            int position = survivingPosition.getAsInt();
             Literal text = literalOf(row, "text");
             String writtenTag = criteriaTagByPosition.get(position);
             String existingTag = canonicalizeLenient(text.getLanguageTag().orElse(null));

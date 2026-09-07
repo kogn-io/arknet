@@ -11,6 +11,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
+import de.hauschel.arknet.req.domain.RemovedPositions;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
@@ -143,9 +144,18 @@ public interface RequirementRepository {
      *                      A position whose criterion this call leaves byte-for-byte unchanged must
      *                      carry the tag it was read under (see
      *                      {@link CurrentRequirement#acceptanceCriteriaLanguageByPosition()}); a
-     *                      newly appended position (issue #266 - {@code req_update} only appends or
-     *                      patches in place, never reorders) has no prior tag to preserve and is
-     *                      always freshly resolved
+     *                      newly appended position has no prior tag to preserve and is always
+     *                      freshly resolved. Keyed by the <em>post-removal</em> position - the same
+     *                      numbering {@code updated.acceptanceCriteria()} itself carries
+     *                      (kogn-io/arknet#513): a surviving criterion that moved because a lower
+     *                      position was removed is keyed under its new number here too
+     * @param removedAcceptanceCriterionPositions the criterion positions, as they were numbered
+     *                      before this call, that {@code updated} no longer carries
+     *                      (kogn-io/arknet#513) - what re-keys every surviving position's other-
+     *                      language variant under its post-removal number, mirroring
+     *                      {@code AdrRepository#compareAndUpdate}'s
+     *                      {@code removedConsequencePositions}. {@link RemovedPositions#NONE} for a
+     *                      call that removes nothing
      * @param defaultLanguage the target project's configured default language (see
      *                      {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
      *                      or {@code null} if it has none. Used only to decide whether an
@@ -175,7 +185,8 @@ public interface RequirementRepository {
      */
     void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
             String titleLanguage, String descriptionLanguage, String rationaleLanguage,
-            Map<Integer, String> acceptanceCriteriaLanguageByPosition, String defaultLanguage);
+            Map<Integer, String> acceptanceCriteriaLanguageByPosition,
+            RemovedPositions removedAcceptanceCriterionPositions, String defaultLanguage);
 
     /**
      * Finds a requirement by its human-readable business code within a project.
