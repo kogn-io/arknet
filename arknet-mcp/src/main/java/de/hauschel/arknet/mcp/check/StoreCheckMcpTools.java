@@ -17,6 +17,7 @@ import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.mcp.store.AnchorContext;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.StoreReader;
+import de.hauschel.arknet.mcp.store.StoreSnapshot;
 
 /**
  * The read-only checking tool of the composition root: {@code store_check}
@@ -56,7 +57,7 @@ public final class StoreCheckMcpTools {
     @McpTool(name = "store_check", description = "Check this project's stored model against what the "
             + "project declares about itself, and report what is decidable; it reads only, changes "
             + "nothing and refuses nothing. Select rules with 'checks'; omit it to run all of them. "
-            + "Today there is exactly one: LANGUAGE reports every field that carries at least one "
+            + "Two checks exist today. LANGUAGE reports every field that carries at least one "
             + "language-tagged value but not one for each language the project maintains "
             + "(project_update languages) - one row per resource and field, with the missing tags. If "
             + "the project declares no maintained language set, LANGUAGE says so instead of reporting "
@@ -65,14 +66,20 @@ public final class StoreCheckMcpTools {
             + "carrying no language-tagged value at all - a single untagged value, or a field never "
             + "written - is indistinguishable from a field that is simply not multilingual and is "
             + "never reported; and it judges presence per language only, never whether one language's "
-            + "text is a current translation of another's. Further checks fold in here rather than "
-            + "arriving as new tools (kogn-io/arknet#473); orphan_check is still its own tool for now.",
+            + "text is a current translation of another's. ROLE_TERM_DUPLICATE reports every role "
+            + "(arkproc:Role, role_add) and glossary term (skos:Concept, term_add) that carry the same "
+            + "name, compared case-insensitively and trimmed across every language variant of the "
+            + "role's name against the term's prefLabel - a report only, never a rejection: the two "
+            + "resource types stay independent of each other (kogn-io/arknet#512). Further checks fold "
+            + "in here rather than arriving as new tools (kogn-io/arknet#473); orphan_check is still "
+            + "its own tool for now.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String storeCheck(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Which checks to run, as a list of names. Allowed: LANGUAGE. "
-                    + "Omit the parameter (or pass an empty list) to run every check - which is what "
-                    + "most callers want, since the set is small and each is cheap.", required = false)
+            @McpToolParam(description = "Which checks to run, as a list of names. Allowed: LANGUAGE, "
+                    + "ROLE_TERM_DUPLICATE. Omit the parameter (or pass an empty list) to run every "
+                    + "check - which is what most callers want, since the set is small and each is "
+                    + "cheap.", required = false)
             final List<String> checks,
             @McpToolParam(description = "Optional anchor identifying the project to check, used "
                     + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
@@ -83,12 +90,14 @@ public final class StoreCheckMcpTools {
         final ResolvedProject project =
                 AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
         final List<StoreCheckKind> selected = select(checks);
+        final StoreSnapshot snapshot = storeReader.readSnapshot(project.id());
         final List<String> sections = new ArrayList<>(selected.size());
         for (final StoreCheckKind kind : selected) {
             sections.add(switch (kind) {
                 case LANGUAGE -> renderer.languageSection(project.maintainedLanguages(),
-                        LanguageGapCheck.run(storeReader.readSnapshot(project.id()),
-                                project.maintainedLanguages()));
+                        LanguageGapCheck.run(snapshot, project.maintainedLanguages()));
+                case ROLE_TERM_DUPLICATE ->
+                        renderer.roleTermDuplicateSection(RoleTermDuplicateCheck.run(snapshot));
             });
         }
         return renderer.report(selected, sections);
