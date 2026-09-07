@@ -127,16 +127,17 @@ Read the note under Option B on why the port publish must stay bound to
 -- both apply here just the same.
 
 `:latest` moves with every push to `main`. For a daemon that stays put, pin a
-release instead:
+release instead, using the version's tag in place of `X.Y.Z`:
 
 ```bash
-ghcr.io/kogn-io/arknet:v0.7.0
+ghcr.io/kogn-io/arknet:vX.Y.Z
 ```
 
 A `vX.Y.Z` tag is published once and never re-points, so the same tag always
 gives you the same daemon -- worth pinning wherever an unannounced change would
-be a nuisance, and worth naming in a bug report. The published versions are
-listed under [Releases](https://github.com/kogn-io/arknet/releases).
+be a nuisance, and worth naming in a bug report. The published versions, and
+thus the tags you can pin, are listed under
+[Releases](https://github.com/kogn-io/arknet/releases).
 
 #### Option B: Docker, built from source
 
