@@ -13,9 +13,9 @@ import java.util.Locale;
  * store, not a bounded context of its own, and a tool per check would grow the tool surface every
  * agent pays for on every call by one entry per rule.
  *
- * <p>Only {@link #LANGUAGE} exists today. The remaining check-shaped tools ({@code orphan_check},
- * and whatever follows) are folded in separately (kogn-io/arknet#473); this enum is the seam they
- * arrive at, not a placeholder for them.</p>
+ * <p>{@link #LANGUAGE} and {@link #ROLE_TERM_DUPLICATE} exist today. The remaining check-shaped
+ * tools ({@code orphan_check}, and whatever follows) are folded in separately
+ * (kogn-io/arknet#473); this enum is the seam they arrive at, not a placeholder for them.</p>
  */
 public enum StoreCheckKind {
 
@@ -23,7 +23,14 @@ public enum StoreCheckKind {
      * Which fields do not carry every language the project undertakes to maintain
      * ({@code arkprj:maintainedLanguage}, kogn-io/arknet#412).
      */
-    LANGUAGE;
+    LANGUAGE,
+
+    /**
+     * Which role ({@code arkproc:Role}) and glossary term ({@code skos:Concept}) carry the same
+     * name (kogn-io/arknet#512) - reported, never rejected: {@code role_add}/{@code term_add}
+     * stay independent of each other.
+     */
+    ROLE_TERM_DUPLICATE;
 
     /**
      * Parses one caller-supplied selector, case-insensitively.

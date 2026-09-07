@@ -10,6 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.mcp.check.LanguageGapCheck.Gap;
+import de.hauschel.arknet.mcp.check.RoleTermDuplicateCheck.Finding;
 import de.hauschel.arknet.mcp.store.Prefixes;
 
 /** Unit tests for {@code store_check}'s text output. */
@@ -76,5 +77,23 @@ class StoreCheckRendererTest {
         assertThat(renderer.report(List.of(StoreCheckKind.LANGUAGE), List.of("body")))
                 .startsWith("store_check: LANGUAGE")
                 .endsWith("body");
+    }
+
+    @Test
+    void saysNoRoleAndTermShareANameWhenTheCheckFoundNothing() {
+        assertThat(renderer.roleTermDuplicateSection(List.of()))
+                .contains("ROLE_TERM_DUPLICATE")
+                .contains("no role and glossary term share a name");
+    }
+
+    @Test
+    void rendersOneRowPerFindingWithTheRoleTheTermAndTheSharedName() {
+        String rendered = renderer.roleTermDuplicateSection(
+                List.of(new Finding("ROLE-1", "TERM-6", "Requirements Engineer")));
+
+        assertThat(rendered)
+                .contains("ROLE_TERM_DUPLICATE")
+                .contains("| Role | Term | Name |")
+                .contains("| ROLE-1 | TERM-6 | Requirements Engineer |");
     }
 }

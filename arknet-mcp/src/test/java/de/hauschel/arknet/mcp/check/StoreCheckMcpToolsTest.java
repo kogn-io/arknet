@@ -36,13 +36,27 @@ class StoreCheckMcpToolsTest {
                 .containsExactly(StoreCheckKind.LANGUAGE);
     }
 
+    @Test
+    void acceptsSeveralDistinctSelectorsInTheOrderGiven() {
+        assertThat(StoreCheckMcpTools.select(List.of("role_term_duplicate", "language")))
+                .containsExactly(StoreCheckKind.ROLE_TERM_DUPLICATE, StoreCheckKind.LANGUAGE);
+    }
+
+    /** Point (c) of kogn-io/arknet#512: an omitted selector runs every check, this one included. */
+    @Test
+    void runsBothChecksWhenTheSelectorIsOmitted() {
+        assertThat(StoreCheckMcpTools.select(null))
+                .containsExactly(StoreCheckKind.LANGUAGE, StoreCheckKind.ROLE_TERM_DUPLICATE);
+    }
+
     /** A silently skipped rule is worse than a rejected call: nobody notices a check that did not run. */
     @Test
     void rejectsAnUnknownSelectorAndNamesTheAllowedValues() {
         assertThatThrownBy(() -> StoreCheckMcpTools.select(List.of("orphans")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("orphans")
-                .hasMessageContaining("LANGUAGE");
+                .hasMessageContaining("LANGUAGE")
+                .hasMessageContaining("ROLE_TERM_DUPLICATE");
     }
 
     @Test
@@ -70,5 +84,18 @@ class StoreCheckMcpToolsTest {
                 .contains("does NOT see")
                 .contains("no language-tagged value at all")
                 .contains("no maintained language set");
+    }
+
+    @Test
+    void namesRoleTermDuplicateAndItsIntentInItsOwnDescription() {
+        McpTool tool = Arrays.stream(StoreCheckMcpTools.class.getDeclaredMethods())
+                .map(method -> method.getAnnotation(McpTool.class))
+                .filter(annotation -> annotation != null)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(tool.description())
+                .contains("ROLE_TERM_DUPLICATE")
+                .contains("never a rejection");
     }
 }

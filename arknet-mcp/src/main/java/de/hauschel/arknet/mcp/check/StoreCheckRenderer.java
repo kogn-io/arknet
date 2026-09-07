@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.mcp.check.LanguageGapCheck.Gap;
+import de.hauschel.arknet.mcp.check.RoleTermDuplicateCheck.Finding;
 import de.hauschel.arknet.mcp.store.Prefixes;
 
 /**
@@ -77,6 +78,30 @@ public final class StoreCheckRenderer {
                 .append(resources).append(resources == 1 ? " resource" : " resources")
                 .append(" missing a maintained language.");
         return rendered.append("\n\n").append(BLIND_SPOT).toString();
+    }
+
+    /**
+     * Renders the role/term-duplicate section (kogn-io/arknet#512).
+     *
+     * @param findings every role and term found to share a name, already ordered
+     * @return the section text
+     */
+    public String roleTermDuplicateSection(final List<Finding> findings) {
+        Objects.requireNonNull(findings, "findings");
+        if (findings.isEmpty()) {
+            return "ROLE_TERM_DUPLICATE: no role and glossary term share a name.";
+        }
+        final StringBuilder rendered = new StringBuilder("ROLE_TERM_DUPLICATE: ")
+                .append(findings.size()).append(findings.size() == 1 ? " pair" : " pairs")
+                .append(" of a role and a glossary term sharing a name.")
+                .append("\n\n| Role | Term | Name |\n| --- | --- | --- |");
+        for (final Finding finding : findings) {
+            rendered.append("\n| ").append(finding.roleCode())
+                    .append(" | ").append(finding.termCode())
+                    .append(" | ").append(finding.name())
+                    .append(" |");
+        }
+        return rendered.toString();
     }
 
     /**
