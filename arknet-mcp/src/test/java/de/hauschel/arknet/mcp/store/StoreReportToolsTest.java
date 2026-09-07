@@ -743,7 +743,7 @@ class StoreReportToolsTest {
         Requirement updated = new Requirement(
                 fr1.id(), fr1.code(), "Login v2", fr1.description(), null, fr1.type(), fr1.status(), fr1.priority(), null, null, fr1.acceptanceCriteria(), List.of());
         requirements.compareAndUpdate(
-                PROJECT, current.head(), updated, null, null, null, noAcceptanceCriteriaLanguages(updated), null);
+                PROJECT, current.head(), updated, null, null, null, noAcceptanceCriteriaLanguages(updated), null, null);
 
         String result = tools.resourceHistory(null, "FR-1", ANCHOR);
 
