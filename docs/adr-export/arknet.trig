@@ -14,8 +14,8 @@
     <http://purl.org/dc/terms/identifier> "TERM-2";
     <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
     <http://www.w3.org/2004/02/skos/core#prefLabel> "Actor"@de, "Actor"@en;
-    <http://www.w3.org/2004/02/skos/core#definition> "Ein Actor ist jemand oder etwas außerhalb von arknet, das handeln kann, ein Interesse daran haben kann, oder beides. Ein Actor ist der Träger einer Rolle, nicht die Rolle selbst: er existiert unabhängig davon, ob und welche Rolle er gerade ausfüllt."@de,
-      "An Actor is someone or something outside arknet that can act, can hold an interest in it, or both. An Actor is the bearer of a role, not the role itself: it exists regardless of whether and which role it currently fills."@en .
+    <http://www.w3.org/2004/02/skos/core#definition> "Ein Actor ist jemand oder etwas, das auf das beschriebene System einwirken kann, ein Interesse daran haben kann, oder beides. Ein Actor ist der Träger einer Rolle, nicht die Rolle selbst: er existiert unabhängig davon, ob und welche Rolle er gerade ausfüllt."@de,
+      "An Actor is someone or something that can act on the system under description, can hold an interest in it, or both. An Actor is the bearer of a role, not the role itself: it exists regardless of whether and which role it currently fills."@en .
   
   <https://w3id.org/arknet/id/5534b165-fa1e-4a74-b725-73058fcb4853> a <http://www.w3.org/2004/02/skos/core#Concept>;
     <http://purl.org/dc/terms/identifier> "TERM-3";
@@ -36,9 +36,9 @@
   <https://w3id.org/arknet/id/f244f238-5f56-4e7c-b20e-8c7473bc0637> a <http://www.w3.org/2004/02/skos/core#Concept>;
     <http://purl.org/dc/terms/identifier> "TERM-5";
     <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Legal Person"@en, "Legal Person"@de;
-    <http://www.w3.org/2004/02/skos/core#definition> "Eine Juristische Person ist ein Actor, der eine Organisation (z. B. ein Unternehmen) ist, die selbst Trägerin von Rechten und Pflichten ist — im Unterschied zu einer natürlichen Person (Human Actor) oder einem externen System (System Actor)."@de,
-      "A Legal Person is an Actor that is an organisation (e.g. a company) which is itself a bearer of rights and obligations — as distinct from a natural person (Human Actor) or an external system (System Actor)."@en;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Legal Actor"@en, "Legal Actor"@de;
+    <http://www.w3.org/2004/02/skos/core#definition> "Ein Legal Actor ist ein Actor, der eine juristische Person ist — eine Organisation, ein Unternehmen oder ein Verein, die selbst Trägerin von Rechten und Pflichten ist —, im Unterschied zu einer natürlichen Person (Human Actor) oder einem externen System (System Actor)."@de,
+      "A Legal Actor is an Actor that is a legal person — an organisation, company or association that is itself a bearer of rights and obligations — as distinct from a natural person (Human Actor) or an external system (System Actor)."@en;
     <http://www.w3.org/2004/02/skos/core#broader> <https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551> .
   
   <https://w3id.org/arknet/id/9608c8f0-3197-4ab7-978f-2c8ba908a042> a <http://www.w3.org/2004/02/skos/core#Concept>;
@@ -138,7 +138,7 @@
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/5a3fb2e7-562a-46ee-a9ef-3a90d1fa4011> .
   
   <https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/710ca292-a92f-4947-b61b-eea614a55509> .
+      <https://w3id.org/arknet/revision/22542270-9460-4ac9-b435-b3068c75297d> .
   
   <https://w3id.org/arknet/activity/c915275f-67ee-4b56-8268-3c5e4108ddf1> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -171,7 +171,7 @@
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-08-04T15:34:06.265100457Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/f244f238-5f56-4e7c-b20e-8c7473bc0637> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/51d414ff-7a5a-4c0e-a946-d0d4cedd0117> .
+      <https://w3id.org/arknet/revision/cd3643fd-933c-4e36-8c08-5f757755c32d> .
   
   <https://w3id.org/arknet/activity/4a280b9c-4a50-41ca-ba97-b6f4d9309c34> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -6077,6 +6077,12 @@ The core of this decision is the distinction between \"unbuilt\" and \"outside\"
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/0399b7a4-6e1d-44dc-87de-0f2ba883ebd7>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-07T08:46:16.619688710Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/58e70ab3-2bb0-4eb1-9046-433364070d02> .
+  
+  <https://w3id.org/arknet/activity/bd18d31c-fa5d-4705-beab-078bdcff490c> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/cfbf655a-5f55-4265-a6e0-3f08ef67ac2c> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551> .
 }
 
 <https://w3id.org/arknet/model/requirements> {
@@ -6313,17 +6319,60 @@ The core of this decision is the distinction between \"unbuilt\" and \"outside\"
       "The agreement later turns out to have been premature: the Requirements Engineer has the status set back to PROPOSED; the requirement's text and links stay unchanged."@en .
 }
 
+<https://w3id.org/arknet/model/provenance> {
+  <https://w3id.org/arknet/revision/cfbf655a-5f55-4265-a6e0-3f08ef67ac2c> <http://www.w3.org/ns/prov#wasGeneratedBy>
+      <https://w3id.org/arknet/activity/bd18d31c-fa5d-4705-beab-078bdcff490c>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-07T12:22:08.417660054Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/710ca292-a92f-4947-b61b-eea614a55509> .
+  
+  <https://w3id.org/arknet/activity/9d202d22-eb76-45a8-a509-5d11cdfa1a12> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/46edf9d4-1259-4e82-950d-5bb5b5370095> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/f244f238-5f56-4e7c-b20e-8c7473bc0637>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/9d202d22-eb76-45a8-a509-5d11cdfa1a12>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-07T12:22:10.288310777Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/51d414ff-7a5a-4c0e-a946-d0d4cedd0117> .
+  
+  <https://w3id.org/arknet/activity/961c3a63-acf8-48ca-8d6b-1ae30f7b5947> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/22542270-9460-4ac9-b435-b3068c75297d> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/803ccddc-e007-40f8-bf43-57485cdca551>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/961c3a63-acf8-48ca-8d6b-1ae30f7b5947>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-07T12:22:15.196811336Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/cfbf655a-5f55-4265-a6e0-3f08ef67ac2c> .
+  
+  <https://w3id.org/arknet/activity/948ab392-26f9-4be9-a4e5-f7886918cd80> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/d1120abd-7114-4e93-948a-fdaa6d14039c> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/f244f238-5f56-4e7c-b20e-8c7473bc0637>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/948ab392-26f9-4be9-a4e5-f7886918cd80>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-07T12:22:17.406723464Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/46edf9d4-1259-4e82-950d-5bb5b5370095> .
+  
+  <https://w3id.org/arknet/activity/6259b910-5aa6-4cda-9777-6cb9a1cacc51> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/cd3643fd-933c-4e36-8c08-5f757755c32d> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/f244f238-5f56-4e7c-b20e-8c7473bc0637>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/6259b910-5aa6-4cda-9777-6cb9a1cacc51>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-07T12:22:21.776993929Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/d1120abd-7114-4e93-948a-fdaa6d14039c> .
+}
+
 <https://w3id.org/arknet/model/export-metadata> {
-    <https://w3id.org/arknet/export/89e49745-b81c-485b-a59b-672af276d406>
+    <https://w3id.org/arknet/export/867704b1-9d0b-4e53-b6b5-311c05efc38c>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#Activity> ;
-        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-07T08:53:02Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
+        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-07T12:23:21Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
         <http://www.w3.org/ns/prov#wasAssociatedWith> <https://w3id.org/arknet/agent/arknet> ;
         <http://www.w3.org/ns/prov#used> <https://w3id.org/arknet/core> , <https://w3id.org/arknet/ddd> , <https://w3id.org/arknet/process> , <https://w3id.org/arknet/requirements> , <https://w3id.org/arknet/architecture> , <https://w3id.org/arknet/provenance> , <https://w3id.org/arknet/project> .
 
     <https://w3id.org/arknet/agent/arknet>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#SoftwareAgent> ;
-        <http://www.w3.org/2002/07/owl#versionInfo> "5c42c8f407874e03e8b380e2abe7995f5f7dc549" ;
-        <http://purl.org/dc/terms/created> "2026-09-07T08:24:34Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+        <http://www.w3.org/2002/07/owl#versionInfo> "57cc4e7b25abf7ad8b88654943363a368786b3f9" ;
+        <http://purl.org/dc/terms/created> "2026-09-07T11:05:54Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
 
     <https://w3id.org/arknet/core>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ;
