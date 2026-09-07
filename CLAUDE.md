@@ -28,7 +28,12 @@ Details/Start: `arknet-mcp/CLAUDE.md`, `README.md`.
 ## Tech-Stack
 
 - Java 25+ (`release 25`; io.kogn.rdf ist Java-25-gebaut), Maven Multi-Module
-- Bauen/Testen: shell-`mvn` (default JDK 25); JDT-MCP kann `--release 25` (noch) nicht
+- Bauen/Testen: shell-`mvn` (default JDK 25). jdt-mcp (Eclipse JDT als MCP-Server) versteht Java 25 und
+  taugt fuer Navigation (`jdt_find_type`/`jdt_find_references`/`jdt_find_implementations`/`jdt_find_callers`),
+  Diagnose (`jdt_get_compilation_errors`, nach externen Aenderungen erst `jdt_refresh_project`) und
+  `jdt_organize_imports`; `jdt_find_references` auf einen Kernel-Typ liefert tausende Treffer ohne Limit,
+  also Methoden-/Feld-Ebene abfragen. `jdt_run_tests` scheitert mit dem JUnit 6 des Projekts (Eclipse-Runner
+  findet `Testable` nicht) -- Tests laufen ueber `mvn`. Eclipse sortiert Imports anders als Spotless.
 - Lokaler Vollbuild: `mvn -T 1C clean install` -- Reaktor parallel je Kern, gemessen ca. 20-25%
   schneller als seriell, aber begrenzt durch eine tiefe Modulkette: `arknet-mcp` haengt von fast
   allen anderen Modulen ab und dominiert mit >2 Min allein den kritischen Pfad, egal wie parallel
@@ -44,6 +49,9 @@ Details/Start: `arknet-mcp/CLAUDE.md`, `README.md`.
   `-T 1C` zufaellig reisst.
 - `clean` ist kein Reflex: nur nach Rebase/modulübergreifendem Umbau noetig (stale .class-Referenzen
   auf umbenannte/entfernte Typen), nicht nach gewoehnlicher Textaenderung -- `mvn install` reicht.
+  Ausnahme, solange jdt-mcp verbunden ist: sein Workspace-Import gibt `src/test/java` keinen eigenen
+  Output-Ordner, Eclipse schreibt die Test-Klassen aller Module nach `target/classes`, und ein `mvn install`
+  ohne `clean` packt sie ins Jar -- mit verbundenem jdt-mcp also immer `clean`.
 - RDF4J 6.x (Triple Store + SHACL Sail)
 - AsciidoctorJ + asciidoctor-diagram (AsciiDoc → HTML/PDF)
 - PlantUML (Diagramme)
@@ -55,44 +63,22 @@ Details/Start: `arknet-mcp/CLAUDE.md`, `README.md`.
 ## Maven-Module
 
 Je Modul liegt die Detail-Doku (Klassen, Ports, Invarianten, ADR-Bezuege) in
-einer eigenen `CLAUDE.md` im Modulverzeichnis -- laedt nur, wenn dort auch
-gearbeitet wird.
+einer eigenen `CLAUDE.md` im Modulverzeichnis -- sie laedt, sobald dort gearbeitet
+wird, und ist die massgebliche Beschreibung des Moduls. Hier nur die Landkarte.
 
-- **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes). Details: `arknet-ontology/CLAUDE.md`
-- **arknet-mcp**: MCP-Server (Streamable HTTP, EIN geteilter lokaler Daemon fuer alle Projekte auf `127.0.0.1:47331`, admin-gestartet -- kein Claude-Code-Subprozess; Projekt pro Aufruf ueber den Anker aus dem Header) + Composition Root, verdrahtet alle sieben BC-Hexagons + geteilter DatasetLifecycle + der Anker-Aufloesung ueber die Projekt-Registry + generischer Store-Lesepfad (der Agent-Digest bleibt generisch, der HTML-Report wird pro BC aus deren Lese-In-Ports zusammengesetzt und faellt fuer alles Uebrige auf die generische Rohsicht zurueck) + der generische Pruefpfad `store_check` (ein Tool mit `checks`-Selektor statt eines Tools je Regel; der Sprachluecken-Check und der Rolle/Glossarbegriff-Namensdopplungs-Check).
-Details: `arknet-mcp/CLAUDE.md`
-- **arknet-shared-kernel**: DDD Shared Kernel -- ProjectId (inkl. der reservierten System-Dataset-Invariante), ProjectResolver-Port (Per-Aufruf-Aufloesung ueber den Anker), ResourceId, DisplayLocale/LocalizedLiteral. Details: `arknet-shared-kernel/CLAUDE.md`
-- **arknet-persistence-support**: technischer Support der kognio-rdf-Out-Adapter -- geteiltes SHACL-Write-Gate, geteilter Schreibtrichter WriteFunnel (schreibt je Write atomar eine PROV-O-Revision + Head-Pointer), SparqlTerms, UnresolvedReferenceException, die Vokabular-Konstanten ArkprovVocabulary/ArkreqVocabulary/ArkdddVocabulary/ArkprjVocabulary/ArkarchVocabulary/ArkprocVocabulary sowie ExportMetadataVocabulary (die IRIs des Export-Metadaten-Graphen -- als einziges Vokabular dieses Moduls nie in ein Dataset geschrieben, nur in den serialisierten Dump).
-Details: `arknet-persistence-support/CLAUDE.md`
-- **arknet-persistence-test-support**: Test-Support derselben kognio-rdf-Out-Adapter -- die geteilten Dekoratoren GuardedLifecycle/GuardedHandle/GuardSyncTx fuer DatasetLifecycle/DatasetHandle/DatasetTx, mit denen die `*RealStoreConcurrencyTest` der BCs eine gewaehlte Verschraenkung zweier Schreiber gegen den echten On-Disk-Store festnageln; gewoehnliches main-Scope-Artefakt (kein `test-jar`-Classifier), von den Konsumenten im test-Scope gezogen.
-Details: `arknet-persistence-test-support/CLAUDE.md`
-- **arknet-architecture-tests**: Invarianten, die der Modulschnitt nicht erzwingen kann -- ArchUnit-Dependency-Regeln, der beidseitige Abgleich von `ArkprovVocabulary`/`ArkprjVocabulary`/`ArkarchVocabulary`/`ArkdddVocabulary`/`ArkprocVocabulary` gegen die ausgelieferte Provenance-, Projekt-, Architektur-, DDD- bzw. Actor-Ontologie plus der Abgleich der Loeschschutz-Listen von `term_delete`/`actor_delete`/`constraint_delete` gegen jede Ontologie-Property, die auf einen Term, Actor bzw. Constraint zeigt, der Abgleich der Feldschluessel des Stale-Translation-Signals jedes `*_update` gegen die `sh:uniqueLang`-Properties der Shapes und der Abgleich des Ontologie-Versions-Scans von `arknet-mcp`s `OntologyVersions` gegen einen echten Parse derselben Dateien. Details: `arknet-architecture-tests/CLAUDE.md`
-- **arknet-requirements**: erste hexagonale BC -- Requirement-Lifecycle (`req_*`-Tools), usesTerm-Kante ins Glossar (`arkreq:usesTerm`, seit Issue #329 auch von UseCase aus setzbar, die Kante bleibt aber requirements-BC-eigen), opake Identitaet, acceptanceCriterion.
-Traegt zusaetzlich Constraint als zweiten Ressourcentyp desselben Hexagons (`constraint_add`/`constraint_get`/`constraint_list`/`constraint_update`/`constraint_delete`, `req_link_constraint` fuer die `oslc_rm:constrainedBy`-Kante) -- technische/geschaeftliche/regulatorische Randbedingungen, TCON-/BCON-/RCON-Codes; Typ und Code stehen mit der Anlage fest, Titel und Statement sind korrigierbar und mehrsprachig.
-Details: `arknet-requirements/CLAUDE.md`
-- **arknet-ubiquitous-language**: zweite hexagonale BC -- SKOS-Glossar (`term_*`-Tools), opake Identitaet. Traegt seit Issue #336 keine Actor-Facette mehr; Akteure leben ausschliesslich im Actor-Register (arknet-actor). Details: `arknet-ubiquitous-language/CLAUDE.md`
-- **arknet-use-cases**: dritte hexagonale BC -- Cockburn-Use-Cases (`uc_*`-Tools) mit opaken Step-VOs, Rollen-/Requirement-Referenzen (`primaryRole`/`supportingRole` auf `arkproc:Role` des Actor-Registers, ADR-37).
-Traegt seit Issue #329 zusaetzlich `usesTerm`-Kanten ins Glossar (`uc_link_term`) und `constrainedBy`-Kanten zu Constraints der requirements-BC (`uc_link_constraint`), damit ein rein use-case-gefuehrtes Projekt (Requirement optional, Issue #327) strukturell vernetzt bleibt.
-Details: `arknet-use-cases/CLAUDE.md`
-- **arknet-bounded-context**: vierte hexagonale BC -- BoundedContext-Lifecycle (`bc_*`-Tools), ubiquitousLanguageTerm-Kante ins Glossar (BC->Term), `arkddd:ContextRelationship` als eigene Ressource fuer die gerichtete Context-Mapping-Kante zwischen zwei Bounded Contexts (`bc_link_context`), opake Identitaet. Details: `arknet-bounded-context/CLAUDE.md`
-- **arknet-project**: fuenfte hexagonale BC -- die Projekt-Registry (`project_*`-Tools), die einen vom Client gesendeten, opaken und typisierten Anker auf das Projekt abbildet, dessen Dataset die Modelldaten haelt.
-Verwaltet Identitaet statt Modell und ist als einziger BC nicht projekt-scoped: seine Registry wohnt im reservierten System-Dataset.
-Sie ist die Aufloesungsquelle, auf die jeder Tool-Aufruf der sechs Modell-BCs geroutet wird.
-Ein Projekt fuehrt neben der einwertigen Standardsprache (`arkprj:defaultLanguage`, der Rueckfall fuer einen Aufruf ohne eigenes `language`) einen mehrwertigen Sprachsatz (`arkprj:maintainedLanguage`, ueber `project_add`/`project_update` als `languages` gesetzt) -- die Zusage, in welchen Sprachen es sein Modell fuehrt, und damit der Sollzustand, gegen den `store_check` Unvollstaendigkeit ueberhaupt benennen kann; ist der Satz nicht leer, muss die Standardsprache Element von ihm sein.
-Details: `arknet-project/CLAUDE.md`
-- **arknet-adr**: sechste hexagonale BC -- Architecture-Decision-Record-Lifecycle (`adr_add`/`adr_list`/`adr_get`/`adr_update`/`adr_set_status`/`adr_supersede`/`adr_unsupersede`/`adr_delete`, `adr_unsupersede` seit kogn-io/arknet#354) plus `adr_check`, die lesende, nicht-blockierende Konsistenz- und Qualitaetspruefung ueber den ganzen Korpus (kogn-io/arknet#387: Fakten und Musterverdacht getrennt, und die Regeln, die sie nicht pruefen kann, in ihrer eigenen Ausgabe benannt), `addressesRequirement`-Kante zu den Requirements, `affectsContext`-Kante zu den Bounded Contexts, `usesTerm`-Kante zu den Glossarbegriffen (kogn-io/arknet#393, eigene Property statt Erweiterung der geteilten `arkreq:usesTerm`-Domain, weil eine ADR im eigenen `arkarch`-Namespace lebt), zwei selbstbezuegliche Kanten (`supersededBy` als Lifecycle-Akt mit eigenem Tool -- ein echter, an die Kante gekoppelter `SUPERSEDED`-Status, geschrieben auf dem abgeloesten Record, mit `adr_unsupersede` als eigenem Rueckweg-Tool fuer eine vertippte Abloesung --, `relatedTo` als gleichrangiger Querverweis, ueber `adr_add`/`adr_update` setzbar) -- von beiden wird nur die Vorwaertsrichtung als Tripel geschrieben, opake Identitaet.
-`Consequence`/`ConsideredOption` sind eigene, positionierte Ressourcen statt flacher Literale, mit je einem Klassifikationsfeld (`consequenceType` POSITIVE/NEGATIVE/NEUTRAL bzw. `optionOutcome` CHOSEN/REJECTED); `name`/`context`/`decision` sowie die Consequence-/ConsideredOption-Texte sind mehrsprachig.
-Korrektur ist gestaffelt: die Textfelder sind nur solange `PROPOSED` aenderbar (die Ablehnung nennt je Status den gangbaren Weg -- `adr_supersede` nur ab `ACCEPTED`, dem einzigen Status, den diese Kante annimmt, sonst eine eigenstaendige neue Entscheidung), mit einer feingranularen Uebersetzungs-Ausnahme -- eine Sprache, die ein Feld bzw. eine Position noch nie trug, ist in jedem Status schreibbar, die Klassifikationsfelder sind davon ausgenommen. Eine Consequence bzw. ConsideredOption laesst sich per Position auch wieder entfernen (`removeConsequencePositions`/`removeConsideredOptionPositions` an `adr_update`, die nachfolgenden ruecken auf) -- ebenfalls nur solange `PROPOSED`, ohne Uebersetzungs-Ausnahme. Die vier Referenzlisten (`addressesRequirement`, `affectsContext`, `usesTerm`, `relatedTo`) bleiben dagegen in jedem Status korrigierbar.
-Geloescht werden kann seit kogn-io/arknet#528 ein `PROPOSED`-Record oder ein `ACCEPTED`-Record ohne Nachfolger und ohne eingehende Kante -- `adr_delete` macht eine Fehlerfassung rueckgaengig und ist kein Lifecycle-Schritt; `REJECTED`, `DEPRECATED` und `SUPERSEDED` bleiben unloeschbar, `REJECTED` ("erwogen und verworfen") ausdruecklich, weil es eine dokumentierte Entscheidung ist.
-Abgelehnt wird ausserdem, solange ein anderer Record ihn ueber `supersededBy` als seinen Nachfolger benennt (aufloesbar mit `adr_unsupersede` auf diesem anderen Record) oder ueber `relatedTo` auf ihn zeigt; der Code eines geloeschten Records bleibt vergeben (er ueberlebt als `dcterms:identifier` an der getombstoneten Revision), damit `ADR-7` nie zwei Entscheidungen benennt.
-Arknets eigene Architekturentscheidungen sind Records dieses Hexagons im arknet-eigenen Store; `docs/adr-export/` ist ihr erzeugtes Abbild.
-Details: `arknet-adr/CLAUDE.md`
-- **arknet-actor**: siebte hexagonale BC -- Actor-Lifecycle (`actor_*`-Tools), `ACTOR-N`-Codes aus einem Zaehler fuer alle vier Typen (`HUMAN`/`SYSTEM`/`LEGAL`/`GROUP`; Typ und Code stehen mit der Anlage fest, Name und Beschreibung sind korrigierbar), opake Identitaet.
-Macht `arkproc:Actor` zu einer eigenstaendigen Ressource statt zu einer Facette am Glossarbegriff: ein Akteur braucht weder Definition noch `TERM-N`-Code, darf aber zusaetzlich Glossarbegriff sein.
-Name und Beschreibung sind bewusst ungetaggte Literale ohne Mehrsprachigkeits-Mechanismus, und der Actor-Ressourcentyp selbst traegt keine Cross-BC-Kante.
-Seit ADR-37/kogn-io/arknet#405 (Teil B) traegt derselbe Hexagon einen zweiten Ressourcentyp, `arkproc:Role` (`role_*`-Tools, `ROLE-N`-Codes aus einem eigenen, von `ACTOR-N` unabhaengigen Zaehler, eigener Named Graph `.../model/roles`) -- anti-rigide gegenueber dem rigiden Actor, darum keine Unterklasse; die Besetzung laeuft ueber den optionalen, mehrwertigen Parameter `filledBy` (Actor-Codes) an `role_add`/`role_update`, mit demselben Tri-State wie `adr_update`s Referenzlisten. Anders als Actor sind Rollenname und -beschreibung mehrsprachig (`language`/`displayLocale`, wie bei Constraint) -- eine Rolle ist eine Funktionsbezeichnung, kein Eigenname.
-Ein Use Case loest `primaryRole`/`supportingRole` gegen `ROLE-N`-Codes dieses Rollen-Registers auf (`RoleLookup` in `arknet-use-cases`, `ResolveRoles` hier fuer die Anzeige), nicht gegen den Namen -- ein Rollenname ist mehrsprachig und damit als Referenzschluessel mehrdeutig.
-Details: `arknet-actor/CLAUDE.md`
+- **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes). `arknet-ontology/CLAUDE.md`
+- **arknet-mcp**: MCP-Server (geteilter lokaler Daemon, `127.0.0.1:47331`) + Composition Root, verdrahtet alle sieben BC-Hexagons, die Anker-Aufloesung, den generischen Store-Lesepfad und den Pruefpfad `store_check`. `arknet-mcp/CLAUDE.md`
+- **arknet-shared-kernel**: DDD Shared Kernel -- ProjectId, ProjectResolver-Port, ResourceId, DisplayLocale/LocalizedLiteral. `arknet-shared-kernel/CLAUDE.md`
+- **arknet-persistence-support**: technischer Support der kognio-rdf-Out-Adapter -- SHACL-Write-Gate, WriteFunnel (PROV-O-Revision + Head-Pointer je Write), SparqlTerms, die `Ark*Vocabulary`-Konstanten. `arknet-persistence-support/CLAUDE.md`
+- **arknet-persistence-test-support**: Test-Support derselben Out-Adapter -- die Guarded*-Dekoratoren fuer die `*RealStoreConcurrencyTest`; main-Scope-Artefakt, im test-Scope gezogen. `arknet-persistence-test-support/CLAUDE.md`
+- **arknet-architecture-tests**: Invarianten, die der Modulschnitt nicht erzwingen kann -- ArchUnit-Regeln und die Abgleiche Vokabular-Konstanten/Loeschschutz-Listen/Stale-Translation-Schluessel/Ontologie-Versionen gegen die ausgelieferten Ontologien und Shapes. `arknet-architecture-tests/CLAUDE.md`
+- **arknet-requirements**: BC 1 -- Requirement-Lifecycle (`req_*`) plus Constraint als zweiter Ressourcentyp (`constraint_*`), `usesTerm`-Kante ins Glossar. `arknet-requirements/CLAUDE.md`
+- **arknet-ubiquitous-language**: BC 2 -- SKOS-Glossar (`term_*`). `arknet-ubiquitous-language/CLAUDE.md`
+- **arknet-use-cases**: BC 3 -- Cockburn-Use-Cases (`uc_*`), Rollen per `ROLE-N`-Code aus dem Actor-Register, Kanten zu Glossar und Constraints. `arknet-use-cases/CLAUDE.md`
+- **arknet-bounded-context**: BC 4 -- BoundedContext-Lifecycle (`bc_*`), ContextRelationship als eigene Ressource. `arknet-bounded-context/CLAUDE.md`
+- **arknet-project**: BC 5 -- die Projekt-Registry (`project_*`), bildet den Anker eines Aufrufs auf das Projekt ab; einziger nicht projekt-scoped BC (System-Dataset); fuehrt Standardsprache und Sprachsatz des Projekts. `arknet-project/CLAUDE.md`
+- **arknet-adr**: BC 6 -- Architecture-Decision-Record-Lifecycle (`adr_*`, `adr_check`), Kanten zu Requirements, Bounded Contexts und Glossar, `supersededBy`/`relatedTo` selbstbezueglich; arknets eigene ADRs sind Records dieses Hexagons. `arknet-adr/CLAUDE.md`
+- **arknet-actor**: BC 7 -- Actor-Lifecycle (`actor_*`, `ACTOR-N`) und Role als zweiter Ressourcentyp (`role_*`, `ROLE-N`, `filledBy`). `arknet-actor/CLAUDE.md`
 
 ## Ontologie-Namespaces
 
