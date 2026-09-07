@@ -1656,24 +1656,43 @@ class KognioRdfAdrRepositoryTest {
     /**
      * The race-free half of the status check: the application service asks before the write
      * transaction opens ({@code AdrService#delete}), this one asks inside it - a status transition
-     * committed in that gap (e.g. a concurrent {@code adr_set_status ACCEPTED}) must not slip past
-     * it. Pinned directly against the adapter, the only way to exercise this half without the
-     * service's own pre-check intercepting first.
+     * committed in that gap (e.g. a concurrent {@code adr_reject}) must not slip past it. Pinned
+     * directly against the adapter, the only way to exercise this half without the service's own
+     * pre-check intercepting first. Seeds {@link AdrStatus#REJECTED} rather than
+     * {@link AdrStatus#ACCEPTED} - since kogn-io/arknet#528 an unreferenced ACCEPTED record is itself
+     * deletable, so only a status {@link AdrStatus#isDeletable()} still refuses exercises this guard.
      */
     @Test
-    void deleteRejectsADecisionThatIsNoLongerProposed() {
+    void deleteRejectsADecisionWhoseStatusForbidsDeletion() {
+        Adr rejected = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.REJECTED, null, null, null,
+                List.of(), List.of(), null);
+        repository.create(PROJECT_A, rejected, "en");
+
+        AdrNotDeletableException thrown = assertThrows(AdrNotDeletableException.class,
+                () -> repository.delete(PROJECT_A, rejected.code()));
+
+        assertEquals(AdrStatus.REJECTED, thrown.status());
+        assertTrue(repository.findByCode(PROJECT_A, rejected.code(), null).isPresent(),
+                "a rejected delete must leave the decision untouched");
+        assertFalse(headsOf(rejected.id().value().value()).isEmpty(),
+                "a rejected delete must not tombstone anything");
+    }
+
+    /**
+     * The service's own pre-check ({@code AdrService#delete}) is bypassed here on purpose - only the
+     * adapter's in-transaction backstop guards this path - so an unreferenced ACCEPTED decision must
+     * now actually delete (kogn-io/arknet#528), the mirror image of
+     * {@link #deleteRejectsADecisionWhoseStatusForbidsDeletion}.
+     */
+    @Test
+    void deleteRemovesAnAcceptedDecisionWithoutASuccessorOrAnIncomingEdge() {
         Adr accepted = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.ACCEPTED, null, null, null,
                 List.of(), List.of(), null);
         repository.create(PROJECT_A, accepted, "en");
 
-        AdrNotDeletableException thrown = assertThrows(AdrNotDeletableException.class,
-                () -> repository.delete(PROJECT_A, accepted.code()));
+        repository.delete(PROJECT_A, accepted.code());
 
-        assertEquals(AdrStatus.ACCEPTED, thrown.status());
-        assertTrue(repository.findByCode(PROJECT_A, accepted.code(), null).isPresent(),
-                "a rejected delete must leave the decision untouched");
-        assertFalse(headsOf(accepted.id().value().value()).isEmpty(),
-                "a rejected delete must not tombstone anything");
+        assertTrue(repository.findByCode(PROJECT_A, accepted.code(), null).isEmpty());
     }
 
     @Test

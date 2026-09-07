@@ -748,7 +748,8 @@ class AdrMcpToolsTest {
     @Test
     void theToolDescriptionsSayWhatRejectedMeansAndWhatDeleteIsFor() {
         String delete = descriptionOf("delete");
-        assertTrue(delete.contains("Only a PROPOSED decision can be deleted"), delete);
+        assertTrue(delete.contains("Deletable while PROPOSED"), delete);
+        assertTrue(delete.contains("while ACCEPTED with no successor and nothing pointing at it"), delete);
         assertTrue(delete.contains("considered and turned down"), delete);
         assertTrue(delete.contains("adr_supersede"), delete);
         assertTrue(delete.contains("adr_set_status DEPRECATED"), delete);

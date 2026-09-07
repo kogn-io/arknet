@@ -1483,17 +1483,55 @@ class AdrServiceTest {
         assertThrows(AdrNotFoundException.class, () -> service.delete(PROJECT, new AdrCode("ADR-9")));
     }
 
+    /**
+     * kogn-io/arknet#528: undoes a mistaken acceptance, not just a mistaken proposal - the record
+     * carries no successor and nothing points at it, so it is deletable exactly like a PROPOSED one.
+     */
     @Test
-    void deleteRefusesAnAcceptedDecisionAndPointsAtSupersede() {
+    void deleteRemovesAnAcceptedDecisionWithNoSuccessorAndNoIncomingEdge() {
         AdrCode code = add(newAdr()).adr().code();
         service.accept(PROJECT, code, null, DEFAULT_LANGUAGE);
 
-        AdrNotDeletableException thrown =
-                assertThrows(AdrNotDeletableException.class, () -> service.delete(PROJECT, code));
+        service.delete(PROJECT, code);
 
-        assertEquals(AdrStatus.ACCEPTED, thrown.status());
-        assertTrue(thrown.getMessage().contains("adr_supersede"), thrown.getMessage());
-        assertTrue(get(PROJECT, code).isPresent(), "a refused delete must leave the decision");
+        assertTrue(get(PROJECT, code).isEmpty());
+    }
+
+    /**
+     * The successor of an {@code adr_supersede} call stays ACCEPTED itself, but is now named by the
+     * superseded decision's own {@code supersededBy} edge - kogn-io/arknet#528 does not open a way to
+     * delete a decision currently serving as another one's recorded successor.
+     */
+    @Test
+    void deleteRefusesAnAcceptedDecisionAnotherOneNamesAsItsSuccessor() {
+        AdrCode older = add(newAdr()).adr().code();
+        service.accept(PROJECT, older, null, DEFAULT_LANGUAGE);
+        AdrCode newer = add(newAdr()).adr().code();
+        service.accept(PROJECT, newer, null, DEFAULT_LANGUAGE);
+        service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
+
+        AdrReferencedException thrown =
+                assertThrows(AdrReferencedException.class, () -> service.delete(PROJECT, newer));
+
+        assertEquals(List.of(new AdrReferencedException.Reference(older,
+                AdrReferencedException.SUPERSEDED_BY)), thrown.references());
+        assertTrue(get(PROJECT, newer).isPresent(), "a refused delete must leave the decision");
+    }
+
+    @Test
+    void deleteRefusesASupersededDecision() {
+        AdrCode older = add(newAdr()).adr().code();
+        service.accept(PROJECT, older, null, DEFAULT_LANGUAGE);
+        AdrCode newer = add(newAdr()).adr().code();
+        service.accept(PROJECT, newer, null, DEFAULT_LANGUAGE);
+        service.supersede(PROJECT, newer, older, DEFAULT_LANGUAGE);
+
+        AdrNotDeletableException thrown =
+                assertThrows(AdrNotDeletableException.class, () -> service.delete(PROJECT, older));
+
+        assertEquals(AdrStatus.SUPERSEDED, thrown.status());
+        assertTrue(thrown.getMessage().contains("adr_unsupersede"), thrown.getMessage());
+        assertTrue(get(PROJECT, older).isPresent(), "a refused delete must leave the decision");
     }
 
     @Test
@@ -1570,6 +1608,26 @@ class AdrServiceTest {
                 AdrReferencedException.RELATED_TO)), thrown.references());
         assertTrue(thrown.getMessage().contains("adr_update"), thrown.getMessage());
         assertTrue(get(PROJECT, peer).isPresent(), "a refused delete must leave the decision");
+    }
+
+    /**
+     * kogn-io/arknet#528's own worked example: an ACCEPTED decision another one is {@code relatedTo}
+     * is refused, exactly like a PROPOSED one, until that edge is resolved via {@code adr_update} -
+     * only then does the delete go through.
+     */
+    @Test
+    void deleteRemovesAnAcceptedDecisionOnceAnIncomingRelatedToEdgeIsCleared() {
+        AdrCode target = add(newAdr()).adr().code();
+        service.accept(PROJECT, target, null, DEFAULT_LANGUAGE);
+        AdrCode naming = add(new NewAdr("Title", "Some context here", "Some decision here",
+                null, null, DEFAULT_LANGUAGE, null, null, null, List.of(target.value()))).adr().code();
+
+        assertThrows(AdrReferencedException.class, () -> service.delete(PROJECT, target));
+
+        update(naming, AdrCorrection.builder().relatedToCodes(List.of()).build());
+        service.delete(PROJECT, target);
+
+        assertTrue(get(PROJECT, target).isEmpty());
     }
 
     @Test

@@ -644,7 +644,7 @@ public class AdrService
         Objects.requireNonNull(code, "code");
         Adr adr = repository.findByCode(projectId, code, null)
                 .orElseThrow(() -> new AdrNotFoundException(projectId, code));
-        if (adr.status() != AdrStatus.PROPOSED) {
+        if (!adr.status().isDeletable()) {
             throw new AdrNotDeletableException(code, adr.status());
         }
         rejectIfReferenced(projectId, code, adr.id());

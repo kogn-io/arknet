@@ -32,5 +32,19 @@ public enum AdrStatus {
     ACCEPTED,
     REJECTED,
     DEPRECATED,
-    SUPERSEDED
+    SUPERSEDED;
+
+    /**
+     * Whether a record in this status may be removed outright rather than only corrected
+     * (kogn-io/arknet#528). {@link #PROPOSED} undoes a mistaken {@code adr_add}; {@link #ACCEPTED}
+     * undoes a mistaken acceptance of a record that was never really an architecture decision -
+     * distinct from being superseded or deprecated, which are real lifecycle outcomes worth keeping
+     * as history. This predicate covers only the record's own status: an {@link #ACCEPTED} record can
+     * never itself carry {@link Adr#supersededBy()} (the compact constructor of {@link Adr} ties that
+     * edge to {@link #SUPERSEDED}), but it may still be named as another record's successor, or be the
+     * target of a {@code relatedTo} edge - both checked separately, not by this method.
+     */
+    public boolean isDeletable() {
+        return this == PROPOSED || this == ACCEPTED;
+    }
 }

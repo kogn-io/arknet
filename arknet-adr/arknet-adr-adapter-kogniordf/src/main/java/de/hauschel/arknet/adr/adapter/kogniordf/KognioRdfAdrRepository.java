@@ -475,7 +475,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * peer that no longer exists. This check re-reads the same peers a second time, but - unlike
      * both of the above - from inside {@code tx}, so it sees exactly what the transaction is about
      * to commit against, closing rather than merely narrowing the race (mirrors {@link
-     * #rejectIfNotProposed}/{@link #rejectIfReferenced}'s role as the delete path's own
+     * #rejectIfStatusForbidsDeletion}/{@link #rejectIfReferenced}'s role as the delete path's own
      * in-transaction backstop over its own didactic pre-check).</p>
      *
      * <p>Deliberately not {@link AdrNotFoundException}: only the opaque {@link AdrId} survives this
@@ -716,7 +716,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
         funnel.delete(dataset, ADR_GRAPH, subjectIriString, code.value(),
                 () -> new AdrNotFoundException(projectId, code),
                 tx -> {
-                    rejectIfNotProposed(tx, code, subjectIriString);
+                    rejectIfStatusForbidsDeletion(tx, code, subjectIriString);
                     rejectIfReferenced(tx, projectId, code, subjectIriString);
                     tx.update("DELETE { GRAPH <" + ADR_GRAPH + "> { ?s ?p ?o } } WHERE { "
                             + "GRAPH <" + ADR_GRAPH + "> { "
@@ -726,12 +726,12 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 });
     }
 
-    private void rejectIfNotProposed(DatasetTx tx, AdrCode code, String subjectIri) {
+    private void rejectIfStatusForbidsDeletion(DatasetTx tx, AdrCode code, String subjectIri) {
         String subject = SparqlTerms.iriRef(subjectIri);
         String query = "SELECT ?status WHERE { GRAPH <" + ADR_GRAPH + "> { "
                 + subject + " <" + STATUS_PROPERTY + "> ?status } }";
         AdrStatus status = tx.select(query).findFirst().map(KognioRdfAdrRepository::statusOf).orElse(null);
-        if (status != AdrStatus.PROPOSED) {
+        if (status == null || !status.isDeletable()) {
             throw new AdrNotDeletableException(code, status);
         }
     }

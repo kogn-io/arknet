@@ -17,14 +17,18 @@ import de.hauschel.arknet.kernel.ProjectId;
  * away. Backs the tool {@code adr_delete}, the closing counterpart of {@link AddAdr} this hexagon
  * lacked.</p>
  *
- * <p><strong>Only a proposal is deletable.</strong> A decision may be deleted while it is
- * {@link AdrStatus#PROPOSED} and in no other status. What is protected is a decision, not a draft
- * (Nygard): once somebody accepted, turned down or retired a record, the record is the history an
- * ADR exists to keep, and removing it erases the reasoning a later reader needs. Each other status
- * therefore has its own path and its own refusal text - see {@link AdrNotDeletableException} -
- * rather than a shared "no". {@link AdrStatus#REJECTED} in particular is <em>not</em> a way to get
- * rid of a record: "considered and turned down" is a decision with value, so a proposal recorded by
- * accident is undone here, not by rejecting it.</p>
+ * <p><strong>A mistaken record is deletable, a real decision is not (kogn-io/arknet#528).</strong>
+ * A decision may be deleted while it is {@link AdrStatus#PROPOSED} or, undoing a mistaken
+ * acceptance, while it is {@link AdrStatus#ACCEPTED} without a successor and without an incoming
+ * {@code relatedTo} edge - see {@link AdrStatus#isDeletable()}. What is protected is a decision, not
+ * a draft (Nygard): once a record has been superseded, deprecated or turned down, or once it serves
+ * as another decision's named successor, the record is the history an ADR exists to keep, and
+ * removing it erases the reasoning a later reader needs. Retiring a record that really was decided
+ * goes through {@link SupersedeAdr}/{@code adr_set_status DEPRECATED} instead - each remaining
+ * status has its own refusal text, see {@link AdrNotDeletableException}, rather than a shared "no".
+ * {@link AdrStatus#REJECTED} in particular is <em>not</em> a way to get rid of a record: "considered
+ * and turned down" is a decision with value, so a record kept by mistake is undone by deleting it
+ * while {@link AdrStatus#PROPOSED} or {@link AdrStatus#ACCEPTED}, not by rejecting it.</p>
  *
  * <p><strong>Referential integrity is refused, not repaired.</strong> While another decision points
  * at this one - naming it as its own successor via {@code arkarch:supersededBy}, or via
@@ -46,7 +50,8 @@ public interface DeleteAdr {
      * @param projectId the project (architecture model) the decision lives in
      * @param code      the ADR code, e.g. {@code ADR-1}
      * @throws AdrNotFoundException      if no decision with this code exists
-     * @throws AdrNotDeletableException  if the decision is no longer {@link AdrStatus#PROPOSED}
+     * @throws AdrNotDeletableException  if the decision's status forbids deletion, see
+     *                                    {@link AdrStatus#isDeletable()}
      * @throws AdrReferencedException    if another decision still points at it
      */
     void delete(ProjectId projectId, AdrCode code);
