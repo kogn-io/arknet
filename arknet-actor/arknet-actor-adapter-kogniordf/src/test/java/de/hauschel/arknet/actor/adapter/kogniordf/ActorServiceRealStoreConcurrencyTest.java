@@ -228,11 +228,25 @@ class ActorServiceRealStoreConcurrencyTest {
      * #updateRetriesAndKeepsBothCorrectionsWhenAConcurrentWriterAdvancedTheHead} above does not
      * cover, since both its writers there share one language and never exercise the out-adapter's
      * capture-before-delete/reattach of the <em>other</em> language variant.
+     *
+     * <p><strong>Both fields already carry both languages before the race</strong> (PR #553 review
+     * comment): a writer that only ever adds a language nobody held before cannot prove the
+     * reattach path at all - overwriting the sole existing variant of a field is not distinguishable
+     * from a plain replace-by-identity that dropped everything. So each field is seeded with both
+     * a German and an English variant first, then each racer touches only <em>one</em> language of
+     * <em>one</em> field, and the assertions below check all four values afterwards - not just the
+     * two each racer itself wrote, but also the pre-existing <em>other</em>-language variant of the
+     * very field each racer touched, which survives only if {@code replaceTriplesForUpdate}'s
+     * capture-before-delete/reattach actually ran. A version of this test missing those two extra
+     * assertions stayed green even with the reattach call commented out (see
+     * {@code KognioRdfActorRepository#replaceTriplesForUpdate}'s own call site) - confirmed manually
+     * before this class was finalised, see PR #553's review thread for the counter-check.</p>
      */
     @Test
     void updateOfNameInGermanAndUpdateOfDescriptionInEnglishByTwoConcurrentWritersDoesNotLoseEitherLanguage() {
         ActorService straightThrough = serviceOver(realLifecycle);
         ActorCode code = straightThrough.add(WS, newActor("Sachbearbeiter"), "de").code();
+        straightThrough.update(WS, code, "Case worker", null, "en", null);
         straightThrough.update(WS, code, null, "Handles incoming applications in the back office.", "en", null);
 
         AtomicBoolean pending = new AtomicBoolean(true);
@@ -249,9 +263,15 @@ class ActorServiceRealStoreConcurrencyTest {
         Actor asGerman = straightThrough.get(WS, code, "de").orElseThrow();
         assertEquals("Antragsbearbeiter", asGerman.name(),
                 "the racer's own German name correction must not have been lost by its own retry");
+        assertEquals("Bearbeitet eingehende Antraege im Backoffice.", asGerman.description(),
+                "the pre-existing German description must survive the concurrent writer's English-only "
+                        + "correction - only capture-before-delete/reattach keeps it, a plain replace would drop it");
         Actor asEnglish = straightThrough.get(WS, code, "en").orElseThrow();
         assertEquals("Handles incoming applications in the back office, corrected.", asEnglish.description(),
                 "the concurrent English description correction must not have been lost by the retry");
+        assertEquals("Case worker", asEnglish.name(),
+                "the pre-existing English name must survive the racer's own German-only correction - only "
+                        + "capture-before-delete/reattach keeps it, a plain replace would drop it");
     }
 
     private static NewActor newActor(String name) {

@@ -375,11 +375,28 @@ class BoundedContextServiceRealStoreConcurrencyTest {
      * deterministically (the compare-and-set race itself is proven store-level by that test
      * already; this one is only about a second field/language dimension racing through the same
      * mechanism).
+     *
+     * <p><strong>Both fields already carry both languages before the race</strong> (PR #553 review
+     * comment): a writer that only ever adds a language nobody held before cannot prove the
+     * reattach path at all - overwriting the sole existing variant of a field is not distinguishable
+     * from a plain replace-by-identity that dropped everything. {@code domainVision} is therefore
+     * seeded with a German variant first (its English one already exists from {@link #add}, as does
+     * {@code name}'s), then each racer touches only <em>one</em> language of <em>one</em> field, and
+     * the assertions below check all four values afterwards - not just the two each racer itself
+     * wrote, but also the pre-existing <em>other</em>-language variant of the very field each racer
+     * touched, which survives only if {@code replaceExistingTriples}'s capture-before-delete/
+     * reattach for {@code name}/{@code domainVision} actually ran. A version of this test missing
+     * those two extra assertions stayed green even with that reattach commented out (see
+     * {@code KognioRdfBoundedContextRepository#replaceExistingTriples}'s own call site) - confirmed
+     * manually before this class was finalised, see PR #553's review thread for the counter-check.
+     * </p>
      */
     @Test
     void updateOfNameAndUpdateOfDomainVisionByTwoConcurrentWritersDoesNotLoseEitherChange() {
         BoundedContextService straightThrough = serviceOver(realLifecycle);
         BoundedContextCode code = straightThrough.add(WS, newBoundedContext("orders-team"), null).code();
+        straightThrough.update(WS, code, null,
+                "Verwaltet den Lebenszyklus einer Kundenbestellung.", "de", null);
 
         AtomicBoolean pending = new AtomicBoolean(true);
         BoundedContextService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
@@ -395,9 +412,15 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         BoundedContext asEnglish = straightThrough.get(WS, code, "en").orElseThrow();
         assertEquals("Owns the lifecycle of a customer order, corrected.", asEnglish.domainVision(),
                 "the concurrent domainVision correction must not have been lost by the retry");
+        assertEquals("OrderManagement", asEnglish.name(),
+                "the pre-existing English name must survive the racer's own German-only correction - only "
+                        + "capture-before-delete/reattach keeps it, a plain replace would drop it");
         BoundedContext asGerman = straightThrough.get(WS, code, "de").orElseThrow();
         assertEquals("Auftragsverwaltung", asGerman.name(),
                 "the racer's own name addition must not have been lost by its own retry");
+        assertEquals("Verwaltet den Lebenszyklus einer Kundenbestellung.", asGerman.domainVision(),
+                "the pre-existing German domainVision must survive the concurrent writer's English-only "
+                        + "correction - only capture-before-delete/reattach keeps it, a plain replace would drop it");
     }
 
     private static NewBoundedContext newBoundedContext(String owner) {
