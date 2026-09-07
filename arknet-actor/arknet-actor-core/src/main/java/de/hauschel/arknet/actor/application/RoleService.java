@@ -194,10 +194,7 @@ public class RoleService
                 current = repository.findCurrentByCode(projectId, code, defaultLanguage)
                         .orElseThrow(() -> new RoleNotFoundException(projectId, code));
             }
-            Role updated = new Role(current.value().id(), current.value().code(),
-                    name != null ? name : current.value().name(),
-                    description != null ? description : current.value().description(),
-                    resolvedFilledBy != null ? resolvedFilledBy : current.value().filledBy());
+            Role updated = current.value().withUpdates(name, description, resolvedFilledBy);
             // name/description each get their own language: a field this call did not name
             // round-trips under the exact tag it was read under (a scoped no-op), never under
             // `language`/`defaultLanguage`. Resolved lazily, per field, mirroring

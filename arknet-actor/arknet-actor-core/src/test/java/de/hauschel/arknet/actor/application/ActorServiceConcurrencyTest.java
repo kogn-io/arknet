@@ -152,47 +152,17 @@ class ActorServiceConcurrencyTest {
      * {@link #findAllCodes} call returns - {@code nextCode()} reads via {@code findAllCodes} rather
      * than {@code findAll} (kogn-io/arknet#360, see {@link ActorRepository#findAllCodes}'s own
      * javadoc), so this simulates a concurrent {@code actor_add} committing between this caller's
-     * code computation and its own {@code create()}.
+     * code computation and its own {@code create()}. Every other call delegates unchanged via
+     * {@link ForwardingActorRepository}.
      */
-    private static final class RaceOnFirstFindAllCodesRepository implements ActorRepository {
+    private static final class RaceOnFirstFindAllCodesRepository extends ForwardingActorRepository {
 
-        private final ActorRepository delegate;
         private final Runnable injection;
         private boolean injected;
 
         RaceOnFirstFindAllCodesRepository(ActorRepository delegate, Runnable injection) {
-            this.delegate = delegate;
+            super(delegate);
             this.injection = injection;
-        }
-
-        @Override
-        public void create(ProjectId projectId, Actor actor) {
-            delegate.create(projectId, actor);
-        }
-
-        @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated);
-        }
-
-        @Override
-        public Optional<Actor> findByCode(ProjectId projectId, ActorCode code) {
-            return delegate.findByCode(projectId, code);
-        }
-
-        @Override
-        public Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code) {
-            return delegate.findCurrentByCode(projectId, code);
-        }
-
-        @Override
-        public List<Actor> findAll(ProjectId projectId) {
-            return delegate.findAll(projectId);
-        }
-
-        @Override
-        public void delete(ProjectId projectId, ActorCode code) {
-            delegate.delete(projectId, code);
         }
 
         @Override
@@ -204,16 +174,6 @@ class ActorServiceConcurrencyTest {
             }
             return result;
         }
-
-        @Override
-        public List<ActorCode> findRetainedCodes(ProjectId projectId) {
-            return delegate.findRetainedCodes(projectId);
-        }
-
-        @Override
-        public List<Actor> findAllByIds(ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
-            return delegate.findAllByIds(projectId, ids);
-        }
     }
 
     /**
@@ -221,32 +181,16 @@ class ActorServiceConcurrencyTest {
      * {@link #findCurrentByCode} call returns - simulating a concurrent caller whose own complete
      * read-modify-write round trip commits in the window between this caller's read and its own
      * write. Every other call, including every subsequent {@code findCurrentByCode} the retry
-     * issues, delegates unchanged.
+     * issues, delegates unchanged via {@link ForwardingActorRepository}.
      */
-    private static final class RaceOnFirstReadRepository implements ActorRepository {
+    private static final class RaceOnFirstReadRepository extends ForwardingActorRepository {
 
-        private final ActorRepository delegate;
         private final Runnable injection;
         private boolean injected;
 
         RaceOnFirstReadRepository(ActorRepository delegate, Runnable injection) {
-            this.delegate = delegate;
+            super(delegate);
             this.injection = injection;
-        }
-
-        @Override
-        public void create(ProjectId projectId, Actor actor) {
-            delegate.create(projectId, actor);
-        }
-
-        @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated);
-        }
-
-        @Override
-        public Optional<Actor> findByCode(ProjectId projectId, ActorCode code) {
-            return delegate.findByCode(projectId, code);
         }
 
         @Override
@@ -258,45 +202,13 @@ class ActorServiceConcurrencyTest {
             }
             return result;
         }
-
-        @Override
-        public List<Actor> findAll(ProjectId projectId) {
-            return delegate.findAll(projectId);
-        }
-
-        @Override
-        public void delete(ProjectId projectId, ActorCode code) {
-            delegate.delete(projectId, code);
-        }
-
-        @Override
-        public List<ActorCode> findAllCodes(ProjectId projectId) {
-            return delegate.findAllCodes(projectId);
-        }
-
-        @Override
-        public List<ActorCode> findRetainedCodes(ProjectId projectId) {
-            return delegate.findRetainedCodes(projectId);
-        }
-
-        @Override
-        public List<Actor> findAllByIds(ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
-            return delegate.findAllByIds(projectId, ids);
-        }
     }
 
     /** A repository whose {@code compareAndUpdate} always reports a conflict, never applying. */
-    private static final class AlwaysConflictingRepository implements ActorRepository {
-
-        private final ActorRepository delegate;
+    private static final class AlwaysConflictingRepository extends ForwardingActorRepository {
 
         AlwaysConflictingRepository(ActorRepository delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public void create(ProjectId projectId, Actor actor) {
-            delegate.create(projectId, actor);
+            super(delegate);
         }
 
         @Override
@@ -305,41 +217,6 @@ class ActorServiceConcurrencyTest {
             delegate.findByCode(projectId, updated.code())
                     .orElseThrow(() -> new ActorNotFoundException(projectId, updated.code()));
             throw new ActorConcurrentlyModifiedException(projectId, updated.code());
-        }
-
-        @Override
-        public Optional<Actor> findByCode(ProjectId projectId, ActorCode code) {
-            return delegate.findByCode(projectId, code);
-        }
-
-        @Override
-        public Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code) {
-            return delegate.findCurrentByCode(projectId, code);
-        }
-
-        @Override
-        public List<Actor> findAll(ProjectId projectId) {
-            return delegate.findAll(projectId);
-        }
-
-        @Override
-        public void delete(ProjectId projectId, ActorCode code) {
-            delegate.delete(projectId, code);
-        }
-
-        @Override
-        public List<ActorCode> findAllCodes(ProjectId projectId) {
-            return delegate.findAllCodes(projectId);
-        }
-
-        @Override
-        public List<ActorCode> findRetainedCodes(ProjectId projectId) {
-            return delegate.findRetainedCodes(projectId);
-        }
-
-        @Override
-        public List<Actor> findAllByIds(ProjectId projectId, List<de.hauschel.arknet.kernel.ResourceId> ids) {
-            return delegate.findAllByIds(projectId, ids);
         }
     }
 }

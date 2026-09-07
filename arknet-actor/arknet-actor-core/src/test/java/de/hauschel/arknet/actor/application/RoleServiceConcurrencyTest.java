@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -26,7 +25,6 @@ import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.actor.domain.Role;
 import de.hauschel.arknet.actor.domain.RoleCode;
 import de.hauschel.arknet.actor.domain.RoleConcurrentlyModifiedException;
-import de.hauschel.arknet.actor.domain.RoleDisplayFallback;
 import de.hauschel.arknet.actor.domain.RoleNotFoundException;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -159,54 +157,16 @@ class RoleServiceConcurrencyTest {
     /**
      * Decorator that runs {@code injection} exactly once, synchronously, right after the first
      * {@link #findAllCodes} call returns - mirrors {@code ActorServiceConcurrencyTest}'s own
-     * decorator exactly.
+     * decorator exactly. Every other call delegates unchanged via {@link ForwardingRoleRepository}.
      */
-    private static final class RaceOnFirstFindAllCodesRepository implements RoleRepository {
+    private static final class RaceOnFirstFindAllCodesRepository extends ForwardingRoleRepository {
 
-        private final RoleRepository delegate;
         private final Runnable injection;
         private boolean injected;
 
         RaceOnFirstFindAllCodesRepository(RoleRepository delegate, Runnable injection) {
-            this.delegate = delegate;
+            super(delegate);
             this.injection = injection;
-        }
-
-        @Override
-        public void create(ProjectId projectId, Role role, String language) {
-            delegate.create(projectId, role, language);
-        }
-
-        @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Role updated,
-                String nameLanguage, String descriptionLanguage, String defaultLanguage) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated, nameLanguage, descriptionLanguage,
-                    defaultLanguage);
-        }
-
-        @Override
-        public Optional<Role> findByCode(ProjectId projectId, RoleCode code, String displayLocale) {
-            return delegate.findByCode(projectId, code, displayLocale);
-        }
-
-        @Override
-        public Optional<CurrentRole> findCurrentByCode(ProjectId projectId, RoleCode code, String defaultLanguage) {
-            return delegate.findCurrentByCode(projectId, code, defaultLanguage);
-        }
-
-        @Override
-        public List<Role> findAll(ProjectId projectId, String displayLocale) {
-            return delegate.findAll(projectId, displayLocale);
-        }
-
-        @Override
-        public Map<RoleCode, RoleDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
-            return delegate.findAllDisplayFallback(projectId, displayLocale);
-        }
-
-        @Override
-        public void delete(ProjectId projectId, RoleCode code) {
-            delegate.delete(projectId, code);
         }
 
         @Override
@@ -218,50 +178,21 @@ class RoleServiceConcurrencyTest {
             }
             return result;
         }
-
-        @Override
-        public List<RoleCode> findRetainedCodes(ProjectId projectId) {
-            return delegate.findRetainedCodes(projectId);
-        }
-
-        @Override
-        public List<de.hauschel.arknet.actor.application.port.in.ResolveRoles.ResolvedRole> findByIds(
-                ProjectId projectId, String displayLocale, List<ResourceId> ids) {
-            return delegate.findByIds(projectId, displayLocale, ids);
-        }
     }
 
     /**
      * Decorator that runs {@code injection} exactly once, synchronously, right after the first
      * {@link #findCurrentByCode} call returns - mirrors {@code ActorServiceConcurrencyTest}'s own
-     * decorator exactly.
+     * decorator exactly. Every other call delegates unchanged via {@link ForwardingRoleRepository}.
      */
-    private static final class RaceOnFirstReadRepository implements RoleRepository {
+    private static final class RaceOnFirstReadRepository extends ForwardingRoleRepository {
 
-        private final RoleRepository delegate;
         private final Runnable injection;
         private boolean injected;
 
         RaceOnFirstReadRepository(RoleRepository delegate, Runnable injection) {
-            this.delegate = delegate;
+            super(delegate);
             this.injection = injection;
-        }
-
-        @Override
-        public void create(ProjectId projectId, Role role, String language) {
-            delegate.create(projectId, role, language);
-        }
-
-        @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Role updated,
-                String nameLanguage, String descriptionLanguage, String defaultLanguage) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated, nameLanguage, descriptionLanguage,
-                    defaultLanguage);
-        }
-
-        @Override
-        public Optional<Role> findByCode(ProjectId projectId, RoleCode code, String displayLocale) {
-            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override
@@ -273,51 +204,13 @@ class RoleServiceConcurrencyTest {
             }
             return result;
         }
-
-        @Override
-        public List<Role> findAll(ProjectId projectId, String displayLocale) {
-            return delegate.findAll(projectId, displayLocale);
-        }
-
-        @Override
-        public Map<RoleCode, RoleDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
-            return delegate.findAllDisplayFallback(projectId, displayLocale);
-        }
-
-        @Override
-        public void delete(ProjectId projectId, RoleCode code) {
-            delegate.delete(projectId, code);
-        }
-
-        @Override
-        public List<RoleCode> findAllCodes(ProjectId projectId) {
-            return delegate.findAllCodes(projectId);
-        }
-
-        @Override
-        public List<RoleCode> findRetainedCodes(ProjectId projectId) {
-            return delegate.findRetainedCodes(projectId);
-        }
-
-        @Override
-        public List<de.hauschel.arknet.actor.application.port.in.ResolveRoles.ResolvedRole> findByIds(
-                ProjectId projectId, String displayLocale, List<ResourceId> ids) {
-            return delegate.findByIds(projectId, displayLocale, ids);
-        }
     }
 
     /** A repository whose {@code compareAndUpdate} always reports a conflict, never applying. */
-    private static final class AlwaysConflictingRepository implements RoleRepository {
-
-        private final RoleRepository delegate;
+    private static final class AlwaysConflictingRepository extends ForwardingRoleRepository {
 
         AlwaysConflictingRepository(RoleRepository delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public void create(ProjectId projectId, Role role, String language) {
-            delegate.create(projectId, role, language);
+            super(delegate);
         }
 
         @Override
@@ -326,47 +219,6 @@ class RoleServiceConcurrencyTest {
             delegate.findByCode(projectId, updated.code(), null)
                     .orElseThrow(() -> new RoleNotFoundException(projectId, updated.code()));
             throw new RoleConcurrentlyModifiedException(projectId, updated.code());
-        }
-
-        @Override
-        public Optional<Role> findByCode(ProjectId projectId, RoleCode code, String displayLocale) {
-            return delegate.findByCode(projectId, code, displayLocale);
-        }
-
-        @Override
-        public Optional<CurrentRole> findCurrentByCode(ProjectId projectId, RoleCode code, String defaultLanguage) {
-            return delegate.findCurrentByCode(projectId, code, defaultLanguage);
-        }
-
-        @Override
-        public List<Role> findAll(ProjectId projectId, String displayLocale) {
-            return delegate.findAll(projectId, displayLocale);
-        }
-
-        @Override
-        public Map<RoleCode, RoleDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
-            return delegate.findAllDisplayFallback(projectId, displayLocale);
-        }
-
-        @Override
-        public void delete(ProjectId projectId, RoleCode code) {
-            delegate.delete(projectId, code);
-        }
-
-        @Override
-        public List<RoleCode> findAllCodes(ProjectId projectId) {
-            return delegate.findAllCodes(projectId);
-        }
-
-        @Override
-        public List<RoleCode> findRetainedCodes(ProjectId projectId) {
-            return delegate.findRetainedCodes(projectId);
-        }
-
-        @Override
-        public List<de.hauschel.arknet.actor.application.port.in.ResolveRoles.ResolvedRole> findByIds(
-                ProjectId projectId, String displayLocale, List<ResourceId> ids) {
-            return delegate.findByIds(projectId, displayLocale, ids);
         }
     }
 }
