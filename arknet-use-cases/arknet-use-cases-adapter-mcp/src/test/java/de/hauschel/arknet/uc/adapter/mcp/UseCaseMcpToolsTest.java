@@ -674,6 +674,28 @@ class UseCaseMcpToolsTest {
     }
 
     /**
+     * A call that appends a step and takes another one out in the same breath says nothing about
+     * the main-step edge. The tags the lookup reports for that edge are pooled over every step
+     * hanging off it, so the removed one may have been the only carrier of English - naming it
+     * would describe a state the answer next to the hint no longer has. The fields the call
+     * really corrected are reported as usual (kogn-io/arknet#537 review).
+     */
+    @Test
+    void updateStaysSilentAboutAnEdgeTheSameCallAlsoRemovesFrom() {
+        UseCaseMcpTools bilingual = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
+                anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
+                hints(Map.of("title", Set.of("de", "en"), "mainStep", Set.of("de", "en"))));
+
+        String rendered = bilingual.update(null, "UC1", "Neuer Titel", null, null, null, null, null,
+                null, null, null, null, null,
+                List.of(new UseCaseMcpTools.NewMainStepInput("Neuer Schritt", null)), List.of(2), "de", null);
+
+        assertTrue(rendered.contains("en: title"), rendered);
+        assertFalse(rendered.contains("mainStep"), rendered);
+    }
+
+    /**
      * The second call of a two-language workflow - the field so far carries only the other
      * language, and this call adds the written one - is a translation, not a correction: the
      * variant already there is its source, and nothing is stale. The lookup must therefore see
@@ -721,6 +743,7 @@ class UseCaseMcpToolsTest {
 
         assertFalse(rendered.contains("stale"), rendered);
     }
+
     /**
      * A lookup answering {@code byField} as the state <em>before</em> the write - and failing the
      * test if the write has already happened when it is asked, because only that state tells a

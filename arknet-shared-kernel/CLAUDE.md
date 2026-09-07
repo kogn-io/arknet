@@ -156,6 +156,12 @@ Sprachluecken meldet; ein Feld, dessen Werte auf einer besessenen Kind-Ressource
 (Akzeptanzkriterium, Use-Case-Schritt, ADR-Konsequenz), wird unter der **Kante** gefuehrt, die es
 besitzt (`acceptanceCriterion`, `mainStep`, `consequence`), weil der Aufrufer solche Listen
 geschlossen schreibt.
+Genau dieses Poolen ist die eine Stelle, an der die Vor-dem-Write-Momentaufnahme nicht traegt: ein
+Write laesst die Varianten anderer Sprachen eines **direkten** Literalfeldes stehen, aber derselbe
+`*_update` kann ein Kind anlegen und ein anderes entfernen, und mit dem entfernten faellt womoeglich
+der letzte Traeger einer Sprache weg, den die Momentaufnahme schon gezaehlt hat.
+Aufgeloest wird das beim Aufrufer, nicht im Mechanismus: ein Tool meldet eine Kind-Kante nur dann als
+geschrieben, wenn derselbe Aufruf unter ihr nichts entfernt (Review zu kogn-io/arknet#537).
 Der zweite Port-Methodenname `ofProjectRegistration(String projectLabel)` ist kein Sonderfall aus
 Bequemlichkeit: der Registry-Record eines Projekts liegt im reservierten System-Dataset, dessen Id
 `ProjectId` per Konstruktion nicht halten darf.

@@ -99,4 +99,5 @@ Dasselbe Fenster hat `role_delete` gegen `uc_add` (`RoleLookup` laeuft ebenfalls
 **Hinweis auf veraltete Uebersetzungen (kogn-io/arknet#474).**
 `req_update` und `constraint_update` haengen an ihre Antwort, welche der vom Projekt gefuehrten Sprachen die geschriebenen Felder noch tragen, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus dem Shared Kernel, blockt nie.
 Gemeldet werden `title`/`description`/`rationale` sowie, unter der besitzenden Kante `acceptanceCriterion`, die Kriterientexte; bei Constraints `title` und `constraintStatement`.
-`removeAcceptanceCriterionPositions` und die reinen Status-/Prioritaetsaenderungen bleiben aussen vor: sie schreiben keinen Text unter einer Sprache und lassen darum nichts zurueck, das veralten koennte.
+Die reinen Status-/Prioritaetsaenderungen bleiben aussen vor: sie schreiben keinen Text unter einer Sprache und lassen darum nichts zurueck, das veralten koennte.
+Ein Aufruf mit `removeAcceptanceCriterionPositions` meldet die Kante `acceptanceCriterion` gar nicht erst als geschrieben, was er sonst noch mit der Liste tut: die Tags der Kante sind ueber alle Kriterien gepoolt, das entfernte kann der letzte Traeger einer Sprache gewesen sein, und der Hinweis stuende dann neben einer Antwort, in der diese Sprache nirgends mehr vorkommt (Review zu kogn-io/arknet#537).

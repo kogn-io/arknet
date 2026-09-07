@@ -526,7 +526,7 @@ public final class RequirementMcpTools {
                 : Priority.valueOf(priority.trim());
         final String staleHint = staleTranslationHint(project, code, blankToNull(language), blankToNull(title),
                 blankToNull(description), blankToNull(rationale), newAcceptanceCriteria,
-                acceptanceCriteriaTextPatches);
+                acceptanceCriteriaTextPatches, removeAcceptanceCriterionPositions);
         final Requirement updated = updateRequirement.update(project.id(), code, blankToNull(title),
                 blankToNull(description), blankToNull(rationale),
                 newAcceptanceCriteria == null ? null : List.copyOf(newAcceptanceCriteria),
@@ -607,13 +607,18 @@ public final class RequirementMcpTools {
      * before the write and appended after it, because only the state before tells a correction
      * from a translation (see {@link StaleTranslationHint}).
      *
-     * <p>{@code removeAcceptanceCriterionPositions} is deliberately absent: taking a criterion out
-     * writes no text under any language, so it leaves nothing behind to go stale.</p>
+     * <p>A call that also <em>removes</em> a criterion reports the acceptance-criterion edge as
+     * unwritten, whatever else it does to that list. The lookup pools the tags of every criterion
+     * hanging off the edge, so a removal can take the last carrier of a language out from under a
+     * snapshot that already counted it - and the hint would then name a language the answer the
+     * caller is holding no longer has anywhere. Better one hint too few than one that is wrong
+     * about the state it is printed next to (kogn-io/arknet#537 review).</p>
      */
     private String staleTranslationHint(final ResolvedProject project, final RequirementCode code,
             final String language, final String title, final String description, final String rationale,
             final List<String> newAcceptanceCriteria,
-            final List<AcceptanceCriterionPatchInput> acceptanceCriteriaTextPatches) {
+            final List<AcceptanceCriterionPatchInput> acceptanceCriteriaTextPatches,
+            final List<Integer> removeAcceptanceCriterionPositions) {
         final List<String> fieldsWritten = new ArrayList<>();
         if (title != null) {
             fieldsWritten.add(TITLE_FIELD);
@@ -624,8 +629,11 @@ public final class RequirementMcpTools {
         if (rationale != null) {
             fieldsWritten.add(RATIONALE_FIELD);
         }
-        if (newAcceptanceCriteria != null && !newAcceptanceCriteria.isEmpty()
-                || acceptanceCriteriaTextPatches != null && !acceptanceCriteriaTextPatches.isEmpty()) {
+        final boolean removesACriterion =
+                removeAcceptanceCriterionPositions != null && !removeAcceptanceCriterionPositions.isEmpty();
+        if (!removesACriterion
+                && (newAcceptanceCriteria != null && !newAcceptanceCriteria.isEmpty()
+                        || acceptanceCriteriaTextPatches != null && !acceptanceCriteriaTextPatches.isEmpty())) {
             fieldsWritten.add(ACCEPTANCE_CRITERION_FIELD);
         }
         if (fieldsWritten.isEmpty()) {

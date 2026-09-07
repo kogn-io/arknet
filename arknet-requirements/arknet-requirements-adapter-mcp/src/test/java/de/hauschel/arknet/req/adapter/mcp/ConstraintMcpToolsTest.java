@@ -355,6 +355,7 @@ class ConstraintMcpToolsTest {
 
         assertFalse(rendered.contains("stale"), rendered);
     }
+
     /**
      * A lookup answering {@code byField} as the state <em>before</em> the write - and failing the
      * test if the write has already happened when it is asked, because only that state tells a

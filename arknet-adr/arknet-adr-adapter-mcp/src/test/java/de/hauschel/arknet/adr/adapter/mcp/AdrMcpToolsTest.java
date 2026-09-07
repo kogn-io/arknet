@@ -927,6 +927,29 @@ class AdrMcpToolsTest {
     }
 
     /**
+     * A call that adds a consequence and takes another one out in the same breath says nothing
+     * about the consequence edge. The tags the lookup reports for that edge are pooled over every
+     * consequence hanging off it, so the removed one may have been the only carrier of German -
+     * naming it would describe a state the answer next to the hint no longer has. The fields the
+     * call really corrected are reported as usual (kogn-io/arknet#537 review).
+     */
+    @Test
+    void updateStaysSilentAboutAnEdgeTheSameCallAlsoRemovesFrom() {
+        AdrMcpTools bilingual = new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                stub, stub, requirements, contexts, terms,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
+                hints(Map.of("name", Set.of("en", "de"), "consequence", Set.of("en", "de"))));
+
+        String rendered = bilingual.update(null, "ADR-1", "A better title", null, null,
+                List.of(new NewConsequenceInput("New one", "NEGATIVE")), null, null, null,
+                List.of(1), null, "en", null, null, null, null, ANCHOR);
+
+        // The whole hint line, not just its start: the record's own missing-content warning above
+        // it mentions consequences too, so only an exact line proves the edge stayed out.
+        assertTrue(rendered.contains("\n  de: name\nRepeat the call"), rendered);
+    }
+
+    /**
      * The second call of a two-language workflow - the field so far carries only the other
      * language, and this call adds the written one - is a translation, not a correction: the
      * variant already there is its source, and nothing is stale. For a record outside PROPOSED
@@ -974,6 +997,7 @@ class AdrMcpToolsTest {
 
         assertFalse(rendered.contains("stale"), rendered);
     }
+
     /**
      * A lookup answering {@code byField} as the state <em>before</em> the write - and failing the
      * test if the write has already happened when it is asked, because only that state tells a

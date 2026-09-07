@@ -535,9 +535,10 @@ public final class ProjectMcpTools {
      *
      * <p>Asked before the write and appended after it, because only the state before tells a
      * correction from a translation (see {@link StaleTranslationHint}). The language set compared
-     * against is nevertheless the one this very call leaves in force - {@code languages} if the
-     * call replaces the set, the caller's current one otherwise, the same reading {@code
-     * ProjectService#update} applies - because that is the only promise a reader can act on.</p>
+     * against is nevertheless the one this very call leaves in force, because that is the only
+     * promise a reader can act on - read off {@link Project#maintainedLanguagesAfter}, the same
+     * call {@code ProjectService#update} checks its own invariant against, so the two cannot drift
+     * apart into two spellings of one rule.</p>
      */
     private String staleTranslationHint(final Project caller, final String description, final String language,
             final List<String> languages) {
@@ -545,7 +546,7 @@ public final class ProjectMcpTools {
             return "";
         }
         final List<String> languagesInForce =
-                languages == null ? caller.maintainedLanguages() : Project.canonicalLanguages(languages);
+                Project.maintainedLanguagesAfter(caller.maintainedLanguages(), languages);
         return staleTranslations.forProjectRegistration(caller.label(), language, languagesInForce,
                 MULTILINGUAL_FIELDS);
     }

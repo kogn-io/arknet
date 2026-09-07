@@ -756,6 +756,27 @@ class RequirementMcpToolsTest {
     }
 
     /**
+     * A call that adds a criterion and takes another one out in the same breath says nothing
+     * about the acceptance-criterion edge. The tags the lookup reports for that edge are pooled
+     * over every criterion hanging off it, so the removed one may have been the only carrier of
+     * English - naming it would describe a state the answer next to the hint no longer has. The
+     * fields the call really corrected are reported as usual (kogn-io/arknet#537 review).
+     */
+    @Test
+    void updateStaysSilentAboutAnEdgeTheSameCallAlsoRemovesFrom() {
+        RequirementMcpTools bilingual = new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub, stub,
+                stub, stub, resolveTerms, resolveConstraints,
+                anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
+                hints(Map.of("title", Set.of("de", "en"), "acceptanceCriterion", Set.of("de", "en"))));
+
+        String rendered = bilingual.update(null, "FR-1", "Neuer Titel", null, null,
+                List.of("Fertig, wenn es geht"), null, List.of(1), null, "de", null);
+
+        assertTrue(rendered.contains("en: title"), rendered);
+        assertFalse(rendered.contains("acceptanceCriterion"), rendered);
+    }
+
+    /**
      * The second call of a two-language workflow - the field so far carries only the other
      * language, and this call adds the written one - is a translation, not a correction: the
      * variant already there is its source, and nothing is stale. The lookup must therefore see
@@ -802,6 +823,7 @@ class RequirementMcpToolsTest {
 
         assertFalse(rendered.contains("stale"), rendered);
     }
+
     /**
      * A lookup answering {@code byField} as the state <em>before</em> the write - and failing the
      * test if the write has already happened when it is asked, because only that state tells a

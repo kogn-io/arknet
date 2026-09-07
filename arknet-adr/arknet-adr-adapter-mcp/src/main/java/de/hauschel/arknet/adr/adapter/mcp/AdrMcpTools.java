@@ -638,7 +638,8 @@ public final class AdrMcpTools {
                 .build();
         final AdrCode code = new AdrCode(id);
         final String staleHint = staleTranslationHint(project, code, correction, newConsequences,
-                consequenceCorrections, newConsideredOptions, consideredOptionCorrections);
+                consequenceCorrections, newConsideredOptions, consideredOptionCorrections,
+                removeConsequencePositions, removeConsideredOptionPositions);
         final AdrDetail updated = updateAdr.update(project.id(), code, correction, project.defaultLanguage());
         return format(project, updated) + missingContentWarnings(updated.adr()) + staleHint;
     }
@@ -962,23 +963,33 @@ public final class AdrMcpTools {
      * {@code PROPOSED} a text field accepts nothing but a language it never carried, so a hint
      * after such a write would recommend the very call {@code Adr} rejects.</p>
      *
-     * <p>The four reference lists, the two classification fields and the two removal lists are
-     * deliberately absent: none of them writes text under a language, so none leaves anything
-     * behind to go stale.</p>
+     * <p>The four reference lists and the two classification fields are deliberately absent: none
+     * of them writes text under a language, so none leaves anything behind to go stale.</p>
+     *
+     * <p>A call that also <em>removes</em> a consequence or a considered option reports that
+     * child edge as unwritten, whatever else it does to that list. The lookup pools the tags of
+     * every child hanging off the edge, so a removal can take the last carrier of a language out
+     * from under a snapshot that already counted it - and the hint would then name a language the
+     * answer the caller is holding no longer has anywhere. Better one hint too few than one that
+     * is wrong about the state it is printed next to (kogn-io/arknet#537 review).</p>
      */
     private String staleTranslationHint(final ResolvedProject project, final AdrCode code,
             final AdrCorrection correction, final List<NewConsequenceInput> newConsequences,
             final List<ConsequenceCorrectionInput> consequenceCorrections,
             final List<NewConsideredOptionInput> newConsideredOptions,
-            final List<ConsideredOptionCorrectionInput> consideredOptionCorrections) {
+            final List<ConsideredOptionCorrectionInput> consideredOptionCorrections,
+            final List<Integer> removeConsequencePositions,
+            final List<Integer> removeConsideredOptionPositions) {
         final List<String> fieldsWritten = new ArrayList<>();
         addIfWritten(fieldsWritten, NAME_FIELD, correction.name());
         addIfWritten(fieldsWritten, CONTEXT_FIELD, correction.context());
         addIfWritten(fieldsWritten, DECISION_FIELD, correction.decision());
-        if (isNotEmpty(newConsequences) || isNotEmpty(consequenceCorrections)) {
+        if (!isNotEmpty(removeConsequencePositions)
+                && (isNotEmpty(newConsequences) || isNotEmpty(consequenceCorrections))) {
             fieldsWritten.add(CONSEQUENCE_FIELD);
         }
-        if (isNotEmpty(newConsideredOptions) || isNotEmpty(consideredOptionCorrections)) {
+        if (!isNotEmpty(removeConsideredOptionPositions)
+                && (isNotEmpty(newConsideredOptions) || isNotEmpty(consideredOptionCorrections))) {
             fieldsWritten.add(CONSIDERED_OPTION_FIELD);
         }
         if (fieldsWritten.isEmpty()) {

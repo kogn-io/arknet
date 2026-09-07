@@ -551,7 +551,7 @@ public final class UseCaseMcpTools {
                 .language(blankToNull(language))
                 .build();
         final String staleHint = staleTranslationHint(project, code, correction, extensions, stepTextPatches,
-                newMainSteps);
+                newMainSteps, removeMainStepPositions);
         final UseCase updated = updateUseCase.update(project.id(), code, correction, project.defaultLanguage());
         return presenter.formatFull(project.id(), updated, null) + staleHint;
     }
@@ -711,13 +711,20 @@ public final class UseCaseMcpTools {
      * after it, because only the state before tells a correction from a translation (see
      * {@link StaleTranslationHint}).
      *
-     * <p>{@code stepRealisesPatches}, {@code removeMainStepPositions} and the two role references
-     * are deliberately absent: none of them writes text under a language, so none leaves anything
-     * behind to go stale.</p>
+     * <p>{@code stepRealisesPatches} and the two role references are deliberately absent: none of
+     * them writes text under a language, so none leaves anything behind to go stale.</p>
+     *
+     * <p>A call that also <em>removes</em> a main-flow step reports the main-step edge as
+     * unwritten, whatever else it does to that list. The lookup pools the tags of every step
+     * hanging off the edge, so a removal can take the last carrier of a language out from under a
+     * snapshot that already counted it - and the hint would then name a language the answer the
+     * caller is holding no longer has anywhere. Better one hint too few than one that is wrong
+     * about the state it is printed next to (kogn-io/arknet#537 review).</p>
      */
     private String staleTranslationHint(final ResolvedProject project, final UseCaseCode code,
             final UseCaseCorrection correction, final List<String> extensions,
-            final List<StepPatchInput> stepTextPatches, final List<NewMainStepInput> newMainSteps) {
+            final List<StepPatchInput> stepTextPatches, final List<NewMainStepInput> newMainSteps,
+            final List<Integer> removeMainStepPositions) {
         final List<String> fieldsWritten = new ArrayList<>();
         addIfWritten(fieldsWritten, TITLE_FIELD, correction.title());
         addIfWritten(fieldsWritten, GOAL_FIELD, correction.goal());
@@ -725,8 +732,10 @@ public final class UseCaseMcpTools {
         addIfWritten(fieldsWritten, TRIGGER_FIELD, correction.trigger());
         addIfWritten(fieldsWritten, PRECONDITION_FIELD, correction.precondition());
         addIfWritten(fieldsWritten, POSTCONDITION_FIELD, correction.postcondition());
-        if (stepTextPatches != null && !stepTextPatches.isEmpty()
-                || newMainSteps != null && !newMainSteps.isEmpty()) {
+        final boolean removesAStep = removeMainStepPositions != null && !removeMainStepPositions.isEmpty();
+        if (!removesAStep
+                && (stepTextPatches != null && !stepTextPatches.isEmpty()
+                        || newMainSteps != null && !newMainSteps.isEmpty())) {
             fieldsWritten.add(MAIN_STEP_FIELD);
         }
         if (extensions != null && !extensions.isEmpty()) {

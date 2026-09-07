@@ -57,4 +57,5 @@ Seit #333 markiert der HTML-Report (`UseCaseCards`) `goal`/`scope`/`trigger`/`pr
 **Hinweis auf veraltete Uebersetzungen (kogn-io/arknet#474).**
 `uc_update` haengt an seine Antwort, welche der vom Projekt gefuehrten Sprachen die geschriebenen Felder noch tragen, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus dem Shared Kernel, blockt nie.
 Gemeldet werden die sechs Prosafelder (`title`/`useCaseGoal`/`designScope`/`trigger`/`useCasePrecondition`/`useCasePostcondition`) sowie, unter den besitzenden Kanten `mainStep`/`extensionStep`, die Schritttexte.
-`stepRealisesPatches`, `removeMainStepPositions` und die beiden Rollenreferenzen bleiben aussen vor: sie schreiben keinen Text unter einer Sprache.
+`stepRealisesPatches` und die beiden Rollenreferenzen bleiben aussen vor: sie schreiben keinen Text unter einer Sprache.
+Ein Aufruf mit `removeMainStepPositions` meldet die Kante `mainStep` gar nicht erst als geschrieben, was er sonst noch mit der Liste tut: die Tags der Kante sind ueber alle Schritte gepoolt, der entfernte kann der letzte Traeger einer Sprache gewesen sein, und der Hinweis stuende dann neben einer Antwort, in der diese Sprache nirgends mehr vorkommt (Review zu kogn-io/arknet#537).

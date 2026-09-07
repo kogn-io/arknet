@@ -170,4 +170,5 @@ Der HTML-Report traegt einen eigenen "Architecture Decisions"-Abschnitt (`AdrCar
 **Hinweis auf veraltete Uebersetzungen (kogn-io/arknet#474).**
 `adr_update` haengt an seine Antwort, welche der vom Projekt gefuehrten Sprachen die geschriebenen Felder noch tragen, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus dem Shared Kernel, blockt nie.
 Gemeldet werden `name`/`adrContext`/`adrDecision` sowie, unter den besitzenden Kanten `consequence`/`consideredOption`, die Texte der Kind-Ressourcen.
-Die vier Referenzlisten, die beiden Klassifikationsfelder und die beiden Entfernungslisten bleiben aussen vor: sie schreiben keinen Text unter einer Sprache.
+Die vier Referenzlisten und die beiden Klassifikationsfelder bleiben aussen vor: sie schreiben keinen Text unter einer Sprache.
+Ein Aufruf mit `removeConsequencePositions` bzw. `removeConsideredOptionPositions` meldet die betroffene Kante gar nicht erst als geschrieben, was er sonst noch mit der Liste tut: die Tags der Kante sind ueber alle Kinder gepoolt, das entfernte kann der letzte Traeger einer Sprache gewesen sein, und der Hinweis stuende dann neben einer Antwort, in der diese Sprache nirgends mehr vorkommt (Review zu kogn-io/arknet#537).

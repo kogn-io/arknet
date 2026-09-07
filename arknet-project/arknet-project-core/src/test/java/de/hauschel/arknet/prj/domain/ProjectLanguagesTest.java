@@ -112,6 +112,28 @@ class ProjectLanguagesTest {
                         + "what a project maintains must not be gated on also configuring one");
     }
 
+    // --- the set a call leaves in force ---------------------------------------------------
+
+    @Test
+    void keepsTheCurrentMaintainedSetWhereACallSuppliesNone() {
+        assertEquals(List.of("de", "en"), Project.maintainedLanguagesAfter(List.of("de", "en"), null),
+                "an omitted argument leaves the set alone - the promise in force afterwards is the "
+                        + "one that was in force before");
+    }
+
+    @Test
+    void takesAnEmptyRequestedSetAsRemovingTheCommitmentRatherThanAsAnOmission() {
+        assertEquals(List.of(), Project.maintainedLanguagesAfter(List.of("de", "en"), List.of()),
+                "an empty list is the one value of this argument that says something: the project "
+                        + "stops promising a language set");
+    }
+
+    @Test
+    void canonicalizesWhicheverSideItReturnsSoOneRuleCannotBeSpeltTwoWays() {
+        assertEquals(List.of("de"), Project.maintainedLanguagesAfter(List.of(), List.of("DE", "de")));
+        assertEquals(List.of("de"), Project.maintainedLanguagesAfter(List.of("DE"), null));
+    }
+
     // --- the record itself ---------------------------------------------------------------
 
     @Test

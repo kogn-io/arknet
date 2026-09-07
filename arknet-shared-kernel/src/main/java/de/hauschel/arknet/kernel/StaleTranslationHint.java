@@ -43,8 +43,18 @@ import java.util.Set;
  * field carries the written language whether the call corrected it or added it. So a tool asks
  * this class before it calls its service and appends the answer after the service returned:
  * one store read more when the write then fails, and a snapshot a concurrent writer may age by
- * the time it is shown, both of which a hint can afford. A write never removes another
- * language's variant, so the tags the other rules need are the same before and after.</p>
+ * the time it is shown, both of which a hint can afford - a concurrent writer can only ever make
+ * the snapshot older, never make it describe a field this call itself emptied.</p>
+ *
+ * <p>What the snapshot rests on is that a write leaves every other language's variant of the
+ * field it writes standing. That holds for a <em>direct literal field</em>, and it is the reason
+ * the fourth rule may be read off the state before. It does <strong>not</strong> hold for a field
+ * pooled over a child edge ({@code acceptanceCriterion}, {@code mainStep}, {@code consequence},
+ * {@code consideredOption}): the tags there are those of every child hanging off the edge
+ * together, and the same {@code *_update} that writes one child may remove another, taking the
+ * last carrier of a language with it. Naming that edge would then describe a state the caller no
+ * longer has. Resolving it is each caller's job, not this class's: a tool reports such an edge as
+ * written only when its call removes nothing under it (kogn-io/arknet#537 review).</p>
  *
  * <h2>What the store can and cannot say</h2>
  *
@@ -85,7 +95,8 @@ public final class StaleTranslationHint {
      *                            ({@link ResolvedProject#maintainedLanguages()})
      * @param fieldsWritten       the multilingual fields this call is about to write, as
      *                            {@link FieldLanguageLookup} keys, in the order they should be
-     *                            reported
+     *                            reported - a child edge under which the same call also removes
+     *                            a child belongs left out (see the class comment)
      * @return the block to append - empty when there is nothing to report, otherwise separated
      *         from the answer above it by a blank line
      */
