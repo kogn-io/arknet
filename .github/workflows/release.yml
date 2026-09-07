@@ -10,7 +10,9 @@ name: Release (manual, version-gated Docker image)
 # `:latest` moves; `vX.Y.Z` never does -- a consumer pins to `vX.Y.Z` and gets a
 # fixed, reproducible daemon. Independent of the Maven `<revision>` property (stays
 # SNAPSHOT decoration -- no Maven artifact is deployed) and independent of the
-# plugin-marketplace release, which lives in its own repository now.
+# plugin-marketplace release, which lives in its own repository now. The last step
+# of this job does bump `<revision>` to the next minor SNAPSHOT on `main`, purely to
+# keep that decoration from lagging the tag -- it is unrelated to the Docker image.
 #
 # Uses the built-in GITHUB_TOKEN (contents: write, packages: write below) for the
 # image push, the tag push and the GitHub release object -- no dedicated release
@@ -93,3 +95,44 @@ jobs:
         # is moving, so an empty one is worse than no release at all.
         run: |
           gh release create "v$VERSION" --title "v$VERSION" --verify-tag --generate-notes
+
+      - name: Bump <revision> to the next minor SNAPSHOT
+        env:
+          VERSION: ${{ inputs.version }}
+        # Runs last, after the release is fully cut -- a failure here never
+        # invalidates the release itself, since the tag was already pushed above.
+        #
+        # The target is derived from the released version (X.Y.Z -> X.(Y+1).0-SNAPSHOT),
+        # not read off the current pom.xml value, so a patch release (X.Y.Z, Z>0)
+        # lands on the same target as the minor release before it -- the step is
+        # then a no-op, not a regression to an earlier SNAPSHOT.
+        #
+        # Pushed with the built-in GITHUB_TOKEN, so this push does NOT trigger
+        # further workflow runs (GitHub suppresses recursive triggers for pushes
+        # authored by GITHUB_TOKEN) -- docker.yml will not rebuild `:latest` off
+        # this commit. That is intentional: the bump only decorates the SNAPSHOT
+        # version, nothing docker.yml's build depends on changes.
+        run: |
+          MAJOR=$(printf '%s' "$VERSION" | cut -d. -f1)
+          MINOR=$(printf '%s' "$VERSION" | cut -d. -f2)
+          NEXT="$MAJOR.$((MINOR + 1)).0-SNAPSHOT"
+
+          MATCHES=$(grep -cP '^\s*<revision>[^<]*</revision>\s*$' pom.xml)
+          if [ "$MATCHES" -ne 1 ]; then
+            echo "::error::Expected exactly one <revision> line in pom.xml, found $MATCHES."
+            exit 1
+          fi
+
+          CURRENT=$(grep -oP '(?<=<revision>)[^<]+(?=</revision>)' pom.xml)
+          if [ "$CURRENT" = "$NEXT" ]; then
+            echo "pom.xml <revision> is already $NEXT -- nothing to bump."
+            exit 0
+          fi
+
+          sed -i "s|<revision>.*</revision>|<revision>$NEXT</revision>|" pom.xml
+
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add pom.xml
+          git commit -m "chore: bump revision to $NEXT after v$VERSION"
+          git push origin HEAD:main
