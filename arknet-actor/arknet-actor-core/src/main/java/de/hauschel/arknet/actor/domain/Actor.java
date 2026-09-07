@@ -20,12 +20,18 @@ import java.util.Objects;
  * resource may still be both an actor and a glossary term - multi-typing stays legal, it is merely
  * no longer required.</p>
  *
- * <p><strong>Plain literals, no language tags.</strong> {@link #name()} and {@link #description()}
- * are written as untagged literals, unlike a glossary term's {@code skos:prefLabel} or a
- * requirement's {@code dcterms:title}. An actor is a structural identity resource - the same choice
- * {@code BoundedContext} makes for its own {@code arknet:name} - not a carrier of prose whose
- * wording is itself the deliverable, and inventing a per-field language mechanism for a name nobody
- * translates would cost every read path a {@code DisplayLocale} hop for nothing.</p>
+ * <p><strong>Multilingual, mirroring {@link Role}'s policy (kogn-io/arknet#520).</strong>
+ * {@link #name()}/{@link #description()} carry language-tagged literals (SHACL
+ * {@code sh:uniqueLang}), the same mechanism {@link Role}'s own {@code name}/{@code description}
+ * use. This record itself stays a plain, already-selected projection (the value one
+ * {@link de.hauschel.arknet.kernel.DisplayLocale} resolved a candidate set down to) - the
+ * multilingual storage and selection live in the out-adapter, not here. Unlike {@link Role}'s
+ * name, an actor's name is a proper noun (an actor is a resource with a name, not a function
+ * description) - {@code term_update}'s FR-10 label-equality guard therefore does not apply here
+ * either: an actor's name is free to differ per language, the same choice kogn-io/arknet#520 made
+ * for a bounded context's own name. Before kogn-io/arknet#520, both fields were untagged literals,
+ * the same choice {@code BoundedContext} used to make for its own {@code arknet:name}; both
+ * resource types carry the same reasoning now.</p>
  *
  * @param id          opaque, unchanging identity of this actor (never a business label); minted
  *                    once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory} and stable

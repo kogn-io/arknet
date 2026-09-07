@@ -10,38 +10,47 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
+import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
+import de.hauschel.arknet.bc.application.port.in.DescribeBoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.LinkContext;
 import de.hauschel.arknet.bc.application.port.in.LinkTerm;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
+import de.hauschel.arknet.bc.application.port.in.UpdateBoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.ContextRelationship;
 import de.hauschel.arknet.bc.domain.ContextRelationshipId;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
+import de.hauschel.arknet.kernel.FieldLanguageLookup;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
- * Scaffold-level check that the adapter declares exactly the five bounded-context tools and guards
+ * Scaffold-level check that the adapter declares exactly the six bounded-context tools and guards
  * its in-port dependencies, plus the term-display-resolution contract ({@link ResolveTerms}):
  * renders the resolved business code, falls back to the bare IRI for an id it cannot
- * resolve, and never issues more than one batch call per rendering.
+ * resolve, and never issues more than one batch call per rendering. Also covers the multilingual
+ * {@code language}/{@code displayLocale} passthrough and {@code bc_update} (kogn-io/arknet#520).
  */
 class BoundedContextMcpToolsTest {
 
@@ -52,6 +61,28 @@ class BoundedContextMcpToolsTest {
 
     private static final ProjectId PROJECT = new ProjectId("test-project");
     private static final String ANCHOR = "/home/dev/projects/test-project";
+
+    /**
+     * The stale-translation signal over an empty store (kogn-io/arknet#474): every test that sets
+     * up no language inventory keeps the answer it always had, because a field that carries no
+     * other language has nothing to report.
+     */
+    private static final StaleTranslationHint NO_TRANSLATIONS = hints(Map.of());
+
+    /** A lookup answering the same field-to-tags inventory for every resource. */
+    private static StaleTranslationHint hints(Map<String, Set<String>> byField) {
+        return new StaleTranslationHint(new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                return byField;
+            }
+        });
+    }
 
     /**
      * Stands in for the project registry: exactly one registered anchor, and a hard
@@ -68,8 +99,8 @@ class BoundedContextMcpToolsTest {
 
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
-    private final BoundedContextMcpTools adapter =
-            new BoundedContextMcpTools(stub, stub, stub, stub, stub, resolveTerms, PROJECTS);
+    private final BoundedContextMcpTools adapter = new BoundedContextMcpTools(
+            stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS);
 
     /**
      * The explicit tool parameter is a full second delivery path, open to a
@@ -78,7 +109,8 @@ class BoundedContextMcpToolsTest {
      */
     @Test
     void routesByTheExplicitAnchorParameterWhenTheTransportCarriesNone() {
-        String created = adapter.add(null, "OrderManagement", "Handles orders end to end.", null, null, ANCHOR);
+        String created =
+                adapter.add(null, "OrderManagement", "Handles orders end to end.", null, null, "en", ANCHOR);
 
         assertTrue(created.contains("BC-1"), created);
         assertEquals(PROJECT, stub.lastProjectId);
@@ -92,48 +124,55 @@ class BoundedContextMcpToolsTest {
     @Test
     void rejectsACallThatCarriesNoAnchorAtAll() {
         assertThrows(UnresolvedProjectAnchorException.class,
-                () -> adapter.add(null, "OrderManagement", "Handles orders end to end.", null, null, null));
+                () -> adapter.add(null, "OrderManagement", "Handles orders end to end.", null, null, "en", null));
     }
 
     @Test
-    void declaresTheFiveBoundedContextTools() {
+    void declaresTheSixBoundedContextTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(5, names.size());
+        assertEquals(6, names.size());
         assertTrue(names.containsAll(
-                List.of("bc_add", "bc_list", "bc_get", "bc_link_term", "bc_link_context")));
+                List.of("bc_add", "bc_list", "bc_get", "bc_update", "bc_link_term", "bc_link_context")));
     }
 
     @Test
     void rejectsNullInPort() {
-        assertThrows(NullPointerException.class,
-                () -> new BoundedContextMcpTools(null, stub, stub, stub, stub, resolveTerms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new BoundedContextMcpTools(stub, stub, stub, null, stub, resolveTerms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new BoundedContextMcpTools(stub, stub, stub, stub, null, resolveTerms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new BoundedContextMcpTools(stub, stub, stub, stub, stub, null, PROJECTS));
+        assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
+                null, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
+                stub, stub, stub, null, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
+                stub, stub, stub, stub, null, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
+                stub, stub, stub, stub, stub, null, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
+                stub, stub, stub, stub, stub, stub, null, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, null, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, null));
     }
 
     @Test
     void rejectsNullProjectResolver() {
-        assertThrows(NullPointerException.class,
-                () -> new BoundedContextMcpTools(stub, stub, stub, stub, stub, resolveTerms, null));
+        assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, resolveTerms, null, NO_TRANSLATIONS));
     }
 
     @Test
     void addPassesTheFieldsThroughAndRendersThem() {
         String rendered = adapter.add(null, "OrderManagement", "Owns the customer order lifecycle end to end.",
-                "CORE_DOMAIN", "orders-team", ANCHOR);
+                "CORE_DOMAIN", "orders-team", "en", ANCHOR);
 
         assertEquals("OrderManagement", stub.lastAddCommand.name());
         assertEquals(Subdomain.CORE_DOMAIN, stub.lastAddCommand.subdomain());
         assertEquals("orders-team", stub.lastAddCommand.ownedBy());
+        assertEquals("en", stub.lastAddCommand.language());
         assertTrue(rendered.contains("BC-1"), rendered);
         assertTrue(rendered.contains("{CORE_DOMAIN}"), rendered);
         assertTrue(rendered.contains("<orders-team>"), rendered);
@@ -141,10 +180,45 @@ class BoundedContextMcpToolsTest {
 
     @Test
     void addNormalisesBlankOptionalFieldsToNull() {
-        adapter.add(null, "OrderManagement", "Owns the customer order lifecycle end to end.", "  ", "", ANCHOR);
+        adapter.add(null, "OrderManagement", "Owns the customer order lifecycle end to end.", "  ", "", "en",
+                ANCHOR);
 
         assertEquals(null, stub.lastAddCommand.subdomain());
         assertEquals(null, stub.lastAddCommand.ownedBy());
+    }
+
+    @Test
+    void updateCorrectsNameAndRendersTheResult() {
+        String rendered = adapter.update(null, "BC-1", "Renamed", null, "en", ANCHOR);
+
+        assertEquals(new BoundedContextCode("BC-1"), stub.lastUpdatedCode);
+        assertEquals("Renamed", stub.lastUpdatedName);
+        assertTrue(rendered.contains("BC-1"), rendered);
+    }
+
+    @Test
+    void updateNormalisesBlankFieldsToNull() {
+        adapter.update(null, "BC-1", "  ", " ", "  ", ANCHOR);
+
+        assertEquals(null, stub.lastUpdatedName);
+        assertEquals(null, stub.lastUpdatedDomainVision);
+        assertEquals(null, stub.lastUpdatedLanguage);
+    }
+
+    @Test
+    void updateAppendsTheStaleTranslationHintWhenAFieldIsWritten() {
+        Stub stubWithMaintainedLanguages = stub;
+        BoundedContextMcpTools adapterWithHints = new BoundedContextMcpTools(
+                stubWithMaintainedLanguages, stubWithMaintainedLanguages, stubWithMaintainedLanguages,
+                stubWithMaintainedLanguages, stubWithMaintainedLanguages, stubWithMaintainedLanguages,
+                stubWithMaintainedLanguages, resolveTerms,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
+                hints(Map.of("name", Set.of("en", "de"))));
+
+        String rendered = adapterWithHints.update(null, "BC-1", "Renamed", null, "en", ANCHOR);
+
+        assertTrue(rendered.contains("Possibly stale translations"), rendered);
+        assertTrue(rendered.contains("de"), rendered);
     }
 
     @Test
@@ -201,7 +275,7 @@ class BoundedContextMcpToolsTest {
                 boundedContextWithTerms("BC-1", termA),
                 boundedContextWithTerms("BC-2", termB));
 
-        String rendered = adapter.list(null, ANCHOR);
+        String rendered = adapter.list(null, null, ANCHOR);
 
         assertEquals(1, resolveTerms.callCount());
         assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
@@ -212,14 +286,49 @@ class BoundedContextMcpToolsTest {
     void listOfBoundedContextsWithoutAnyLinkedTermsDoesNotCallResolveTerms() {
         stub.allBoundedContexts = List.of(boundedContextWithTerms("BC-1"));
 
-        adapter.list(null, ANCHOR);
+        adapter.list(null, null, ANCHOR);
 
         assertEquals(0, resolveTerms.callCount());
     }
 
     @Test
+    void listPassesAnExplicitDisplayLocaleArgumentThrough() {
+        stub.allBoundedContexts = List.of(boundedContextWithTerms("BC-1"));
+
+        adapter.list(null, "de", ANCHOR);
+
+        assertEquals("de", stub.lastListDisplayLocale);
+    }
+
+    @Test
+    void listMarksABoundedContextWhoseDisplayedLanguageFellBack() {
+        stub.allBoundedContexts = List.of(boundedContextWithTerms("BC-1"));
+        stub.fallbacks = Map.of(new BoundedContextCode("BC-1"), new BoundedContextDisplayFallback("de", null));
+
+        String rendered = adapter.list(null, null, ANCHOR);
+
+        assertTrue(rendered.contains("[fallback: name=de]"), rendered);
+    }
+
+    @Test
+    void listLeavesABoundedContextWithNoFallbackUnmarked() {
+        stub.allBoundedContexts = List.of(boundedContextWithTerms("BC-1"));
+
+        String rendered = adapter.list(null, null, ANCHOR);
+
+        assertTrue(!rendered.contains("[fallback:"), rendered);
+    }
+
+    @Test
+    void getPassesAnExplicitDisplayLocaleArgumentThrough() {
+        adapter.get(null, "BC-1", "de", ANCHOR);
+
+        assertEquals("de", stub.lastGetDisplayLocale);
+    }
+
+    @Test
     void getRendersUnknownBoundedContextMessage() {
-        String rendered = adapter.get(null, "BC-99", ANCHOR);
+        String rendered = adapter.get(null, "BC-99", null, ANCHOR);
 
         assertTrue(rendered.contains("Bounded context not found: BC-99"), rendered);
     }
@@ -260,9 +369,10 @@ class BoundedContextMcpToolsTest {
                 "Owns the customer order lifecycle end to end.", Subdomain.CORE_DOMAIN, "orders-team", terms);
     }
 
-    /** Structural stub implementing the five driving in-ports. */
+    /** Structural stub implementing the six driving in-ports. */
     private static final class Stub
-            implements AddBoundedContext, ListBoundedContexts, GetBoundedContext, LinkTerm, LinkContext {
+            implements AddBoundedContext, ListBoundedContexts, DescribeBoundedContextDisplayFallback,
+            GetBoundedContext, UpdateBoundedContext, LinkTerm, LinkContext {
 
         private BoundedContextCode lastLinkedBoundedContext;
         private String lastLinkedTermCode;
@@ -275,9 +385,16 @@ class BoundedContextMcpToolsTest {
         private BoundedContextCode lastUpstreamCode;
         private BoundedContextCode lastDownstreamCode;
         private RelationshipType lastRelationshipType;
+        private String lastListDisplayLocale;
+        private String lastGetDisplayLocale;
+        private Map<BoundedContextCode, BoundedContextDisplayFallback> fallbacks = Map.of();
+        private BoundedContextCode lastUpdatedCode;
+        private String lastUpdatedName;
+        private String lastUpdatedDomainVision;
+        private String lastUpdatedLanguage;
 
         @Override
-        public BoundedContext add(ProjectId projectId, NewBoundedContext command) {
+        public BoundedContext add(ProjectId projectId, NewBoundedContext command, String defaultLanguage) {
             lastAddCommand = command;
             lastProjectId = projectId;
             return new BoundedContext(ID, new BoundedContextCode("BC-1"), command.name(),
@@ -285,13 +402,33 @@ class BoundedContextMcpToolsTest {
         }
 
         @Override
-        public List<BoundedContext> list(ProjectId projectId) {
+        public List<BoundedContext> list(ProjectId projectId, String displayLocale) {
+            lastListDisplayLocale = displayLocale;
             return allBoundedContexts;
         }
 
         @Override
-        public Optional<BoundedContext> get(ProjectId projectId, BoundedContextCode code) {
+        public Map<BoundedContextCode, BoundedContextDisplayFallback> describe(
+                ProjectId projectId, String displayLocale) {
+            return fallbacks;
+        }
+
+        @Override
+        public Optional<BoundedContext> get(ProjectId projectId, BoundedContextCode code, String displayLocale) {
+            lastGetDisplayLocale = displayLocale;
             return Optional.empty();
+        }
+
+        @Override
+        public BoundedContext update(ProjectId projectId, BoundedContextCode code, String name,
+                String domainVision, String language, String defaultLanguage) {
+            lastUpdatedCode = code;
+            lastUpdatedName = name;
+            lastUpdatedDomainVision = domainVision;
+            lastUpdatedLanguage = language;
+            return new BoundedContext(ID, code, name != null ? name : "OrderManagement",
+                    domainVision != null ? domainVision : "Owns the customer order lifecycle end to end.",
+                    Subdomain.CORE_DOMAIN, "orders-team", List.of());
         }
 
         @Override

@@ -136,7 +136,9 @@ Projektbeschreibung (`project_add`/`project_update`), Requirement-`title`/
 UseCase-`title`/`goal`/`scope`/`trigger`/`precondition`/`postcondition`/
 Step-`text`/Extension-`text` (`uc_add`/`uc_update`), Constraint-`title`/
 `constraintStatement` (`constraint_add`/`constraint_update`), Role-`name`/
-`description` (`role_add`/`role_update`) sowie die
+`description` (`role_add`/`role_update`), BoundedContext-`name`/
+`domainVision` (`bc_add`/`bc_update`) sowie Actor-`name`/`description`
+(`actor_add`/`actor_update`, kogn-io/arknet#520) sowie die
 ADR-Felder `name`/`context`/`decision` samt Consequence- und
 ConsideredOption-Texten (`adr_add`/`adr_update`) tragen jeweils
 mehrere sprachgetaggte RDF-Literale je Ressource, ueber ein optionales
@@ -163,13 +165,11 @@ vorher nicht trug, wird uebersetzt, nicht korrigiert, und bekommt keinen
 Hinweis; darum wird der Bestand vor dem Schreiben nachgeschlagen. Der
 Mechanismus dahinter (`StaleTranslationHint`
 + `FieldLanguageLookup` im Shared Kernel, im Composition Root ueber den
-generischen Store-Lesepfad bedient) ist einer fuer alle sieben Tools; er blockt
+generischen Store-Lesepfad bedient) ist einer fuer alle neun Tools; er blockt
 nie und behauptet keine Revision je Sprachvariante -- der WriteFunnel fuehrt
 Revisionen je Ressource, nicht je Literal. Das Gegenstueck dazu ist
 `store_check LANGUAGE`: dort fehlt eine Sprache ganz, hier ist sie da, aber
-alt. Andere Freitext-Felder
-(z.B. BoundedContext-`name`/`description`) bleiben einfache, ungetaggte
-Literale ohne diesen Mechanismus. Quer dazu akzeptiert **jedes**
+alt. Quer dazu akzeptiert **jedes**
 Prosa-Feld ein enges Markdown-Subset (`**fett**`, `*kursiv*`, `` `code` ``,
 `- `-Listen, Absaetze an Leerzeilen); Links, Ueberschriften, Tabellen und HTML
 bleiben bewusst Text, weil ein handgeschriebener Link den modellvalidierten

@@ -15,7 +15,6 @@
 @prefix sh:     <http://www.w3.org/ns/shacl#> .
 @prefix arknet: <https://w3id.org/arknet/core#> .
 @prefix arkddd: <https://w3id.org/arknet/ddd#> .
-@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
 @prefix shapes: <https://w3id.org/arknet/shapes#> .
 
 
@@ -36,20 +35,18 @@ shapes:BoundedContext-name
     a sh:PropertyShape ;
     sh:path     arknet:name ;
     sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
     sh:minLength 2 ;
-    sh:message  "A BoundedContext must have exactly one 'arknet:name' (min. 2 characters)."@en , "BoundedContext muss genau einen 'arknet:name' haben (min. 2 Zeichen)."@de ;
+    sh:uniqueLang true ;
+    sh:message  "A BoundedContext needs at least one 'arknet:name' (min. 2 characters) - the context's human-readable name, e.g. 'OrderManagement'. sh:uniqueLang allows at most one arknet:name per non-empty language tag - two names sharing the same tag are not allowed, but DIFFERENT language tags are (a context may be named in several languages)."@en , "Ein BoundedContext braucht mindestens einen 'arknet:name' (min. 2 Zeichen) - den menschenlesbaren Namen des Contexts, z.B. 'OrderManagement'. sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag - zwei Namen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (ein Context darf mehrsprachig benannt sein)."@de ;
     sh:severity sh:Violation .
 
 shapes:BoundedContext-domainVision
     a sh:PropertyShape ;
     sh:path     arkddd:domainVision ;
     sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
     sh:minLength 10 ;
-    sh:message  "A BoundedContext must have an 'arkddd:domainVision' (min. 10 characters). Express in one sentence: What does this context do?"@en , "BoundedContext muss eine 'arkddd:domainVision' haben (min. 10 Zeichen). Formuliere in einem Satz: Was leistet dieser Context?"@de ;
+    sh:uniqueLang true ;
+    sh:message  "A BoundedContext needs at least one 'arkddd:domainVision' (min. 10 characters) - one sentence: What does this context do? sh:uniqueLang allows at most one arkddd:domainVision per non-empty language tag - two visions sharing the same tag are not allowed, but DIFFERENT language tags are (a context's vision may be stated in several languages)."@en , "Ein BoundedContext braucht mindestens eine 'arkddd:domainVision' (min. 10 Zeichen) - ein Satz: Was leistet dieser Context? sh:uniqueLang erlaubt hoechstens eine arkddd:domainVision je nicht-leerem Sprach-Tag - zwei Visionen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (die Vision eines Contexts darf mehrsprachig formuliert sein)."@de ;
     sh:severity sh:Violation .
 
 shapes:BoundedContext-hasAggregate

@@ -138,7 +138,7 @@ class ActorServiceRealStoreConcurrencyTest {
         Thread winnerThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                Actor result = winnerService.add(WS, newActor("Winner"));
+                Actor result = winnerService.add(WS, newActor("Winner"), "de");
                 winnerResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } finally {
@@ -149,7 +149,7 @@ class ActorServiceRealStoreConcurrencyTest {
         Thread loserThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                Actor result = loserService.add(WS, newActor("Loser"));
+                Actor result = loserService.add(WS, newActor("Loser"), "de");
                 loserResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } catch (RuntimeException e) {
@@ -176,7 +176,7 @@ class ActorServiceRealStoreConcurrencyTest {
         assertNotEquals(winnerResult.get().code(), loserResult.get().code(), diagnostics);
 
         List<Actor> stored =
-                KognioRdfActorRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT).findAll(WS);
+                KognioRdfActorRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT).findAll(WS, null);
         assertEquals(2, stored.size(), diagnostics);
         assertTrue(stored.stream().map(Actor::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())), diagnostics);
@@ -196,29 +196,29 @@ class ActorServiceRealStoreConcurrencyTest {
     @Test
     void updateRetriesAndKeepsBothCorrectionsWhenAConcurrentWriterAdvancedTheHead() {
         ActorService straightThrough = serviceOver(realLifecycle);
-        ActorCode code = straightThrough.add(WS, newActor("Sachbearbeiter")).code();
+        ActorCode code = straightThrough.add(WS, newActor("Sachbearbeiter"), "de").code();
 
         AtomicBoolean pending = new AtomicBoolean(true);
         ActorService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
             if (pending.compareAndSet(true, false)) {
-                straightThrough.update(WS, code, null, "Beschreibung des anderen Aufrufers.");
+                straightThrough.update(WS, code, null, "Beschreibung des anderen Aufrufers.", "de", null);
             }
         }));
 
-        Actor result = racing.update(WS, code, "Antragsbearbeiter", null);
+        Actor result = racing.update(WS, code, "Antragsbearbeiter", null, "de", null);
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
         assertEquals("Antragsbearbeiter", result.name());
         assertEquals("Beschreibung des anderen Aufrufers.", result.description(),
                 "the retry must build on the state it re-read, not on its stale first read");
-        Actor stored = straightThrough.get(WS, code).orElseThrow();
+        Actor stored = straightThrough.get(WS, code, null).orElseThrow();
         assertEquals("Antragsbearbeiter", stored.name());
         assertEquals("Beschreibung des anderen Aufrufers.", stored.description(),
                 "both writers' corrections must survive - neither is silently lost");
     }
 
     private static NewActor newActor(String name) {
-        return new NewActor(ActorType.HUMAN, name, "Bearbeitet eingehende Antraege im Backoffice.");
+        return new NewActor(ActorType.HUMAN, name, "Bearbeitet eingehende Antraege im Backoffice.", "de");
     }
 
     private static ActorService serviceOver(DatasetLifecycle lifecycle) {

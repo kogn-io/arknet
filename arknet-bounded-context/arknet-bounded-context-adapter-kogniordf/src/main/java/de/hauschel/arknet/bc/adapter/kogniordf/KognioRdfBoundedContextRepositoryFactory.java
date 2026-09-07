@@ -83,7 +83,7 @@ public final class KognioRdfBoundedContextRepositoryFactory {
         Objects.requireNonNull(displayLocale, "displayLocale");
         WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(displayLocale),
                 WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        return new KognioRdfBoundedContextRepository(lifecycle, resourceIdFactory, funnel);
+        return new KognioRdfBoundedContextRepository(lifecycle, resourceIdFactory, displayLocale, funnel);
     }
 
     /**

@@ -54,7 +54,6 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
 
 /**
  * Integration test for {@link KognioRdfBoundedContextRepository} against an in-memory
@@ -77,16 +76,15 @@ class KognioRdfBoundedContextRepositoryTest {
     Path storageRoot;
 
     private DatasetLifecycleRdf4j lifecycle;
-    private KognioRdfBoundedContextRepository repository;
+    private BoundedContextRepository repository;
 
     @BeforeEach
     void setUp() {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
-        ShaclWriteGate gate = KognioRdfBoundedContextRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
-        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        repository = new KognioRdfBoundedContextRepository(datasetLifecycle, new UuidResourceIdFactory(), funnel);
+        repository = KognioRdfBoundedContextRepositoryFactory.over(
+                datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
     }
 
     @AfterEach
@@ -111,8 +109,8 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"),
                 Subdomain.CORE_DOMAIN, "orders-team", List.of());
 
-        repository.create(PROJECT_A, bc);
-        Optional<BoundedContext> found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"));
+        repository.create(PROJECT_A, bc, "en");
+        Optional<BoundedContext> found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"), null);
 
         assertEquals(Optional.of(bc), found);
         assertEquals("OrderManagement", found.orElseThrow().name());
@@ -124,8 +122,8 @@ class KognioRdfBoundedContextRepositoryTest {
     void createsAndReadsBackWithoutOptionalFields() {
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"), null, null, List.of());
 
-        repository.create(PROJECT_A, bc);
-        BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow();
+        repository.create(PROJECT_A, bc, "en");
+        BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).orElseThrow();
 
         assertNull(found.subdomain());
         assertNull(found.ownedBy());
@@ -134,11 +132,11 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void findAllReturnsEveryStoredBoundedContext() {
         repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"),
-                Subdomain.CORE_DOMAIN, null, List.of()));
+                Subdomain.CORE_DOMAIN, null, List.of()), "en");
         repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-2"),
-                Subdomain.SUPPORTING_DOMAIN, null, List.of()));
+                Subdomain.SUPPORTING_DOMAIN, null, List.of()), "en");
 
-        List<BoundedContext> all = repository.findAll(PROJECT_A);
+        List<BoundedContext> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(2, all.size());
     }
@@ -154,16 +152,16 @@ class KognioRdfBoundedContextRepositoryTest {
      */
     @Test
     void findAllCodesKeepsTheCodeOfASubjectFindAllCannotMaterialiseAtAll() {
-        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()), "en");
         String bare = "https://w3id.org/arknet/id/" + UUID.randomUUID();
         insertTriple(bare, VocabRdf.TYPE.getIRIString(), "<" + BOUNDED_CONTEXT_TYPE + ">");
         insertTriple(bare, "http://purl.org/dc/terms/identifier", "\"BC-2\"");
 
-        List<BoundedContext> all = repository.findAll(PROJECT_A);
+        List<BoundedContext> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(1, all.size());
         assertEquals(new BoundedContextCode("BC-1"), all.get(0).code());
-        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-2")).isEmpty());
+        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-2"), null).isEmpty());
         assertTrue(repository.findAllCodes(PROJECT_A).contains(new BoundedContextCode("BC-2")));
     }
 
@@ -179,7 +177,7 @@ class KognioRdfBoundedContextRepositoryTest {
      */
     @Test
     void findAllCodesCountsACodeHeldByABlankNodeSubject() {
-        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()), "en");
         String insertBlankNodeCode = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { [] a <"
                 + BOUNDED_CONTEXT_TYPE + "> ; <http://purl.org/dc/terms/identifier> \"BC-2\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -189,7 +187,7 @@ class KognioRdfBoundedContextRepositoryTest {
             });
         }
 
-        List<BoundedContext> all = repository.findAll(PROJECT_A);
+        List<BoundedContext> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(1, all.size());
         assertEquals(new BoundedContextCode("BC-1"), all.get(0).code());
@@ -213,7 +211,7 @@ class KognioRdfBoundedContextRepositoryTest {
      */
     @Test
     void findAllSkipsAFullyPopulatedBlankNodeSubjectInsteadOfCrashingTheWholeListing() {
-        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()), "en");
         String insertBlankNodeContext = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
                 + "[] a <" + BOUNDED_CONTEXT_TYPE + "> ; "
                 + "<http://purl.org/dc/terms/identifier> \"BC-2\" ; "
@@ -228,16 +226,16 @@ class KognioRdfBoundedContextRepositoryTest {
             });
         }
 
-        List<BoundedContext> all = repository.findAll(PROJECT_A);
+        List<BoundedContext> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(1, all.size());
         assertEquals(new BoundedContextCode("BC-1"), all.get(0).code());
-        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-2")).isEmpty());
+        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-2"), null).isEmpty());
     }
 
     @Test
     void findByCodeIsEmptyForUnknownCode() {
-        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-99")).isEmpty());
+        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-99"), null).isEmpty());
     }
 
     @Test
@@ -245,22 +243,22 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContextId id = freshId();
         BoundedContext first = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
-        repository.create(PROJECT_A, first);
+        repository.create(PROJECT_A, first, "en");
 
         BoundedContext sameIdentity = new BoundedContext(id, new BoundedContextCode("BC-2"), "Inventory",
                 "Tracks the stock levels of every sellable product across warehouses.", null, null, List.of());
 
-        assertThrows(ResourceAlreadyExistsException.class, () -> repository.create(PROJECT_A, sameIdentity));
+        assertThrows(ResourceAlreadyExistsException.class, () -> repository.create(PROJECT_A, sameIdentity, "en"));
     }
 
     @Test
     void createRejectsADuplicateBusinessCodeOnADifferentIdentity() {
-        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()), "en");
 
         BoundedContext sameCode = boundedContext(new BoundedContextCode("BC-1"), null, null, List.of());
 
         assertThrows(DuplicateBoundedContextCodeException.class,
-                () -> repository.create(PROJECT_A, sameCode));
+                () -> repository.create(PROJECT_A, sameCode, "en"));
     }
 
     @Test
@@ -269,14 +267,14 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
                 Subdomain.CORE_DOMAIN, "orders-team", List.of());
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "en");
 
         BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
                 Subdomain.SUPPORTING_DOMAIN, "platform-team", List.of());
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed, "en", "en", null);
 
-        BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow();
+        BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).orElseThrow();
         assertEquals(Subdomain.SUPPORTING_DOMAIN, found.subdomain());
         assertEquals("platform-team", found.ownedBy());
     }
@@ -286,7 +284,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext missing = boundedContext(new BoundedContextCode("BC-1"), null, null, List.of());
 
         assertThrows(BoundedContextNotFoundException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, null, missing));
+                () -> repository.compareAndUpdate(PROJECT_A, null, missing, "en", "en", null));
     }
 
     /**
@@ -296,19 +294,19 @@ class KognioRdfBoundedContextRepositoryTest {
      */
     @Test
     void compareAndUpdateRejectsACodeChangedToCollideWithAnotherBoundedContext() {
-        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()), "en");
         BoundedContextId id = freshId();
         BoundedContext second = new BoundedContext(id, new BoundedContextCode("BC-2"), "Inventory",
                 "Tracks the stock levels of every sellable product across warehouses.", null, null, List.of());
-        repository.create(PROJECT_A, second);
+        repository.create(PROJECT_A, second, "en");
         RevisionToken head = currentHeadOf(second.code());
 
         BoundedContext recodedToCollide = new BoundedContext(id, new BoundedContextCode("BC-1"), second.name(),
                 second.domainVision(), second.subdomain(), second.ownedBy(), second.usesTerms());
 
         assertThrows(DuplicateBoundedContextCodeException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, head, recodedToCollide));
-        assertEquals("Inventory", repository.findByCode(PROJECT_A, new BoundedContextCode("BC-2"))
+                () -> repository.compareAndUpdate(PROJECT_A, head, recodedToCollide, "en", "en", null));
+        assertEquals("Inventory", repository.findByCode(PROJECT_A, new BoundedContextCode("BC-2"), null)
                 .orElseThrow().name(), "the rejected write must not have changed anything");
         assertEquals(1, revisionsOf(id.value().value()).size(),
                 "the rejected write must not have recorded a revision");
@@ -324,13 +322,13 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContextId id = freshId();
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "en");
 
         BoundedContext renamedOnly = new BoundedContext(id, new BoundedContextCode("BC-1"), "Renamed",
                 original.domainVision(), original.subdomain(), original.ownedBy(), original.usesTerms());
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), renamedOnly);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), renamedOnly, "en", "en", null);
 
-        assertEquals("Renamed", repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"))
+        assertEquals("Renamed", repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"), null)
                 .orElseThrow().name());
     }
 
@@ -343,14 +341,14 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContextId id = freshId();
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "en");
 
         BoundedContext recoded = new BoundedContext(id, new BoundedContextCode("BC-9"), original.name(),
                 original.domainVision(), original.subdomain(), original.ownedBy(), original.usesTerms());
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), recoded);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), recoded, "en", "en", null);
 
-        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-9")).isPresent());
-        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1")).isEmpty());
+        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-9"), null).isPresent());
+        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).isEmpty());
     }
 
     @Test
@@ -378,9 +376,9 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"),
                 Subdomain.CORE_DOMAIN, "orders-team", List.of());
 
-        repository.create(PROJECT_A, bc);
+        repository.create(PROJECT_A, bc, "en");
 
-        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1")).isPresent());
+        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).isPresent());
     }
 
     @Test
@@ -390,8 +388,8 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"),
                 Subdomain.CORE_DOMAIN, "orders-team", List.of(term1, term2));
 
-        repository.create(PROJECT_A, bc);
-        BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow();
+        repository.create(PROJECT_A, bc, "en");
+        BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).orElseThrow();
 
         assertEquals(List.of(term1, term2), found.usesTerms());
     }
@@ -408,15 +406,15 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null,
                 List.of(term1));
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "en");
 
         TermRef term2 = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-2"));
         BoundedContext extended = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null,
                 List.of(term1, term2));
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(extended.code()), extended);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(extended.code()), extended, "en", "en", null);
 
-        BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow();
+        BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).orElseThrow();
         assertEquals(List.of(term1, term2), found.usesTerms());
     }
 
@@ -432,7 +430,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContextId id = freshId();
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "en");
 
         String aggregateIri = "https://w3id.org/arknet/id/" + UUID.randomUUID();
         String insertAggregate = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
@@ -447,7 +445,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
                 Subdomain.CORE_DOMAIN, "orders-team", List.of());
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed, "en", "en", null);
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
                 + "> <https://w3id.org/arknet/ddd#hasAggregate> <" + aggregateIri + "> } }";
@@ -472,7 +470,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContextId id = freshId();
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "en");
 
         String insertBlankTerm = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
                 + id.value().value() + "> <https://w3id.org/arknet/ddd#ubiquitousLanguageTerm> "
@@ -487,7 +485,7 @@ class KognioRdfBoundedContextRepositoryTest {
         TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID()));
         BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of(term));
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed, "en", "en", null);
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
                 + "> <https://w3id.org/arknet/ddd#ubiquitousLanguageTerm> ?term . "
@@ -511,7 +509,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContextId id = freshId();
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "en");
 
         String insertBlankAggregate = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
                 + id.value().value() + "> <https://w3id.org/arknet/ddd#hasAggregate> "
@@ -526,7 +524,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
                 Subdomain.CORE_DOMAIN, "orders-team", List.of());
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed, "en", "en", null);
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
                 + "> <https://w3id.org/arknet/ddd#hasAggregate> ?aggregate . "
@@ -539,17 +537,17 @@ class KognioRdfBoundedContextRepositoryTest {
 
     @Test
     void projectsAreIsolated() {
-        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()), "en");
 
-        assertFalse(repository.findByCode(PROJECT_B, new BoundedContextCode("BC-1")).isPresent());
-        assertTrue(repository.findAll(PROJECT_B).isEmpty());
+        assertFalse(repository.findByCode(PROJECT_B, new BoundedContextCode("BC-1"), null).isPresent());
+        assertTrue(repository.findAll(PROJECT_B, null).isEmpty());
     }
 
     /** A store-first bounded context is what actually lands in the shared project dataset. */
     @Test
     void writesIntoTheBoundedContextNamedGraph() {
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"), null, null, List.of());
-        repository.create(PROJECT_A, bc);
+        repository.create(PROJECT_A, bc, "en");
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + bc.id().value().value()
                 + "> a <" + BOUNDED_CONTEXT_TYPE + "> } }";
@@ -567,7 +565,7 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void writesSubdomainAsADerivedPartOfNode() {
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"), Subdomain.CORE_DOMAIN, null, List.of());
-        repository.create(PROJECT_A, bc);
+        repository.create(PROJECT_A, bc, "en");
 
         String query = "SELECT ?subdomainNode WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
                 + bc.id().value().value() + "> <https://w3id.org/arknet/ddd#partOf> ?subdomainNode } }";
@@ -598,7 +596,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
                 Subdomain.CORE_DOMAIN, null, List.of());
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "en");
 
         String subdomainNodeQuery = "SELECT ?subdomainNode WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
                 + id.value().value() + "> <https://w3id.org/arknet/ddd#partOf> ?subdomainNode } }";
@@ -612,7 +610,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
                 Subdomain.SUPPORTING_DOMAIN, null, List.of());
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed, "en", "en", null);
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + originalSubdomainNode + "> ?p ?o } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -635,12 +633,12 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void findByCodeGroupsARowMultipliedOwnedByAndLogsAWarning() {
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"), null, "team-a", List.of());
-        repository.create(PROJECT_A, bc);
+        repository.create(PROJECT_A, bc, "en");
         insertTriple(bc.id().value().value(), "https://w3id.org/arknet/ddd#ownedBy", "\"team-b\"");
 
         ListAppender<ILoggingEvent> logs = attachLogAppender();
         try {
-            BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow();
+            BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).orElseThrow();
 
             assertTrue(List.of("team-a", "team-b").contains(found.ownedBy()),
                     "must return one of the two legally co-existing values, not throw or return null");
@@ -662,7 +660,7 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void findCurrentByCodeGroupsARowMultipliedSubdomainAndLogsAWarning() {
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"), Subdomain.CORE_DOMAIN, null, List.of());
-        repository.create(PROJECT_A, bc);
+        repository.create(PROJECT_A, bc, "en");
         String secondSubdomainNode = "https://w3id.org/arknet/id/" + UUID.randomUUID();
         insertTriple(secondSubdomainNode, "https://w3id.org/1999/02/22-rdf-syntax-ns#type",
                 "<https://w3id.org/arknet/ddd#Subdomain>");
@@ -673,7 +671,7 @@ class KognioRdfBoundedContextRepositoryTest {
         ListAppender<ILoggingEvent> logs = attachLogAppender();
         try {
             BoundedContextRepository.CurrentBoundedContext found =
-                    repository.findCurrentByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow();
+                    repository.findCurrentByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).orElseThrow();
 
             assertTrue(List.of(Subdomain.CORE_DOMAIN, Subdomain.SUPPORTING_DOMAIN)
                             .contains(found.value().subdomain()),
@@ -700,20 +698,20 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContextId id = freshId();
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, "team-a", List.of());
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "en");
         insertTriple(id.value().value(), "https://w3id.org/arknet/ddd#ownedBy", "\"team-b\"");
 
         BoundedContextRepository.CurrentBoundedContext current =
-                repository.findCurrentByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow();
+                repository.findCurrentByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).orElseThrow();
         String observedOwnedBy = current.value().ownedBy();
 
         BoundedContext renamed = new BoundedContext(id, new BoundedContextCode("BC-1"), "Renamed",
                 current.value().domainVision(), current.value().subdomain(), observedOwnedBy,
                 current.value().usesTerms());
-        repository.compareAndUpdate(PROJECT_A, current.head(), renamed);
+        repository.compareAndUpdate(PROJECT_A, current.head(), renamed, "en", "en", null);
 
         assertEquals(observedOwnedBy,
-                repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow().ownedBy(),
+                repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).orElseThrow().ownedBy(),
                 "the value actually read must be the one surviving the write, not a different row picked "
                         + "independently at write time");
     }
@@ -762,7 +760,7 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void everyWriteRecordsExactlyOneRevisionAndMovesTheQueryableHead() {
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"), null, null, List.of());
-        repository.create(PROJECT_A, bc);
+        repository.create(PROJECT_A, bc, "en");
         String subject = bc.id().value().value();
 
         List<String> afterCreate = revisionsOf(subject);
@@ -770,7 +768,7 @@ class KognioRdfBoundedContextRepositoryTest {
         assertEquals(afterCreate, headsOf(subject), "the head must point at the sole revision");
 
         repository.compareAndUpdate(PROJECT_A, new RevisionToken(afterCreate.get(0)), new BoundedContext(bc.id(),
-                bc.code(), "Renamed", bc.domainVision(), bc.subdomain(), bc.ownedBy(), bc.usesTerms()));
+                bc.code(), "Renamed", bc.domainVision(), bc.subdomain(), bc.ownedBy(), bc.usesTerms()), "en", "en", null);
 
         assertEquals(2, revisionsOf(subject).size(), "update must record exactly one more revision");
         List<String> heads = headsOf(subject);
@@ -788,10 +786,10 @@ class KognioRdfBoundedContextRepositoryTest {
      */
     @Test
     void aRejectedWriteLeavesNoRevisionBehind() {
-        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()), "en");
 
         assertThrows(DuplicateBoundedContextCodeException.class, () -> repository.create(PROJECT_A,
-                boundedContext(new BoundedContextCode("BC-1"), null, null, List.of())));
+                boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()), "en"));
 
         String all = "SELECT ?r WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + "?r a <" + ArkprovVocabulary.REVISION_TYPE + "> } }";
@@ -812,10 +810,10 @@ class KognioRdfBoundedContextRepositoryTest {
     void findCurrentByCodeReturnsTheStateTogetherWithTheCurrentHead() {
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"),
                 Subdomain.CORE_DOMAIN, "orders-team", List.of());
-        repository.create(PROJECT_A, bc);
+        repository.create(PROJECT_A, bc, "en");
 
         BoundedContextRepository.CurrentBoundedContext current =
-                repository.findCurrentByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow();
+                repository.findCurrentByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).orElseThrow();
 
         assertEquals(bc, current.value());
         assertEquals(headsOf(bc.id().value().value()), List.of(current.head().value()));
@@ -823,7 +821,7 @@ class KognioRdfBoundedContextRepositoryTest {
 
     @Test
     void findCurrentByCodeReturnsEmptyForAnUnknownCode() {
-        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, new BoundedContextCode("BC-9")));
+        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, new BoundedContextCode("BC-9"), null));
     }
 
     /**
@@ -836,21 +834,21 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContextId id = freshId();
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "en");
         RevisionToken staleHead = currentHeadOf(original.code());
 
         // A concurrent writer commits first, moving the head away from what the loser observed.
         BoundedContext byTheWinner = new BoundedContext(id, original.code(), "Renamed by the winner",
                 original.domainVision(), original.subdomain(), original.ownedBy(), List.of());
-        repository.compareAndUpdate(PROJECT_A, staleHead, byTheWinner);
+        repository.compareAndUpdate(PROJECT_A, staleHead, byTheWinner, "en", "en", null);
 
         BoundedContext byTheLoser = new BoundedContext(id, original.code(), "Renamed by the loser",
                 original.domainVision(), original.subdomain(), original.ownedBy(), List.of());
         assertThrows(BoundedContextConcurrentlyModifiedException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, staleHead, byTheLoser));
+                () -> repository.compareAndUpdate(PROJECT_A, staleHead, byTheLoser, "en", "en", null));
 
         assertEquals("Renamed by the winner",
-                repository.findByCode(PROJECT_A, original.code()).orElseThrow().name());
+                repository.findByCode(PROJECT_A, original.code(), null).orElseThrow().name());
         assertEquals(2, revisionsOf(id.value().value()).size(),
                 "the rejected write must not have recorded a revision");
     }
@@ -865,7 +863,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContextId id = freshId();
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "en");
         // Strips the head the create recorded, leaving the state from before the revision trail existed.
         String dropHead = "DELETE WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
                 + id.value().value() + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
@@ -879,9 +877,9 @@ class KognioRdfBoundedContextRepositoryTest {
 
         BoundedContext changed = new BoundedContext(id, original.code(), "Renamed",
                 original.domainVision(), original.subdomain(), original.ownedBy(), List.of());
-        repository.compareAndUpdate(PROJECT_A, null, changed);
+        repository.compareAndUpdate(PROJECT_A, null, changed, "en", "en", null);
 
-        assertEquals("Renamed", repository.findByCode(PROJECT_A, original.code()).orElseThrow().name());
+        assertEquals("Renamed", repository.findByCode(PROJECT_A, original.code(), null).orElseThrow().name());
         assertEquals(1, headsOf(id.value().value()).size(), "the write must have recorded a head again");
     }
 
@@ -896,8 +894,8 @@ class KognioRdfBoundedContextRepositoryTest {
     void findByIdsResolvesOnlyTheIdentitiesTheProjectHolds() {
         BoundedContext first = boundedContext(new BoundedContextCode("BC-1"), null, null, List.of());
         BoundedContext second = boundedContext(new BoundedContextCode("BC-2"), null, null, List.of());
-        repository.create(PROJECT_A, first);
-        repository.create(PROJECT_A, second);
+        repository.create(PROJECT_A, first, "en");
+        repository.create(PROJECT_A, second, "en");
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID());
 
         List<ResolveBoundedContexts.ResolvedBoundedContext> resolved = repository.findByIds(
@@ -938,13 +936,13 @@ class KognioRdfBoundedContextRepositoryTest {
 
         assertEquals(List.of(new ResolveBoundedContexts.ResolvedBoundedContext(
                 ResourceId.of(subject), new BoundedContextCode("BC-7"))), resolved);
-        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-7")).isEmpty(),
+        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-7"), null).isEmpty(),
                 "precondition: the single-context read path cannot surface it at all");
     }
 
     /** The head a caller would observe right now - what a well-behaved compare-and-set passes. */
     private RevisionToken currentHeadOf(BoundedContextCode code) {
-        return repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
+        return repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
     }
 
     private List<String> revisionsOf(String subjectIri) {

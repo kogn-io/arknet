@@ -349,11 +349,11 @@ class KognioRdfRoleRepositoryTest {
      */
     @Test
     void filledByReadsBackAsCodeAndNameThroughTheServiceReadPath() {
-        ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, funnel);
+        ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, funnel);
         actors.create(PROJECT_A, new Actor(actorId("actor-b"), new ActorCode("ACTOR-1"), ActorType.HUMAN,
-                "Sachbearbeiter", null));
+                "Sachbearbeiter", null), "en");
         actors.create(PROJECT_A, new Actor(actorId("actor-a"), new ActorCode("ACTOR-2"), ActorType.SYSTEM,
-                "Fachanwendung", null));
+                "Fachanwendung", null), "en");
         RoleService service = new RoleService(repository, actors, new UuidResourceIdFactory());
 
         RoleCode code = service.add(PROJECT_A, new NewRole("Requirements Engineer",

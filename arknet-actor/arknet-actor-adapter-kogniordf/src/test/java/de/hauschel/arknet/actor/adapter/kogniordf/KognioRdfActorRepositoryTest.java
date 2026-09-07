@@ -95,7 +95,7 @@ class KognioRdfActorRepositoryTest {
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
         WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        repository = new KognioRdfActorRepository(datasetLifecycle, funnel);
+        repository = new KognioRdfActorRepository(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
     @AfterEach
@@ -117,8 +117,8 @@ class KognioRdfActorRepositoryTest {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN,
                 "Bearbeitet eingehende Antraege im Backoffice.");
 
-        repository.create(PROJECT_A, stored);
-        Optional<Actor> found = repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1"));
+        repository.create(PROJECT_A, stored, "de");
+        Optional<Actor> found = repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1"), null);
 
         assertEquals(Optional.of(stored), found);
         assertEquals(ActorType.HUMAN, found.orElseThrow().type());
@@ -127,9 +127,9 @@ class KognioRdfActorRepositoryTest {
 
     @Test
     void createsAndReadsBackWithoutTheOptionalDescription() {
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.SYSTEM, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.SYSTEM, null), "de");
 
-        Actor found = repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1")).orElseThrow();
+        Actor found = repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1"), null).orElseThrow();
 
         assertNull(found.description());
     }
@@ -140,9 +140,9 @@ class KognioRdfActorRepositoryTest {
         int n = 0;
         for (ActorType type : ActorType.values()) {
             ActorCode code = new ActorCode("ACTOR-" + (++n));
-            repository.create(PROJECT_A, actor(code, type, null));
+            repository.create(PROJECT_A, actor(code, type, null), "de");
 
-            assertEquals(type, repository.findByCode(PROJECT_A, code).orElseThrow().type());
+            assertEquals(type, repository.findByCode(PROJECT_A, code, null).orElseThrow().type());
         }
     }
 
@@ -150,7 +150,7 @@ class KognioRdfActorRepositoryTest {
     @Test
     void writesOnlyTheConcreteActorTypeIntoTheActorNamedGraph() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.GROUP, null);
-        repository.create(PROJECT_A, stored);
+        repository.create(PROJECT_A, stored, "de");
 
         String subject = stored.id().value().value();
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -164,37 +164,37 @@ class KognioRdfActorRepositoryTest {
 
     @Test
     void findAllReturnsEveryStoredActor() {
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-2"), ActorType.LEGAL, "Zulieferer."));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null), "de");
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-2"), ActorType.LEGAL, "Zulieferer."), "de");
 
-        List<Actor> all = repository.findAll(PROJECT_A);
+        List<Actor> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(2, all.size());
     }
 
     @Test
     void findByCodeIsEmptyForUnknownCode() {
-        assertTrue(repository.findByCode(PROJECT_A, new ActorCode("ACTOR-99")).isEmpty());
+        assertTrue(repository.findByCode(PROJECT_A, new ActorCode("ACTOR-99"), null).isEmpty());
     }
 
     @Test
     void createRejectsAnAlreadyExistingIdentity() {
         ActorId id = freshId();
         Actor first = new Actor(id, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Sachbearbeiter", null);
-        repository.create(PROJECT_A, first);
+        repository.create(PROJECT_A, first, "de");
 
         Actor sameIdentity = new Actor(id, new ActorCode("ACTOR-2"), ActorType.SYSTEM, "PaymentService", null);
 
-        assertThrows(ResourceAlreadyExistsException.class, () -> repository.create(PROJECT_A, sameIdentity));
+        assertThrows(ResourceAlreadyExistsException.class, () -> repository.create(PROJECT_A, sameIdentity, "de"));
     }
 
     @Test
     void createRejectsADuplicateBusinessCodeOnADifferentIdentity() {
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null), "de");
 
         Actor sameCode = actor(new ActorCode("ACTOR-1"), ActorType.SYSTEM, null);
 
-        assertThrows(DuplicateActorCodeException.class, () -> repository.create(PROJECT_A, sameCode));
+        assertThrows(DuplicateActorCodeException.class, () -> repository.create(PROJECT_A, sameCode, "de"));
     }
 
     @Test
@@ -202,13 +202,13 @@ class KognioRdfActorRepositoryTest {
         ActorId id = freshId();
         Actor original = new Actor(id, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Sachbearbeiter",
                 "Bearbeitet eingehende Antraege im Backoffice.");
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "de");
 
         Actor changed = new Actor(id, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Antragsbearbeiter",
                 "Neue Beschreibung.");
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed, "de", "de", null);
 
-        Actor found = repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1")).orElseThrow();
+        Actor found = repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1"), null).orElseThrow();
         assertEquals("Antragsbearbeiter", found.name());
         assertEquals("Neue Beschreibung.", found.description());
     }
@@ -222,11 +222,11 @@ class KognioRdfActorRepositoryTest {
         ActorId id = freshId();
         Actor original = new Actor(id, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Sachbearbeiter",
                 "Alte Beschreibung.");
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "de");
 
         Actor changed = new Actor(id, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Sachbearbeiter",
                 "Neue Beschreibung.");
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed, "de", "de", null);
 
         String ask = "ASK { GRAPH <" + ACTOR_GRAPH + "> { <" + id.value().value() + "> <"
                 + DESCRIPTION_PROPERTY + "> \"Alte Beschreibung.\" } }";
@@ -240,7 +240,7 @@ class KognioRdfActorRepositoryTest {
         Actor missing = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
 
         assertThrows(ActorNotFoundException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, null, missing));
+                () -> repository.compareAndUpdate(PROJECT_A, null, missing, "de", "de", null));
     }
 
     /**
@@ -250,18 +250,18 @@ class KognioRdfActorRepositoryTest {
      */
     @Test
     void compareAndUpdateRejectsACodeChangedToCollideWithAnotherActor() {
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null), "de");
         ActorId id = freshId();
         Actor second = new Actor(id, new ActorCode("ACTOR-2"), ActorType.SYSTEM, "PaymentService", null);
-        repository.create(PROJECT_A, second);
+        repository.create(PROJECT_A, second, "de");
         RevisionToken head = currentHeadOf(second.code());
 
         Actor recodedToCollide = new Actor(id, new ActorCode("ACTOR-1"), second.type(), second.name(),
                 second.description());
 
         assertThrows(DuplicateActorCodeException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, head, recodedToCollide));
-        assertEquals("PaymentService", repository.findByCode(PROJECT_A, new ActorCode("ACTOR-2"))
+                () -> repository.compareAndUpdate(PROJECT_A, head, recodedToCollide, "de", "de", null));
+        assertEquals("PaymentService", repository.findByCode(PROJECT_A, new ActorCode("ACTOR-2"), null)
                 .orElseThrow().name(), "the rejected write must not have changed anything");
         assertEquals(1, revisionsOf(id.value().value()).size(),
                 "the rejected write must not have recorded a revision");
@@ -276,13 +276,13 @@ class KognioRdfActorRepositoryTest {
     void compareAndUpdateAcceptsAnUnchangedCode() {
         ActorId id = freshId();
         Actor original = new Actor(id, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Sachbearbeiter", null);
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "de");
 
         Actor renamedOnly = new Actor(id, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Antragsbearbeiter", null);
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), renamedOnly);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), renamedOnly, "de", "de", null);
 
         assertEquals("Antragsbearbeiter",
-                repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1")).orElseThrow().name());
+                repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1"), null).orElseThrow().name());
     }
 
     // ---- the SHACL gate actually fires (the reasoning decision, pinned) --------------------
@@ -333,9 +333,9 @@ class KognioRdfActorRepositoryTest {
     @Test
     void gateAcceptsAWellFormedActor() {
         repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.GROUP,
-                "Der Fachbereich, der die Freigabe erteilt."));
+                "Der Fachbereich, der die Freigabe erteilt."), "de");
 
-        assertTrue(repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1")).isPresent());
+        assertTrue(repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1"), null).isPresent());
     }
 
     /**
@@ -348,9 +348,9 @@ class KognioRdfActorRepositoryTest {
     void anActorNeedsNoGlossaryDefinition() {
         Actor bare = actor(new ActorCode("ACTOR-1"), ActorType.LEGAL, null);
 
-        repository.create(PROJECT_A, bare);
+        repository.create(PROJECT_A, bare, "de");
 
-        Actor found = repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1")).orElseThrow();
+        Actor found = repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1"), null).orElseThrow();
         assertNull(found.description());
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             assertFalse(handle.sparqlQuery().ask("ASK { GRAPH <" + ACTOR_GRAPH + "> { <"
@@ -362,28 +362,32 @@ class KognioRdfActorRepositoryTest {
     // ---- row multiplication: SHACL gates writes, not the store ----------------------------
 
     /**
-     * {@code actshapes:Actor-name} bounds the name to one value, but SHACL gates writes rather than
-     * the store: a store-first actor can carry two of them. The read path must group its
-     * rows and pick deterministically instead of returning an arbitrary, unlogged one - and must log
-     * the collapse, because {@code compareAndUpdate}'s replace-by-identity write would otherwise
-     * silently drop the other value on the very next update.
+     * {@code actshapes:ActorShape} bounds {@code type} to one value, but SHACL gates writes rather
+     * than the store: a store-first actor can carry two {@code rdf:type} triples. The read path
+     * must group its rows and pick deterministically instead of returning an arbitrary, unlogged
+     * one - and must log the collapse, because {@link #firstDistinctValue}'s replace-by-identity
+     * write would otherwise silently drop the other value on the very next update. Since
+     * kogn-io/arknet#520 {@code type} is the only field this guard still applies to - {@code name}/
+     * {@code description} are multilingual now and select a candidate via {@link DisplayLocale}
+     * instead, never logging a collapse (several untagged candidates are a legitimate
+     * language-selection input, not a defect).
      */
     @Test
-    void findByCodeGroupsARowMultipliedNameAndLogsAWarning() {
+    void findByCodeGroupsARowMultipliedTypeAndLogsAWarning() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        repository.create(PROJECT_A, stored);
-        insertTriple(stored.id().value().value(), NAME_PROPERTY, "\"Antragsbearbeiter\"");
+        repository.create(PROJECT_A, stored, "de");
+        insertTriple(stored.id().value().value(), VocabRdf.TYPE.getIRIString(), "<" + GROUP_ACTOR_TYPE + ">");
 
         ListAppender<ILoggingEvent> logs = attachLogAppender();
         try {
-            Actor found = repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1")).orElseThrow();
+            Actor found = repository.findByCode(PROJECT_A, new ActorCode("ACTOR-1"), null).orElseThrow();
 
-            assertTrue(List.of("Sachbearbeiter", "Antragsbearbeiter").contains(found.name()),
+            assertTrue(List.of(ActorType.HUMAN, ActorType.GROUP).contains(found.type()),
                     "must return one of the two legally co-existing values, not throw or return null");
             assertTrue(logs.list.stream().anyMatch(event -> event.getLevel() == Level.WARN
-                            && event.getFormattedMessage().contains("name")
+                            && event.getFormattedMessage().contains("type")
                             && event.getFormattedMessage().contains("2 distinct values")),
-                    "the collapsed second name must be logged, not silently discarded");
+                    "the collapsed second type must be logged, not silently discarded");
         } finally {
             detachLogAppender(logs);
         }
@@ -393,11 +397,10 @@ class KognioRdfActorRepositoryTest {
     @Test
     void findAllSurfacesARowMultipliedActorExactlyOnce() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        repository.create(PROJECT_A, stored);
-        insertTriple(stored.id().value().value(), DESCRIPTION_PROPERTY, "\"Eine Beschreibung.\"");
-        insertTriple(stored.id().value().value(), DESCRIPTION_PROPERTY, "\"Eine zweite Beschreibung.\"");
+        repository.create(PROJECT_A, stored, "de");
+        insertTriple(stored.id().value().value(), VocabRdf.TYPE.getIRIString(), "<" + GROUP_ACTOR_TYPE + ">");
 
-        List<Actor> all = repository.findAll(PROJECT_A);
+        List<Actor> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(1, all.size(), "one subject, one actor - regardless of how many rows it binds");
     }
@@ -413,13 +416,13 @@ class KognioRdfActorRepositoryTest {
      */
     @Test
     void findAllCodesKeepsTheCodeOfASubjectFindAllCannotMaterialiseAtAll() {
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null), "de");
         ActorId bare = freshId();
         insertTriple(bare.value().value(), VocabRdf.TYPE.getIRIString(), "<" + HUMAN_ACTOR_TYPE + ">");
         insertTriple(bare.value().value(), IDENTIFIER_PROPERTY, "\"ACTOR-2\"");
 
-        assertEquals(1, repository.findAll(PROJECT_A).size());
-        assertTrue(repository.findByCode(PROJECT_A, new ActorCode("ACTOR-2")).isEmpty());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
+        assertTrue(repository.findByCode(PROJECT_A, new ActorCode("ACTOR-2"), null).isEmpty());
         assertTrue(repository.findAllCodes(PROJECT_A).contains(new ActorCode("ACTOR-2")));
     }
 
@@ -434,7 +437,7 @@ class KognioRdfActorRepositoryTest {
      */
     @Test
     void findAllCodesCountsACodeHeldByABlankNodeSubject() {
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null), "de");
         String insertBlankNodeCode = "INSERT DATA { GRAPH <" + ACTOR_GRAPH + "> { [] a <"
                 + HUMAN_ACTOR_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \"ACTOR-2\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -444,7 +447,7 @@ class KognioRdfActorRepositoryTest {
             });
         }
 
-        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
         assertTrue(repository.findAllCodes(PROJECT_A).contains(new ActorCode("ACTOR-2")),
                 repository.findAllCodes(PROJECT_A).toString());
     }
@@ -463,7 +466,7 @@ class KognioRdfActorRepositoryTest {
      */
     @Test
     void findAllSkipsAFullyPopulatedBlankNodeSubjectInsteadOfCrashingTheWholeListing() {
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null), "de");
         String insertBlankNodeActor = "INSERT DATA { GRAPH <" + ACTOR_GRAPH + "> { [] a <"
                 + HUMAN_ACTOR_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \"ACTOR-2\" ; "
                 + "<" + NAME_PROPERTY + "> \"Anonymous\" ; "
@@ -475,11 +478,11 @@ class KognioRdfActorRepositoryTest {
             });
         }
 
-        List<Actor> all = repository.findAll(PROJECT_A);
+        List<Actor> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(1, all.size());
         assertEquals(new ActorCode("ACTOR-1"), all.get(0).code());
-        assertTrue(repository.findByCode(PROJECT_A, new ActorCode("ACTOR-2")).isEmpty());
+        assertTrue(repository.findByCode(PROJECT_A, new ActorCode("ACTOR-2"), null).isEmpty());
     }
 
     /**
@@ -488,10 +491,10 @@ class KognioRdfActorRepositoryTest {
      */
     @Test
     void findAllCodesCoversEveryActorType() {
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-2"), ActorType.SYSTEM, null));
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-3"), ActorType.LEGAL, null));
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-4"), ActorType.GROUP, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null), "de");
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-2"), ActorType.SYSTEM, null), "de");
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-3"), ActorType.LEGAL, null), "de");
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-4"), ActorType.GROUP, null), "de");
 
         assertEquals(List.of(new ActorCode("ACTOR-1"), new ActorCode("ACTOR-2"),
                 new ActorCode("ACTOR-3"), new ActorCode("ACTOR-4")),
@@ -501,10 +504,10 @@ class KognioRdfActorRepositoryTest {
 
     @Test
     void projectsAreIsolated() {
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null), "de");
 
-        assertFalse(repository.findByCode(PROJECT_B, new ActorCode("ACTOR-1")).isPresent());
-        assertTrue(repository.findAll(PROJECT_B).isEmpty());
+        assertFalse(repository.findByCode(PROJECT_B, new ActorCode("ACTOR-1"), null).isPresent());
+        assertTrue(repository.findAll(PROJECT_B, null).isEmpty());
     }
 
     // ---- findAllByIds: the batch lookup RoleService drives (ADR-37/kogn-io/arknet#405) --------
@@ -522,8 +525,8 @@ class KognioRdfActorRepositoryTest {
         Actor first = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN,
                 "Bearbeitet eingehende Antraege im Backoffice.");
         Actor second = actor(new ActorCode("ACTOR-2"), ActorType.SYSTEM, null);
-        repository.create(PROJECT_A, first);
-        repository.create(PROJECT_A, second);
+        repository.create(PROJECT_A, first, "de");
+        repository.create(PROJECT_A, second, "de");
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID());
 
         List<Actor> found = repository.findAllByIds(
@@ -537,7 +540,7 @@ class KognioRdfActorRepositoryTest {
     @Test
     void findAllByIdsIsIsolatedPerProject() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        repository.create(PROJECT_A, stored);
+        repository.create(PROJECT_A, stored, "de");
 
         assertEquals(List.of(), repository.findAllByIds(PROJECT_B, List.of(stored.id().value())));
     }
@@ -571,7 +574,7 @@ class KognioRdfActorRepositoryTest {
     @Test
     void everyWriteRecordsExactlyOneRevisionAndMovesTheQueryableHead() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        repository.create(PROJECT_A, stored);
+        repository.create(PROJECT_A, stored, "de");
         String subject = stored.id().value().value();
 
         List<String> afterCreate = revisionsOf(subject);
@@ -579,7 +582,7 @@ class KognioRdfActorRepositoryTest {
         assertEquals(afterCreate, headsOf(subject), "the head must point at the sole revision");
 
         repository.compareAndUpdate(PROJECT_A, new RevisionToken(afterCreate.get(0)),
-                new Actor(stored.id(), stored.code(), stored.type(), "Antragsbearbeiter", null));
+                new Actor(stored.id(), stored.code(), stored.type(), "Antragsbearbeiter", null), "de", "de", null);
 
         assertEquals(2, revisionsOf(subject).size(), "update must record exactly one more revision");
         List<String> heads = headsOf(subject);
@@ -591,10 +594,10 @@ class KognioRdfActorRepositoryTest {
 
     @Test
     void aRejectedWriteLeavesNoRevisionBehind() {
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null), "de");
 
         assertThrows(DuplicateActorCodeException.class,
-                () -> repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.SYSTEM, null)));
+                () -> repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.SYSTEM, null), "de"));
 
         String all = "SELECT ?r WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + "?r a <" + ArkprovVocabulary.REVISION_TYPE + "> } }";
@@ -609,10 +612,10 @@ class KognioRdfActorRepositoryTest {
     @Test
     void findCurrentByCodeReturnsTheStateTogetherWithTheCurrentHead() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, "Eine Beschreibung.");
-        repository.create(PROJECT_A, stored);
+        repository.create(PROJECT_A, stored, "de");
 
         ActorRepository.CurrentActor current =
-                repository.findCurrentByCode(PROJECT_A, new ActorCode("ACTOR-1")).orElseThrow();
+                repository.findCurrentByCode(PROJECT_A, new ActorCode("ACTOR-1"), null).orElseThrow();
 
         assertEquals(stored, current.value());
         assertEquals(headsOf(stored.id().value().value()), List.of(current.head().value()));
@@ -620,7 +623,7 @@ class KognioRdfActorRepositoryTest {
 
     @Test
     void findCurrentByCodeReturnsEmptyForAnUnknownCode() {
-        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, new ActorCode("ACTOR-9")));
+        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, new ActorCode("ACTOR-9"), null));
     }
 
     /**
@@ -632,19 +635,19 @@ class KognioRdfActorRepositoryTest {
     void compareAndUpdateRejectsAStaleHeadAndWritesNothing() {
         ActorId id = freshId();
         Actor original = new Actor(id, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Sachbearbeiter", null);
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "de");
         RevisionToken staleHead = currentHeadOf(original.code());
 
         // A concurrent writer commits first, moving the head away from what the loser observed.
         repository.compareAndUpdate(PROJECT_A, staleHead,
-                new Actor(id, original.code(), original.type(), "Renamed by the winner", null));
+                new Actor(id, original.code(), original.type(), "Renamed by the winner", null), "de", "de", null);
 
         Actor byTheLoser = new Actor(id, original.code(), original.type(), "Renamed by the loser", null);
         assertThrows(ActorConcurrentlyModifiedException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, staleHead, byTheLoser));
+                () -> repository.compareAndUpdate(PROJECT_A, staleHead, byTheLoser, "de", "de", null));
 
         assertEquals("Renamed by the winner",
-                repository.findByCode(PROJECT_A, original.code()).orElseThrow().name());
+                repository.findByCode(PROJECT_A, original.code(), null).orElseThrow().name());
         assertEquals(2, revisionsOf(id.value().value()).size(),
                 "the rejected write must not have recorded a revision");
     }
@@ -658,7 +661,7 @@ class KognioRdfActorRepositoryTest {
     void compareAndUpdateAcceptsANullHeadWhenTheResourceHasNoneYet() {
         ActorId id = freshId();
         Actor original = new Actor(id, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Sachbearbeiter", null);
-        repository.create(PROJECT_A, original);
+        repository.create(PROJECT_A, original, "de");
         // Strips the head the create recorded, leaving the state from before the revision trail existed.
         String dropHead = "DELETE WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
                 + id.value().value() + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
@@ -671,9 +674,9 @@ class KognioRdfActorRepositoryTest {
         assertNull(currentHeadOf(original.code()), "precondition: the actor carries no head");
 
         repository.compareAndUpdate(PROJECT_A, null,
-                new Actor(id, original.code(), original.type(), "Antragsbearbeiter", null));
+                new Actor(id, original.code(), original.type(), "Antragsbearbeiter", null), "de", "de", null);
 
-        assertEquals("Antragsbearbeiter", repository.findByCode(PROJECT_A, original.code()).orElseThrow().name());
+        assertEquals("Antragsbearbeiter", repository.findByCode(PROJECT_A, original.code(), null).orElseThrow().name());
         assertEquals(1, headsOf(id.value().value()).size(), "the write must have recorded a head again");
     }
 
@@ -682,11 +685,11 @@ class KognioRdfActorRepositoryTest {
     @Test
     void deleteRemovesTheActorAndItsTriples() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, "Bearbeitet eingehende Antraege.");
-        repository.create(PROJECT_A, stored);
+        repository.create(PROJECT_A, stored, "de");
 
         repository.delete(PROJECT_A, stored.code());
 
-        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isEmpty());
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isEmpty());
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             assertFalse(handle.sparqlQuery().ask("ASK { GRAPH <" + ACTOR_GRAPH + "> { <"
                     + stored.id().value().value() + "> ?p ?o } }"), "no triple of the deleted actor may remain");
@@ -706,7 +709,7 @@ class KognioRdfActorRepositoryTest {
     @Test
     void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        repository.create(PROJECT_A, stored);
+        repository.create(PROJECT_A, stored, "de");
         String subject = stored.id().value().value();
         String lastRevision = headsOf(subject).get(0);
 
@@ -733,7 +736,7 @@ class KognioRdfActorRepositoryTest {
     @Test
     void deleteRejectsAnActorStillReferencedByAFilledByEdgeInAForeignGraph() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        repository.create(PROJECT_A, stored);
+        repository.create(PROJECT_A, stored, "de");
         String reference = "INSERT DATA { GRAPH <https://example.org/roles> { <https://example.org/roles/1> <"
                 + ArkprocVocabulary.FILLED_BY + "> <" + stored.id().value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -744,7 +747,7 @@ class KognioRdfActorRepositoryTest {
         }
 
         assertThrows(ActorReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
-        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isPresent(),
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isPresent(),
                 "a rejected delete must leave the actor untouched");
     }
 
@@ -762,7 +765,7 @@ class KognioRdfActorRepositoryTest {
     @Test
     void deleteDoesNotRejectAnActorReferencedOnlyByAPrimaryRoleEdge() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        repository.create(PROJECT_A, stored);
+        repository.create(PROJECT_A, stored, "de");
         String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
                 + ArkreqVocabulary.PRIMARY_ROLE + "> <" + stored.id().value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -774,7 +777,7 @@ class KognioRdfActorRepositoryTest {
 
         repository.delete(PROJECT_A, stored.code());
 
-        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isEmpty(),
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isEmpty(),
                 "a primaryRole edge must no longer block the delete");
     }
 
@@ -790,7 +793,7 @@ class KognioRdfActorRepositoryTest {
     @Test
     void deleteRejectsAnActorStillReferencedByARolesFilledBy() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        repository.create(PROJECT_A, stored);
+        repository.create(PROJECT_A, stored, "de");
         WriteFunnel funnel = new WriteFunnel(lifecycle, KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT),
                 WriteFunnel.DEFAULT_WRITE_CONFLICT);
         KognioRdfRoleRepository roles = new KognioRdfRoleRepository(lifecycle, DisplayLocale.DEFAULT, funnel);
@@ -800,17 +803,17 @@ class KognioRdfActorRepositoryTest {
                 List.of(stored.id())), "de");
 
         assertThrows(ActorReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
-        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isPresent(),
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isPresent(),
                 "a rejected delete must leave the actor untouched");
     }
 
     @Test
     void projectsAreIsolatedForDelete() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        repository.create(PROJECT_A, stored);
+        repository.create(PROJECT_A, stored, "de");
 
         assertThrows(ActorNotFoundException.class, () -> repository.delete(PROJECT_B, stored.code()));
-        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isPresent(),
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isPresent(),
                 "a delete in another project must not touch this project's actor");
     }
 
@@ -823,7 +826,7 @@ class KognioRdfActorRepositoryTest {
     @Test
     void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
-        repository.create(PROJECT_A, stored);
+        repository.create(PROJECT_A, stored, "de");
         String lastRevision = headsOf(stored.id().value().value()).get(0);
 
         repository.delete(PROJECT_A, stored.code());
@@ -835,9 +838,9 @@ class KognioRdfActorRepositoryTest {
     /** A living actor's revision carries no retained code - only a tombstoned one does. */
     @Test
     void findRetainedCodesIgnoresLivingActorsAndOtherProjects() {
-        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null), "de");
         Actor deleted = actor(new ActorCode("ACTOR-2"), ActorType.SYSTEM, null);
-        repository.create(PROJECT_A, deleted);
+        repository.create(PROJECT_A, deleted, "de");
 
         repository.delete(PROJECT_A, deleted.code());
 
@@ -903,7 +906,7 @@ class KognioRdfActorRepositoryTest {
 
     /** The head a caller would observe right now - what a well-behaved compare-and-set passes. */
     private RevisionToken currentHeadOf(ActorCode code) {
-        return repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
+        return repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
     }
 
     private List<String> revisionsOf(String subjectIri) {

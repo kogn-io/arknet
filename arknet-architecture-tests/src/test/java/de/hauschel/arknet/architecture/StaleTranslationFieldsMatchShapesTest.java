@@ -28,9 +28,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import de.hauschel.arknet.actor.adapter.mcp.ActorMcpTools;
 import de.hauschel.arknet.actor.adapter.mcp.RoleMcpTools;
 import de.hauschel.arknet.adr.adapter.mcp.AdrMcpTools;
+import de.hauschel.arknet.bc.adapter.mcp.BoundedContextMcpTools;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
@@ -99,7 +102,10 @@ class StaleTranslationFieldsMatchShapesTest {
                 Arguments.of(UbiquitousLanguageMcpTools.class, ArkreqVocabulary.CONCEPT_TYPE, TERM_LABEL_NEVER_STALE),
                 Arguments.of(RoleMcpTools.class, ArkprocVocabulary.ROLE_TYPE, Set.of()),
                 Arguments.of(AdrMcpTools.class, ArkarchVocabulary.ADR_TYPE, Set.of()),
-                Arguments.of(ProjectMcpTools.class, ArkprjVocabulary.PROJECT_TYPE, Set.of()));
+                Arguments.of(ProjectMcpTools.class, ArkprjVocabulary.PROJECT_TYPE, Set.of()),
+                // kogn-io/arknet#520: the last two untagged prosa fields became language-tagged.
+                Arguments.of(ActorMcpTools.class, ArkprocVocabulary.ACTOR_TYPE, Set.of()),
+                Arguments.of(BoundedContextMcpTools.class, ArkdddVocabulary.BOUNDED_CONTEXT_TYPE, Set.of()));
     }
 
     @ParameterizedTest(name = "{0}")

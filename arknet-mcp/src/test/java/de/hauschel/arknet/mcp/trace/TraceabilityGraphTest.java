@@ -160,7 +160,8 @@ class TraceabilityGraphTest {
         // glossary term): never usesTerm'd, never filledBy'd, never referenced by any use case -
         // must show up in actorIris() regardless (issue #147).
         actors.create(PROJECT, new Actor(
-                new ActorId(ResourceId.of(ACTOR_IRI)), new ActorCode("ACTOR-1"), ActorType.HUMAN, "Customer", null));
+                new ActorId(ResourceId.of(ACTOR_IRI)), new ActorCode("ACTOR-1"), ActorType.HUMAN, "Customer", null),
+                "en");
         // Role (ADR-37/kogn-io/arknet#405 Part C, its own resource type in the same register):
         // never usesTerm'd but referenced as UC1's primary role - must show up in roleIris()
         // independent of that reference (issue #147), the same way the actor above does.
@@ -212,7 +213,7 @@ class TraceabilityGraphTest {
         boundedContexts.create(PROJECT, new BoundedContext(
                 new BoundedContextId(ResourceId.of(BC_1_IRI)), new BoundedContextCode("BC-1"), "Ordering",
                 "Wir verarbeiten Bestellungen.", null, null,
-                List.of(new de.hauschel.arknet.bc.domain.TermRef(ResourceId.of(TERM_4_IRI)))));
+                List.of(new de.hauschel.arknet.bc.domain.TermRef(ResourceId.of(TERM_4_IRI)))), "en");
 
         StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
         return TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
@@ -806,7 +807,7 @@ class TraceabilityGraphTest {
          */
         private void seedActor(String actorIri, ActorCode code, ActorType type, String name) {
             ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-            actors.create(PROJECT, new Actor(new ActorId(ResourceId.of(actorIri)), code, type, name, null));
+            actors.create(PROJECT, new Actor(new ActorId(ResourceId.of(actorIri)), code, type, name, null), "en");
         }
 
         /** Overwrites a requirement's {@code dcterms:description} with raw prose, for prose-matching tests. */
@@ -899,7 +900,7 @@ class TraceabilityGraphTest {
                     lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
             boundedContexts.create(PROJECT, new BoundedContext(
                     new BoundedContextId(ResourceId.of(bc2Iri)), new BoundedContextCode("BC-2"), "Billing",
-                    "Wir stellen Rechnungen.", null, null, List.of()));
+                    "Wir stellen Rechnungen.", null, null, List.of()), "en");
             ContextRelationshipRepository contextRelationships =
                     KognioRdfContextRelationshipRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
             contextRelationships.create(PROJECT, new ContextRelationship(

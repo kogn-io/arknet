@@ -123,9 +123,9 @@ arkddd:hasContext
 arkddd:domainVision
     a owl:DatatypeProperty ;
     rdfs:domain  arkddd:BoundedContext ;
-    rdfs:range   xsd:string ;
+    rdfs:range   rdfs:Literal ;
     rdfs:label   "domain vision"@en ;
-    rdfs:comment "Ein Satz, der beschreibt, was dieser Bounded Context leistet und warum er existiert."@de .
+    rdfs:comment "Ein Satz, der beschreibt, was dieser Bounded Context leistet und warum er existiert. Mehrsprachig: rdfs:Literal statt xsd:string, weil shapes:BoundedContext-domainVision je Sprach-Tag ein eigenes (dann rdf:langString-) Literal erlaubt (sh:uniqueLang, kogn-io/arknet#520)."@de .
 
 arkddd:ownedBy
     a owl:DatatypeProperty ;

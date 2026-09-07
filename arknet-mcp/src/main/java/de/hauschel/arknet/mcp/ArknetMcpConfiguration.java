@@ -634,9 +634,10 @@ public class ArknetMcpConfiguration {
     @Bean
     BoundedContextMcpTools boundedContextMcpTools(
             final BoundedContextService service, final ResolveTerms resolveTerms,
-            final ProjectResolver projectResolver) {
+            final ProjectResolver projectResolver, final StaleTranslationHint staleTranslationHint) {
         return new BoundedContextMcpTools(
-                service, service, service, service, service, resolveTerms, projectResolver);
+                service, service, service, service, service, service, service, resolveTerms, projectResolver,
+                staleTranslationHint);
     }
 
     // --- ADR hexagon -----------------------------------------------------------
@@ -777,8 +778,9 @@ public class ArknetMcpConfiguration {
      * dataset as the requirements and use cases that will eventually refer to it.
      */
     @Bean
-    ActorRepository actorRepository(final DatasetLifecycle datasetLifecycle, final WriteFunnel actorWriteFunnel) {
-        return KognioRdfActorRepositoryFactory.over(datasetLifecycle, actorWriteFunnel);
+    ActorRepository actorRepository(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale,
+            final WriteFunnel actorWriteFunnel) {
+        return KognioRdfActorRepositoryFactory.over(datasetLifecycle, displayLocale, actorWriteFunnel);
     }
 
     @Bean
@@ -793,8 +795,10 @@ public class ArknetMcpConfiguration {
      * as a business code and no Borrowed In-Port to justify.
      */
     @Bean
-    ActorMcpTools actorMcpTools(final ActorService service, final ProjectResolver projectResolver) {
-        return new ActorMcpTools(service, service, service, service, service, projectResolver);
+    ActorMcpTools actorMcpTools(final ActorService service, final ProjectResolver projectResolver,
+            final StaleTranslationHint staleTranslationHint) {
+        return new ActorMcpTools(service, service, service, service, service, service, projectResolver,
+                staleTranslationHint);
     }
 
     /**

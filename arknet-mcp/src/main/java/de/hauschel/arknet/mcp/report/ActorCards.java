@@ -25,9 +25,11 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <p><strong>No glossary mark-up, no borrowed port.</strong> An actor carries no reference to a
  * term, a requirement or a bounded context in this scope (see {@code ActorMcpTools}'s own
- * "No borrowed neighbour port" note) and its name/description are plain, untagged literals - so
- * unlike {@link BoundedContextCards} or {@link RequirementCards} there is no prose to mark up
- * against the {@link Glossary} and no neighbour hexagon's read in-port to borrow.</p>
+ * "No borrowed neighbour port" note) - so unlike {@link BoundedContextCards} or
+ * {@link RequirementCards} there is no prose to mark up against the {@link Glossary} and no
+ * neighbour hexagon's read in-port to borrow. {@code displayLocale} IS a real parameter since
+ * kogn-io/arknet#520 - an actor's {@code name}/{@code description} are language-tagged, mirroring
+ * {@link RoleCards}.</p>
  */
 public final class ActorCards {
 
@@ -44,11 +46,14 @@ public final class ActorCards {
     }
 
     /**
-     * @param projectId the project to read
+     * @param projectId     the project to read
+     * @param displayLocale the resolved project's own configured default display language (BCP-47
+     *                      tag), or {@code null} if it has none - passed straight through to
+     *                      {@code actor_list}'s own port, mirroring {@link RoleCards}
      * @return the actor section, ordered by business code
      */
-    public ModelSection section(final ProjectId projectId) {
-        final List<ModelCard> cards = actors.list(projectId).stream()
+    public ModelSection section(final ProjectId projectId, final String displayLocale) {
+        final List<ModelCard> cards = actors.list(projectId, displayLocale).stream()
                 .sorted(Comparator.comparing(actor -> actor.code().value(), BusinessCodes.ORDER))
                 .map(ActorCards::card)
                 .toList();

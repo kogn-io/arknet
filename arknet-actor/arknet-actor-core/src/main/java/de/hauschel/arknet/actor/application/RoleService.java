@@ -248,7 +248,7 @@ public class RoleService
         List<ActorId> resolved = new ArrayList<>();
         for (String rawCode : codes) {
             ActorCode actorCode = new ActorCode(rawCode);
-            Actor actor = actorRepository.findByCode(projectId, actorCode)
+            Actor actor = actorRepository.findByCode(projectId, actorCode, null)
                     .orElseThrow(() -> new ActorNotFoundException(projectId, actorCode));
             resolved.add(actor.id());
         }

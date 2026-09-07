@@ -17,6 +17,7 @@ import de.hauschel.arknet.bc.application.port.out.RevisionToken;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
+import de.hauschel.arknet.bc.domain.BoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
@@ -29,7 +30,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  *
  * <p>A hand-rolled fake (not a mock): it actually stores bounded contexts, keyed by project
  * then opaque identity, so the service's policy can be exercised end-to-end. Insertion order is
- * preserved to make {@link #findAll(ProjectId)} assertions deterministic. {@link #create}
+ * preserved to make {@link #findAll(ProjectId, String)} assertions deterministic. {@link #create}
  * mirrors the real out-adapter's in-transaction guards: an identity collision rejects with
  * {@link ResourceAlreadyExistsException}, a business-code collision with
  * {@link DuplicateBoundedContextCodeException}. {@link #compareAndUpdate} mirrors the same
@@ -43,11 +44,21 @@ import de.hauschel.arknet.kernel.ResourceId;
  * #findCurrentByCode} hands it out alongside the bounded context, {@link #compareAndUpdate}
  * rejects a stale one, exactly the CAS contract the real adapter enforces via
  * {@code arkprov:head}.</p>
+ *
+ * <p><strong>Multilingual, one value per field, not a per-language set (kogn-io/arknet#520).
+ * </strong> Mirrors {@code InMemoryConstraintRepository}/{@code InMemoryRoleRepository} exactly:
+ * this fake exercises {@code BoundedContextService}'s per-field language resolution, not the real
+ * adapter's capture-preserve-reattach of <em>other</em> language variants, which
+ * {@code KognioRdfBoundedContextRepositoryMultilingualTest} pins against a real store instead.
+ * {@code displayLocale} is therefore accepted and ignored, and {@link #findAllDisplayFallback}
+ * always returns an empty map.</p>
  */
 final class InMemoryBoundedContextRepository implements BoundedContextRepository {
 
     private final Map<ProjectId, Map<BoundedContextId, BoundedContext>> byProject = new LinkedHashMap<>();
     private final Map<BoundedContextId, RevisionToken> headByIdentity = new LinkedHashMap<>();
+    private final Map<BoundedContextId, String> nameLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<BoundedContextId, String> domainVisionLanguageByIdentity = new LinkedHashMap<>();
 
     /**
      * Codes seeded by {@link #seedUnmaterialisableCode} - deliberately kept out of
@@ -60,7 +71,7 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
     private final Map<ProjectId, List<BoundedContextCode>> unmaterialisableByProject = new LinkedHashMap<>();
 
     @Override
-    public void create(ProjectId projectId, BoundedContext boundedContext) {
+    public void create(ProjectId projectId, BoundedContext boundedContext, String language) {
         Map<BoundedContextId, BoundedContext> contexts = byProject.computeIfAbsent(projectId,
                 k -> new LinkedHashMap<>());
         if (contexts.containsKey(boundedContext.id())) {
@@ -72,10 +83,15 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
         }
         contexts.put(boundedContext.id(), boundedContext);
         headByIdentity.put(boundedContext.id(), new RevisionToken(UUID.randomUUID().toString()));
+        nameLanguageByIdentity.put(boundedContext.id(), language);
+        domainVisionLanguageByIdentity.put(boundedContext.id(), language);
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated) {
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated,
+            String nameLanguage, String domainVisionLanguage, String defaultLanguage) {
+        // Nothing multi-valued to sweep in this fake - defaultLanguage only matters to the real
+        // out-adapter's language-variant preservation (see the class javadoc).
         Map<BoundedContextId, BoundedContext> contexts = byProject.getOrDefault(projectId, Map.of());
         if (!contexts.containsKey(updated.id())) {
             throw new BoundedContextNotFoundException(projectId, updated.code());
@@ -90,25 +106,37 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
         }
         contexts.put(updated.id(), updated);
         headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));
+        nameLanguageByIdentity.put(updated.id(), nameLanguage);
+        domainVisionLanguageByIdentity.put(updated.id(), domainVisionLanguage);
     }
 
     @Override
-    public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code) {
+    public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code, String displayLocale) {
         return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(bc -> bc.code().equals(code))
                 .findFirst();
     }
 
     @Override
-    public Optional<CurrentBoundedContext> findCurrentByCode(ProjectId projectId, BoundedContextCode code) {
-        return findByCode(projectId, code)
-                .map(boundedContext ->
-                        new CurrentBoundedContext(boundedContext, headByIdentity.get(boundedContext.id())));
+    public Optional<CurrentBoundedContext> findCurrentByCode(ProjectId projectId, BoundedContextCode code,
+            String defaultLanguage) {
+        return findByCode(projectId, code, null)
+                .map(boundedContext -> new CurrentBoundedContext(boundedContext,
+                        headByIdentity.get(boundedContext.id()),
+                        nameLanguageByIdentity.get(boundedContext.id()),
+                        domainVisionLanguageByIdentity.get(boundedContext.id())));
     }
 
     @Override
-    public List<BoundedContext> findAll(ProjectId projectId) {
+    public List<BoundedContext> findAll(ProjectId projectId, String displayLocale) {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /** Nothing multi-valued to fall back among in this plain in-memory fake - always empty. */
+    @Override
+    public Map<BoundedContextCode, BoundedContextDisplayFallback> findAllDisplayFallback(
+            ProjectId projectId, String displayLocale) {
+        return Map.of();
     }
 
     /**

@@ -19,9 +19,14 @@ import java.util.Objects;
  * @param code         human-readable business label (e.g. {@code BC-1}); maps to
  *                     {@code dcterms:identifier}
  * @param name         the context's human-readable name (e.g. {@code OrderManagement}); maps to
- *                     {@code arknet:name} and is required by the bounded-context SHACL shape
+ *                     {@code arknet:name} and is required by the bounded-context SHACL shape.
+ *                     Multilingual since kogn-io/arknet#520 (SHACL {@code sh:uniqueLang}), without
+ *                     an FR-10 label-equality guard: a context is nowhere referenced by its name
+ *                     (every edge to it runs over {@link BoundedContextCode}), so a name free to
+ *                     differ per language breaks no reference and creates no ambiguous resolution
  * @param domainVision one sentence stating what this context does and why it exists; maps to
- *                     {@code arkddd:domainVision} and is required by the SHACL shape
+ *                     {@code arkddd:domainVision} and is required by the SHACL shape. Multilingual
+ *                     since kogn-io/arknet#520, the same mechanism as {@link #name()}
  * @param subdomain    strategic subdomain classification; maps to {@code arkddd:partOf} (a
  *                     derived {@code arkddd:Subdomain} node carrying {@code arkddd:subdomainType})
  *                     - a {@code sh:Warning}-only property. Optional (may be

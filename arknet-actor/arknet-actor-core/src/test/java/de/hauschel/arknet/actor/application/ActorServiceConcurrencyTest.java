@@ -70,14 +70,14 @@ class ActorServiceConcurrencyTest {
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
         RaceOnFirstFindAllCodesRepository racing =
-                new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(WS, newActor()));
+                new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(WS, newActor(), "de"));
         ActorService underTest = new ActorService(racing, resourceIdFactory);
 
-        Actor result = underTest.add(WS, newActor());
+        Actor result = underTest.add(WS, newActor(), "de");
 
         assertEquals(new ActorCode("ACTOR-2"), result.code());
-        assertEquals(2, store.findAll(WS).size());
-        assertTrue(store.findAll(WS).stream().map(Actor::code).toList()
+        assertEquals(2, store.findAll(WS, null).size());
+        assertTrue(store.findAll(WS, null).stream().map(Actor::code).toList()
                 .containsAll(List.of(new ActorCode("ACTOR-1"), new ActorCode("ACTOR-2"))));
     }
 
@@ -88,17 +88,17 @@ class ActorServiceConcurrencyTest {
      */
     @Test
     void concurrentUpdateCallsForDifferentFieldsBothSurvive() {
-        ActorCode code = otherCaller.add(WS, newActor()).code();
+        ActorCode code = otherCaller.add(WS, newActor(), "de").code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
-                () -> otherCaller.update(WS, code, null, "Beschreibung des anderen Aufrufers."));
+                () -> otherCaller.update(WS, code, null, "Beschreibung des anderen Aufrufers.", "de", null));
         ActorService underTest = new ActorService(racing, resourceIdFactory);
 
-        Actor result = underTest.update(WS, code, "Antragsbearbeiter", null);
+        Actor result = underTest.update(WS, code, "Antragsbearbeiter", null, "de", null);
 
         assertEquals("Antragsbearbeiter", result.name());
         assertEquals("Beschreibung des anderen Aufrufers.", result.description(),
                 "the retry must build on the state it re-read, not on its stale first read");
-        Actor stored = store.findByCode(WS, code).orElseThrow();
+        Actor stored = store.findByCode(WS, code, null).orElseThrow();
         assertEquals("Antragsbearbeiter", stored.name());
         assertEquals("Beschreibung des anderen Aufrufers.", stored.description());
     }
@@ -110,11 +110,11 @@ class ActorServiceConcurrencyTest {
      */
     @Test
     void updateGivesUpAfterExhaustingRetriesAgainstPermanentContention() {
-        ActorCode code = otherCaller.add(WS, newActor()).code();
+        ActorCode code = otherCaller.add(WS, newActor(), "de").code();
         ActorService underTest = new ActorService(new AlwaysConflictingRepository(store), resourceIdFactory);
 
         assertThrows(ActorConcurrentlyModifiedException.class,
-                () -> underTest.update(WS, code, "Antragsbearbeiter", null));
+                () -> underTest.update(WS, code, "Antragsbearbeiter", null, "de", null));
     }
 
     /**
@@ -123,17 +123,17 @@ class ActorServiceConcurrencyTest {
      */
     @Test
     void anUnchangedUpdateWritesNothingEvenUnderPermanentContention() {
-        Actor added = otherCaller.add(WS, newActor());
+        Actor added = otherCaller.add(WS, newActor(), "de");
         ActorService underTest = new ActorService(new AlwaysConflictingRepository(store), resourceIdFactory);
 
-        Actor result = underTest.update(WS, added.code(), added.name(), added.description());
+        Actor result = underTest.update(WS, added.code(), null, null, null, null);
 
         assertEquals(added, result);
     }
 
     private static NewActor newActor() {
         return new NewActor(ActorType.HUMAN, "Sachbearbeiter",
-                "Bearbeitet eingehende Antraege im Backoffice.");
+                "Bearbeitet eingehende Antraege im Backoffice.", "de");
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
@@ -194,8 +194,8 @@ class ActorServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code) {
-            Optional<CurrentActor> result = delegate.findCurrentByCode(projectId, code);
+        public Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code, String defaultLanguage) {
+            Optional<CurrentActor> result = delegate.findCurrentByCode(projectId, code, defaultLanguage);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -212,9 +212,10 @@ class ActorServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated,
+                String nameLanguage, String descriptionLanguage, String defaultLanguage) {
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
-            delegate.findByCode(projectId, updated.code())
+            delegate.findByCode(projectId, updated.code(), null)
                     .orElseThrow(() -> new ActorNotFoundException(projectId, updated.code()));
             throw new ActorConcurrentlyModifiedException(projectId, updated.code());
         }

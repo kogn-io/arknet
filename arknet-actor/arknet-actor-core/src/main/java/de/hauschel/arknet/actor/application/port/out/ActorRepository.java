@@ -4,11 +4,13 @@
 package de.hauschel.arknet.actor.application.port.out;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorConcurrentlyModifiedException;
+import de.hauschel.arknet.actor.domain.ActorDisplayFallback;
 import de.hauschel.arknet.actor.domain.ActorNotFoundException;
 import de.hauschel.arknet.actor.domain.ActorReferencedException;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
@@ -34,6 +36,12 @@ import de.hauschel.arknet.kernel.ResourceId;
  * {@link #compareAndUpdate} therefore make that distinction explicit at the port - and there is no
  * unconditional update: every correction to an already-created actor goes through the
  * compare-and-set guard, so a guarded write path can never be bypassed by accident.</p>
+ *
+ * <p><strong>Multilingual write/read shape, mirroring {@code RoleRepository} (kogn-io/
+ * arknet#520).</strong> {@link #create}/{@link #compareAndUpdate} take their own {@code language}
+ * arguments, {@link #findByCode}/{@link #findAll} take a {@code displayLocale} override, and
+ * {@link #findAllDisplayFallback} answers the fallback-visibility companion query - the same shape
+ * {@code RoleRepository} carries, not the untagged one this port used before kogn-io/arknet#520.</p>
  */
 public interface ActorRepository {
 
@@ -42,6 +50,10 @@ public interface ActorRepository {
      *
      * @param projectId the project (architecture model) to store the actor in
      * @param actor     the actor to create
+     * @param language  the BCP-47 language tag {@code actor.name()} and, if present,
+     *                  {@code actor.description()} are written in, or {@code null} for plain,
+     *                  untagged literals - the same tag applies to both, since a freshly created
+     *                  actor is written whole in one call
      * @throws ResourceAlreadyExistsException if an actor with this identity already exists
      * @throws DuplicateActorCodeException    if another actor already carries this actor's
      *                                        {@link ActorCode} - identity collision and
@@ -52,7 +64,7 @@ public interface ActorRepository {
      *                          {@code arknet-persistence-support}, a module
      *                          {@code arknet-actor-core} must not depend on.
      */
-    void create(ProjectId projectId, Actor actor);
+    void create(ProjectId projectId, Actor actor, String language);
 
     /**
      * Replaces an existing actor by identity, but only if its current concurrency token still
@@ -76,12 +88,27 @@ public interface ActorRepository {
      * brand-new identity, enforced here too rather than left to the fact that no caller in this
      * codebase currently changes the code on an update.</p>
      *
-     * @param projectId    the project (architecture model) the actor lives in
-     * @param expectedHead the {@link RevisionToken} the caller last observed for this actor (from
-     *                     {@link #findCurrentByCode}), or {@code null} if the caller expects no
-     *                     revision to exist yet
-     * @param updated      the actor to store in place of the current one, if its head still matches
-     *                     {@code expectedHead}
+     * @param projectId          the project (architecture model) the actor lives in
+     * @param expectedHead       the {@link RevisionToken} the caller last observed for this actor
+     *                           (from {@link #findCurrentByCode}), or {@code null} if the caller
+     *                           expects no revision to exist yet
+     * @param updated            the actor to store in place of the current one, if its head still
+     *                           matches {@code expectedHead}
+     * @param nameLanguage       the BCP-47 language tag {@code updated.name()} is written in for
+     *                           this call, or {@code null} for a plain, untagged literal. A call
+     *                           that leaves the name's content unchanged must pass through the tag
+     *                           the value it read was itself resolved under (see
+     *                           {@link CurrentActor#nameLanguage()}), so the write is a scoped
+     *                           no-op on that one language variant; every other language-tagged
+     *                           variant of {@code name} survives untouched
+     * @param descriptionLanguage the same as {@code nameLanguage}, for {@code updated.description()}
+     *                           (see {@link CurrentActor#descriptionLanguage()} for the pass-through
+     *                           case) - independent of {@code nameLanguage}
+     * @param defaultLanguage    the target project's configured default language, or {@code null}
+     *                           if it has none - used only to decide whether an existing
+     *                           <em>untagged</em> literal on {@code name}/{@code description}
+     *                           should be swept away rather than preserved (issue #258's lazy sweep,
+     *                           mirroring {@code RoleRepository#compareAndUpdate} exactly)
      * @throws ActorNotFoundException              if no actor with this identity exists at all
      * @throws ActorConcurrentlyModifiedException  if {@code expectedHead} no longer matches the
      *                                             stored actor's current head - a concurrent write
@@ -91,46 +118,81 @@ public interface ActorRepository {
      * @throws RuntimeException if {@code updated} violates a SHACL write constraint (see
      *                          {@link #create} for why the type is not fixed here).
      */
-    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated);
+    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated,
+            String nameLanguage, String descriptionLanguage, String defaultLanguage);
 
     /**
      * Finds an actor by its human-readable business code within a project.
      *
-     * @param projectId the project (architecture model) to look up the actor in
-     * @param code      the actor code (e.g. {@code ACTOR-1})
+     * @param projectId     the project (architecture model) to look up the actor in
+     * @param code          the actor code (e.g. {@code ACTOR-1})
+     * @param displayLocale the BCP-47 language tag the caller wants {@code name}/
+     *                      {@code description} shown in, overriding this repository's own
+     *                      configured display-language preference for this one call, or
+     *                      {@code null} to use that preference unchanged
      * @return the actor if present, otherwise {@link Optional#empty()}
      */
-    Optional<Actor> findByCode(ProjectId projectId, ActorCode code);
+    Optional<Actor> findByCode(ProjectId projectId, ActorCode code, String displayLocale);
 
     /**
      * Reads an actor's current state together with its concurrency token (recorded by the last
      * write through this port). State and token come from one query call - one snapshot -
      * which is the load-bearing guarantee here, not an ordering of clauses within that query. Backs
      * the read side of the read-modify-write round trip {@link #compareAndUpdate} guards the write
-     * side of.
+     * side of. Mirrors {@code RoleRepository#findCurrentByCode} exactly, including which language
+     * variant this read projects through (the target project's own configured default, not the
+     * reading process's own preference - issue #456).
      *
-     * @param projectId the project (architecture model) to look up the actor in
-     * @param code      the actor code (e.g. {@code ACTOR-1})
+     * @param projectId       the project (architecture model) to look up the actor in
+     * @param code            the actor code (e.g. {@code ACTOR-1})
+     * @param defaultLanguage the project's configured default language, or {@code null} if it has
+     *                        none - the BCP-47 tag {@code name}/{@code description} are selected
+     *                        under, degrading along the usual fallback chain
      * @return the actor and its current head, or {@link Optional#empty()} if no actor with this
      *         code exists
      */
-    Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code);
+    Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code, String defaultLanguage);
 
     /**
      * An actor's state paired with its current concurrency token (the {@link RevisionToken}, or
      * {@code null} if no write has ever been recorded for this actor), as read together by
      * {@link #findCurrentByCode}.
+     *
+     * @param value              the actor as currently read
+     * @param head               the concurrency token, or {@code null}
+     * @param nameLanguage       the BCP-47 language tag of the specific {@code name} literal
+     *                           {@code value.name()} was selected from (or {@code null} if that
+     *                           literal is untagged) - a read-modify-write round trip that does not
+     *                           itself intend to change {@code name} must pass this straight
+     *                           through to {@link #compareAndUpdate}'s {@code nameLanguage}
+     * @param descriptionLanguage the same as {@code nameLanguage}, for {@code value.description()}
      */
-    record CurrentActor(Actor value, RevisionToken head) {
+    record CurrentActor(Actor value, RevisionToken head, String nameLanguage, String descriptionLanguage) {
     }
 
     /**
      * Returns all actors stored in a project.
      *
-     * @param projectId the project (architecture model) to list actors from
+     * @param projectId     the project (architecture model) to list actors from
+     * @param displayLocale the BCP-47 language tag the caller wants each actor's {@code name}/
+     *                      {@code description} shown in, overriding this repository's own
+     *                      configured display-language preference for this one call, or
+     *                      {@code null} to use that preference unchanged
      * @return all actors, never {@code null}
      */
-    List<Actor> findAll(ProjectId projectId);
+    List<Actor> findAll(ProjectId projectId, String displayLocale);
+
+    /**
+     * Companion to {@link #findAll}: not the displayed value, but whether displaying it required
+     * falling back past the requested/project-default language tier (kogn-io/arknet#520) - mirrors
+     * {@code RoleRepository#findAllDisplayFallback} exactly.
+     *
+     * @param projectId     the project (architecture model) to list actors from
+     * @param displayLocale the same override {@link #findAll} accepts
+     * @return see
+     *         {@link de.hauschel.arknet.actor.application.port.in.DescribeActorDisplayFallback#describe}
+     */
+    Map<ActorCode, ActorDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale);
 
     /**
      * Returns the business code of every actor registered in a project, read independently of
@@ -202,7 +264,10 @@ public interface ActorRepository {
      * and left it with no consumer at all, inside this hexagon or outside it.
      *
      * <p>Not a per-id existence check: an id absent from the project (or not an actor at all) is
-     * simply absent from the result, never an error.</p>
+     * simply absent from the result, never an error. Uses this repository's own configured
+     * display-language preference (no {@code displayLocale} override) - {@code RoleService} resolves
+     * an occupant's name only for display in the reading process's own language, mirroring how
+     * {@code findAllByIds} behaved before kogn-io/arknet#520.</p>
      *
      * @param projectId the project (architecture model) to look up actors in
      * @param ids       the opaque identities to resolve; an empty list yields an empty result

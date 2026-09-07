@@ -121,8 +121,8 @@ class RoleServiceConcurrencyTest {
      */
     @Test
     void aReorderedButOtherwiseIdenticalOccupancyIsStillANoOp() {
-        actorRepository.create(WS, actor("ACTOR-1", "Erstbesetzung"));
-        actorRepository.create(WS, actor("ACTOR-2", "Zweitbesetzung"));
+        actorRepository.create(WS, actor("ACTOR-1", "Erstbesetzung"), "de");
+        actorRepository.create(WS, actor("ACTOR-2", "Zweitbesetzung"), "de");
         RoleDetail added = otherCaller.add(WS, new NewRole("Case Handler", null, List.of("ACTOR-1", "ACTOR-2"), "en"),
                 DEFAULT_LANGUAGE);
         RoleService underTest = new RoleService(new AlwaysConflictingRepository(store), actorRepository,

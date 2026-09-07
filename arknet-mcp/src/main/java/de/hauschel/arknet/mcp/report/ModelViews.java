@@ -105,7 +105,7 @@ public final class ModelViews {
         final List<String> failures = new ArrayList<>();
         final Glossary glossary = glossary(projectId, displayLocale, failures);
         collect(sections, failures, BoundedContextCards.SECTION_TITLE,
-                () -> boundedContexts.section(projectId, glossary));
+                () -> boundedContexts.section(projectId, displayLocale, glossary));
         collect(sections, failures, RequirementCards.SECTION_TITLE,
                 () -> requirements.section(projectId, displayLocale, glossary));
         collect(sections, failures, ConstraintCards.SECTION_TITLE,
@@ -113,7 +113,7 @@ public final class ModelViews {
         collect(sections, failures, UseCaseCards.SECTION_TITLE,
                 () -> useCases.section(projectId, displayLocale, glossary));
         collect(sections, failures, AdrCards.SECTION_TITLE, () -> adrs.section(projectId, glossary));
-        collect(sections, failures, ActorCards.SECTION_TITLE, () -> actors.section(projectId));
+        collect(sections, failures, ActorCards.SECTION_TITLE, () -> actors.section(projectId, displayLocale));
         collect(sections, failures, RoleCards.SECTION_TITLE, () -> roles.section(projectId, displayLocale));
         collect(sections, failures, TermCards.SECTION_TITLE, () -> TermCards.section(glossary));
         return new Views(CodeReferences.markUp(sections), failures);
