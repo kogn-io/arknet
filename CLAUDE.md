@@ -17,7 +17,7 @@
 - Pipes & Filters: Turtle → Parse → Validate (SHACL) → Triple Store (RDF4J) → SPARQL → Template → AsciiDoc → HTML/PDF
 - Delivery: **MCP-first** + CLI als Convenience-Layer
 - Store: lokaler Single-User-Client, Store hinter domaennahem Out-Port austauschbar.
-Arknets eigene Architekturentscheidungen stehen im arknet-Store (`adr_*`-Tools des Moduls arknet-adr) und als erzeugtes Abbild unter `docs/adr-export/`; die Regeln dazu stehen in `CONTRIBUTING.md`.
+Arknets eigene Architekturentscheidungen sind Records im arknet-Store (`adr_*`-Tools des Moduls arknet-adr); `docs/adr-export/` ist ihr erzeugtes Abbild und nie Ausgangspunkt einer Aenderung. Die Regeln dazu stehen in `CONTRIBUTING.md`.
 - CLI: **nicht implementiert**. Produktvision haelt an einem CLI als CI/CD-Convenience-Layer fest -- ein store-first-Neuschnitt, wenn der CI-Bedarf konkret wird.
 - Keine Datei-Pipeline: `arknet-core`, `arknet-projection` und die datei-basierten `arknet_*`-MCP-Tools existieren nicht mehr. Store-first (die BC-Tools) ist der einzige Modell-Lebenszyklus. Generierende Ausgabepfade: das self-contained `store-report.html` (`store_overview`) sowie, seit issue #415, `docs/adr-export/` -- ein reproduzierbarer, ins Repository committeter Store-Export (`.trig`-Volldump + Report), manuell erzeugt via `scripts/export-store-docs.sh`; siehe `docs/adr-export/README.md`.
 - MCP-Betriebsmodell: EIN geteilter, langlebiger Daemon fuer alle Projekte der Maschine (Streamable HTTP, `127.0.0.1:47331`), kein Claude-Code-Subprozess pro Session -- Grund: mehrere Sessions/Worktrees desselben Projekts teilen einen Store und kollidierten als eigene Subprozesse am NativeStore-Verzeichnis-Lock.
