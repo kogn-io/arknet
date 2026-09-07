@@ -106,7 +106,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
 public class KognioRdfRoleRepository implements RoleRepository {
 
     private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
-    private static final String ROLE_GRAPH = "https://w3id.org/arknet/model/roles";
+    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
 
     private static final String ROLE_TYPE = ArkprocVocabulary.ROLE_TYPE;
     private static final String FILLED_BY_PROPERTY = ArkprocVocabulary.FILLED_BY;

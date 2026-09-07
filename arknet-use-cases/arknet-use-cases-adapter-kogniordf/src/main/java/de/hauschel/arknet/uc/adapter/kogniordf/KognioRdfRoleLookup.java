@@ -71,10 +71,10 @@ public final class KognioRdfRoleLookup implements RoleLookup {
 
     private static final String ROLE_TYPE = ArkprocVocabulary.ROLE_TYPE;
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
-    // Mirrors the graph IRI the role out-adapter (KognioRdfRoleRepository) writes into. The
-    // bounded contexts share one project dataset; resolving a role means reading across into
-    // that sibling graph.
-    private static final String ROLE_GRAPH = "https://w3id.org/arknet/model/roles";
+    // The graph IRI the role out-adapter (KognioRdfRoleRepository) writes into, shared via
+    // ArkprocVocabulary (kogn-io/arknet#524). The bounded contexts share one project dataset;
+    // resolving a role means reading across into that sibling graph.
+    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
 
     private final DatasetLifecycle lifecycle;
 

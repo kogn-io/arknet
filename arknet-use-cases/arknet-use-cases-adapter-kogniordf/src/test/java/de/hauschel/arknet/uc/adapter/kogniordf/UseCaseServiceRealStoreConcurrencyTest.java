@@ -39,6 +39,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
@@ -135,7 +136,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
     private void seedCustomerRole() {
         try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/roles> { "
+                tx.update("INSERT DATA { GRAPH <" + ArkprocVocabulary.ROLES_GRAPH + "> { "
                         + "<" + CUSTOMER_ID.value() + "> a <https://w3id.org/arknet/process#Role> ; "
                         + "<http://purl.org/dc/terms/identifier> \"ROLE-1\" } }");
                 return null;

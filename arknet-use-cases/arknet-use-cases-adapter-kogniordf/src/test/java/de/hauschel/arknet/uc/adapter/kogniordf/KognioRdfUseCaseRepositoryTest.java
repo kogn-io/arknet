@@ -37,6 +37,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
@@ -84,7 +85,7 @@ class KognioRdfUseCaseRepositoryTest {
     private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
-    private static final String ROLE_GRAPH = "https://w3id.org/arknet/model/roles";
+    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
     private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
 
     private static final UseCaseId ID_1 = new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-1"));

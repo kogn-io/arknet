@@ -27,6 +27,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.RoleRef;
@@ -78,7 +79,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
     private void seedCustomerRole() {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/roles> { "
+                tx.update("INSERT DATA { GRAPH <" + ArkprocVocabulary.ROLES_GRAPH + "> { "
                         + "<https://w3id.org/arknet/model/role/customer> "
                         + "a <https://w3id.org/arknet/process#Role> ; "
                         + "<http://purl.org/dc/terms/identifier> \"ROLE-customer\" ; "

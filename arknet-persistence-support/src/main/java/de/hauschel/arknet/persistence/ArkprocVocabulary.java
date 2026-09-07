@@ -90,6 +90,15 @@ public final class ArkprocVocabulary {
      */
     public static final String FILLED_BY = NAMESPACE + "filledBy";
 
+    /**
+     * The named graph every {@link #ROLE_TYPE} instance is written into - separate from the
+     * actor out-adapter's own actor graph, since {@code KognioRdfRoleRepository} shares that
+     * adapter's gate and funnel but not its graph (ADR-37 Part B). Read across into by
+     * {@code arknet-use-cases}' {@code KognioRdfRoleLookup}/{@code KognioRdfUseCaseRepository} to
+     * resolve/type-check a use case's {@code primaryRole}/{@code supportingRole} targets.
+     */
+    public static final String ROLES_GRAPH = "https://w3id.org/arknet/model/roles";
+
     private ArkprocVocabulary() {
     }
 }

@@ -34,6 +34,7 @@ import de.hauschel.arknet.actor.domain.RoleId;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteFunnel;
 
@@ -49,7 +50,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  */
 class KognioRdfRoleRepositoryMultilingualTest {
 
-    private static final String ROLE_GRAPH = "https://w3id.org/arknet/model/roles";
+    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
     private static final String NAME_PROPERTY = "https://w3id.org/arknet/core#name";
     private static final String DESCRIPTION_PROPERTY = "https://w3id.org/arknet/core#description";
     private static final ProjectId PROJECT_A = new ProjectId("a");

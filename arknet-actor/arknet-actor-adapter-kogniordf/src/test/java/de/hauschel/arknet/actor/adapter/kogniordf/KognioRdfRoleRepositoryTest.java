@@ -52,6 +52,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
@@ -70,7 +71,7 @@ class KognioRdfRoleRepositoryTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
     private static final ProjectId PROJECT_B = new ProjectId("b");
-    private static final String ROLE_GRAPH = "https://w3id.org/arknet/model/roles";
+    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
     private static final String ROLE_TYPE = "https://w3id.org/arknet/process#Role";
     private static final String FILLED_BY_PROPERTY = "https://w3id.org/arknet/process#filledBy";
     private static final String IDENTIFIER_PROPERTY = "http://purl.org/dc/terms/identifier";

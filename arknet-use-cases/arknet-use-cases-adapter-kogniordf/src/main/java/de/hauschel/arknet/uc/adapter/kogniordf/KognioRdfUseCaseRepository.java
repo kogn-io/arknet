@@ -209,9 +209,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     // again once every store has been migrated (see scalarWhereClause).
     private static final String LEGACY_PRIMARY_ACTOR_PROPERTY = ARKREQ_NAMESPACE + "primaryActor";
     private static final String LEGACY_SUPPORTING_ACTOR_PROPERTY = ARKREQ_NAMESPACE + "supportingActor";
-    // Mirrors KognioRdfRoleLookup#ROLE_GRAPH: the graph arknet-actor's role out-adapter writes
-    // into. Read across into it by assertRoleTargetsAreTypedRoles only.
-    private static final String ROLE_GRAPH = "https://w3id.org/arknet/model/roles";
+    // Shared via ArkprocVocabulary (kogn-io/arknet#524): the graph arknet-actor's role
+    // out-adapter writes into. Read across into it by assertRoleTargetsAreTypedRoles only.
+    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
     private static final String MAIN_STEP_PROPERTY = ArkreqVocabulary.MAIN_STEP;
     private static final String EXTENSION_STEP_PROPERTY = ArkreqVocabulary.EXTENSION_STEP;
     private static final String POSITION_PROPERTY = ARKREQ_NAMESPACE + "position";

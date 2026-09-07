@@ -22,6 +22,7 @@ import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.uc.application.port.out.RoleLookup;
 
@@ -39,7 +40,7 @@ class KognioRdfRoleLookupTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
     private static final ProjectId PROJECT_B = new ProjectId("b");
-    private static final String ROLE_GRAPH = "https://w3id.org/arknet/model/roles";
+    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
     private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
 
     /**
