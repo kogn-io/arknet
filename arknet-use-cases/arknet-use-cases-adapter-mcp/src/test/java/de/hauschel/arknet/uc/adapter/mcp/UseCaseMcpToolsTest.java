@@ -696,6 +696,61 @@ class UseCaseMcpToolsTest {
     }
 
     /**
+     * {@code extensions} is a wholesale replace, so whether it shortens or lengthens the list is
+     * not in this call's arguments at all - only a comparison against the stored count tells.
+     * Shortening three extensions to one collapses {@code stableExtensionPrefixLength} to the
+     * common prefix, so anything beyond it loses every language variant but the one just written;
+     * the hint must not recommend repeating the call under a language the answer no longer has
+     * anywhere (kogn-io/arknet#538).
+     */
+    @Test
+    void updateStaysSilentAboutExtensionStepWhenTheCountChanges() {
+        stub.getResult = Optional.of(useCaseWithExtensions(3));
+        UseCaseMcpTools bilingual = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
+                anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
+                hints(Map.of("title", Set.of("de", "en"), "extensionStep", Set.of("de", "en"))));
+
+        String rendered = bilingual.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null,
+                List.of("nur noch eine"), null, null, null, null, "de", null);
+
+        assertTrue(rendered.contains("en: title"), rendered);
+        assertFalse(rendered.contains("extensionStep"), rendered);
+    }
+
+    /**
+     * The common case of an {@code extensions} replace that does not change the list's length -
+     * every position keeps its identity, so every other language's variant survives, and the
+     * hint reports {@code extensionStep} exactly as for any other touched field
+     * (kogn-io/arknet#538).
+     */
+    @Test
+    void updateReportsExtensionStepWhenTheCountStaysTheSame() {
+        stub.getResult = Optional.of(useCaseWithExtensions(2));
+        UseCaseMcpTools bilingual = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, stub,
+                resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
+                anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
+                hints(Map.of("extensionStep", Set.of("de", "en"))));
+
+        String rendered = bilingual.update(null, "UC1", null, null, null, null, null, null, null, null,
+                List.of("erste", "zweite, korrigiert"), null, null, null, null, "de", null);
+
+        assertTrue(rendered.contains("en: extensionStep"), rendered);
+    }
+
+    /** A use case carrying {@code count} placeholder extensions, otherwise minimal. */
+    private static UseCase useCaseWithExtensions(int count) {
+        RoleRef primaryRole = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer"));
+        List<String> extensions = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            extensions.add("extension " + (i + 1));
+        }
+        return new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "t", "goal", null, null, primaryRole,
+                List.of(), null, null, List.of(new Step(1, "do something", List.of())), extensions, List.of(),
+                List.of());
+    }
+
+    /**
      * The second call of a two-language workflow - the field so far carries only the other
      * language, and this call adds the written one - is a translation, not a correction: the
      * variant already there is its source, and nothing is stale. The lookup must therefore see
