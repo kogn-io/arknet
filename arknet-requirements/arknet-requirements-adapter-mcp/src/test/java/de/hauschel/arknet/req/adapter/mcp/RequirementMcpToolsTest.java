@@ -40,6 +40,7 @@ import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.RemovedPositions;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementDisplayFallback;
@@ -251,7 +252,7 @@ class RequirementMcpToolsTest {
     /** {@code req_update} carries the rationale down to {@link UpdateRequirement}. */
     @Test
     void updatePassesTheRationaleThrough() {
-        adapter.update(null, "FR-1", null, null, RATIONALE, null, null, null, null, null);
+        adapter.update(null, "FR-1", null, null, RATIONALE, null, null, null, null, null, null);
 
         assertEquals(RATIONALE, stub.lastUpdateRationale);
     }
@@ -259,7 +260,7 @@ class RequirementMcpToolsTest {
     /** An omitted rationale reaches the port as {@code null} - "leave it alone", never "remove it". */
     @Test
     void updateWithoutARationalePassesNullThrough() {
-        adapter.update(null, "FR-1", "New title", null, null, null, null, null, null, null);
+        adapter.update(null, "FR-1", "New title", null, null, null, null, null, null, null, null);
 
         assertNull(stub.lastUpdateRationale);
     }
@@ -508,7 +509,7 @@ class RequirementMcpToolsTest {
     void updatePassesAllGivenFieldsThroughToTheInPort() {
         List<String> criteria = List.of("Bundesueberweisung braucht eine Kopfzahl");
 
-        String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", null, criteria, null,
+        String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", null, criteria, null, null,
                 "SHOULD_HAVE", null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
@@ -523,11 +524,25 @@ class RequirementMcpToolsTest {
     @Test
     void updatePassesAcceptanceCriteriaTextPatchesThroughToTheInPort() {
         adapter.update(null, "FR-1", null, null, null, null,
-                List.of(new RequirementMcpTools.AcceptanceCriterionPatchInput(1, "Korrigierter Text")), null, null,
+                List.of(new RequirementMcpTools.AcceptanceCriterionPatchInput(1, "Korrigierter Text")), null, null, null,
                 null);
 
         assertEquals(List.of(new AcceptanceCriterionTextPatch(1, "Korrigierter Text")),
                 stub.lastUpdateAcceptanceCriteriaTextPatches);
+    }
+
+    /**
+     * {@code req_update}'s {@code removeAcceptanceCriterionPositions} reaches {@link UpdateRequirement}
+     * as a {@link RemovedPositions} (kogn-io/arknet#513).
+     */
+    @Test
+    void updatePassesRemoveAcceptanceCriterionPositionsThroughToTheInPort() {
+        // The stub's fixture requirement carries a single criterion (position 1); appending one
+        // first keeps the removal from emptying the list, which the domain refuses.
+        adapter.update(null, "FR-1", null, null, null, List.of("New criterion"), null, List.of(2), null, null, null);
+
+        assertEquals(new RemovedPositions(java.util.Set.of(2)),
+                stub.lastUpdateRemovedAcceptanceCriterionPositions);
     }
 
     /**
@@ -537,7 +552,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "FR-1", null, null, null, null, null, null, null, null);
+        adapter.update(null, "FR-1", null, null, null, null, null, null, null, null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals(null, stub.lastUpdateTitle);
@@ -555,7 +570,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateCanCorrectOnlyThePriority() {
-        String rendered = adapter.update(null, "FR-1", null, null, null, null, null, "SHOULD_HAVE", null, null);
+        String rendered = adapter.update(null, "FR-1", null, null, null, null, null, null, "SHOULD_HAVE", null, null);
 
         assertEquals(Priority.SHOULD_HAVE, stub.lastUpdatePriority);
         assertEquals(null, stub.lastUpdateTitle);
@@ -571,7 +586,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateTreatsABlankPriorityAsOmitted() {
-        adapter.update(null, "FR-1", null, null, null, null, null, "  ", null, null);
+        adapter.update(null, "FR-1", null, null, null, null, null, null, "  ", null, null);
 
         assertEquals(null, stub.lastUpdatePriority);
     }
@@ -580,13 +595,13 @@ class RequirementMcpToolsTest {
     @Test
     void updateRejectsAnUnknownPriority() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "FR-1", null, null, null, null, null, "NICE_TO_HAVE", null, null));
+                () -> adapter.update(null, "FR-1", null, null, null, null, null, null, "NICE_TO_HAVE", null, null));
     }
 
     /** {@code req_update}'s {@code language} argument reaches {@link UpdateRequirement} unchanged. */
     @Test
     void updatePassesTheLanguageThrough() {
-        adapter.update(null, "FR-1", "Neuer Titel", null, null, null, null, null, "de", null);
+        adapter.update(null, "FR-1", "Neuer Titel", null, null, null, null, null, null, "de", null);
 
         assertEquals("de", stub.lastUpdateLanguage);
     }
@@ -717,6 +732,7 @@ class RequirementMcpToolsTest {
         private String lastUpdateRationale;
         private List<String> lastUpdateNewAcceptanceCriteria;
         private List<AcceptanceCriterionTextPatch> lastUpdateAcceptanceCriteriaTextPatches;
+        private RemovedPositions lastUpdateRemovedAcceptanceCriterionPositions;
         private Priority lastUpdatePriority;
         private String lastUpdateLanguage;
         private String lastListDisplayLocale;
@@ -812,6 +828,7 @@ class RequirementMcpToolsTest {
         public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
                 String rationale, List<String> newAcceptanceCriteria,
                 List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
+                RemovedPositions removeAcceptanceCriterionPositions,
                 Priority priority, String language, String defaultLanguage) {
             lastUpdatedRequirement = code;
             lastUpdateTitle = title;
@@ -819,6 +836,7 @@ class RequirementMcpToolsTest {
             lastUpdateRationale = rationale;
             lastUpdateNewAcceptanceCriteria = newAcceptanceCriteria;
             lastUpdateAcceptanceCriteriaTextPatches = acceptanceCriteriaTextPatches;
+            lastUpdateRemovedAcceptanceCriterionPositions = removeAcceptanceCriterionPositions;
             lastUpdatePriority = priority;
             lastUpdateLanguage = language;
             Requirement base = new Requirement(ID, code, title != null ? title : "t",
@@ -827,8 +845,11 @@ class RequirementMcpToolsTest {
                     priority != null ? priority : Priority.MUST_HAVE, null, List.of(), DEFAULT_CRITERIA,
                     List.of());
             base = base.withAppendedAcceptanceCriteria(newAcceptanceCriteria);
-            return acceptanceCriteriaTextPatches != null
+            base = acceptanceCriteriaTextPatches != null
                     ? base.withAcceptanceCriteriaTextPatches(projectId, acceptanceCriteriaTextPatches)
+                    : base;
+            return removeAcceptanceCriterionPositions != null
+                    ? base.withoutAcceptanceCriteria(projectId, removeAcceptanceCriterionPositions)
                     : base;
         }
 

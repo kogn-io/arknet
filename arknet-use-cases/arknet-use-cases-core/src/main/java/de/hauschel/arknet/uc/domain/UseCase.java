@@ -3,10 +3,13 @@
 
 package de.hauschel.arknet.uc.domain;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import de.hauschel.arknet.kernel.ProjectId;
 
@@ -181,6 +184,79 @@ public record UseCase(
         }
         return new UseCase(id, code, title, goal, scope, trigger, primaryRole, supportingRoles,
                 precondition, postcondition, patched, extensions, usesTerms, constrainedBy);
+    }
+
+    /**
+     * Returns a new use case with {@code newMainSteps} appended to {@link #steps()}, numbered
+     * continuing from the current highest position (kogn-io/arknet#513, mirroring
+     * {@code de.hauschel.arknet.req.domain.Requirement#withAppendedAcceptanceCriteria} and
+     * {@code de.hauschel.arknet.adr.domain.Adr#withAppendedConsequences}) - closing half of the
+     * gap this port used to leave: before this method, growing the main flow meant a fresh
+     * {@code uc_add} under a new {@link UseCaseCode}, orphaning every inbound reference to the old
+     * one.
+     *
+     * @param newMainSteps the steps to append, in order, already resolved to
+     *                     {@link RequirementRef}s; {@code null} or empty is a no-op returning
+     *                     {@code this} unchanged
+     * @return a new use case with the additional main-flow steps appended
+     */
+    public UseCase withAppendedMainSteps(List<NewMainStep> newMainSteps) {
+        if (newMainSteps == null || newMainSteps.isEmpty()) {
+            return this;
+        }
+        List<Step> appended = new ArrayList<>(steps);
+        int nextPosition = steps.size() + 1;
+        for (NewMainStep draft : newMainSteps) {
+            appended.add(new Step(nextPosition++, draft.text(), draft.realises()));
+        }
+        return new UseCase(id, code, title, goal, scope, trigger, primaryRole, supportingRoles,
+                precondition, postcondition, appended, extensions, usesTerms, constrainedBy);
+    }
+
+    /**
+     * Returns a new use case with the main-flow steps at {@code removed}'s positions taken out and
+     * the survivors renumbered consecutively from 1 (kogn-io/arknet#513) - the other half of the
+     * gap {@link #withAppendedMainSteps} closes. Before this method, a step recorded by mistake
+     * could only leave with the whole use case.
+     *
+     * <p><strong>Never leaves the flow empty.</strong> A use case must have at least one step (the
+     * compact constructor rejects an empty list), so removing every remaining step in one call is
+     * rejected the same way creating a use case without one would be.</p>
+     *
+     * <p><strong>The survivors move up, and their language variants must move with them.</strong>
+     * Position is a step's only identity, and the out-adapter carries every other-language variant
+     * of a step's text across a write keyed by that position. This method renumbers through
+     * {@link RemovedPositions#survivingPositionOf} and nothing else, so the write path
+     * ({@code UseCaseService}, the out-adapter) can re-key each surviving position's language state
+     * by the very same rule. {@code realises} moves with its step unchanged.</p>
+     *
+     * @param projectId the project the removal is issued against, for the exception message only
+     * @param removed   the 1-based positions, as this record currently numbers them, to remove
+     * @return a new use case without those main-flow steps, or {@code this} if {@code removed} is
+     *         empty
+     * @throws StepPositionNotFoundException if a removed position matches no step in
+     *                                        {@link #steps()}
+     * @throws IllegalArgumentException      if removing every named position would leave
+     *                                        {@link #steps()} empty
+     */
+    public UseCase withoutMainSteps(ProjectId projectId, RemovedPositions removed) {
+        Objects.requireNonNull(removed, "removed");
+        if (removed.isEmpty()) {
+            return this;
+        }
+        Set<Integer> present = new HashSet<>(steps.stream().map(Step::position).toList());
+        for (Integer position : removed.positions()) {
+            if (!present.contains(position)) {
+                throw new StepPositionNotFoundException(projectId, code, position);
+            }
+        }
+        List<Step> surviving = steps.stream()
+                .filter(step -> !removed.contains(step.position()))
+                .map(step -> new Step(removed.survivingPositionOf(step.position()).getAsInt(),
+                        step.text(), step.realises()))
+                .toList();
+        return new UseCase(id, code, title, goal, scope, trigger, primaryRole, supportingRoles,
+                precondition, postcondition, surviving, extensions, usesTerms, constrainedBy);
     }
 
     /**

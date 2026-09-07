@@ -7,6 +7,7 @@ import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.blankToNull;
 import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.effectiveDisplayLocale;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,6 +37,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
 import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.RemovedPositions;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementDisplayFallback;
@@ -427,7 +429,10 @@ public final class RequirementMcpTools {
                     + "already-set one. "
                     + "newAcceptanceCriteria appends new criteria after the existing ones; "
                     + "acceptanceCriteriaTextPatches corrects the wording of one or more existing criteria "
-                    + "by position - neither can insert mid-list, delete or reorder a criterion. "
+                    + "by position; removeAcceptanceCriterionPositions takes one or more out by that same "
+                    + "position and moves the ones after it up - a position cannot be both corrected and "
+                    + "removed in one call, and removing every remaining criterion is rejected (at least "
+                    + "one must stay). "
                     + "Does not touch status (use req_set_status) or linked terms (use req_link_term)." + PROSE_MARKUP)
     public String update(
             final McpSyncRequestContext context,
@@ -452,6 +457,12 @@ public final class RequirementMcpTools {
                     + "with no matching criterion is rejected (optional, unchanged if omitted)",
                     required = false)
             final List<AcceptanceCriterionPatchInput> acceptanceCriteriaTextPatches,
+            @McpToolParam(description = "1-based positions (as req_get currently shows them) of acceptance "
+                    + "criteria to remove. The criteria after a removed one move up so the survivors stay "
+                    + "gap-free. A position named here must not also be named in acceptanceCriteriaTextPatches, "
+                    + "and removing every remaining criterion is rejected - at least one must stay (optional, "
+                    + "none removed if omitted)", required = false)
+            final List<Integer> removeAcceptanceCriterionPositions,
             @McpToolParam(description = "New MoSCoW priority: MUST_HAVE, SHOULD_HAVE, COULD_HAVE or "
                     + "WONT_HAVE (optional, unchanged if omitted - omitting it cannot clear a priority "
                     + "that is already set)", required = false)
@@ -482,6 +493,7 @@ public final class RequirementMcpTools {
                 blankToNull(description), blankToNull(rationale),
                 newAcceptanceCriteria == null ? null : List.copyOf(newAcceptanceCriteria),
                 toAcceptanceCriteriaTextPatches(acceptanceCriteriaTextPatches),
+                toRemovedPositions(removeAcceptanceCriterionPositions),
                 requirementPriority, blankToNull(language), project.defaultLanguage());
         return presenter.format(project.id(), updated);
     }
@@ -503,6 +515,14 @@ public final class RequirementMcpTools {
             return null;
         }
         return patches.stream().map(p -> new AcceptanceCriterionTextPatch(p.position(), p.text())).toList();
+    }
+
+    /** Mirrors {@code AdrMcpTools#toRemovedPositions} (kogn-io/arknet#513). */
+    private static RemovedPositions toRemovedPositions(final List<Integer> positions) {
+        if (positions == null) {
+            return RemovedPositions.NONE;
+        }
+        return new RemovedPositions(new LinkedHashSet<>(positions));
     }
 
     @McpTool(name = "req_schema",

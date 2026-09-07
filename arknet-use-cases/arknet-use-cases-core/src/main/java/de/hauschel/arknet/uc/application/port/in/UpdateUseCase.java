@@ -6,6 +6,7 @@ package de.hauschel.arknet.uc.application.port.in;
 import java.util.List;
 
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.uc.domain.RemovedPositions;
 import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
 import de.hauschel.arknet.uc.domain.UseCase;
@@ -34,17 +35,24 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * each new correctable field; the builder names the fields a call actually sets and leaves the
  * rest alone.</p>
  *
- * <p><strong>Step corrections are two independent, narrowly-scoped mechanisms.</strong>
- * {@code stepTextPatches} lets a caller fix the wording of one or more existing main-flow steps
- * by {@link de.hauschel.arknet.uc.domain.Step#position() position} - nothing else about a step;
- * it never touches a step's {@link de.hauschel.arknet.uc.domain.Step#realises() realises}
+ * <p><strong>Step corrections are four independent, narrowly-scoped mechanisms (append and remove
+ * added by kogn-io/arknet#513, mirroring {@code adr_update}'s {@code removeConsequencePositions}).
+ * </strong> {@code stepTextPatches} lets a caller fix the wording of one or more existing main-flow
+ * steps by {@link de.hauschel.arknet.uc.domain.Step#position() position} - nothing else about a
+ * step; it never touches a step's {@link de.hauschel.arknet.uc.domain.Step#realises() realises}
  * references. {@code stepRealisesPatches} is a separate, independent list that instead corrects
  * only a step's {@code realises} references, leaving its {@code text} untouched: a listed
  * position's value list replaces that step's entire {@code realises} set wholesale, with an
  * empty list the explicit, unambiguous signal to clear it - distinct from omitting the position
- * altogether, which leaves it unchanged (issue #255). Neither mechanism can add, remove or
- * reorder steps, and a patch naming a position with no matching step is rejected rather than
- * silently ignored, in either list.</p>
+ * altogether, which leaves it unchanged (issue #255). {@code newMainSteps} appends new steps after
+ * the existing ones, numbered continuing from the current highest position; {@code
+ * removeMainStepPositions} takes one or more existing steps out by that same position and moves
+ * the ones after it up. Position is a purely technical write-ordering detail throughout - a patch
+ * naming a position with no matching step is rejected rather than silently ignored, in any list,
+ * and naming the same position in both {@code stepTextPatches}/{@code stepRealisesPatches} and
+ * {@code removeMainStepPositions} is rejected too - correcting what is being removed is a
+ * contradiction, not a sequence. Removing every remaining step in one call is rejected as well: a
+ * use case must have at least one step.</p>
  *
  * <p><strong>Role corrections (issue #343; repointed from actor to role by ADR-37/
  * kogn-io/arknet#405 Part C).</strong> {@code primaryRole} and
@@ -64,10 +72,13 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * literal, so neither ever forces a write language to be resolved: a role-only correction
  * goes through in a project that has no {@code defaultLanguage} configured at all.</p>
  *
- * <p><strong>Explicitly out of scope.</strong> Full step-list restructuring (adding, removing or
- * reordering steps) is untouched by this port - create a replacement use case with
- * {@code uc_add} if the flow itself needs restructuring, at the price named above: a new
- * {@link UseCaseCode}, and no inbound reference carried over.</p>
+ * <p><strong>Explicitly out of scope.</strong> Reordering the main flow is still untouched by this
+ * port - {@code newMainSteps}/{@code removeMainStepPositions} append and remove, they never move
+ * a surviving step to a different position; a caller wanting a different order still needs
+ * {@code uc_add} for a replacement use case, at the price named above: a new {@link UseCaseCode},
+ * and no inbound reference carried over. {@code extensions} keeps its own, pre-existing
+ * restructuring rule (a wholesale replace, issue #254/PR #267) rather than gaining this port's new
+ * position-addressed append/remove mechanism.</p>
  *
  * <p><strong>Language.</strong> {@code title}, {@code goal}, {@code scope}, {@code trigger},
  * {@code precondition}, {@code postcondition}, each patched step's {@code text} and each entry of
@@ -114,9 +125,15 @@ public interface UpdateUseCase {
      * @throws UseCaseConcurrentlyModifiedException if the write keeps losing the compare-and-set
      *                                                race against a concurrent writer across every
      *                                                retry attempt
-     * @throws StepPositionNotFoundException         if {@code stepTextPatches} or
-     *                                                {@code stepRealisesPatches} names a position
+     * @throws StepPositionNotFoundException         if {@code stepTextPatches}, {@code
+     *                                                stepRealisesPatches} or {@code
+     *                                                removeMainStepPositions} names a position
      *                                                with no matching existing step
+     * @throws IllegalArgumentException              if the same position is named in {@code
+     *                                                removeMainStepPositions} and in {@code
+     *                                                stepTextPatches}/{@code stepRealisesPatches},
+     *                                                or if {@code removeMainStepPositions} would
+     *                                                leave the main flow empty
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if a changed field/step
      *                                                ships no {@code language} and {@code
      *                                                defaultLanguage} is {@code null} too
@@ -162,11 +179,24 @@ public interface UpdateUseCase {
      *                            list clears it, and a position not listed here is left
      *                            unchanged; {@code null} to leave every step's realises
      *                            unchanged
+     * @param newMainSteps        main-flow steps to append after the existing ones
+     *                            (kogn-io/arknet#513), or {@code null}/empty for none - always
+     *                            allowed (see
+     *                            {@link de.hauschel.arknet.uc.domain.UseCase#withAppendedMainSteps})
+     * @param removeMainStepPositions the 1-based positions, as the use case currently numbers
+     *                            them, of the main-flow steps to remove (kogn-io/arknet#513), or
+     *                            {@code null}/{@link RemovedPositions#NONE} for none; the steps
+     *                            after a removed one move up. Naming the same position here and in
+     *                            {@code stepTextPatches}/{@code stepRealisesPatches} is refused, and
+     *                            removing every remaining step is refused too - a use case must
+     *                            have at least one (see
+     *                            {@link de.hauschel.arknet.uc.domain.UseCase#withoutMainSteps})
      * @param language            the BCP-47 language tag every field this call actually touches
      *                            (a non-{@code null} {@code title}/{@code goal}/{@code scope}/
      *                            {@code trigger}/{@code precondition}/{@code postcondition}, each
-     *                            patched step's text, and, if {@code extensions} is non-{@code
-     *                            null}, every entry of it) is written in, or {@code null} to fall
+     *                            patched or newly appended step's text, and, if {@code extensions}
+     *                            is non-{@code null}, every entry of it) is written in, or
+     *                            {@code null} to fall
      *                            back to the project's {@code defaultLanguage}. Only the existing
      *                            literal carrying the tag actually written is replaced per field -
      *                            every other language-tagged variant survives untouched, except an
@@ -185,7 +215,37 @@ public interface UpdateUseCase {
             List<String> extensions,
             List<StepTextPatch> stepTextPatches,
             List<StepRealisesPatch> stepRealisesPatches,
+            List<NewMainStep> newMainSteps,
+            RemovedPositions removeMainStepPositions,
             String language) {
+
+        public UseCaseCorrection {
+            newMainSteps = newMainSteps == null ? List.of() : List.copyOf(newMainSteps);
+            removeMainStepPositions = removeMainStepPositions == null ? RemovedPositions.NONE : removeMainStepPositions;
+            rejectCorrectingARemovedPosition(stepTextPatches == null ? List.of()
+                    : stepTextPatches.stream().map(StepTextPatch::position).toList(),
+                    removeMainStepPositions, "main-flow step");
+            rejectCorrectingARemovedPosition(stepRealisesPatches == null ? List.of()
+                    : stepRealisesPatches.stream().map(StepRealisesPatch::position).toList(),
+                    removeMainStepPositions, "main-flow step");
+        }
+
+        /**
+         * A position both corrected (text or realises) and removed in one call is a
+         * contradiction, refused here on the correction object itself rather than deep in the
+         * mutation chain, so the caller learns which list collides before anything is read or
+         * written (kogn-io/arknet#513, mirrors {@code AdrCorrection}'s own
+         * {@code rejectCorrectingARemovedPosition}).
+         */
+        private static void rejectCorrectingARemovedPosition(
+                List<Integer> correctedPositions, RemovedPositions removed, String what) {
+            for (Integer position : correctedPositions) {
+                if (removed.contains(position)) {
+                    throw new IllegalArgumentException(what + " position " + position
+                            + " is named both as a correction and as a removal - remove it or correct it, not both");
+                }
+            }
+        }
 
         /** @return a builder for a correction that, until something is set on it, changes nothing */
         public static Builder builder() {
@@ -211,6 +271,8 @@ public interface UpdateUseCase {
             private List<String> extensions;
             private List<StepTextPatch> stepTextPatches;
             private List<StepRealisesPatch> stepRealisesPatches;
+            private List<NewMainStep> newMainSteps;
+            private RemovedPositions removeMainStepPositions;
             private String language;
 
             private Builder() {
@@ -285,6 +347,21 @@ public interface UpdateUseCase {
                 return this;
             }
 
+            /** @param value see {@link UseCaseCorrection#newMainSteps()} @return this builder */
+            public Builder newMainSteps(List<NewMainStep> value) {
+                this.newMainSteps = value;
+                return this;
+            }
+
+            /**
+             * @param value see {@link UseCaseCorrection#removeMainStepPositions()}
+             * @return this builder
+             */
+            public Builder removeMainStepPositions(RemovedPositions value) {
+                this.removeMainStepPositions = value;
+                return this;
+            }
+
             /** @param value see {@link UseCaseCorrection#language()} @return this builder */
             public Builder language(String value) {
                 this.language = value;
@@ -295,9 +372,27 @@ public interface UpdateUseCase {
             public UseCaseCorrection build() {
                 return new UseCaseCorrection(title, goal, scope, trigger, primaryRole,
                         supportingRoles, precondition, postcondition, extensions, stepTextPatches,
-                        stepRealisesPatches, language);
+                        stepRealisesPatches, newMainSteps, removeMainStepPositions, language);
             }
         }
+    }
+
+    /**
+     * A main-flow step to append, as passed by the agent to {@code uc_update} (kogn-io/arknet#513) -
+     * the position-free counterpart of {@link AddUseCase.NewStep}, since an appended step's position
+     * is assigned by {@link de.hauschel.arknet.uc.domain.UseCase#withAppendedMainSteps}, continuing
+     * from the use case's current highest one, never named by the caller.
+     *
+     * <p><strong>Raw human-typed references.</strong> {@code realises} is a list of plain business
+     * codes here (e.g. {@code FR-1}), not {@link de.hauschel.arknet.uc.domain.RequirementRef}:
+     * resolving them to the referenced requirements' opaque identities is the application service's
+     * job, mirroring {@link AddUseCase.NewStep#realises()}.</p>
+     *
+     * @param text     what happens in this step (an actor or system action)
+     * @param realises business codes of the functional requirements this step fulfils (e.g.
+     *                 {@code FR-1}); may be empty, resolved by the service
+     */
+    record NewMainStep(String text, List<String> realises) {
     }
 
     /**

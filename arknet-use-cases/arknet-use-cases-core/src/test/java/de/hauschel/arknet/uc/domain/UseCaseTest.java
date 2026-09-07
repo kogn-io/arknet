@@ -254,6 +254,68 @@ class UseCaseTest {
         assertThrows(NullPointerException.class, () -> uc.withStepRealisesPatches(PROJECT, null));
     }
 
+    /**
+     * kogn-io/arknet#513: appending a main-flow step continues the position numbering from the
+     * current highest, mirroring {@code Requirement#withAppendedAcceptanceCriteria}.
+     */
+    @Test
+    void withAppendedMainStepsContinuesPositionsAfterExisting() {
+        UseCase uc = useCaseWithSteps(List.of(step(1, "select items")));
+
+        UseCase appended = uc.withAppendedMainSteps(List.of(
+                new NewMainStep("confirm", List.of()), new NewMainStep("pay", List.of(FR5))));
+
+        assertEquals(List.of(step(1, "select items"), step(2, "confirm"), new Step(3, "pay", List.of(FR5))),
+                appended.steps());
+    }
+
+    @Test
+    void withAppendedMainStepsIsANoOpForNullOrEmpty() {
+        UseCase uc = useCaseWithSteps(List.of(step(1, "select items")));
+
+        assertEquals(uc, uc.withAppendedMainSteps(null));
+        assertEquals(uc, uc.withAppendedMainSteps(List.of()));
+    }
+
+    /** kogn-io/arknet#513: removing a step renumbers the survivors consecutively from 1. */
+    @Test
+    void withoutMainStepsRenumbersTheSurvivors() {
+        UseCase uc = useCaseWithSteps(List.of(
+                step(1, "select items"), step(2, "confirm"), new Step(3, "pay", List.of(FR5))));
+
+        UseCase trimmed = uc.withoutMainSteps(PROJECT, new RemovedPositions(java.util.Set.of(2)));
+
+        assertEquals(List.of(step(1, "select items"), new Step(2, "pay", List.of(FR5))), trimmed.steps());
+    }
+
+    @Test
+    void withoutMainStepsWithNothingToRemoveIsANoOp() {
+        UseCase uc = useCaseWithSteps(List.of(step(1, "select items")));
+
+        assertEquals(uc, uc.withoutMainSteps(PROJECT, RemovedPositions.NONE));
+    }
+
+    @Test
+    void withoutMainStepsThrowsForAnUnknownPosition() {
+        UseCase uc = useCaseWithSteps(List.of(step(1, "select items")));
+
+        StepPositionNotFoundException ex = assertThrows(StepPositionNotFoundException.class,
+                () -> uc.withoutMainSteps(PROJECT, new RemovedPositions(java.util.Set.of(9))));
+
+        assertSame(PROJECT, ex.projectId());
+        assertEquals(CODE, ex.useCaseCode());
+        assertEquals(9, ex.position());
+    }
+
+    /** A use case must have at least one step - removing the last one is refused. */
+    @Test
+    void withoutMainStepsRejectsEmptyingTheFlow() {
+        UseCase uc = useCaseWithSteps(List.of(step(1, "select items")));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> uc.withoutMainSteps(PROJECT, new RemovedPositions(java.util.Set.of(1))));
+    }
+
     @Test
     void rejectsNullRequirementRefIdentity() {
         assertThrows(NullPointerException.class, () -> new RequirementRef(null));

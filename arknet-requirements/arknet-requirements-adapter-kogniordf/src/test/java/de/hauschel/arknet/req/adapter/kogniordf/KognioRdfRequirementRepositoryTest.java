@@ -116,7 +116,7 @@ class KognioRdfRequirementRepositoryTest {
         RevisionToken head = repository.findCurrentByCode(projectId, updated.code(), null)
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
-        repository.compareAndUpdate(projectId, head, updated, null, null, null, noAcceptanceCriteriaLanguages(updated), null);
+        repository.compareAndUpdate(projectId, head, updated, null, null, null, noAcceptanceCriteriaLanguages(updated), null, null);
     }
 
     /**
@@ -375,7 +375,7 @@ class KognioRdfRequirementRepositoryTest {
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
 
         repository.compareAndUpdate(
-                PROJECT_A, head, accepted, null, null, null, noAcceptanceCriteriaLanguages(accepted), null);
+                PROJECT_A, head, accepted, null, null, null, noAcceptanceCriteriaLanguages(accepted), null, null);
 
         assertEquals(Optional.of(accepted), repository.findByCode(PROJECT_A, code, null));
     }
@@ -407,7 +407,7 @@ class KognioRdfRequirementRepositoryTest {
 
         assertThrows(RequirementConcurrentlyModifiedException.class,
                 () -> repository.compareAndUpdate(
-                        PROJECT_A, staleHead, staleAttempt, null, null, null, noAcceptanceCriteriaLanguages(staleAttempt), null));
+                        PROJECT_A, staleHead, staleAttempt, null, null, null, noAcceptanceCriteriaLanguages(staleAttempt), null, null));
         assertEquals(Optional.of(concurrentlyAccepted), repository.findByCode(PROJECT_A, code, null));
     }
 
@@ -421,7 +421,7 @@ class KognioRdfRequirementRepositoryTest {
 
         assertThrows(RequirementNotFoundException.class,
                 () -> repository.compareAndUpdate(
-                        PROJECT_A, null, neverCreated, null, null, null, noAcceptanceCriteriaLanguages(neverCreated), null));
+                        PROJECT_A, null, neverCreated, null, null, null, noAcceptanceCriteriaLanguages(neverCreated), null, null));
         assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
         assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, code, null));
     }
@@ -442,7 +442,7 @@ class KognioRdfRequirementRepositoryTest {
                 created.type(), RequirementStatus.ACCEPTED, created.priority(),
                 created.qualityCategory(), created.usesTerms(), created.acceptanceCriteria(), List.of());
         repository.compareAndUpdate(
-                PROJECT_A, head, accepted, null, null, null, noAcceptanceCriteriaLanguages(accepted), null);
+                PROJECT_A, head, accepted, null, null, null, noAcceptanceCriteriaLanguages(accepted), null, null);
 
         Requirement found = repository.findByCode(PROJECT_A, created.code(), null).orElseThrow();
         assertEquals(RequirementStatus.ACCEPTED, found.status());
@@ -1809,7 +1809,7 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED, null, null, null,
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
         repository.compareAndUpdate(
-                PROJECT_A, headAfterCreate, accepted, null, null, null, noAcceptanceCriteriaLanguages(accepted), null);
+                PROJECT_A, headAfterCreate, accepted, null, null, null, noAcceptanceCriteriaLanguages(accepted), null, null);
 
         List<String> revisions = revisionsOf(id);
         assertEquals(2, revisions.size(), "compareAndUpdate must record exactly one more revision");

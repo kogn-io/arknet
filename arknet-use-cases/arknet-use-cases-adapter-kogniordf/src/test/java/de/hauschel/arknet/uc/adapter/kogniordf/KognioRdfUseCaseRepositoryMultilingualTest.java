@@ -5,9 +5,11 @@ package de.hauschel.arknet.uc.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -129,7 +131,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase withGermanTitle = useCase(created.id(), code, "Bestellung aufgeben", "Order is placed",
                 "Customer selects items");
         repository.compareAndUpdate(PROJECT_A, head, withGermanTitle, "de", "en", null, null, null, null,
-                Map.of(1, "en"), Map.of(), null, Integer.MAX_VALUE);
+                Map.of(1, "en"), Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
         UseCaseRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
 
         List<UseCase> all = germanReader.findAll(PROJECT_A, null);
@@ -157,7 +159,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase withGermanTitle = useCase(created.id(), code, "Bestellung aufgeben", "Order is placed",
                 "Customer selects items");
         repository.compareAndUpdate(PROJECT_A, head, withGermanTitle, "de", "en", null, null, null, null,
-                Map.of(1, "en"), Map.of(), null, Integer.MAX_VALUE);
+                Map.of(1, "en"), Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
         UseCaseRepository englishReader = readerFor(Locale.ENGLISH, Locale.ENGLISH);
 
         List<UseCase> all = englishReader.findAll(PROJECT_A, "de");
@@ -194,7 +196,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase withGermanTitle = useCase(created.id(), code, "Bestellung aufgeben", "Order is placed",
                 "Customer selects items");
         repository.compareAndUpdate(PROJECT_A, head, withGermanTitle, "de", "en", null, null, null, null,
-                Map.of(1, "en"), Map.of(), null, Integer.MAX_VALUE);
+                Map.of(1, "en"), Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -221,7 +223,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase withGermanStepText = useCase(created.id(), code, "Place order", "Order is placed",
                 "Kunde waehlt Artikel");
         repository.compareAndUpdate(PROJECT_A, head, withGermanStepText, "en", "en", null, null, null, null,
-                Map.of(1, "de"), Map.of(), null, Integer.MAX_VALUE);
+                Map.of(1, "de"), Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -254,7 +256,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 new Step(3, "Customer confirms order", List.of()));
         UseCase updated = useCase(id, code, "Place order", "Order is placed", withGermanSecondStep);
         repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", null, null, null, null,
-                Map.of(1, "en", 2, "de", 3, "en"), Map.of(), null, Integer.MAX_VALUE);
+                Map.of(1, "en", 2, "de", 3, "en"), Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -289,9 +291,64 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 new Step(3, "Customer confirms order", List.of()));
         UseCase updated = useCase(id, code, "Place order", "Order is placed", withRewordedSecondStep);
         repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", null, null, null, null,
-                Map.of(1, "en", 2, "en", 3, "en"), Map.of(), null, Integer.MAX_VALUE);
+                Map.of(1, "en", 2, "en", 3, "en"), Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(1, countStepTextLiterals(id, 2));
+    }
+
+    /**
+     * kogn-io/arknet#513: a removal moves the main-flow steps after it up, and their preserved
+     * other-language variants have to move with them - keyed by position, a German text written at
+     * position 2 would otherwise land on whatever now sits at 2 (a different step here) instead of
+     * following its own step to position 1. Mutation test: dropping the
+     * {@code RemovedPositions#survivingPositionOf} re-keying in {@code otherLanguageStepTexts}
+     * leaves position 1 reading the wrong German text and loses the removed step's variant nowhere
+     * useful either.
+     */
+    @Test
+    void compareAndUpdateMovesAnOtherLanguageStepTextAlongWithItsSurvivingEntry() {
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCaseId id = freshId();
+        List<Step> original = List.of(
+                new Step(1, "select items", List.of()), new Step(2, "confirm", List.of()));
+        repository.create(PROJECT_A, useCase(id, code, "Place order", "Order is placed", original), "en");
+        String selectSteps = "SELECT ?s ?pos WHERE { GRAPH <https://w3id.org/arknet/model/use-cases> { <"
+                + id.value().value() + "> <https://w3id.org/arknet/requirements#mainStep> ?s . "
+                + "?s <https://w3id.org/arknet/requirements#position> ?pos } }";
+        Map<String, String> stepIriByPosition = new LinkedHashMap<>();
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.sparqlQuery().select(selectSteps).forEach(row -> stepIriByPosition.put(
+                    ((io.kogn.rdf.terms.Literal) row.getValue("pos").orElseThrow()).getLexicalForm(),
+                    row.getValue("s").orElseThrow().toString()));
+        }
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/use-cases> { <"
+                + stepIriByPosition.get("1") + "> <https://w3id.org/arknet/requirements#stepText> "
+                + "\"Erster Wortlaut\"@de . <" + stepIriByPosition.get("2")
+                + "> <https://w3id.org/arknet/requirements#stepText> \"Zweiter Wortlaut\"@de } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+
+        de.hauschel.arknet.uc.domain.RemovedPositions removed =
+                new de.hauschel.arknet.uc.domain.RemovedPositions(java.util.Set.of(1));
+        UseCase current = repository.findByCode(PROJECT_A, code, null).orElseThrow();
+        UseCase trimmed = current.withoutMainSteps(PROJECT_A, removed);
+        repository.compareAndUpdate(PROJECT_A, currentHead(code), trimmed, "en", "en", null, null, null, null,
+                Map.of(1, "en"), Map.of(), null, Integer.MAX_VALUE, removed);
+
+        UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
+        assertEquals("Zweiter Wortlaut", asGerman.steps().get(0).text());
+        UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
+        assertEquals("confirm", asEnglish.steps().get(0).text());
+        String askRemovedTextSurvives = "ASK { GRAPH <https://w3id.org/arknet/model/use-cases> { ?s <"
+                + "https://w3id.org/arknet/requirements#stepText> \"Erster Wortlaut\"@de } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertFalse(handle.sparqlQuery().ask(askRemovedTextSurvives),
+                    "the removed position's other-language variant must go with it, not attach to the survivor");
+        }
     }
 
     /**
@@ -343,7 +400,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 List.of(new Step(1, "Customer selects items", List.of())),
                 List.of("2a. Payment declined -> abort"), List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, head, withGermanTrigger, "en", "en", "en", "de", "en", "en",
-                Map.of(1, "en"), Map.of(1, "en"), null, Integer.MAX_VALUE);
+                Map.of(1, "en"), Map.of(1, "en"), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -382,7 +439,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase updated = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
                 null, null, List.of(new Step(1, "Customer selects items", List.of())), withGermanSecondExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", null, null, null, null,
-                Map.of(1, "en"), Map.of(1, "en", 2, "de", 3, "en"), null, Integer.MAX_VALUE);
+                Map.of(1, "en"), Map.of(1, "en", 2, "de", 3, "en"), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -424,14 +481,14 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 List.of(), null, null, List.of(new Step(1, "Customer selects items", List.of())),
                 withGermanSecondExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, headAfterCreate, withGermanVariant, "en", "en", null, null, null,
-                null, Map.of(1, "en"), Map.of(1, "en", 2, "de"), null, Integer.MAX_VALUE);
+                null, Map.of(1, "en"), Map.of(1, "en", 2, "de"), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
         RevisionToken headAfterTranslation = currentHead(code);
 
         List<String> withInsertedExtension = List.of("2a. A", "2b. New", "3a. B");
         UseCase withInsert = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
                 null, null, List.of(new Step(1, "Customer selects items", List.of())), withInsertedExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, headAfterTranslation, withInsert, "en", "en", null, null, null, null,
-                Map.of(1, "en"), Map.of(1, "en", 2, "en", 3, "en"), null, 1);
+                Map.of(1, "en"), Map.of(1, "en", 2, "en", 3, "en"), null, 1, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(1, countExtensionTextLiterals(id, 2),
                 "the stale German variant of the superseded position-2 extension must not survive");
@@ -475,14 +532,14 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 List.of(), null, null, List.of(new Step(1, "Customer selects items", List.of())),
                 withGermanFirstExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, headAfterCreate, withGermanVariant, "en", "en", null, null, null,
-                null, Map.of(1, "en"), Map.of(1, "de", 2, "en", 3, "en"), null, Integer.MAX_VALUE);
+                null, Map.of(1, "en"), Map.of(1, "de", 2, "en", 3, "en"), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
         RevisionToken headAfterTranslation = currentHead(code);
 
         List<String> withInsertedExtension = List.of("2a. A (de)", "3a. B", "2c. New", "4a. C");
         UseCase withInsert = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
                 null, null, List.of(new Step(1, "Customer selects items", List.of())), withInsertedExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, headAfterTranslation, withInsert, "en", "en", null, null, null, null,
-                Map.of(1, "en"), Map.of(1, "de", 2, "en", 3, "en", 4, "en"), null, 2);
+                Map.of(1, "en"), Map.of(1, "de", 2, "en", 3, "en", 4, "en"), null, 2, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(2, countExtensionTextLiterals(id, 1),
                 "position 1's own German variant must survive a restructure that never touched it");
@@ -516,7 +573,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase updated = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
                 null, null, List.of(new Step(1, "Customer selects items", List.of())), withRewordedSecondExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", null, null, null, null,
-                Map.of(1, "en"), Map.of(1, "en", 2, "en"), null, Integer.MAX_VALUE);
+                Map.of(1, "en"), Map.of(1, "en", 2, "en"), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(1, countExtensionTextLiterals(id, 2));
     }
@@ -538,7 +595,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanTitle, "de",
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE);
+                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(1, countTitleLiterals(PROJECT_A, id));
         UseCase reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -561,7 +618,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchTitle, "fr",
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE);
+                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(2, countTitleLiterals(PROJECT_A, id));
         assertTrue(hasUntaggedTitle(PROJECT_A, id, "Place order"));
@@ -588,7 +645,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanStepText, current.titleLanguage(),
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                Map.of(1, "de"), current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE);
+                Map.of(1, "de"), current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(1, countStepTextLiterals(id, 1));
         UseCase reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -612,7 +669,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchStepText, current.titleLanguage(),
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                Map.of(1, "fr"), current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE);
+                Map.of(1, "fr"), current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(2, countStepTextLiterals(id, 1));
         UseCase asFrench = repository.findByCode(PROJECT_A, code, "fr").orElseThrow();
@@ -640,7 +697,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanScope, current.titleLanguage(),
                 current.goalLanguage(), "de", current.triggerLanguage(), current.preconditionLanguage(),
                 current.postconditionLanguage(), current.stepTextLanguageByPosition(),
-                current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE);
+                current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(1, countScopeLiterals(PROJECT_A, id));
         UseCase reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -665,7 +722,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchScope, current.titleLanguage(),
                 current.goalLanguage(), "fr", current.triggerLanguage(), current.preconditionLanguage(),
                 current.postconditionLanguage(), current.stepTextLanguageByPosition(),
-                current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE);
+                current.extensionTextLanguageByPosition(), "de", Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(2, countScopeLiterals(PROJECT_A, id));
         assertTrue(hasUntaggedScope(PROJECT_A, id, "Webshop"));
@@ -695,7 +752,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanExtension, current.titleLanguage(),
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), Map.of(1, "de"), "de", Integer.MAX_VALUE);
+                current.stepTextLanguageByPosition(), Map.of(1, "de"), "de", Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(1, countExtensionTextLiterals(id, 1));
         UseCase reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -721,7 +778,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchExtension, current.titleLanguage(),
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), Map.of(1, "fr"), "de", Integer.MAX_VALUE);
+                current.stepTextLanguageByPosition(), Map.of(1, "fr"), "de", Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(2, countExtensionTextLiterals(id, 1));
         UseCase asFrench = repository.findByCode(PROJECT_A, code, "fr").orElseThrow();
@@ -747,7 +804,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         assertDoesNotThrow(() -> repository.compareAndUpdate(PROJECT_A, current.head(), current.value(),
                 current.titleLanguage(), current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), null, Integer.MAX_VALUE));
+                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE));
 
         UseCase reloaded = repository.findByCode(PROJECT_A, code, null).orElseThrow();
         assertEquals("Place order", reloaded.title());
@@ -771,7 +828,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), current.value(),
                 current.titleLanguage(), current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), null, Integer.MAX_VALUE);
+                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
         assertEquals(1, countTitleLiterals(PROJECT_A, id));
     }
@@ -847,7 +904,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase german = useCase(english.id(), code, "Bestellung aufgeben", "Bestellung ist aufgegeben",
                 "Kunde waehlt Artikel");
         repository.compareAndUpdate(PROJECT_A, currentHead(code), german, "de", "de", null, null, null, null,
-                Map.of(1, "de"), Map.of(), "de", Integer.MAX_VALUE);
+                Map.of(1, "de"), Map.of(), "de", Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
     }
 
     /**

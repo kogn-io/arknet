@@ -19,6 +19,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
+import de.hauschel.arknet.req.domain.RemovedPositions;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
@@ -98,10 +99,16 @@ final class InMemoryRequirementRepository implements RequirementRepository {
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
             String titleLanguage, String descriptionLanguage, String rationaleLanguage,
-            Map<Integer, String> acceptanceCriteriaLanguageByPosition, String defaultLanguage) {
+            Map<Integer, String> acceptanceCriteriaLanguageByPosition,
+            RemovedPositions removedAcceptanceCriterionPositions, String defaultLanguage) {
         // This fake stores a single title/description value per identity (no multi-valued
         // literals), so there is nothing for it to sweep - defaultLanguage only matters to the
         // real out-adapter's language-variant preservation, exercised by
+        // KognioRdfRequirementRepositoryMultilingualTest instead. Same for
+        // removedAcceptanceCriterionPositions: the caller already re-keys
+        // acceptanceCriteriaLanguageByPosition to the post-removal numbering (see
+        // RequirementService#acceptanceCriteriaLanguageByPosition), so this fake has nothing left
+        // to re-key itself - the real out-adapter's own re-keying is pinned in
         // KognioRdfRequirementRepositoryMultilingualTest instead.
         Map<RequirementId, Requirement> requirements = byProject.getOrDefault(projectId, Map.of());
         Requirement current = requirements.get(updated.id());

@@ -215,10 +215,12 @@ class UseCaseServiceConcurrencyTest {
                 String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
                 String preconditionLanguage, String postconditionLanguage,
                 Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
-                String defaultLanguage, int stableExtensionPrefixLength) {
+                String defaultLanguage, int stableExtensionPrefixLength,
+                de.hauschel.arknet.uc.domain.RemovedPositions removedMainStepPositions) {
             delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage, scopeLanguage,
                     triggerLanguage, preconditionLanguage, postconditionLanguage, stepTextLanguageByPosition,
-                    extensionTextLanguageByPosition, defaultLanguage, stableExtensionPrefixLength);
+                    extensionTextLanguageByPosition, defaultLanguage, stableExtensionPrefixLength,
+                    removedMainStepPositions);
         }
 
         @Override
@@ -282,10 +284,12 @@ class UseCaseServiceConcurrencyTest {
                 String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
                 String preconditionLanguage, String postconditionLanguage,
                 Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
-                String defaultLanguage, int stableExtensionPrefixLength) {
+                String defaultLanguage, int stableExtensionPrefixLength,
+                de.hauschel.arknet.uc.domain.RemovedPositions removedMainStepPositions) {
             delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage, scopeLanguage,
                     triggerLanguage, preconditionLanguage, postconditionLanguage, stepTextLanguageByPosition,
-                    extensionTextLanguageByPosition, defaultLanguage, stableExtensionPrefixLength);
+                    extensionTextLanguageByPosition, defaultLanguage, stableExtensionPrefixLength,
+                    removedMainStepPositions);
         }
 
         @Override
@@ -344,7 +348,8 @@ class UseCaseServiceConcurrencyTest {
                 String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
                 String preconditionLanguage, String postconditionLanguage,
                 Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
-                String defaultLanguage, int stableExtensionPrefixLength) {
+                String defaultLanguage, int stableExtensionPrefixLength,
+                de.hauschel.arknet.uc.domain.RemovedPositions removedMainStepPositions) {
             compareAndUpdateAttempts++;
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
             delegate.findByCode(projectId, updated.code(), null)

@@ -15,6 +15,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
+import de.hauschel.arknet.uc.domain.RemovedPositions;
 import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -101,11 +102,15 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
             String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
             String preconditionLanguage, String postconditionLanguage,
             Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
-            String defaultLanguage, int stableExtensionPrefixLength) {
+            String defaultLanguage, int stableExtensionPrefixLength, RemovedPositions removedMainStepPositions) {
         // This fake stores a single title/goal/scope/trigger/precondition/postcondition/step-text/
         // extension-text value per identity (no multi-valued literals), so there is nothing for it
         // to sweep - defaultLanguage only matters to the real out-adapter's language-variant
-        // preservation, exercised by KognioRdfUseCaseRepositoryMultilingualTest instead.
+        // preservation, exercised by KognioRdfUseCaseRepositoryMultilingualTest instead. Same for
+        // removedMainStepPositions: the caller already re-keys stepTextLanguageByPosition to the
+        // post-removal numbering (see UseCaseService#updateWithOptimisticRetry), so this fake has
+        // nothing left to re-key itself - the real out-adapter's own re-keying is pinned in
+        // KognioRdfUseCaseRepositoryMultilingualTest instead.
         // stableExtensionPrefixLength is recorded, not acted on, so UseCaseServiceTest can assert on
         // the service's own computation of it (see lastStableExtensionPrefixLength()).
         lastStableExtensionPrefixLength = stableExtensionPrefixLength;

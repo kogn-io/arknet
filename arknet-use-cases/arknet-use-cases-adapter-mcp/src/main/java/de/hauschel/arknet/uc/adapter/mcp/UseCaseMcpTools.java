@@ -30,6 +30,7 @@ import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
+import de.hauschel.arknet.uc.domain.RemovedPositions;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -254,6 +255,18 @@ public final class UseCaseMcpTools {
     public record StepRealisesPatchInput(int position, List<String> realises) {
     }
 
+    /**
+     * A main-flow step to append, as passed by the agent to {@code uc_update} (kogn-io/arknet#513) -
+     * the position-free counterpart of {@link StepInput}: the next position is assigned
+     * automatically, continuing from the use case's current highest one.
+     *
+     * @param text     what happens in this step (an actor or system action)
+     * @param realises business codes of the functional requirements this step fulfils (e.g.
+     *                 {@code FR-1}); may be empty or omitted
+     */
+    public record NewMainStepInput(String text, List<String> realises) {
+    }
+
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
 
     @McpTool(name = "uc_add",
@@ -386,19 +399,21 @@ public final class UseCaseMcpTools {
 
     @McpTool(name = "uc_update",
             description = "Correct an already-created use case's title, goal, scope, trigger, precondition "
-                    + "and/or postcondition, and/or individual existing main-flow steps' text and/or realises "
-                    + "references by position. Every argument is optional - an omitted one leaves that field "
-                    + "unchanged; omitted extensions leave the existing ones unchanged, given extensions "
-                    + "replace them wholesale. stepTextPatches corrects only a step's text; "
+                    + "and/or postcondition, and/or its main flow. Every argument is optional - an omitted "
+                    + "one leaves that field unchanged; omitted extensions leave the existing ones unchanged, "
+                    + "given extensions replace them wholesale. stepTextPatches corrects only a step's text; "
                     + "stepRealisesPatches replaces a step's entire realises set wholesale (an empty array "
                     + "clears it) - a position omitted from either list is left untouched, and a position with "
-                    + "no matching step is rejected in either list. Neither can add, remove or reorder steps. "
-                    + "The role references are correctable too: a given primaryRole replaces the current "
-                    + "one (it cannot be cleared - a use case always has exactly one), and a given "
-                    + "supportingRoles array replaces the current list wholesale, an empty array clearing "
-                    + "it. Does not touch the step list's structure; use uc_add to create a replacement use "
-                    + "case if the flow itself needs restructuring - note that this mints a new use-case code "
-                    + "and does not carry over inbound references." + PROSE_MARKUP)
+                    + "no matching step is rejected in either list. newMainSteps appends steps after the "
+                    + "existing ones; removeMainStepPositions takes one or more out by position and moves the "
+                    + "ones after up - a position cannot be both corrected (stepTextPatches/"
+                    + "stepRealisesPatches) and removed in one call, and removing every remaining step is "
+                    + "rejected (at least one must stay). Reordering the main flow is still out of scope - "
+                    + "use uc_add for a replacement use case if the flow needs a different order, at the "
+                    + "price of a new use-case code and no inbound references carried over. The role "
+                    + "references are correctable too: a given primaryRole replaces the current one (it "
+                    + "cannot be cleared - a use case always has exactly one), and a given supportingRoles "
+                    + "array replaces the current list wholesale, an empty array clearing it." + PROSE_MARKUP)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
@@ -448,9 +463,21 @@ public final class UseCaseMcpTools {
                     + "a position with no matching step is rejected (optional, unchanged if omitted)",
                     required = false)
             final List<StepRealisesPatchInput> stepRealisesPatches,
+            @McpToolParam(description = "Main-flow steps to append after the existing ones: a JSON array of "
+                    + "{text: string, realises: array of requirement labels like 'FR-1' this step fulfils "
+                    + "(optional)}. Position is assigned automatically, continuing from the current highest "
+                    + "(optional, none appended if omitted)", required = false)
+            final List<NewMainStepInput> newMainSteps,
+            @McpToolParam(description = "1-based positions (as uc_get currently shows them) of main-flow "
+                    + "steps to remove. The steps after a removed one move up so the survivors stay gap-free. "
+                    + "A position named here must not also be named in stepTextPatches/stepRealisesPatches, "
+                    + "and removing every remaining step is rejected - at least one must stay (optional, none "
+                    + "removed if omitted)", required = false)
+            final List<Integer> removeMainStepPositions,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') every field this call "
                     + "actually touches (a non-omitted title/goal/scope/trigger/precondition/postcondition, "
-                    + "each patched step's text, and, if extensions is given, every entry of it) is written "
+                    + "each patched or newly appended step's text, and, if extensions is given, every entry "
+                    + "of it) is written "
                     + "in. Falls back to the project's configured default language (see uc_add's same "
                     + "parameter) if omitted; if the project has no default either, the call is rejected "
                     + "rather than writing an untagged literal. Only the existing literal carrying the tag "
@@ -480,6 +507,8 @@ public final class UseCaseMcpTools {
                 .extensions(extensions == null ? null : List.copyOf(extensions))
                 .stepTextPatches(toStepTextPatches(stepTextPatches))
                 .stepRealisesPatches(toStepRealisesPatches(stepRealisesPatches))
+                .newMainSteps(toNewMainSteps(newMainSteps))
+                .removeMainStepPositions(toRemovedPositions(removeMainStepPositions))
                 .language(blankToNull(language))
                 .build();
         final UseCase updated = updateUseCase.update(project.id(), code, correction, project.defaultLanguage());
@@ -566,6 +595,24 @@ public final class UseCaseMcpTools {
         return patches.stream()
                 .map(p -> new UpdateUseCase.StepRealisesPatch(p.position(), requireRealises(p)))
                 .toList();
+    }
+
+    private static List<UpdateUseCase.NewMainStep> toNewMainSteps(final List<NewMainStepInput> steps) {
+        if (steps == null) {
+            return null;
+        }
+        return steps.stream()
+                .map(s -> new UpdateUseCase.NewMainStep(s.text(),
+                        s.realises() == null ? List.of() : List.copyOf(s.realises())))
+                .toList();
+    }
+
+    /** Mirrors {@code AdrMcpTools#toRemovedPositions} (kogn-io/arknet#513). */
+    private static RemovedPositions toRemovedPositions(final List<Integer> positions) {
+        if (positions == null) {
+            return RemovedPositions.NONE;
+        }
+        return new RemovedPositions(new java.util.LinkedHashSet<>(positions));
     }
 
     /**

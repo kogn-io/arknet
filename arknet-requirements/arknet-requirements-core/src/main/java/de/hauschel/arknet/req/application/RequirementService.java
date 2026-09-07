@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -44,6 +45,7 @@ import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.MissingAcceptanceCriteriaException;
 import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.RemovedPositions;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
@@ -267,7 +269,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
         // still passed as the READ-side language below, so an untouched field is echoed back
         // under the project's own language rather than the process default).
         return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false,
-                Set.of(), Requirement::accept);
+                Set.of(), RemovedPositions.NONE, Requirement::accept);
     }
 
     @Override
@@ -276,7 +278,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
         Objects.requireNonNull(code, "code");
         // propose() never touches any text field either - same reasoning as accept().
         return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false,
-                Set.of(), Requirement::propose);
+                Set.of(), RemovedPositions.NONE, Requirement::propose);
     }
 
     @Override
@@ -290,7 +292,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
         TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
         // linkTerm() never touches any text field either - same reasoning as accept().
         return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false,
-                Set.of(), current -> {
+                Set.of(), RemovedPositions.NONE, current -> {
             if (current.usesTerms().contains(term)) {
                 return current;
             }
@@ -322,7 +324,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
         ConstraintRef ref = new ConstraintRef(constraint.id().value());
         // linkConstraint() never touches any text field either - same reasoning as accept().
         return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false,
-                Set.of(), current -> {
+                Set.of(), RemovedPositions.NONE, current -> {
             if (current.constrainedBy().contains(ref)) {
                 return current;
             }
@@ -339,9 +341,12 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
     public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
             String rationale, List<String> newAcceptanceCriteria,
             List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
+            RemovedPositions removeAcceptanceCriterionPositions,
             Priority priority, String language, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        RemovedPositions removed = removeAcceptanceCriterionPositions == null
+                ? RemovedPositions.NONE : removeAcceptanceCriterionPositions;
         // Which positions this call itself patches (issue #271): the signal
         // updateWithOptimisticRetry resolves a fresh language against, instead of comparing the
         // patched text to what is already stored there - a caller correcting a typo back to the
@@ -352,9 +357,18 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
                 : acceptanceCriteriaTextPatches.stream()
                         .map(AcceptanceCriterionTextPatch::position)
                         .collect(Collectors.toUnmodifiableSet());
+        // A position both corrected and removed in one call is a contradiction, refused here
+        // before anything is read or written - mirrors AdrCorrection's own
+        // rejectCorrectingARemovedPosition (kogn-io/arknet#513).
+        for (Integer position : touchedAcceptanceCriteriaPositions) {
+            if (removed.contains(position)) {
+                throw new IllegalArgumentException("acceptance criterion position " + position
+                        + " is named both as a correction and as a removal - remove it or correct it, not both");
+            }
+        }
         return updateWithOptimisticRetry(projectId, code, language, defaultLanguage, defaultLanguage,
                 title != null, description != null, rationale != null, touchedAcceptanceCriteriaPositions,
-                current -> {
+                removed, current -> {
             Requirement base = new Requirement(current.id(), current.code(),
                     title != null ? title : current.title(),
                     description != null ? description : current.description(),
@@ -364,9 +378,14 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
                     current.qualityCategory(), current.usesTerms(), current.acceptanceCriteria(),
                     current.constrainedBy());
             base = base.withAppendedAcceptanceCriteria(newAcceptanceCriteria);
-            return acceptanceCriteriaTextPatches != null
+            base = acceptanceCriteriaTextPatches != null
                     ? base.withAcceptanceCriteriaTextPatches(projectId, acceptanceCriteriaTextPatches)
                     : base;
+            // Removal comes last (kogn-io/arknet#513, mirroring adr_update's own ordering):
+            // appends and corrections address the positions the caller saw via req_get, and only
+            // the removal renumbers - so it must not run before anything that is addressed by
+            // position.
+            return base.withoutAcceptanceCriteria(projectId, removed);
         });
     }
 
@@ -397,7 +416,9 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
      * criteria after it (via {@link Requirement#withAppendedAcceptanceCriteria}) does not clear the
      * guard - the placeholder itself would still be persisted at position {@code 1} - only
      * {@link #update} patching that exact position with real text (via
-     * {@link Requirement#withAcceptanceCriteriaTextPatches}) does. A no-op mutation never reaches
+     * {@link Requirement#withAcceptanceCriteriaTextPatches}) does - removing the placeholder
+     * itself via {@code removeAcceptanceCriterionPositions} (kogn-io/arknet#513) also clears it,
+     * since a real criterion then takes over position 1. A no-op mutation never reaches
      * this check, since it already returned above. This guard runs <em>before</em> resolving a
      * touched field's write language whenever {@code mutation} changed any text (title,
      * description, rationale or an acceptance criterion) - a legacy requirement missing its
@@ -422,7 +443,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
     private Requirement updateWithOptimisticRetry(ProjectId projectId, RequirementCode code, String language,
             String defaultLanguage, String readDefaultLanguage, boolean titleTouched, boolean descriptionTouched,
             boolean rationaleTouched, Set<Integer> touchedAcceptanceCriteriaPositions,
-            UnaryOperator<Requirement> mutation) {
+            RemovedPositions removedAcceptanceCriterionPositions, UnaryOperator<Requirement> mutation) {
         RequirementConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             // The project's own default language, not the reading process's, decides which
@@ -476,7 +497,8 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
             String rationaleLanguage = resolveTouchedLanguage(rationaleTouched, current.value().rationale(),
                     updated.rationale(), current.rationaleLanguage(), language, defaultLanguage);
             Map<Integer, String> acceptanceCriteriaLanguageByPosition = acceptanceCriteriaLanguageByPosition(
-                    current, updated, language, defaultLanguage, touchedAcceptanceCriteriaPositions);
+                    current, updated, removedAcceptanceCriterionPositions, language, defaultLanguage,
+                    touchedAcceptanceCriteriaPositions);
             // A true no-op needs both text and language to already match what is stored: text-only
             // equality (the pre-#271 check) missed a named field/position whose caller supplied a
             // different language for text that happens to already match - see the block comment
@@ -493,7 +515,8 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
             }
             try {
                 repository.compareAndUpdate(projectId, current.head(), updated, titleLanguage, descriptionLanguage,
-                        rationaleLanguage, acceptanceCriteriaLanguageByPosition, defaultLanguage);
+                        rationaleLanguage, acceptanceCriteriaLanguageByPosition,
+                        removedAcceptanceCriterionPositions, defaultLanguage);
                 return updated;
             } catch (RequirementConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the requirement between our read and our write -
@@ -517,48 +540,63 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
             return;
         }
         AcceptanceCriterion placeholder = current.value().acceptanceCriteria().get(0);
+        // Position 1 always exists post-mutation: acceptanceCriteria is never empty (the compact
+        // constructor rejects that), and positions are gap-free from 1 - a removal that took
+        // position 1 out itself renumbers whatever survived into position 1 (kogn-io/arknet#513),
+        // so this lookup can never come up empty, append/patch/remove alike.
         AcceptanceCriterion stillAtPlaceholderPosition = updated.acceptanceCriteria().stream()
                 .filter(criterion -> criterion.position() == placeholder.position())
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException(
-                        "acceptance criteria never lose an existing position (append/patch-only, issue #266)"));
+                        "acceptance criteria position 1 is always present when the list is non-empty"));
         if (stillAtPlaceholderPosition.text().equals(placeholder.text())) {
             throw new MissingAcceptanceCriteriaException(projectId, code);
         }
     }
 
     /**
-     * The BCP-47 language tag each of {@code updated}'s acceptance-criterion positions is written
-     * under: a position absent from {@code current} altogether (a newly appended position - it
-     * has no prior tag or text to compare against) is always freshly resolved via {@link
-     * LanguageTag#resolveWriteLanguage}; an existing position named in {@code touchedPositions}
-     * (this call's own {@code acceptanceCriteriaTextPatches}, see {@link #update}) resolves fresh
-     * only if the caller supplied {@code language} explicitly or the patched text actually differs
-     * from what is stored there (issue #271, and its regression - a named position whose patched
-     * text happens to equal what is stored and whose caller did not name a language is a no-op,
-     * not a forced retag). Every other position round-trips under the exact tag {@code current}
-     * carried for it (a scoped no-op). Mirrors the {@code titleTouched}/{@code descriptionTouched}
-     * distinction directly above via {@link #resolveTouchedPositionLanguage}, once per position
-     * instead of once for the whole field - the same shape {@code
-     * UseCaseService#updateWithOptimisticRetry} already uses for {@code Step#text()} via
+     * The BCP-47 language tag each surviving/appended acceptance-criterion position is written
+     * under, keyed by the <em>post-removal</em> position (kogn-io/arknet#513, mirroring
+     * {@code AdrService#positionLanguages}): every position {@code current} carries that
+     * {@code removed} does not take out is re-keyed via {@link RemovedPositions#survivingPositionOf}
+     * and resolves fresh only if it is named in {@code touchedPositions} (this call's own
+     * {@code acceptanceCriteriaTextPatches}, see {@link #update}) and either the caller supplied
+     * {@code language} explicitly or the patched text actually differs from what is stored there
+     * (issue #271 - a named position whose patched text happens to equal what is stored and whose
+     * caller did not name a language is a no-op, not a forced retag); otherwise it round-trips
+     * under the exact tag {@code current} carried for it (a scoped no-op). Whatever position
+     * {@code updated} carries beyond what survived is a freshly appended one and always resolves
+     * fresh - it has no prior tag or text to compare against. Mirrors the
+     * {@code titleTouched}/{@code descriptionTouched} distinction directly above, once per
+     * position instead of once for the whole field - the same shape
+     * {@code UseCaseService#updateWithOptimisticRetry} already uses for {@code Step#text()} via
      * {@code stepTextLanguageByPosition}.
      */
     private static Map<Integer, String> acceptanceCriteriaLanguageByPosition(
-            RequirementRepository.CurrentRequirement current, Requirement updated, String language,
-            String defaultLanguage, Set<Integer> touchedPositions) {
-        Map<Integer, String> currentTextByPosition = new HashMap<>();
-        for (AcceptanceCriterion criterion : current.value().acceptanceCriteria()) {
-            currentTextByPosition.put(criterion.position(), criterion.text());
+            RequirementRepository.CurrentRequirement current, Requirement updated, RemovedPositions removed,
+            String language, String defaultLanguage, Set<Integer> touchedPositions) {
+        Map<Integer, String> updatedTextByPosition = new HashMap<>();
+        for (AcceptanceCriterion criterion : updated.acceptanceCriteria()) {
+            updatedTextByPosition.put(criterion.position(), criterion.text());
         }
         Map<Integer, String> languageByPosition = new LinkedHashMap<>();
-        for (AcceptanceCriterion criterion : updated.acceptanceCriteria()) {
-            boolean isNewPosition = !currentTextByPosition.containsKey(criterion.position());
-            String resolved = resolveTouchedPositionLanguage(isNewPosition,
-                    touchedPositions.contains(criterion.position()),
-                    currentTextByPosition.get(criterion.position()), criterion.text(),
+        for (AcceptanceCriterion criterion : current.value().acceptanceCriteria()) {
+            OptionalInt survivingPosition = removed.survivingPositionOf(criterion.position());
+            if (survivingPosition.isEmpty()) {
+                continue;
+            }
+            int newPosition = survivingPosition.getAsInt();
+            String resolved = resolveTouchedLanguage(touchedPositions.contains(criterion.position()),
+                    criterion.text(), updatedTextByPosition.get(newPosition),
                     current.acceptanceCriteriaLanguageByPosition().get(criterion.position()),
                     language, defaultLanguage);
-            languageByPosition.put(criterion.position(), resolved);
+            languageByPosition.put(newPosition, resolved);
+        }
+        for (AcceptanceCriterion criterion : updated.acceptanceCriteria()) {
+            // Resolved lazily, not via a blind put: a lifecycle call passes no language at all and
+            // must not be asked for one on behalf of a position it merely carries through.
+            languageByPosition.computeIfAbsent(criterion.position(),
+                    position -> LanguageTag.resolveWriteLanguage(language, defaultLanguage));
         }
         return languageByPosition;
     }
@@ -580,21 +618,6 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
         return languageTouched
                 ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
                 : currentLanguage;
-    }
-
-    /**
-     * {@link #resolveTouchedLanguage} extended with {@code isNewPosition}: a position with no
-     * prior text/tag at all (a newly appended acceptance criterion) always resolves fresh,
-     * regardless of {@code touched} - there is nothing to compare its text against or fall back
-     * to.
-     */
-    private static String resolveTouchedPositionLanguage(boolean isNewPosition, boolean touched,
-            String currentText, String updatedText, String currentLanguage, String language,
-            String defaultLanguage) {
-        if (isNewPosition) {
-            return LanguageTag.resolveWriteLanguage(language, defaultLanguage);
-        }
-        return resolveTouchedLanguage(touched, currentText, updatedText, currentLanguage, language, defaultLanguage);
     }
 
     @Override

@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
+import de.hauschel.arknet.uc.domain.RemovedPositions;
 import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -116,7 +117,11 @@ public interface UseCaseRepository {
      *                      position: the tag {@code updated.steps()}' step at that position is
      *                      written in for this call, or {@code null} for untagged at that
      *                      position. A position this call does not patch must carry through
-     *                      {@link CurrentUseCase#stepTextLanguageByPosition()}'s own entry for it
+     *                      {@link CurrentUseCase#stepTextLanguageByPosition()}'s own entry for it.
+     *                      Keyed by the <em>post-removal</em> position - the same numbering
+     *                      {@code updated.steps()} itself carries (kogn-io/arknet#513): a
+     *                      surviving step that moved because a lower position was removed is
+     *                      keyed under its new number here too
      * @param extensionTextLanguageByPosition the same as {@code stepTextLanguageByPosition}, per
      *                      extension position (1-based, in {@code updated.extensions()}'s order):
      *                      the tag the extension text at that position is written in for this
@@ -144,9 +149,11 @@ public interface UseCaseRepository {
      *                      {@link #findCurrentByCode} last read - position-based other-language-
      *                      variant preservation for extensions is safe up to (and including) this
      *                      length, and must be suspended beyond it. Extension positions are not
-     *                      stable identities the way main-flow-step positions are ({@code
-     *                      stepTextPatches} never adds/removes/reorders steps, but a wholesale
-     *                      {@code extensions} replace explicitly may) - re-attaching an old
+     *                      stable identities the way main-flow-step positions are (a main-flow
+     *                      step's position only ever moves by {@code removeMainStepPositions}'
+     *                      own exact renumbering, kogn-io/arknet#513, never by an implicit
+     *                      insert/reorder the way a wholesale {@code extensions} replace may) -
+     *                      re-attaching an old
      *                      position's other-language variant by position alone, once that position
      *                      may now denote a completely different extension, would silently graft a
      *                      stale translation onto unrelated content. A same-length replace can only
@@ -161,7 +168,15 @@ public interface UseCaseRepository {
      *                      rather than misattached. A same-length reorder (a swap) is indistinguishable
      *                      from an in-place edit by content alone and is not covered - it is not a
      *                      supported operation on this list today. Main-flow-step preservation is
-     *                      unaffected by this parameter, its positions stay stable by construction
+     *                      unaffected by this parameter - it renumbers via
+     *                      {@code removedMainStepPositions} instead, see that parameter
+     * @param removedMainStepPositions the main-flow-step positions, as {@code updated} was
+     *                      numbered before this write, that this call removes
+     *                      (kogn-io/arknet#513) - what re-keys every surviving position's
+     *                      other-language variant under its post-removal number, mirroring
+     *                      {@code AdrRepository#compareAndUpdate}'s
+     *                      {@code removedConsequencePositions}. {@link RemovedPositions#NONE} for
+     *                      a call that removes nothing
      * @throws UseCaseNotFoundException              if no use case with this identity exists at
      *                                                all
      * @throws UseCaseConcurrentlyModifiedException if {@code expectedHead} no longer matches the
@@ -177,7 +192,7 @@ public interface UseCaseRepository {
             String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
             String preconditionLanguage, String postconditionLanguage,
             Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
-            String defaultLanguage, int stableExtensionPrefixLength);
+            String defaultLanguage, int stableExtensionPrefixLength, RemovedPositions removedMainStepPositions);
 
     /**
      * Finds a use case by its human-readable business code within a project.

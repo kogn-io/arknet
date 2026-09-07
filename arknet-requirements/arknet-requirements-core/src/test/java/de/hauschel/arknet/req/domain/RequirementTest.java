@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -350,6 +351,50 @@ class RequirementTest {
                 () -> req.withAcceptanceCriteriaTextPatches(
                         PROJECT_ID, List.of(new AcceptanceCriterionTextPatch(7, "no such criterion"))));
         assertEquals(7, exception.position());
+    }
+
+    /** kogn-io/arknet#513: removing a criterion renumbers the survivors consecutively from 1. */
+    @Test
+    void withoutAcceptanceCriteriaRenumbersTheSurvivors() {
+        List<AcceptanceCriterion> threeCriteria = List.of(
+                new AcceptanceCriterion(1, "First"), new AcceptanceCriterion(2, "Second"),
+                new AcceptanceCriterion(3, "Third"));
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, threeCriteria, List.of());
+
+        Requirement trimmed = req.withoutAcceptanceCriteria(PROJECT_ID, new RemovedPositions(Set.of(2)));
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "First"), new AcceptanceCriterion(2, "Third")),
+                trimmed.acceptanceCriteria());
+    }
+
+    @Test
+    void withoutAcceptanceCriteriaWithNothingToRemoveIsANoOp() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, CRITERIA, List.of());
+
+        assertEquals(req, req.withoutAcceptanceCriteria(PROJECT_ID, RemovedPositions.NONE));
+    }
+
+    @Test
+    void withoutAcceptanceCriteriaThrowsForAnUnknownPosition() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, CRITERIA, List.of());
+
+        AcceptanceCriterionPositionNotFoundException exception = assertThrows(
+                AcceptanceCriterionPositionNotFoundException.class,
+                () -> req.withoutAcceptanceCriteria(PROJECT_ID, new RemovedPositions(Set.of(9))));
+        assertEquals(9, exception.position());
+    }
+
+    /** {@code acceptanceCriteria} is mandatory - removing the last one is refused, not silently emptied. */
+    @Test
+    void withoutAcceptanceCriteriaRejectsEmptyingTheList() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, CRITERIA, List.of());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> req.withoutAcceptanceCriteria(PROJECT_ID, new RemovedPositions(Set.of(1))));
     }
 
     @Test
