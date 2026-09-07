@@ -135,7 +135,7 @@ class RequirementServiceConcurrencyTest {
         RequirementService underTest =
                 new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
-        Requirement result = underTest.update(WS, code, null, "Corrected description", null, null, null, null, null, null, DEFAULT_LANGUAGE);
+        Requirement result = underTest.update(WS, code, null, "Corrected description", null, null, null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals("Corrected description", result.description());
         assertEquals(List.of(new TermRef(TERM_1)), result.usesTerms());

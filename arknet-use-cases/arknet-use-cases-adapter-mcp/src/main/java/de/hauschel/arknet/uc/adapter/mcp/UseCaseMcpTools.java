@@ -451,7 +451,11 @@ public final class UseCaseMcpTools {
                     + "price of a new use-case code and no inbound references carried over. The role "
                     + "references are correctable too: a given primaryRole replaces the current one (it "
                     + "cannot be cleared - a use case always has exactly one), and a given supportingRoles "
-                    + "array replaces the current list wholesale, an empty array clearing it."
+                    + "array replaces the current list wholesale, an empty array clearing it. "
+                    + "usesTermCodes replaces the use case's arkreq:usesTerm links wholesale: omit it to leave "
+                    + "the existing links untouched, pass an empty list to remove them all, or pass the full "
+                    + "set of TERM-N codes the use case should use going forward (uc_link_term remains the "
+                    + "convenient way to add a single link without restating the rest)."
                     + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
     public String update(
             final McpSyncRequestContext context,
@@ -513,6 +517,13 @@ public final class UseCaseMcpTools {
                     + "and removing every remaining step is rejected - at least one must stay (optional, none "
                     + "removed if omitted)", required = false)
             final List<Integer> removeMainStepPositions,
+            @McpToolParam(description = "Business codes of the glossary terms this use case should use going "
+                    + "forward, e.g. ['TERM-1', 'TERM-2'] (resolved against the glossary, not skos:prefLabel "
+                    + "or store IRIs). Omit to leave the existing arkreq:usesTerm links untouched; pass an "
+                    + "empty list to remove every link; pass a non-empty list to replace the links wholesale - "
+                    + "a term not named here is unlinked even if it was linked before (kogn-io/arknet#540).",
+                    required = false)
+            final List<String> usesTermCodes,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') every field this call "
                     + "actually touches (a non-omitted title/goal/scope/trigger/precondition/postcondition, "
                     + "each patched or newly appended step's text, and, if extensions is given, every entry "
@@ -548,6 +559,7 @@ public final class UseCaseMcpTools {
                 .stepRealisesPatches(toStepRealisesPatches(stepRealisesPatches))
                 .newMainSteps(toNewMainSteps(newMainSteps))
                 .removeMainStepPositions(toRemovedPositions(removeMainStepPositions))
+                .usesTermCodes(usesTermCodes == null ? null : List.copyOf(usesTermCodes))
                 .language(blankToNull(language))
                 .build();
         final String staleHint = staleTranslationHint(project, code, correction, extensions, stepTextPatches,
@@ -559,7 +571,8 @@ public final class UseCaseMcpTools {
     @McpTool(name = "uc_link_term",
             description = "Link a use case to a glossary term of the ubiquitous language it uses. The term "
                     + "must already exist (create it with term_add first). Linking the same term twice is a "
-                    + "no-op.")
+                    + "no-op. To remove a link (or replace the whole set), use uc_update's usesTermCodes "
+                    + "instead.")
     public String linkTerm(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,

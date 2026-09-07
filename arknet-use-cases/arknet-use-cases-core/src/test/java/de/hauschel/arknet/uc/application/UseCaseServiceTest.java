@@ -986,6 +986,68 @@ class UseCaseServiceTest {
         assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
     }
 
+    /**
+     * kogn-io/arknet#540: an omitted {@code usesTermCodes} (the {@code UseCaseCorrection} field
+     * left {@code null}) leaves the existing {@code arkreq:usesTerm} edges untouched - mirroring
+     * {@code supportingRoles}' own tri-state.
+     */
+    @Test
+    void updateWithoutUsesTermCodesLeavesExistingLinksUntouched() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        UseCase updated = service.update(WS, code, UseCaseCorrection.builder().title("New title").build(),
+                DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new TermRef(TERM_1_ID)), updated.usesTerms());
+    }
+
+    /**
+     * kogn-io/arknet#540: an empty {@code usesTermCodes} list is the explicit, unambiguous signal
+     * to remove every {@code arkreq:usesTerm} edge - the gap this issue closes, since neither
+     * {@code uc_link_term} (add-only) nor a prior {@code uc_update} could ever do this.
+     */
+    @Test
+    void updateWithEmptyUsesTermCodesRemovesEveryLink() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+        service.linkTerm(WS, code, "TERM-2", DEFAULT_LANGUAGE);
+
+        UseCase updated = service.update(WS, code,
+                UseCaseCorrection.builder().usesTermCodes(List.of()).build(), DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(), updated.usesTerms());
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    /** A non-empty {@code usesTermCodes} list replaces the existing edges wholesale. */
+    @Test
+    void updateWithUsesTermCodesReplacesTheExistingLinksWholesale() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        UseCase updated = service.update(WS, code,
+                UseCaseCorrection.builder().usesTermCodes(List.of("TERM-2")).build(), DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new TermRef(TERM_2_ID)), updated.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_2_ID)), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    /**
+     * An unknown term code in {@code usesTermCodes} is rejected before anything is written - the
+     * same didactic rejection {@code uc_link_term} raises.
+     */
+    @Test
+    void updateWithAnUnknownUsesTermCodeIsRejectedAndWritesNothing() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        assertThrows(NoSuchElementException.class, () -> service.update(WS, code,
+                UseCaseCorrection.builder().usesTermCodes(List.of("TERM-99")).build(), DEFAULT_LANGUAGE));
+
+        assertEquals(List.of(new TermRef(TERM_1_ID)), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
     @Test
     void linkConstraintAddsTheConstraintToTheUseCase() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();

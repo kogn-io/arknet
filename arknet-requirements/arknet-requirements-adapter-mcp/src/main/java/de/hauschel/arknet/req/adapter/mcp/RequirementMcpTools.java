@@ -405,7 +405,8 @@ public final class RequirementMcpTools {
     @McpTool(name = "req_link_term",
             description = "Link a requirement to a glossary term of the ubiquitous language it uses. "
                     + "The term must already exist (create it with term_add first). Linking the same "
-                    + "term twice is a no-op.")
+                    + "term twice is a no-op. To remove a link (or replace the whole set), use "
+                    + "req_update's usesTermCodes instead.")
     public String linkTerm(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
@@ -467,7 +468,11 @@ public final class RequirementMcpTools {
                     + "position and moves the ones after it up - a position cannot be both corrected and "
                     + "removed in one call, and removing every remaining criterion is rejected (at least "
                     + "one must stay). "
-                    + "Does not touch status (use req_set_status) or linked terms (use req_link_term)."
+                    + "usesTermCodes replaces the requirement's arkreq:usesTerm links wholesale: omit it to "
+                    + "leave the existing links untouched, pass an empty list to remove them all, or pass the "
+                    + "full set of TERM-N codes the requirement should use going forward (req_link_term remains "
+                    + "the convenient way to add a single link without restating the rest). "
+                    + "Does not touch status (use req_set_status)."
                     + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
     public String update(
             final McpSyncRequestContext context,
@@ -502,6 +507,13 @@ public final class RequirementMcpTools {
                     + "WONT_HAVE (optional, unchanged if omitted - omitting it cannot clear a priority "
                     + "that is already set)", required = false)
             final String priority,
+            @McpToolParam(description = "Business codes of the glossary terms this requirement should use "
+                    + "going forward, e.g. ['TERM-1', 'TERM-2'] (resolved against the glossary, not "
+                    + "skos:prefLabel or store IRIs). Omit to leave the existing arkreq:usesTerm links "
+                    + "untouched; pass an empty list to remove every link; pass a non-empty list to replace "
+                    + "the links wholesale - a term not named here is unlinked even if it was linked before "
+                    + "(kogn-io/arknet#540).", required = false)
+            final List<String> usesTermCodes,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') a non-omitted title/"
                     + "description/rationale/touched acceptance criterion is written in. Falls back to the "
                     + "project's "
@@ -532,7 +544,8 @@ public final class RequirementMcpTools {
                 newAcceptanceCriteria == null ? null : List.copyOf(newAcceptanceCriteria),
                 toAcceptanceCriteriaTextPatches(acceptanceCriteriaTextPatches),
                 toRemovedPositions(removeAcceptanceCriterionPositions),
-                requirementPriority, blankToNull(language), project.defaultLanguage());
+                requirementPriority, usesTermCodes == null ? null : List.copyOf(usesTermCodes),
+                blankToNull(language), project.defaultLanguage());
         return presenter.format(project.id(), updated) + staleHint;
     }
 
