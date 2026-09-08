@@ -96,7 +96,10 @@ public final class TraceabilityMcpTools {
                     + " text; an architecture decision's name, context, decision, every consequence's statement"
                     + " and every considered option's name/rationale count as its text), or a term's own"
                     + " skos:definition naming another term without a skos:broader or skos:related edge - and constraints no"
-                    + " requirement or use case is bound by via constrainedBy. Reported as four lists.",
+                    + " requirement or use case is bound by via constrainedBy. Reported as four lists. The mention"
+                    + " match is literal and whole-word, not stem-based, so it also flags everyday words used in"
+                    + " their ordinary sense (e.g. \"Rolle\", \"Begriff\", \"Projekt\") - a hit in that list is a"
+                    + " reading hint for a human, not a finding that demands an edge.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String orphanCheck(
             final McpSyncRequestContext context,
