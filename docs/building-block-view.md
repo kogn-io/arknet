@@ -25,17 +25,24 @@ points at them, and it repeats nothing the store already holds (glossary, record
 
 ## 2. Context view
 
+The Bounded Contexts, their context map and their glossary links live in the store
+(#438): `bc_list` shows BC-1 to BC-6 with name, domain vision, subdomain and linked
+terms; `resource_get BC-n` shows a context's relationships (there is no relationship
+listing yet). This section keeps only what the store does not hold: the resource
+types each context owns, the record it rests on, and how the recorded relationships
+compare to the code.
+
 Target Bounded Contexts per ADR-10, ADR-36 and ADR-46 (all ACCEPTED) plus the two
 decided on #554 and #444 (records pending):
 
-| Bounded Context (target)     | holds                                                         | Record |
-|------------------------------|---------------------------------------------------------------|--------|
-| Product & Requirements       | Requirement, Constraint, AcceptanceCriterion, UseCase, Steps  | ADR-10 |
-| Domain Modelling             | Term (SKOS), BoundedContext, ContextRelationship              | ADR-10 |
-| Architecture & Decisions     | ArchitectureDecisionRecord, Consequence, ConsideredOption     | ADR-10 |
-| Actor                        | Actor, Role                                                   | ADR-36, ADR-37 |
-| Project registry             | Project, Anchor, language commitment -- supporting context outside the eight lifecycle contexts, like Actor | ADR-13 (successor pending; decided on #444, 2026-09-08) |
-| Model Analysis               | read-only: impact analysis, trace matrix, orphans, role/use-case matrix, term co-occurrence, `store_check`, the HTML report -- reads the Published Language of every model context | #554 (decided 2026-09-08, record pending) |
+| Code | Bounded Context (target)     | holds                                                         | Record |
+|------|------------------------------|---------------------------------------------------------------|--------|
+| BC-1 | Product & Requirements       | Requirement, Constraint, AcceptanceCriterion, UseCase, Steps  | ADR-10 |
+| BC-2 | Domain Modelling             | Term (SKOS), BoundedContext, ContextRelationship              | ADR-10 |
+| BC-3 | Architecture & Decisions     | ArchitectureDecisionRecord, Consequence, ConsideredOption     | ADR-10 |
+| BC-4 | Actor                        | Actor, Role                                                   | ADR-36, ADR-37 |
+| BC-5 | Project registry             | Project, Anchor, language commitment -- supporting context outside the eight lifecycle contexts, like Actor | ADR-13 (successor pending; decided on #444, 2026-09-08) |
+| BC-6 | Model Analysis               | read-only: impact analysis, trace matrix, orphans, role/use-case matrix, term co-occurrence, `store_check`, the HTML report -- reads the Published Language of every model context | #554 (decided 2026-09-08, record pending) |
 
 Decided on #444 (2026-09-08): the project registry is a Bounded Context of its own --
 a supporting context outside the eight lifecycle contexts, the same position Actor
@@ -46,23 +53,30 @@ are a language no model context holds. Tenant and user identity are not part of 
 (a different language, a decision of its own once multi-tenancy becomes concrete;
 ADR-6). The undefined "model context" goes with the successor of ADR-13.
 
-Context map (as built today, read off the code, not yet in the store -- #438):
+Context map as recorded in the store (#438, 2026-09-08), against the code:
 
-- Product & Requirements reads Domain Modelling (term codes) and Actor (role codes).
-- Architecture & Decisions reads Product & Requirements and Domain Modelling.
-- Domain Modelling (bounded-context) reads Domain Modelling (ubiquitous-language) --
-  context-internal per ADR-10.
-- Actor reads nobody.
-- The project registry reads nobody; the tool adapter of every context resolves its
-  project there (upstream of every context).
-- Model Analysis (target, #554) reads every model context through its Published
-  Language; nobody reads Model Analysis.
-- `arknet-shared-kernel` is the Shared Kernel of every context (decided on #444):
-  project identity, resource identity, business-code assignment, language.
-- Relationship kind: on the write side the out-adapter reads the neighbour's named
-  graph (= Published Language, the ontology as schema); on the read side the in-adapter
-  borrows the neighbour's read in-port (Borrowed In-Port, TERM-22 -- whether that
-  pattern survives is for the successor of ADR-49).
+- `PUBLISHED_LANGUAGE`, nine relationships: Domain Modelling and Actor upstream of
+  Product & Requirements (term codes, role codes); Product & Requirements and Domain
+  Modelling upstream of Architecture & Decisions; every other context upstream of
+  Model Analysis. The four edges among the model contexts are as built: the
+  out-adapter reads the neighbour's named graph (the ontology as schema). The five
+  into Model Analysis are the target of #554, not the build: today those evaluations
+  live in the composition root, and `store_check` takes the maintained languages from
+  `ResolvedProject`, not from the registry's graph.
+- `CONFORMIST`, four relationships: the project registry upstream of the four model
+  contexts. As built, no context reads the registry's graph. The contexts take
+  `ProjectId` and the language commitments as they are, through the Shared Kernel
+  (`ResolvedProject`), and the composition root fills that value by calling the
+  registry's `ResolveProject` in-port. Whether this becomes a Published Language
+  edge once Part B has moved the resolver is for the consolidation pass after Part A.
+- Not recorded: Domain Modelling (bounded-context) reads Domain Modelling
+  (ubiquitous-language), context-internal per ADR-10; and `arknet-shared-kernel` as
+  the Shared Kernel of every context (decided on #444: project identity, resource
+  identity, business-code assignment, language). The store records a shared kernel
+  only pairwise, so that statement waits for #77.
+- Relationship kind as built, read side: the in-adapter borrows the neighbour's read
+  in-port (Borrowed In-Port, TERM-22). Abolished on #444, removed in Part B, see
+  section 4.
 
 ## 3. Building blocks as built
 
@@ -156,7 +170,8 @@ depends on its own core only. TERM-22 goes with it (#439, #441).
    undefined "model context" goes. Left for the ADR-10 successor: the full context
    list placed against ADR-46, the gateway wording and TERM-22 dropped, context =
    Maven parent and Component = hexagon.
-4. #438 -- Bounded Contexts and context map into the store; section 2 moves there.
+4. Done (#438, 2026-09-08): six Bounded Contexts, thirteen relationships and the
+   glossary links are in the store; section 2 keeps only what the store does not hold.
 5. Part B (#439, #441, #560, #561): Maven, ArchUnit, module map in `CLAUDE.md`.
 6. #77 -- building-block view into the store; this file goes away. Before that, a
    successor of ADR-46 (components move from "outside" to "not yet built"), see the
