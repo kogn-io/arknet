@@ -31,6 +31,7 @@ class HtmlReportRendererTest {
     private static final ProjectId PROJECT = new ProjectId("report-test");
     private static final String ARKREQ = "https://w3id.org/arknet/requirements#";
     private static final String ARKPROC = "https://w3id.org/arknet/process#";
+    private static final String ARKARCH = "https://w3id.org/arknet/architecture#";
     private static final String ID = "https://w3id.org/arknet/id/";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 
@@ -153,6 +154,65 @@ class HtmlReportRendererTest {
         final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views, DisplayLocale.DEFAULT);
 
         assertThat(html).contains("id=\"r-" + anchorOf(ac) + "\"");
+    }
+
+    /**
+     * Issue #571: since #357 every ADR consequence and considered option is its own {@code
+     * arkarch:Consequence}/{@code arkarch:ConsideredOption} resource, already rendered inline on
+     * its ADR's card ({@link AdrCards}). Without this suppression both also showed up as their
+     * own raw cards in "Other resources" - the same "litters the report" problem #297 already
+     * fixed for acceptance criteria, here for two sub-resource types at once.
+     */
+    @Test
+    void suppressesAdrConsequencesAndConsideredOptionsFromTheRawSectionWhenTheirAdrIsCarded() {
+        final String adr = ID + "adr-1";
+        final String consequence = ID + "consequence-1";
+        final String option = ID + "option-1";
+        final ModelSection section = new ModelSection("Architecture Decisions", "architecture-decisions", "",
+                List.of(new ModelCard("ADR-1", "Store first", adr, List.of(), List.of())));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(adr, RDF_TYPE, ARKARCH + "ArchitectureDecisionRecord"),
+                iri(adr, ARKARCH + "consequence", consequence),
+                iri(consequence, RDF_TYPE, ARKARCH + "Consequence"),
+                literal(consequence, ARKARCH + "consequenceStatement", "Weniger Kopien"),
+                iri(adr, ARKARCH + "consideredOption", option),
+                iri(option, RDF_TYPE, ARKARCH + "ConsideredOption"),
+                literal(option, ARKARCH + "optionRationale", "Zu aufwendig")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).doesNotContain("id=\"r-" + anchorOf(consequence) + "\"");
+        assertThat(html).doesNotContain("id=\"r-" + anchorOf(option) + "\"");
+    }
+
+    /**
+     * Counterpart to {@link #suppressesAdrConsequencesAndConsideredOptionsFromTheRawSectionWhenTheirAdrIsCarded()},
+     * mirroring the #142 protection already in place for use-case steps and (#297) acceptance
+     * criteria: if the Architecture Decisions section itself failed to build, no ADR is carded, so
+     * its consequences and considered options must not be swallowed as if an ADR card had already
+     * shown them.
+     */
+    @Test
+    void keepsAdrConsequencesAndConsideredOptionsInOtherResourcesWhenTheAdrSectionItselfFailed() {
+        final String adr = ID + "adr-1";
+        final String consequence = ID + "consequence-1";
+        final String option = ID + "option-1";
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(adr, RDF_TYPE, ARKARCH + "ArchitectureDecisionRecord"),
+                iri(adr, ARKARCH + "consequence", consequence),
+                iri(consequence, RDF_TYPE, ARKARCH + "Consequence"),
+                literal(consequence, ARKARCH + "consequenceStatement", "Weniger Kopien"),
+                iri(adr, ARKARCH + "consideredOption", option),
+                iri(option, RDF_TYPE, ARKARCH + "ConsideredOption"),
+                literal(option, ARKARCH + "optionRationale", "Zu aufwendig")));
+        final ModelViews.Views views = new ModelViews.Views(
+                List.of(), List.of("Architecture Decisions: could not be read (IllegalStateException: store closed)"));
+
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views, DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("id=\"r-" + anchorOf(consequence) + "\"");
+        assertThat(html).contains("id=\"r-" + anchorOf(option) + "\"");
     }
 
     /**
