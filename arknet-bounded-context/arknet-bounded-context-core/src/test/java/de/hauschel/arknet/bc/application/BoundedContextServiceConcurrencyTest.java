@@ -116,11 +116,11 @@ class BoundedContextServiceConcurrencyTest {
     void concurrentUpdateCallsForDifferentFieldsBothSurvive() {
         BoundedContextCode code = otherCaller.add(WS, newBoundedContext(), null).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
-                () -> otherCaller.update(WS, code, null, "Updated vision from the other caller.", "en", null));
+                () -> otherCaller.update(WS, code, null, "Updated vision from the other caller.", null, "en", null));
         BoundedContextService underTest =
                 new BoundedContextService(racing, resourceIdFactory, termLookup, contextRelationshipRepository);
 
-        BoundedContext result = underTest.update(WS, code, "UpdatedName", null, "en", null);
+        BoundedContext result = underTest.update(WS, code, "UpdatedName", null, null, "en", null);
 
         assertEquals("UpdatedName", result.name());
         BoundedContext stored = store.findByCode(WS, code, null).orElseThrow();

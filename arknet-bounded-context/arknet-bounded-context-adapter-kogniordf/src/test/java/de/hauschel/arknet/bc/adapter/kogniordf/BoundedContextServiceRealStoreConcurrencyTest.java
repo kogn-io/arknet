@@ -399,17 +399,17 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         BoundedContextService straightThrough = serviceOver(realLifecycle);
         BoundedContextCode code = straightThrough.add(WS, newBoundedContext("orders-team"), null).code();
         straightThrough.update(WS, code, null,
-                "Verwaltet den Lebenszyklus einer Kundenbestellung.", "de", null);
+                "Verwaltet den Lebenszyklus einer Kundenbestellung.", null, "de", null);
 
         AtomicBoolean pending = new AtomicBoolean(true);
         BoundedContextService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
             if (pending.compareAndSet(true, false)) {
                 straightThrough.update(WS, code, null,
-                        "Owns the lifecycle of a customer order, corrected.", "en", null);
+                        "Owns the lifecycle of a customer order, corrected.", null, "en", null);
             }
         }));
 
-        racing.update(WS, code, "Auftragsverwaltung", null, "de", null);
+        racing.update(WS, code, "Auftragsverwaltung", null, null, "de", null);
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
         BoundedContext asEnglish = straightThrough.get(WS, code, "en").orElseThrow().context();

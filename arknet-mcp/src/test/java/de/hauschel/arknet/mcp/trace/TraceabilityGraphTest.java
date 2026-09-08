@@ -949,6 +949,39 @@ class TraceabilityGraphTest {
         }
 
         /**
+         * Regression guard for kogn-io/arknet#567: {@code bc_update}'s {@code terms} tri-state
+         * removes a bounded context's {@code arkddd:ubiquitousLanguageTerm} edge via the out-port's
+         * replace-by-identity write, so a fresh {@link TraceabilityGraph} snapshot taken afterwards
+         * must report the term as unreferenced again - exactly the sibling regression
+         * {@link #dependentsNoLongerReachesAContextRelationshipRemovedByUnlink} guards for
+         * {@code bc_unlink_context}.
+         */
+        @Test
+        void isReferencedTermIsFalseForATermUnlinkedByBcUpdate() {
+            String bc2Iri = "https://w3id.org/arknet/id/trace-test-bc-2-term-unlinked";
+            String termIri = "https://w3id.org/arknet/id/trace-test-term-unlinked";
+            BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
+                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+            BoundedContextId id = new BoundedContextId(ResourceId.of(bc2Iri));
+            boundedContexts.create(PROJECT, new BoundedContext(
+                    id, new BoundedContextCode("BC-4"), "Fulfilment", "Wir versenden Bestellungen.", null, null,
+                    List.of(new de.hauschel.arknet.bc.domain.TermRef(ResourceId.of(termIri)))), "en");
+
+            BoundedContextRepository.CurrentBoundedContext current =
+                    boundedContexts.findCurrentByCode(PROJECT, new BoundedContextCode("BC-4"), null).orElseThrow();
+            BoundedContext unlinked = new BoundedContext(id, current.value().code(), current.value().name(),
+                    current.value().domainVision(), current.value().subdomain(), current.value().ownedBy(),
+                    List.of());
+            boundedContexts.compareAndUpdate(PROJECT, current.head(), unlinked, current.nameLanguage(),
+                    current.domainVisionLanguage(), null);
+
+            StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+            TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+            assertThat(freshGraph.isReferencedTerm(termIri)).isFalse();
+        }
+
+        /**
          * Regression test for issue #147: {@link TraceabilityGraph#actorIris()} must find an actor
          * from its {@code arkproc:HumanActor}/{@code SystemActor} type alone - since ADR-37/
          * kogn-io/arknet#405 Part C no use case can reference an actor at all any more (see

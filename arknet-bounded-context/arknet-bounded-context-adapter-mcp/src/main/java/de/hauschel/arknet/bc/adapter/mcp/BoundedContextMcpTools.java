@@ -69,9 +69,10 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * and inline {@code [fallback: ...]} marking {@code bc_list} appends. No FR-10 label-equality
  * guard applies to {@code name}: a bounded context is nowhere referenced by its name (every edge
  * to it runs over {@link BoundedContextCode}), so a name free to differ per language breaks no
- * reference. {@code bc_update} corrects only {@code name}/{@code domainVision} - not
- * {@code subdomain}/{@code ownedBy}/linked terms/context relationships, which stay exactly as
- * fixed since {@code bc_add} (or, for terms, since the last {@code bc_link_term}).</p>
+ * reference. {@code bc_update} corrects {@code name}/{@code domainVision} and, via the
+ * {@code terms} tri-state (kogn-io/arknet#567), the linked glossary terms - not
+ * {@code subdomain}/{@code ownedBy}/context relationships, which stay exactly as fixed since
+ * {@code bc_add}.</p>
  *
  * <p><strong>Term display resolution (Borrowed In-Port).</strong> {@link TermRef} carries a linked term's
  * opaque subject identity, not its business code - but a human who typed {@code TERM-1} into
@@ -331,11 +332,15 @@ public final class BoundedContextMcpTools {
     }
 
     @McpTool(name = "bc_update",
-            description = "Correct an already-created bounded context's name and/or domain vision, or state "
-                    + "either of them in a further language. Both arguments are optional - an omitted one "
-                    + "leaves that field unchanged. Does NOT touch subdomain, ownedBy, linked terms "
-                    + "(bc_link_term) or context relationships (bc_link_context/bc_unlink_context) - those "
-                    + "stay fixed since creation (or the last such call). Cannot change the context's code "
+            description = "Correct an already-created bounded context's name, domain vision and/or linked "
+                    + "glossary terms, or state name/domain vision in a further language. name/domainVision "
+                    + "are optional - an omitted one leaves that field unchanged. "
+                    + "terms replaces the context's arkddd:ubiquitousLanguageTerm links wholesale: omit it to "
+                    + "leave the existing links untouched, pass an empty list to remove them all, or pass the "
+                    + "full set of TERM-N codes the context should use going forward (bc_link_term remains "
+                    + "the convenient way to add a single link without restating the rest). "
+                    + "Does NOT touch subdomain, ownedBy or context relationships (bc_link_context/"
+                    + "bc_unlink_context) - those stay fixed since creation. Cannot change the context's code "
                     + "(BC-N): it is "
                     + "fixed at creation, and everything already referring to the context refers to that "
                     + "code." + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
@@ -346,6 +351,13 @@ public final class BoundedContextMcpTools {
             final String name,
             @McpToolParam(description = "New domain vision (optional, unchanged if omitted)", required = false)
             final String domainVision,
+            @McpToolParam(description = "Business codes of the glossary terms this bounded context should use "
+                    + "going forward, e.g. ['TERM-1', 'TERM-2'] (resolved against the glossary, not "
+                    + "skos:prefLabel or store IRIs). Omit to leave the existing arkddd:ubiquitousLanguageTerm "
+                    + "links untouched; pass an empty list to remove every link; pass a non-empty list to "
+                    + "replace the links wholesale - a term not named here is unlinked even if it was linked "
+                    + "before (kogn-io/arknet#567).", required = false)
+            final List<String> terms,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'en') a non-omitted name/"
                     + "domainVision is written in. Falls back to the project's configured default language "
                     + "(see bc_add's same parameter) if omitted; if the project has no default either, the "
@@ -368,7 +380,8 @@ public final class BoundedContextMcpTools {
         final String staleHint = staleTranslationHint(project, code, blankToNull(language), blankToNull(name),
                 blankToNull(domainVision));
         final BoundedContext updated = updateBoundedContext.update(project.id(), code, blankToNull(name),
-                blankToNull(domainVision), blankToNull(language), project.defaultLanguage());
+                blankToNull(domainVision), terms == null ? null : List.copyOf(terms), blankToNull(language),
+                project.defaultLanguage());
         return format(project.id(), updated) + staleHint;
     }
 

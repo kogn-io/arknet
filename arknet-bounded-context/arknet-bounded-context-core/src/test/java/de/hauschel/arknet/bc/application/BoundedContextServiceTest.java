@@ -209,7 +209,7 @@ class BoundedContextServiceTest {
     void updateCorrectsNameWithoutTouchingDomainVision() {
         BoundedContext added = service.add(WS, newBoundedContext(), null);
 
-        BoundedContext updated = service.update(WS, added.code(), "OrderMgmt", null, "en", null);
+        BoundedContext updated = service.update(WS, added.code(), "OrderMgmt", null, null, "en", null);
 
         assertEquals("OrderMgmt", updated.name());
         assertEquals(added.domainVision(), updated.domainVision());
@@ -220,7 +220,7 @@ class BoundedContextServiceTest {
         BoundedContext added = service.add(WS, newBoundedContext(), null);
         String originalName = added.name();
 
-        service.update(WS, added.code(), originalName, null, "de", null);
+        service.update(WS, added.code(), originalName, null, null, "de", null);
 
         assertEquals("de", repository.findCurrentByCode(WS, added.code(), null).orElseThrow().nameLanguage());
     }
@@ -231,7 +231,7 @@ class BoundedContextServiceTest {
         BoundedContextRepository.CurrentBoundedContext before =
                 repository.findCurrentByCode(WS, added.code(), null).orElseThrow();
 
-        BoundedContext returned = service.update(WS, added.code(), null, null, null, null);
+        BoundedContext returned = service.update(WS, added.code(), null, null, null, null, null);
 
         assertEquals(added, returned);
         assertEquals(before.head(), repository.findCurrentByCode(WS, added.code(), null).orElseThrow().head());
@@ -241,7 +241,7 @@ class BoundedContextServiceTest {
     void updateLeavesSubdomainAndOwnedByUntouched() {
         BoundedContext added = service.add(WS, newBoundedContext(), null);
 
-        BoundedContext updated = service.update(WS, added.code(), "OrderMgmt", null, "en", null);
+        BoundedContext updated = service.update(WS, added.code(), "OrderMgmt", null, null, "en", null);
 
         assertEquals(Subdomain.CORE_DOMAIN, updated.subdomain());
         assertEquals("orders-team", updated.ownedBy());
@@ -250,7 +250,81 @@ class BoundedContextServiceTest {
     @Test
     void updateThrowsWhenBoundedContextUnknown() {
         assertThrows(BoundedContextNotFoundException.class,
-                () -> service.update(WS, new BoundedContextCode("BC-99"), "X", null, "en", null));
+                () -> service.update(WS, new BoundedContextCode("BC-99"), "X", null, null, "en", null));
+    }
+
+    /**
+     * kogn-io/arknet#567: a {@code null} {@code termCodes} argument to {@code update} leaves the
+     * existing {@code arkddd:ubiquitousLanguageTerm} edges untouched - the "unchanged" leg of the
+     * tri-state, mirroring {@code RequirementService#update}'s {@code usesTermCodes}.
+     */
+    @Test
+    void updateWithNullTermCodesLeavesExistingLinksUntouched() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-1");
+
+        BoundedContext updated = service.update(WS, code, null, null, null, "en", null);
+
+        assertEquals(List.of(new TermRef(TERM_1)), updated.usesTerms());
+    }
+
+    /**
+     * kogn-io/arknet#567: an empty {@code termCodes} list is the explicit, unambiguous signal to
+     * remove every {@code arkddd:ubiquitousLanguageTerm} edge - the gap this issue closes, since
+     * neither {@code bc_link_term} (add-only) nor a prior {@code bc_update} could ever do this.
+     */
+    @Test
+    void updateWithEmptyTermCodesRemovesEveryLink() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-1");
+        service.linkTerm(WS, code, "TERM-2");
+
+        BoundedContext updated = service.update(WS, code, null, null, List.of(), "en", null);
+
+        assertEquals(List.of(), updated.usesTerms());
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().context().usesTerms());
+    }
+
+    /** A non-empty {@code termCodes} list replaces the existing edges wholesale. */
+    @Test
+    void updateWithTermCodesReplacesTheExistingLinksWholesale() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-1");
+
+        BoundedContext updated = service.update(WS, code, null, null, List.of("TERM-2"), "en", null);
+
+        assertEquals(List.of(new TermRef(TERM_2)), updated.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_2)), service.get(WS, code, null).orElseThrow().context().usesTerms());
+    }
+
+    /**
+     * An unknown term code in {@code termCodes} is rejected before anything is written - the same
+     * didactic rejection {@code bc_link_term} raises.
+     */
+    @Test
+    void updateWithAnUnknownTermCodeIsRejectedAndWritesNothing() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-1");
+
+        assertThrows(NoSuchElementException.class,
+                () -> service.update(WS, code, null, null, List.of("TERM-99"), "en", null));
+
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().context().usesTerms());
+    }
+
+    /**
+     * {@code termCodes} is independent of every other field this port corrects - a call that
+     * touches both a text field and the term links applies both.
+     */
+    @Test
+    void updateChangesTheNameAndReplacesTheTermLinksInTheSameCall() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-1");
+
+        BoundedContext updated = service.update(WS, code, "OrderMgmt", null, List.of("TERM-2"), "en", null);
+
+        assertEquals("OrderMgmt", updated.name());
+        assertEquals(List.of(new TermRef(TERM_2)), updated.usesTerms());
     }
 
     @Test
@@ -337,7 +411,7 @@ class BoundedContextServiceTest {
     @Test
     void linkTermLeavesNameAndDomainVisionLanguagesUnchanged() {
         BoundedContext added = service.add(WS, newBoundedContext(), null);
-        service.update(WS, added.code(), null, "Updated vision statement here.", "de", null);
+        service.update(WS, added.code(), null, "Updated vision statement here.", null, "de", null);
 
         service.linkTerm(WS, added.code(), "TERM-1");
 

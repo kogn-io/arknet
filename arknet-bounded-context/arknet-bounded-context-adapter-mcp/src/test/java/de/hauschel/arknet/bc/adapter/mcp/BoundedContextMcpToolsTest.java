@@ -195,7 +195,7 @@ class BoundedContextMcpToolsTest {
 
     @Test
     void updateCorrectsNameAndRendersTheResult() {
-        String rendered = adapter.update(null, "BC-1", "Renamed", null, "en", ANCHOR);
+        String rendered = adapter.update(null, "BC-1", "Renamed", null, null, "en", ANCHOR);
 
         assertEquals(new BoundedContextCode("BC-1"), stub.lastUpdatedCode);
         assertEquals("Renamed", stub.lastUpdatedName);
@@ -204,7 +204,7 @@ class BoundedContextMcpToolsTest {
 
     @Test
     void updateNormalisesBlankFieldsToNull() {
-        adapter.update(null, "BC-1", "  ", " ", "  ", ANCHOR);
+        adapter.update(null, "BC-1", "  ", " ", null, "  ", ANCHOR);
 
         assertEquals(null, stub.lastUpdatedName);
         assertEquals(null, stub.lastUpdatedDomainVision);
@@ -221,10 +221,38 @@ class BoundedContextMcpToolsTest {
                 anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
                 hints(Map.of("name", Set.of("en", "de"))));
 
-        String rendered = adapterWithHints.update(null, "BC-1", "Renamed", null, "en", ANCHOR);
+        String rendered = adapterWithHints.update(null, "BC-1", "Renamed", null, null, "en", ANCHOR);
 
         assertTrue(rendered.contains("Possibly stale translations"), rendered);
         assertTrue(rendered.contains("de"), rendered);
+    }
+
+    /**
+     * {@code bc_update}'s {@code terms} reaches {@link UpdateBoundedContext} unchanged
+     * (kogn-io/arknet#567) - an empty list is the explicit signal to remove every link, distinct
+     * from the omitted ({@code null}) case.
+     */
+    @Test
+    void updatePassesTermsThroughToTheInPort() {
+        adapter.update(null, "BC-1", null, null, List.of("TERM-1", "TERM-2"), null, ANCHOR);
+
+        assertEquals(List.of("TERM-1", "TERM-2"), stub.lastUpdatedTermCodes);
+    }
+
+    /** An empty {@code terms} list reaches the in-port as an empty list, not {@code null}. */
+    @Test
+    void updatePassesAnEmptyTermsListThroughDistinctFromOmitted() {
+        adapter.update(null, "BC-1", null, null, List.of(), null, ANCHOR);
+
+        assertEquals(List.of(), stub.lastUpdatedTermCodes);
+    }
+
+    /** Omitting {@code terms} reaches the in-port as {@code null}, leaving existing links untouched. */
+    @Test
+    void updateOmittingTermsPassesNullThroughToTheInPort() {
+        adapter.update(null, "BC-1", "Renamed", null, null, null, ANCHOR);
+
+        assertEquals(null, stub.lastUpdatedTermCodes);
     }
 
     @Test
@@ -465,6 +493,7 @@ class BoundedContextMcpToolsTest {
         private BoundedContextCode lastUpdatedCode;
         private String lastUpdatedName;
         private String lastUpdatedDomainVision;
+        private List<String> lastUpdatedTermCodes;
         private String lastUpdatedLanguage;
 
         @Override
@@ -499,10 +528,11 @@ class BoundedContextMcpToolsTest {
 
         @Override
         public BoundedContext update(ProjectId projectId, BoundedContextCode code, String name,
-                String domainVision, String language, String defaultLanguage) {
+                String domainVision, List<String> termCodes, String language, String defaultLanguage) {
             lastUpdatedCode = code;
             lastUpdatedName = name;
             lastUpdatedDomainVision = domainVision;
+            lastUpdatedTermCodes = termCodes;
             lastUpdatedLanguage = language;
             return new BoundedContext(ID, code, name != null ? name : "OrderManagement",
                     domainVision != null ? domainVision : "Owns the customer order lifecycle end to end.",
