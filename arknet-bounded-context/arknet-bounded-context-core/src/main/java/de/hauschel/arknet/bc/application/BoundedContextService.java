@@ -313,27 +313,40 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
 
     @Override
     public BoundedContext update(ProjectId projectId, BoundedContextCode code, String name, String domainVision,
-            String language, String defaultLanguage) {
+            List<String> termCodes, String language, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        // Resolution first, outside the retry, mirroring linkTerm()/RequirementService#update: an
+        // unknown TERM-9 is a didactic rejection of the whole call, never a race worth retrying.
+        // null stays null here - it is the "leave this relation alone" signal
+        // (kogn-io/arknet#567, precedent RequirementService#update's usesTermCodes resolution), an
+        // empty list a deliberate clear.
+        List<TermRef> terms = termCodes == null
+                ? null
+                : termCodes.stream()
+                        .map(termCode -> new TermRef(termLookup.resolveByCode(projectId, termCode)))
+                        .distinct()
+                        .toList();
         // Mirrors ConstraintService#updateWithOptimisticRetry exactly for the language handling.
         return updateWithOptimisticRetry(projectId, code, defaultLanguage, current -> {
             BoundedContext updated = new BoundedContext(current.value().id(), current.value().code(),
                     name != null ? name : current.value().name(),
                     domainVision != null ? domainVision : current.value().domainVision(),
-                    current.value().subdomain(), current.value().ownedBy(), current.value().usesTerms());
+                    current.value().subdomain(), current.value().ownedBy(),
+                    terms != null ? terms : current.value().usesTerms());
             // name/domainVision each get their own language: a field this call did not name
             // round-trips under the exact tag it was read under (a scoped no-op), never under
             // `language`/`defaultLanguage`. Resolved lazily, per field, mirroring
-            // ConstraintService#resolveTouchedLanguage exactly.
+            // ConstraintService#resolveTouchedLanguage exactly. termCodes carries no language of
+            // its own and never influences either tag.
             String nameLanguage = resolveTouchedLanguage(name != null, current.value().name(), updated.name(),
                     current.nameLanguage(), language, defaultLanguage);
             String domainVisionLanguage = resolveTouchedLanguage(domainVision != null,
                     current.value().domainVision(), updated.domainVision(), current.domainVisionLanguage(),
                     language, defaultLanguage);
-            // A call that changes neither text nor either field's language tag is a no-op - the
-            // same "naming a field with its already-current text but an explicit, different
-            // language is still a write" rule ConstraintService states.
+            // A call that changes neither text, nor the term links, nor either field's language
+            // tag is a no-op - the same "naming a field with its already-current text but an
+            // explicit, different language is still a write" rule ConstraintService states.
             if (updated.equals(current.value())
                     && Objects.equals(nameLanguage, current.nameLanguage())
                     && Objects.equals(domainVisionLanguage, current.domainVisionLanguage())) {
