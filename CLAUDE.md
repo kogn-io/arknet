@@ -65,6 +65,8 @@ Details/Start: `arknet-mcp/CLAUDE.md`, `README.md`.
 Je Modul liegt die Detail-Doku (Klassen, Ports, Invarianten, ADR-Bezuege) in
 einer eigenen `CLAUDE.md` im Modulverzeichnis -- sie laedt, sobald dort gearbeitet
 wird, und ist die massgebliche Beschreibung des Moduls. Hier nur die Landkarte.
+Wie die Module zu Komponenten und Bounded Contexts gehoeren (Bausteinsicht), steht in
+`docs/building-block-view.md`.
 
 - **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes). `arknet-ontology/CLAUDE.md`
 - **arknet-mcp**: MCP-Server (geteilter lokaler Daemon, `127.0.0.1:47331`) + Composition Root, verdrahtet alle sieben BC-Hexagons, die Anker-Aufloesung, den generischen Store-Lesepfad und den Pruefpfad `store_check`. `arknet-mcp/CLAUDE.md`
