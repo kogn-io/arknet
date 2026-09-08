@@ -32,6 +32,7 @@ Target Bounded Contexts per ADR-10, ADR-36 and ADR-46 (all ACCEPTED):
 | Architecture & Decisions     | ArchitectureDecisionRecord, Consequence, ConsideredOption     | ADR-10 |
 | Actor                        | Actor, Role                                                   | ADR-36, ADR-37 |
 | (Project registry)           | Project, Anchor -- "outside the model contexts"               | ADR-13 |
+| Model Analysis               | read-only: impact analysis, trace matrix, orphans, role/use-case matrix, term co-occurrence, `store_check`, the HTML report -- reads the Published Language of every model context | #554 (decided 2026-09-08, record pending) |
 
 Open: ADR-13 calls the registry "a hexagon outside the model contexts". In the current
 vocabulary every Component belongs to a Bounded Context; whether the registry is a
@@ -45,6 +46,8 @@ Context map (as built today, read off the code, not yet in the store -- #438):
 - Domain Modelling (bounded-context) reads Domain Modelling (ubiquitous-language) --
   context-internal per ADR-10.
 - Actor and the project registry read nobody.
+- Model Analysis (target, #554) reads every model context through its Published
+  Language; nobody reads Model Analysis.
 - Relationship kind: on the write side the out-adapter reads the neighbour's named
   graph (= Published Language, the ontology as schema); on the read side the in-adapter
   borrows the neighbour's read in-port (Borrowed In-Port, TERM-22 -- whether that
@@ -69,7 +72,7 @@ Outside every Bounded Context:
 
 | Role in the schema                 | Module                          | Note |
 |------------------------------------|---------------------------------|------|
-| Application (composition root)     | arknet-mcp                      | Spring Boot daemon; additionally carries the generic store read path (ADR-51, tolerated exception) and five cross-context evaluations (violation, location open: #554) |
+| Application (composition root)     | arknet-mcp                      | Spring Boot daemon; additionally carries the generic store read path (ADR-51, tolerated exception); the five cross-context evaluations, `store_check` and the HTML report still live here and move to Model Analysis (#554) |
 | Shared Kernel candidate            | arknet-shared-kernel            | ProjectId, ProjectResolver, ResourceId, DisplayLocale -- to be tested against the Shared Kernel definition (small, delimited, decided?) or a technical library without model terms |
 | Technical library                  | arknet-persistence-support      | SHACL gate, WriteFunnel, vocabulary constants -- no model term, hence neither Shared Kernel nor vocabulary |
 | Technical library (test scope)     | arknet-persistence-test-support | Guarded* decorators |
@@ -120,7 +123,9 @@ Borrowed In-Port therefore survives the target schema only through the neighbour
 
 ## 7. Open decisions (in order)
 
-1. #554 -- where the five cross-context evaluations live outside the composition root.
+1. #554 -- decided: the cross-context evaluations, `store_check` and the report become
+   the Component `arknet-model-analysis` of a read-only Bounded Context Model Analysis,
+   reading the Published Language (no Borrowed In-Ports). The move itself is Part B.
 2. ADR-48 and ADR-49 (PROPOSED) to be withdrawn and rewritten: Components per Bounded
    Context, neighbour access (own out-port plus adapter, or Published Language; fate of
    the Borrowed In-Port), `api` modules, `<bc>-shared`, shared-kernel. Closes #352. The
