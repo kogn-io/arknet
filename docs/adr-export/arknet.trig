@@ -5787,7 +5787,7 @@ The core of this decision is the distinction between \"unbuilt\" and \"outside\"
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T11:38:47.641848713Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/804ade54-7c54-45d1-804d-d0db6dc2a114> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/07ac265b-9d51-4b1e-95ad-a719f3a070cf> .
+      <https://w3id.org/arknet/revision/e46880ba-96fe-41cf-95bb-60f6071508ae> .
   
   <https://w3id.org/arknet/activity/f317a7d1-8539-4d68-a6a8-4e69acd4c635> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -6324,10 +6324,9 @@ Cross-context evaluations that follow the edges of the metamodel do not belong i
     <https://w3id.org/arknet/core#name> "Domänenmodellierung"@de, "Domain Modelling"@en;
     <https://w3id.org/arknet/ddd#domainVision> "Führt Sprache und Grenzen des Modells: die Begriffe, in denen die Ubiquitous Language festgehalten wird, sowie die Bounded Contexts mit ihren Context-Map-Beziehungen."@de,
       "Keeps the model's language and boundaries: the terms in which the Ubiquitous Language is written down, and the Bounded Contexts with their context-map relationships."@en;
-    <https://w3id.org/arknet/ddd#partOf> <https://w3id.org/arknet/id/eb77d14a-52f6-47dc-aa2c-93dffc6c7621>;
+    <https://w3id.org/arknet/ddd#partOf> <https://w3id.org/arknet/id/4a252d1e-56c6-4cd8-9b4f-10fc85a0094b>;
     <https://w3id.org/arknet/ddd#ubiquitousLanguageTerm> <https://w3id.org/arknet/id/c2df3868-3a66-46ca-8621-677374d02aa6>,
-      <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9>, <https://w3id.org/arknet/id/24b5563d-4f98-4884-b08b-9aa75af41917>,
-      <https://w3id.org/arknet/id/d6f351d9-ec26-4041-95f9-77059a89090d> .
+      <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9>, <https://w3id.org/arknet/id/24b5563d-4f98-4884-b08b-9aa75af41917> .
   
   <https://w3id.org/arknet/id/a6870e28-4aa0-4cf5-86da-f8a1fb1f9c70> a <https://w3id.org/arknet/ddd#BoundedContext>;
     <http://purl.org/dc/terms/identifier> "BC-3";
@@ -6348,83 +6347,7 @@ Cross-context evaluations that follow the edges of the metamodel do not belong i
       <https://w3id.org/arknet/id/b585160f-4f80-4baa-aa6b-8178666bb635> .
   
   <https://w3id.org/arknet/id/1d06bb6f-847d-409e-b024-23081ffb9c43> a <https://w3id.org/arknet/ddd#BoundedContext>;
-    <http://purl.org/dc/terms/identifier> "BC-5";
-    <https://w3id.org/arknet/core#name> "Projekt-Registry"@de, "Project Registry"@en;
-    <https://w3id.org/arknet/ddd#domainVision> "Bildet den Anker eines Aufrufs auf das registrierte Projekt ab und führt dessen Identität, Anker und Sprachzusagen, stromaufwärts von jedem anderen Kontext."@de,
-      "Maps the anchor of a call to the registered project and keeps that project's identity, anchors and language commitments, upstream of every other context."@en;
-    <https://w3id.org/arknet/ddd#partOf> <https://w3id.org/arknet/id/b2360925-2bdf-4d8f-9c7b-f0905784c262>;
-    <https://w3id.org/arknet/ddd#ubiquitousLanguageTerm> <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>,
-      <https://w3id.org/arknet/id/8fc7d040-da89-4b17-9aff-5d557709088a> .
-  
-  <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5> a <https://w3id.org/arknet/ddd#BoundedContext>;
-    <http://purl.org/dc/terms/identifier> "BC-6";
-    <https://w3id.org/arknet/core#name> "Modellanalyse"@de, "Model Analysis"@en;
-    <https://w3id.org/arknet/ddd#domainVision> "Wertet das Modell lesend über Kontextgrenzen hinweg aus: Auswirkungen, Nachverfolgbarkeit, verwaiste Ressourcen, Rollen-Use-Case-Matrix, Begriffs-Kookkurrenz und Sprachlücken; schreibt nie."@de,
-      "Evaluates the model read-only across context boundaries: impact, traceability, orphaned resources, the role/use-case matrix, term co-occurrence and language gaps; it never writes."@en;
-    <https://w3id.org/arknet/ddd#partOf> <https://w3id.org/arknet/id/b8ed4eed-5c7d-43c1-a506-70152cbaa5a7> .
-  
-  <https://w3id.org/arknet/id/2cbef2c6-0d89-47fc-9045-bf2881d836ef> a <https://w3id.org/arknet/ddd#Subdomain>;
-    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#CoreDomain> .
-  
-  <https://w3id.org/arknet/id/b8ed4eed-5c7d-43c1-a506-70152cbaa5a7> a <https://w3id.org/arknet/ddd#Subdomain>;
-    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#SupportingDomain> .
-  
-  <https://w3id.org/arknet/id/9e707310-3b4e-44c6-bc44-8ce620835b1e> a <https://w3id.org/arknet/ddd#ContextRelationship>;
-    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/804ade54-7c54-45d1-804d-d0db6dc2a114>;
-    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/e6ba4963-8b0c-4e13-aec9-b0ec72fc4496>;
-    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
-  
-  <https://w3id.org/arknet/id/e142272d-fb21-40b2-a3ab-8fc15917d8dd> a <https://w3id.org/arknet/ddd#ContextRelationship>;
-    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/2f2943e7-0df6-4238-8a59-99606852aa36>;
-    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/e6ba4963-8b0c-4e13-aec9-b0ec72fc4496>;
-    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
-  
-  <https://w3id.org/arknet/id/7561183c-dcae-4b07-8ae9-0c70e22d7a82> a <https://w3id.org/arknet/ddd#ContextRelationship>;
-    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/e6ba4963-8b0c-4e13-aec9-b0ec72fc4496>;
-    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/a6870e28-4aa0-4cf5-86da-f8a1fb1f9c70>;
-    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
-  
-  <https://w3id.org/arknet/id/53b636e0-22dd-4f1b-beb6-c4620aaa076e> a <https://w3id.org/arknet/ddd#ContextRelationship>;
-    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/804ade54-7c54-45d1-804d-d0db6dc2a114>;
-    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/a6870e28-4aa0-4cf5-86da-f8a1fb1f9c70>;
-    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
-  
-  <https://w3id.org/arknet/id/15ba85ee-53d0-45bd-bcab-c6d5fb13e3d0> a <https://w3id.org/arknet/ddd#ContextRelationship>;
-    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/e6ba4963-8b0c-4e13-aec9-b0ec72fc4496>;
-    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5>;
-    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
-  
-  <https://w3id.org/arknet/id/888e2524-ae84-4636-a3db-3a9538d43fc7> a <https://w3id.org/arknet/ddd#ContextRelationship>;
-    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/804ade54-7c54-45d1-804d-d0db6dc2a114>;
-    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5>;
-    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
-  
-  <https://w3id.org/arknet/id/cfe50b33-acd7-48da-ba1f-1042b0cb449e> a <https://w3id.org/arknet/ddd#ContextRelationship>;
-    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/a6870e28-4aa0-4cf5-86da-f8a1fb1f9c70>;
-    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5>;
-    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
-  
-  <https://w3id.org/arknet/id/4e9e56cb-dbe6-40ce-ae40-c836fea79fd7> a <https://w3id.org/arknet/ddd#ContextRelationship>;
-    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/2f2943e7-0df6-4238-8a59-99606852aa36>;
-    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5>;
-    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
-  
-  <https://w3id.org/arknet/id/0470e3c9-d263-4a52-8148-e64e1ec4376c> a <https://w3id.org/arknet/ddd#ContextRelationship>;
-    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/1d06bb6f-847d-409e-b024-23081ffb9c43>;
-    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5>;
-    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
-  
-  <https://w3id.org/arknet/id/4c28655e-6829-43a3-910d-0398c12fb028> a <https://w3id.org/arknet/ddd#Subdomain>;
-    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#CoreDomain> .
-  
-  <https://w3id.org/arknet/id/eb77d14a-52f6-47dc-aa2c-93dffc6c7621> a <https://w3id.org/arknet/ddd#Subdomain>;
-    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#CoreDomain> .
-  
-  <https://w3id.org/arknet/id/d895d408-c762-4f38-9cb3-6410d637f030> a <https://w3id.org/arknet/ddd#Subdomain>;
-    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#SupportingDomain> .
-  
-  <https://w3id.org/arknet/id/b2360925-2bdf-4d8f-9c7b-f0905784c262> a <https://w3id.org/arknet/ddd#Subdomain>;
-    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#SupportingDomain> .
+    <http://purl.org/dc/terms/identifier> "BC-5" .
 }
 
 <https://w3id.org/arknet/model/provenance> {
@@ -7174,6 +7097,83 @@ Cross-context evaluations that follow the edges of the metamodel do not belong i
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/ee418743-c20b-4beb-9180-a08882aa59d0>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T15:13:10.171724673Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/4b4fc0a5-4469-44b2-8302-9603c5a3370a> .
+}
+
+<https://w3id.org/arknet/model/bounded-context> {
+  <https://w3id.org/arknet/id/1d06bb6f-847d-409e-b024-23081ffb9c43> <https://w3id.org/arknet/core#name>
+      "Projekt-Registry"@de, "Project Registry"@en;
+    <https://w3id.org/arknet/ddd#domainVision> "Bildet den Anker eines Aufrufs auf das registrierte Projekt ab und führt dessen Identität, Anker und Sprachzusagen, stromaufwärts von jedem anderen Kontext."@de,
+      "Maps the anchor of a call to the registered project and keeps that project's identity, anchors and language commitments, upstream of every other context."@en;
+    <https://w3id.org/arknet/ddd#partOf> <https://w3id.org/arknet/id/b2360925-2bdf-4d8f-9c7b-f0905784c262>;
+    <https://w3id.org/arknet/ddd#ubiquitousLanguageTerm> <https://w3id.org/arknet/id/ebdd226f-5b5d-46b6-a41a-53ec10c2090c>,
+      <https://w3id.org/arknet/id/8fc7d040-da89-4b17-9aff-5d557709088a> .
+  
+  <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5> a <https://w3id.org/arknet/ddd#BoundedContext>;
+    <http://purl.org/dc/terms/identifier> "BC-6";
+    <https://w3id.org/arknet/core#name> "Modellanalyse"@de, "Model Analysis"@en;
+    <https://w3id.org/arknet/ddd#domainVision> "Wertet das Modell lesend über Kontextgrenzen hinweg aus: Auswirkungen, Nachverfolgbarkeit, verwaiste Ressourcen, Rollen-Use-Case-Matrix, Begriffs-Kookkurrenz und Sprachlücken; schreibt nie."@de,
+      "Evaluates the model read-only across context boundaries: impact, traceability, orphaned resources, the role/use-case matrix, term co-occurrence and language gaps; it never writes."@en;
+    <https://w3id.org/arknet/ddd#partOf> <https://w3id.org/arknet/id/b8ed4eed-5c7d-43c1-a506-70152cbaa5a7> .
+  
+  <https://w3id.org/arknet/id/2cbef2c6-0d89-47fc-9045-bf2881d836ef> a <https://w3id.org/arknet/ddd#Subdomain>;
+    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#CoreDomain> .
+  
+  <https://w3id.org/arknet/id/b8ed4eed-5c7d-43c1-a506-70152cbaa5a7> a <https://w3id.org/arknet/ddd#Subdomain>;
+    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#SupportingDomain> .
+  
+  <https://w3id.org/arknet/id/9e707310-3b4e-44c6-bc44-8ce620835b1e> a <https://w3id.org/arknet/ddd#ContextRelationship>;
+    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/804ade54-7c54-45d1-804d-d0db6dc2a114>;
+    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/e6ba4963-8b0c-4e13-aec9-b0ec72fc4496>;
+    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
+  
+  <https://w3id.org/arknet/id/e142272d-fb21-40b2-a3ab-8fc15917d8dd> a <https://w3id.org/arknet/ddd#ContextRelationship>;
+    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/2f2943e7-0df6-4238-8a59-99606852aa36>;
+    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/e6ba4963-8b0c-4e13-aec9-b0ec72fc4496>;
+    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
+  
+  <https://w3id.org/arknet/id/7561183c-dcae-4b07-8ae9-0c70e22d7a82> a <https://w3id.org/arknet/ddd#ContextRelationship>;
+    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/e6ba4963-8b0c-4e13-aec9-b0ec72fc4496>;
+    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/a6870e28-4aa0-4cf5-86da-f8a1fb1f9c70>;
+    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
+  
+  <https://w3id.org/arknet/id/53b636e0-22dd-4f1b-beb6-c4620aaa076e> a <https://w3id.org/arknet/ddd#ContextRelationship>;
+    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/804ade54-7c54-45d1-804d-d0db6dc2a114>;
+    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/a6870e28-4aa0-4cf5-86da-f8a1fb1f9c70>;
+    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
+  
+  <https://w3id.org/arknet/id/15ba85ee-53d0-45bd-bcab-c6d5fb13e3d0> a <https://w3id.org/arknet/ddd#ContextRelationship>;
+    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/e6ba4963-8b0c-4e13-aec9-b0ec72fc4496>;
+    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5>;
+    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
+  
+  <https://w3id.org/arknet/id/888e2524-ae84-4636-a3db-3a9538d43fc7> a <https://w3id.org/arknet/ddd#ContextRelationship>;
+    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/804ade54-7c54-45d1-804d-d0db6dc2a114>;
+    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5>;
+    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
+  
+  <https://w3id.org/arknet/id/cfe50b33-acd7-48da-ba1f-1042b0cb449e> a <https://w3id.org/arknet/ddd#ContextRelationship>;
+    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/a6870e28-4aa0-4cf5-86da-f8a1fb1f9c70>;
+    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5>;
+    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
+  
+  <https://w3id.org/arknet/id/4e9e56cb-dbe6-40ce-ae40-c836fea79fd7> a <https://w3id.org/arknet/ddd#ContextRelationship>;
+    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/2f2943e7-0df6-4238-8a59-99606852aa36>;
+    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5>;
+    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
+  
+  <https://w3id.org/arknet/id/0470e3c9-d263-4a52-8148-e64e1ec4376c> a <https://w3id.org/arknet/ddd#ContextRelationship>;
+    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/1d06bb6f-847d-409e-b024-23081ffb9c43>;
+    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5>;
+    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#PublishedLanguage> .
+  
+  <https://w3id.org/arknet/id/4c28655e-6829-43a3-910d-0398c12fb028> a <https://w3id.org/arknet/ddd#Subdomain>;
+    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#CoreDomain> .
+  
+  <https://w3id.org/arknet/id/d895d408-c762-4f38-9cb3-6410d637f030> a <https://w3id.org/arknet/ddd#Subdomain>;
+    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#SupportingDomain> .
+  
+  <https://w3id.org/arknet/id/b2360925-2bdf-4d8f-9c7b-f0905784c262> a <https://w3id.org/arknet/ddd#Subdomain>;
+    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#SupportingDomain> .
 }
 
 <https://w3id.org/arknet/model/adr> {
@@ -8234,7 +8234,10 @@ The trigger for an api module remains the one of the schema: a module outside th
   
   <https://w3id.org/arknet/activity/92f7542d-74e0-45d3-92e4-a5737affa1e9> a <http://www.w3.org/ns/prov#Activity> .
   
-  <https://w3id.org/arknet/revision/d86fa1ec-bc3f-4065-b0f0-73a1dc821661> a <http://www.w3.org/ns/prov#Entity> .
+  <https://w3id.org/arknet/revision/d86fa1ec-bc3f-4065-b0f0-73a1dc821661> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/b818005b-8796-41a6-b10a-4bf7c62f4be3>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/92f7542d-74e0-45d3-92e4-a5737affa1e9> .
 }
 
 <https://w3id.org/arknet/model/use-cases> {
@@ -8874,10 +8877,8 @@ The trigger for an api module remains the one of the schema: a module outside th
 }
 
 <https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/revision/d86fa1ec-bc3f-4065-b0f0-73a1dc821661> a <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/b818005b-8796-41a6-b10a-4bf7c62f4be3>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/92f7542d-74e0-45d3-92e4-a5737affa1e9>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T18:30:33.010023809Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  <https://w3id.org/arknet/revision/d86fa1ec-bc3f-4065-b0f0-73a1dc821661> <http://www.w3.org/ns/prov#generatedAtTime>
+      "2026-09-08T18:30:33.010023809Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/id/1cd42d86-585e-4777-9ba7-baa5f837ae0d> <https://w3id.org/arknet/provenance#head>
       <https://w3id.org/arknet/revision/0828ba88-0f8d-432d-93cc-66d024aa68ec> .
@@ -9176,6 +9177,15 @@ The trigger for an api module remains the one of the schema: a module outside th
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/81ce84c5-0f22-4763-8ef2-d1b5ac6fda86>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T18:39:15.558300391Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/6b490f41-2e1e-41b1-a987-f0c40b2e1079> .
+  
+  <https://w3id.org/arknet/activity/3d3ae93f-62a7-496d-8d67-4738a4a61dca> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/e46880ba-96fe-41cf-95bb-60f6071508ae> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/804ade54-7c54-45d1-804d-d0db6dc2a114>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/3d3ae93f-62a7-496d-8d67-4738a4a61dca>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T20:10:12.948900511Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/07ac265b-9d51-4b1e-95ad-a719f3a070cf> .
 }
 
 <https://w3id.org/arknet/model/ubiquitous-language> {
@@ -9939,17 +9949,22 @@ The trigger for an api module remains the one of the schema: a module outside th
       "The need contradicts an existing requirement: the Coding AI Agent presents the conflict to the Requirements Engineer for a decision."@en .
 }
 
+<https://w3id.org/arknet/model/bounded-context> {
+  <https://w3id.org/arknet/id/4a252d1e-56c6-4cd8-9b4f-10fc85a0094b> a <https://w3id.org/arknet/ddd#Subdomain>;
+    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#CoreDomain> .
+}
+
 <https://w3id.org/arknet/model/export-metadata> {
-    <https://w3id.org/arknet/export/4bf83568-72f0-4afe-9bde-7a6834ea60bb>
+    <https://w3id.org/arknet/export/b3523f69-20bd-45cd-8faf-cf3a26969fff>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#Activity> ;
-        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-08T18:39:43Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
+        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-08T20:10:52Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
         <http://www.w3.org/ns/prov#wasAssociatedWith> <https://w3id.org/arknet/agent/arknet> ;
         <http://www.w3.org/ns/prov#used> <https://w3id.org/arknet/core> , <https://w3id.org/arknet/ddd> , <https://w3id.org/arknet/process> , <https://w3id.org/arknet/requirements> , <https://w3id.org/arknet/architecture> , <https://w3id.org/arknet/provenance> , <https://w3id.org/arknet/project> .
 
     <https://w3id.org/arknet/agent/arknet>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#SoftwareAgent> ;
         <http://www.w3.org/2002/07/owl#versionInfo> "dev" ;
-        <http://purl.org/dc/terms/created> "2026-09-08T16:51:56Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+        <http://purl.org/dc/terms/created> "2026-09-08T20:08:21Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
 
     <https://w3id.org/arknet/core>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ;
