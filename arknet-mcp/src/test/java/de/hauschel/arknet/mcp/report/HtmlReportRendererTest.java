@@ -32,6 +32,7 @@ class HtmlReportRendererTest {
     private static final String ARKREQ = "https://w3id.org/arknet/requirements#";
     private static final String ARKPROC = "https://w3id.org/arknet/process#";
     private static final String ARKARCH = "https://w3id.org/arknet/architecture#";
+    private static final String ARKDDD = "https://w3id.org/arknet/ddd#";
     private static final String ID = "https://w3id.org/arknet/id/";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 
@@ -213,6 +214,62 @@ class HtmlReportRendererTest {
 
         assertThat(html).contains("id=\"r-" + anchorOf(consequence) + "\"");
         assertThat(html).contains("id=\"r-" + anchorOf(option) + "\"");
+    }
+
+    /**
+     * Issue #570: an {@code arkddd:ContextRelationship} is its own resource, referenced backwards
+     * - its {@code arkddd:upstream}/{@code arkddd:downstream} edges point <em>at</em> the bounded
+     * contexts it connects, not the other way round ({@code BoundedContextDetail}'s javadoc
+     * explains why it cannot be a field on either one). Once both contexts are carded, {@link
+     * BoundedContextCards} already renders the relationship as a "Context map" chip on each side,
+     * so it must not also show up as its own raw card in "Other resources" - the same
+     * "litters the report" problem #297/#571 already fixed for acceptance criteria and ADR
+     * consequences/considered options.
+     */
+    @Test
+    void suppressesContextRelationshipsFromTheRawSectionWhenBothContextsAreCarded() {
+        final String bc1 = ID + "bc-1";
+        final String bc2 = ID + "bc-2";
+        final String relationship = ID + "relationship-1";
+        final ModelSection section = new ModelSection("Bounded Contexts", "bounded-contexts", "", List.of(
+                new ModelCard("BC-1", "Ordering", bc1, List.of(), List.of()),
+                new ModelCard("BC-2", "Catalog", bc2, List.of(), List.of())));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(bc1, RDF_TYPE, ARKDDD + "BoundedContext"),
+                iri(bc2, RDF_TYPE, ARKDDD + "BoundedContext"),
+                iri(relationship, RDF_TYPE, ARKDDD + "ContextRelationship"),
+                iri(relationship, ARKDDD + "upstream", bc1),
+                iri(relationship, ARKDDD + "downstream", bc2)));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).doesNotContain("id=\"r-" + anchorOf(relationship) + "\"");
+    }
+
+    /**
+     * Counterpart to {@link #suppressesContextRelationshipsFromTheRawSectionWhenBothContextsAreCarded()},
+     * mirroring the #142 protection already in place for use-case steps: if the Bounded Contexts
+     * section itself failed to build, neither context is carded, so the relationship between them
+     * must not be swallowed as if a context map had already shown it.
+     */
+    @Test
+    void keepsContextRelationshipsInOtherResourcesWhenTheBoundedContextsSectionItselfFailed() {
+        final String bc1 = ID + "bc-1";
+        final String bc2 = ID + "bc-2";
+        final String relationship = ID + "relationship-1";
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(bc1, RDF_TYPE, ARKDDD + "BoundedContext"),
+                iri(bc2, RDF_TYPE, ARKDDD + "BoundedContext"),
+                iri(relationship, RDF_TYPE, ARKDDD + "ContextRelationship"),
+                iri(relationship, ARKDDD + "upstream", bc1),
+                iri(relationship, ARKDDD + "downstream", bc2)));
+        final ModelViews.Views views = new ModelViews.Views(
+                List.of(), List.of("Bounded Contexts: could not be read (IllegalStateException: store closed)"));
+
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views, DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("id=\"r-" + anchorOf(relationship) + "\"");
     }
 
     /**
