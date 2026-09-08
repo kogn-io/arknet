@@ -103,14 +103,28 @@ public final class HtmlReportRenderer {
     /** {@code arkreq:criterionText} - the text of one acceptance criterion. */
     private static final String CRITERION_TEXT = ArkreqVocabulary.CRITERION_TEXT;
 
-    /** {@code arkarch:consequence} - an ADR's edge to one of its {@code arkarch:Consequence} resources. */
+    /**
+     * {@code arkarch:consequence} - an ADR's edge to one of its {@code arkarch:Consequence}
+     * resources, inlined into the ADR's card instead of shown as a raw resource (issue #571,
+     * mirroring {@link #ACCEPTANCE_CRITERION_TYPE}'s suppression).
+     */
     private static final String CONSEQUENCE_EDGE = ArkarchVocabulary.CONSEQUENCE;
+
+    /** The predicate by which an ADR reaches its consequences. */
+    private static final Set<String> CONSEQUENCE_EDGES = Set.of(CONSEQUENCE_EDGE);
 
     /** {@code arkarch:consequenceStatement} - the text of one consequence. */
     private static final String CONSEQUENCE_STATEMENT = ArkarchVocabulary.CONSEQUENCE_STATEMENT;
 
-    /** {@code arkarch:consideredOption} - an ADR's edge to one of its {@code ConsideredOption} resources. */
+    /**
+     * {@code arkarch:consideredOption} - an ADR's edge to one of its {@code ConsideredOption}
+     * resources, inlined into the ADR's card instead of shown as a raw resource (issue #571,
+     * mirroring {@link #ACCEPTANCE_CRITERION_TYPE}'s suppression).
+     */
     private static final String CONSIDERED_OPTION_EDGE = ArkarchVocabulary.CONSIDERED_OPTION;
+
+    /** The predicate by which an ADR reaches its considered options. */
+    private static final Set<String> CONSIDERED_OPTION_EDGES = Set.of(CONSIDERED_OPTION_EDGE);
 
     /** {@code arkarch:optionRationale} - the text of one considered option. */
     private static final String OPTION_RATIONALE = ArkarchVocabulary.OPTION_RATIONALE;
@@ -223,32 +237,42 @@ public final class HtmlReportRenderer {
     }
 
     /**
-     * Every resource no card was built for, minus the use-case steps and requirement acceptance
-     * criteria already shown inside their owning card. Order stays the snapshot's own (primary
-     * type, then IRI), so the fallback keeps the shape the whole report used to have.
+     * Every resource no card was built for, minus the use-case steps, requirement acceptance
+     * criteria and ADR consequences/considered options already shown inside their owning card.
+     * Order stays the snapshot's own (primary type, then IRI), so the fallback keeps the shape
+     * the whole report used to have.
      *
-     * <p>Only a <em>carded</em> use case's {@code mainStep}/{@code extensionStep} edges - or a
-     * <em>carded</em> requirement's {@code acceptanceCriterion} edge - count as "already shown" -
-     * if the owning section itself failed to build, no use case/requirement is carded, so its
-     * steps/acceptance criteria stay uninlined and fall through to this same leftovers list
-     * instead of disappearing from the whole document (issue #142, extended to acceptance
-     * criteria by issue #297).</p>
+     * <p>Only a <em>carded</em> use case's {@code mainStep}/{@code extensionStep} edges, a
+     * <em>carded</em> requirement's {@code acceptanceCriterion} edge, or a <em>carded</em> ADR's
+     * {@code consequence}/{@code consideredOption} edge count as "already shown" - if the owning
+     * section itself failed to build, no use case/requirement/ADR is carded, so its
+     * steps/acceptance criteria/consequences/considered options stay uninlined and fall through
+     * to this same leftovers list instead of disappearing from the whole document (issue #142,
+     * extended to acceptance criteria by issue #297 and to ADR consequences/considered options by
+     * issue #571 - four suppressions in total).</p>
      */
     private static List<StoreResource> leftovers(final StoreSnapshot snapshot, final Set<String> carded) {
         final Set<String> inlinedSteps = inlinedTargets(snapshot, carded, STEP_EDGES);
         final Set<String> inlinedAcceptanceCriteria = inlinedTargets(snapshot, carded, ACCEPTANCE_CRITERION_EDGES);
+        final Set<String> inlinedConsequences = inlinedTargets(snapshot, carded, CONSEQUENCE_EDGES);
+        final Set<String> inlinedConsideredOptions = inlinedTargets(snapshot, carded, CONSIDERED_OPTION_EDGES);
         return snapshot.resources().stream()
                 .filter(resource -> !carded.contains(resource.iri()))
                 .filter(resource -> !(resource.types().contains(STEP_TYPE) && inlinedSteps.contains(resource.iri())))
                 .filter(resource -> !(resource.types().contains(ACCEPTANCE_CRITERION_TYPE)
                         && inlinedAcceptanceCriteria.contains(resource.iri())))
+                .filter(resource -> !(resource.types().contains(ArkarchVocabulary.CONSEQUENCE_TYPE_CLASS)
+                        && inlinedConsequences.contains(resource.iri())))
+                .filter(resource -> !(resource.types().contains(ArkarchVocabulary.CONSIDERED_OPTION_TYPE_CLASS)
+                        && inlinedConsideredOptions.contains(resource.iri())))
                 .toList();
     }
 
     /**
      * The targets of {@code edges} reached from a <em>carded</em> resource - shared by {@link
-     * #leftovers}'s two suppressions (use-case steps, requirement acceptance criteria), which
-     * differ only in which edge predicates and which type they inline.
+     * #leftovers}'s four suppressions (use-case steps, requirement acceptance criteria, ADR
+     * consequences, ADR considered options), which differ only in which edge predicates and
+     * which type they inline.
      */
     private static Set<String> inlinedTargets(
             final StoreSnapshot snapshot, final Set<String> carded, final Set<String> edges) {
