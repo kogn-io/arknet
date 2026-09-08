@@ -27,6 +27,7 @@ import de.hauschel.arknet.mcp.store.StoreResource;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
 import de.hauschel.arknet.mcp.store.Triple;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 
 /**
@@ -128,6 +129,22 @@ public final class HtmlReportRenderer {
 
     /** {@code arkarch:optionRationale} - the text of one considered option. */
     private static final String OPTION_RATIONALE = ArkarchVocabulary.OPTION_RATIONALE;
+
+    /**
+     * {@code arkddd:ContextRelationship} - its own resource rather than a field on either bounded
+     * context it connects ({@code de.hauschel.arknet.bc.domain.ContextRelationship}'s javadoc
+     * explains why, referenced from {@code BoundedContextDetail} likewise), so unlike the four
+     * suppressions above it is reached backwards: from the relationship's own
+     * {@code arkddd:upstream}/{@code arkddd:downstream} edge to a carded context, not from a
+     * carded resource's own outgoing edge to it. Inlined into that context's "Context map" block
+     * ({@link BoundedContextCards}) instead of shown as a raw resource (issue #570, mirroring
+     * {@link #ACCEPTANCE_CRITERION_TYPE}'s suppression).
+     */
+    private static final String CONTEXT_RELATIONSHIP_TYPE = ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE;
+
+    /** The two predicates by which a {@code arkddd:ContextRelationship} reaches its two contexts. */
+    private static final Set<String> CONTEXT_RELATIONSHIP_EDGES =
+            Set.of(ArkdddVocabulary.UPSTREAM, ArkdddVocabulary.DOWNSTREAM);
 
     private final Prefixes prefixes;
 
@@ -238,24 +255,28 @@ public final class HtmlReportRenderer {
 
     /**
      * Every resource no card was built for, minus the use-case steps, requirement acceptance
-     * criteria and ADR consequences/considered options already shown inside their owning card.
-     * Order stays the snapshot's own (primary type, then IRI), so the fallback keeps the shape
-     * the whole report used to have.
+     * criteria, ADR consequences/considered options and context relationships already shown
+     * inside their owning card. Order stays the snapshot's own (primary type, then IRI), so the
+     * fallback keeps the shape the whole report used to have.
      *
      * <p>Only a <em>carded</em> use case's {@code mainStep}/{@code extensionStep} edges, a
-     * <em>carded</em> requirement's {@code acceptanceCriterion} edge, or a <em>carded</em> ADR's
-     * {@code consequence}/{@code consideredOption} edge count as "already shown" - if the owning
-     * section itself failed to build, no use case/requirement/ADR is carded, so its
-     * steps/acceptance criteria/consequences/considered options stay uninlined and fall through
-     * to this same leftovers list instead of disappearing from the whole document (issue #142,
-     * extended to acceptance criteria by issue #297 and to ADR consequences/considered options by
-     * issue #571 - four suppressions in total).</p>
+     * <em>carded</em> requirement's {@code acceptanceCriterion} edge, a <em>carded</em> ADR's
+     * {@code consequence}/{@code consideredOption} edge, or a <em>carded</em> bounded context's
+     * {@code upstream}/{@code downstream} edge count as "already shown" - if the owning section
+     * itself failed to build, no use case/requirement/ADR/bounded context is carded, so its
+     * steps/acceptance criteria/consequences/considered options/context relationships stay
+     * uninlined and fall through to this same leftovers list instead of disappearing from the
+     * whole document (issue #142, extended to acceptance criteria by issue #297, to ADR
+     * consequences/considered options by issue #571 and to context relationships by issue #570 -
+     * five suppressions in total).</p>
      */
     private static List<StoreResource> leftovers(final StoreSnapshot snapshot, final Set<String> carded) {
         final Set<String> inlinedSteps = inlinedTargets(snapshot, carded, STEP_EDGES);
         final Set<String> inlinedAcceptanceCriteria = inlinedTargets(snapshot, carded, ACCEPTANCE_CRITERION_EDGES);
         final Set<String> inlinedConsequences = inlinedTargets(snapshot, carded, CONSEQUENCE_EDGES);
         final Set<String> inlinedConsideredOptions = inlinedTargets(snapshot, carded, CONSIDERED_OPTION_EDGES);
+        final Set<String> inlinedContextRelationships =
+                inliningSources(snapshot, carded, CONTEXT_RELATIONSHIP_EDGES);
         return snapshot.resources().stream()
                 .filter(resource -> !carded.contains(resource.iri()))
                 .filter(resource -> !(resource.types().contains(STEP_TYPE) && inlinedSteps.contains(resource.iri())))
@@ -265,14 +286,16 @@ public final class HtmlReportRenderer {
                         && inlinedConsequences.contains(resource.iri())))
                 .filter(resource -> !(resource.types().contains(ArkarchVocabulary.CONSIDERED_OPTION_TYPE_CLASS)
                         && inlinedConsideredOptions.contains(resource.iri())))
+                .filter(resource -> !(resource.types().contains(CONTEXT_RELATIONSHIP_TYPE)
+                        && inlinedContextRelationships.contains(resource.iri())))
                 .toList();
     }
 
     /**
      * The targets of {@code edges} reached from a <em>carded</em> resource - shared by {@link
-     * #leftovers}'s four suppressions (use-case steps, requirement acceptance criteria, ADR
-     * consequences, ADR considered options), which differ only in which edge predicates and
-     * which type they inline.
+     * #leftovers}'s use-case-step, requirement-acceptance-criterion and ADR-consequence/
+     * considered-option suppressions, which differ only in which edge predicates and which type
+     * they inline.
      */
     private static Set<String> inlinedTargets(
             final StoreSnapshot snapshot, final Set<String> carded, final Set<String> edges) {
@@ -283,6 +306,23 @@ public final class HtmlReportRenderer {
                 .map(Triple::object)
                 .filter(RdfNode.Resource.class::isInstance)
                 .map(object -> ((RdfNode.Resource) object).iri())
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * The <em>sources</em> of {@code edges} whose target is a <em>carded</em> resource - the
+     * mirror image of {@link #inlinedTargets}, needed because a {@code
+     * arkddd:ContextRelationship} points <em>at</em> the bounded contexts it connects rather than
+     * being pointed at by them (see {@link #CONTEXT_RELATIONSHIP_EDGES}'s javadoc).
+     */
+    private static Set<String> inliningSources(
+            final StoreSnapshot snapshot, final Set<String> carded, final Set<String> edges) {
+        return snapshot.resources().stream()
+                .filter(resource -> resource.outgoing().stream()
+                        .anyMatch(triple -> edges.contains(triple.predicate())
+                                && triple.object() instanceof RdfNode.Resource target
+                                && carded.contains(target.iri())))
+                .map(StoreResource::iri)
                 .collect(Collectors.toSet());
     }
 

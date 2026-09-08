@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 
 import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
+import de.hauschel.arknet.bc.application.port.in.RelatedContext;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -27,8 +28,22 @@ import de.hauschel.arknet.kernel.ProjectId;
  * link where it is used, a glossary word the vision names without an
  * {@code arkddd:ubiquitousLanguageTerm} edge as a gap. Only linked terms the vision never names
  * remain as chips; see {@link RequirementCards} for the same reasoning at length.</p>
+ *
+ * <p><strong>Context map (issue #570).</strong> {@link BoundedContextDetail#relationships()}
+ * (issue #565) already carries every {@code arkddd:ContextRelationship} this context takes part
+ * in, from this context's own point of view - direction, peer context and DDD relationship type,
+ * peer already resolved to its business code. This class turns each into one {@link Ref} chip
+ * (the same {@code Block.Refs} shape {@code AdrCards} uses for "Affects contexts"), so a reader
+ * sees e.g. {@code upstream of BC-1 (Published language)} instead of the relationship's opaque
+ * subject IRI. {@code HtmlReportRenderer} suppresses the underlying {@code
+ * arkddd:ContextRelationship} resources from "Other resources" once they are carried by a carded
+ * context this way, mirroring the use-case-step/acceptance-criterion/ADR-consequence suppression
+ * (issue #142 and its successors).</p>
  */
 public final class BoundedContextCards {
+
+    /** The context-map block's label, shared with tests. */
+    public static final String CONTEXT_MAP_LABEL = "Context map";
 
     /** The section title, shared with {@link ModelViews}' failure message for this section. */
     public static final String SECTION_TITLE = "Bounded Contexts";
@@ -54,15 +69,16 @@ public final class BoundedContextCards {
     public ModelSection section(final ProjectId projectId, final String displayLocale, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
         final List<ModelCard> cards = contexts.list(projectId, displayLocale).stream()
-                .map(BoundedContextDetail::context)
-                .sorted(Comparator.comparing(context -> context.code().value(), BusinessCodes.ORDER))
-                .map(context -> card(context, glossary))
+                .sorted(Comparator.comparing(
+                        detail -> detail.context().code().value(), BusinessCodes.ORDER))
+                .map(detail -> card(detail.context(), detail.relationships(), glossary))
                 .toList();
         return new ModelSection(SECTION_TITLE, "bounded-contexts",
                 "the strategic model boundaries and the language inside each", cards);
     }
 
-    private static ModelCard card(final BoundedContext context, final Glossary glossary) {
+    private static ModelCard card(
+            final BoundedContext context, final List<RelatedContext> relationships, final Glossary glossary) {
         final List<Badge> badges = new ArrayList<>();
         if (context.subdomain() != null) {
             badges.add(new Badge(Badge.Kind.Known.SUBDOMAIN, Labels.humanise(context.subdomain().name())));
@@ -78,8 +94,23 @@ public final class BoundedContextCards {
         if (context.ownedBy() != null) {
             blocks.add(Block.Prose.plain("Owned by", context.ownedBy()));
         }
+        if (!relationships.isEmpty()) {
+            blocks.add(new Block.Refs(CONTEXT_MAP_LABEL, relationships.stream()
+                    .sorted(Comparator.comparing(
+                            relationship -> relationship.peerCode().value(), BusinessCodes.ORDER))
+                    .map(BoundedContextCards::relationshipRef)
+                    .toList()));
+        }
         UnmentionedTerms.addTo(blocks, linked, glossary, List.of(context.domainVision()),
                 "Ubiquitous language", "not named in the vision");
         return new ModelCard(context.code().value(), context.name(), context.id().value().value(), badges, blocks);
+    }
+
+    private static Ref relationshipRef(final RelatedContext relationship) {
+        final String direction = relationship.direction() == RelatedContext.Direction.UPSTREAM_OF
+                ? "upstream of" : "downstream of";
+        final String label = direction + " " + relationship.peerCode().value() + " ("
+                + Labels.humanise(relationship.relationshipType().name()) + ")";
+        return Ref.of(label, relationship.peerId().value().value());
     }
 }
