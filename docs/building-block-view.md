@@ -14,7 +14,7 @@ points at them, and it repeats nothing the store already holds (glossary, record
 - **Ubiquitous Language** (TERM-25): the one language of a Bounded Context.
 - **Component** (TERM-26): one or more form a Bounded Context and speak its
   Ubiquitous Language; each has a responsibility of its own behind an interface.
-  Construction rule (decided on #444, 2026-09-08; record pending): a Component is a
+  Construction rule (ADR-52 and ADR-48, both proposed): a Component is a
   hexagon, built as the modules `core | adapter-<tech>`. An `api` module is an extension
   stage, built only once a module outside the Component calls an in-port at compile
   time; arknet has no such caller.
@@ -32,17 +32,17 @@ listing yet). This section keeps only what the store does not hold: the resource
 types each context owns, the record it rests on, and how the recorded relationships
 compare to the code.
 
-Target Bounded Contexts per ADR-10, ADR-36 and ADR-46 (all ACCEPTED) plus the two
-decided on #554 and #444 (records pending):
+Target Bounded Contexts per ADR-52 (proposed successor of ADR-10; lists all six),
+ADR-36 and ADR-46 (both ACCEPTED):
 
 | Code | Bounded Context (target)     | holds                                                         | Record |
 |------|------------------------------|---------------------------------------------------------------|--------|
-| BC-1 | Product & Requirements       | Requirement, Constraint, AcceptanceCriterion, UseCase, Steps  | ADR-10 |
-| BC-2 | Domain Modelling             | Term (SKOS), BoundedContext, ContextRelationship              | ADR-10 |
-| BC-3 | Architecture & Decisions     | ArchitectureDecisionRecord, Consequence, ConsideredOption     | ADR-10 |
+| BC-1 | Product & Requirements       | Requirement, Constraint, AcceptanceCriterion, UseCase, Steps  | ADR-10; successor ADR-52 (proposed) |
+| BC-2 | Domain Modelling             | Term (SKOS), BoundedContext, ContextRelationship              | ADR-10; successor ADR-52 (proposed) |
+| BC-3 | Architecture & Decisions     | ArchitectureDecisionRecord, Consequence, ConsideredOption     | ADR-10; successor ADR-52 (proposed) |
 | BC-4 | Actor                        | Actor, Role                                                   | ADR-36, ADR-37 |
-| BC-5 | Project registry             | Project, Anchor, language commitment -- supporting context outside the eight lifecycle contexts, like Actor | ADR-13 (successor pending; decided on #444, 2026-09-08) |
-| BC-6 | Model Analysis               | read-only: impact analysis, trace matrix, orphans, role/use-case matrix, term co-occurrence, `store_check`, the HTML report -- reads the Published Language of every model context | #554 (decided 2026-09-08, record pending) |
+| BC-5 | Project registry             | Project, Anchor, language commitment -- supporting context outside the eight lifecycle contexts, like Actor | ADR-13; successor ADR-53 (proposed) |
+| BC-6 | Model Analysis               | read-only: impact analysis, trace matrix, orphans, role/use-case matrix, term co-occurrence, `store_check`, the HTML report -- reads the Published Language of every model context | ADR-54 (proposed) |
 
 Decided on #444 (2026-09-08): the project registry is a Bounded Context of its own --
 a supporting context outside the eight lifecycle contexts, the same position Actor
@@ -51,7 +51,7 @@ schema knows no Component without a context; `ProjectId` sits in the Shared Kern
 a model term and needs an owning context; Project, Anchor and the language commitment
 are a language no model context holds. Tenant and user identity are not part of it
 (a different language, a decision of its own once multi-tenancy becomes concrete;
-ADR-6). The undefined "model context" goes with the successor of ADR-13.
+ADR-6). Recorded as ADR-53 (proposed); the undefined "model context" goes with it.
 
 Context map as recorded in the store (#438, 2026-09-08), against the code:
 
@@ -75,15 +75,15 @@ Context map as recorded in the store (#438, 2026-09-08), against the code:
   identity, business-code assignment, language). The store records a shared kernel
   only pairwise, so that statement waits for #77.
 - Relationship kind as built, read side: the in-adapter borrows the neighbour's read
-  in-port (Borrowed In-Port, TERM-22). Abolished on #444, removed in Part B, see
-  section 4.
+  in-port (Borrowed In-Port, TERM-22). Abolished by ADR-49 (proposed), removed in
+  Part B, see section 4.
 
 ## 3. Building blocks as built
 
 Seven Components, three modules each (`core`, `adapter-kogniordf`, `adapter-mcp`),
 no `api` module, no `<bc>-shared`. Target context per section 2.
 
-Target (decided on #444, 2026-09-08, five sub-decisions; records pending): the
+Target (decided on #444, 2026-09-08; recorded as ADR-48 and ADR-56, both proposed): the
 Components stay as they are and the Bounded Contexts become Maven parents above them
 (`arknet-product-requirements`, `arknet-domain-modelling`); no core is merged. The two
 merged contexts get a `<bc>-shared` (typed codes, the context's one `TermRef`); Actor,
@@ -105,8 +105,8 @@ Outside every Bounded Context:
 
 | Role in the schema                 | Module                          | Note |
 |------------------------------------|---------------------------------|------|
-| Application (composition root)     | arknet-mcp                      | Spring Boot daemon; additionally carries the generic store read path (ADR-51, tolerated exception); the five cross-context evaluations, `store_check` and the HTML report still live here and move to Model Analysis (#554) |
-| Shared Kernel                      | arknet-shared-kernel            | decided on #444: keeps ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale (model terms every core carries); LocalizedLiteral moves to persistence-support, the anchor/translation mechanics (ProjectResolver, StaleTranslationHint, FieldLanguageLookup) into a support module of the tool adapters (#561) |
+| Application (composition root)     | arknet-mcp                      | Spring Boot daemon; additionally carries the generic store read path (ADR-51, tolerated exception; ADR-55, proposed successor, narrows it to `store_overview`/`resource_get`); the five cross-context evaluations, `store_check` and the HTML report still live here and move to Model Analysis (ADR-54, #560) |
+| Shared Kernel                      | arknet-shared-kernel            | ADR-56 (proposed): keeps ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale (model terms every core carries); LocalizedLiteral moves to persistence-support, the anchor/translation mechanics (ProjectResolver, StaleTranslationHint, FieldLanguageLookup) into a support module of the tool adapters (#561) |
 | Technical library                  | arknet-persistence-support      | SHACL gate, WriteFunnel, vocabulary constants -- no model term, hence neither Shared Kernel nor vocabulary |
 | Technical library (test scope)     | arknet-persistence-test-support | Guarded* decorators |
 | Published Language (schema)        | arknet-ontology                 | .ttl ontologies and shapes |
@@ -126,8 +126,8 @@ Outside every Bounded Context:
   - adr-mcp -> requirements-core, ubiquitous-language-core, bounded-context-core
   - actor-mcp, project-mcp, ubiquitous-language-mcp: none
 
-The schema's dependency rules forbid an adapter depending on a foreign core. Decided
-on #444 (2026-09-08): the Borrowed In-Port is abolished. The `*Lookup` out-ports get the
+The schema's dependency rules forbid an adapter depending on a foreign core. ADR-49
+(proposed): the Borrowed In-Port is abolished. The `*Lookup` out-ports get the
 reverse direction (identity to code), served by `adapter-kogniordf` through the Published
 Language, and in-port results carry foreign codes themselves; every `-adapter-mcp` then
 depends on its own core only. TERM-22 goes with it (#439, #441).
@@ -137,12 +137,12 @@ depends on its own core only. TERM-22 goes with it (#439, #441).
 | Mandatory per schema                          | arknet as built                                     |
 |-----------------------------------------------|-----------------------------------------------------|
 | Bounded Context as Maven parent               | missing; today the parent is the Component (#439, #441, #560) |
-| `api` per Component                           | not required: extension stage, no foreign in-port caller in arknet (decided on #444) |
+| `api` per Component                           | not required: extension stage, no foreign in-port caller in arknet (ADR-48) |
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
-| `<bc>-shared` once ownerless identities exist | missing; decided: one each for Product & Requirements and Domain Modelling (#439, #441) |
+| `<bc>-shared` once ownerless identities exist | missing; ADR-48: one each for Product & Requirements and Domain Modelling (#439, #441) |
 | Application outside every Bounded Context     | present (arknet-mcp)                                 |
-| dependency rules as a checker                 | partial (the ArchUnit rules do not carry "no core depends on a neighbouring core", per ADR-48's context) |
+| dependency rules as a checker                 | partial (the ArchUnit rules do not yet carry the schema's rule that no module of a Component depends on a module of another; ADR-49, Part B) |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |
 
 ## 6. Cross-cutting concepts (pointers only)
@@ -151,25 +151,28 @@ depends on its own core only. TERM-22 goes with it (#439, #441).
 - Persistence only through domain-near out-ports, records without graph access: ADR-8, ADR-45
 - Project identity: anchor, one dataset per project, system dataset: ADR-20, ADR-25, ADR-27
 - Operation: one shared daemon, Spring AI: ADR-16, ADR-14
-- Composition root without application logic: ADR-51
+- Composition root without application logic: ADR-51; successor ADR-55 (proposed)
 - Namespaces follow context boundaries: ADR-12
 - Foreign concepts through an anti-corruption layer: ADR-19
 - Single user, no tenancy in the cores: ADR-6
 
 ## 7. Open decisions (in order)
 
-1. #554 -- decided: the cross-context evaluations, `store_check` and the report become
-   the Component `arknet-model-analysis` of a read-only Bounded Context Model Analysis,
-   reading the Published Language (no Borrowed In-Ports). The move itself is Part B.
-2. Decided (#444, 2026-09-08): Components stay, contexts become parents; Borrowed
-   In-Port abolished; no `api`; two `<bc>-shared`; shared-kernel confirmed and slimmed.
-   ADR-48 and ADR-49 are replaced by records of this shape in the consolidation pass
-   after Part A. Closes #352.
-3. ADR-10 and ADR-13 through successor records in the consolidation pass. Decided
-   (#444, 2026-09-08): the project registry is a Bounded Context of its own; the
-   undefined "model context" goes. Left for the ADR-10 successor: the full context
-   list placed against ADR-46, the gateway wording and TERM-22 dropped, context =
-   Maven parent and Component = hexagon.
+1. Decided on #554, recorded as ADR-54 (proposed): the cross-context evaluations,
+   `store_check` and the report become the Component `arknet-model-analysis` of a
+   read-only Bounded Context Model Analysis, reading the Published Language (no
+   Borrowed In-Ports). The move itself is Part B (#560).
+2. Decided on #444 (2026-09-08), recorded in the consolidation pass: ADR-48 rewritten
+   (Components stay, contexts become parents, two `<bc>-shared`, no `api`), ADR-49
+   rewritten (Borrowed In-Port abolished, Published Language in both directions),
+   ADR-56 new (shared kernel confirmed and slimmed). All proposed; a review precedes
+   acceptance. #352 closes with their acceptance.
+3. ADR-52 (successor of ADR-10: the full context list placed against ADR-46, context =
+   Maven parent and Component = hexagon, gateway wording and TERM-22 dropped) and
+   ADR-53 (successor of ADR-13: the project registry is a Bounded Context of its own)
+   are written, proposed. The supersession edges are recorded once both sides are
+   accepted; until then ADR-10 and ADR-13 stay ACCEPTED and ADR-52/ADR-53 name them
+   via `relatedTo`.
 4. Done (#438, 2026-09-08): six Bounded Contexts, thirteen relationships and the
    glossary links are in the store; section 2 keeps only what the store does not hold.
 5. Part B (#439, #441, #560, #561): Maven, ArchUnit, module map in `CLAUDE.md`.
