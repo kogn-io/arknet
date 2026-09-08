@@ -19,11 +19,14 @@ import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
+import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
 import de.hauschel.arknet.bc.application.port.in.DescribeBoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.LinkContext;
 import de.hauschel.arknet.bc.application.port.in.LinkTerm;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
+import de.hauschel.arknet.bc.application.port.in.RelatedContext;
+import de.hauschel.arknet.bc.application.port.in.UnlinkContext;
 import de.hauschel.arknet.bc.application.port.in.UpdateBoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
@@ -100,7 +103,7 @@ class BoundedContextMcpToolsTest {
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final BoundedContextMcpTools adapter = new BoundedContextMcpTools(
-            stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS);
+            stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS);
 
     /**
      * The explicit tool parameter is a full second delivery path, open to a
@@ -128,40 +131,43 @@ class BoundedContextMcpToolsTest {
     }
 
     @Test
-    void declaresTheSixBoundedContextTools() {
+    void declaresTheSevenBoundedContextTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(6, names.size());
+        assertEquals(7, names.size());
         assertTrue(names.containsAll(
-                List.of("bc_add", "bc_list", "bc_get", "bc_update", "bc_link_term", "bc_link_context")));
+                List.of("bc_add", "bc_list", "bc_get", "bc_update", "bc_link_term", "bc_link_context",
+                        "bc_unlink_context")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                null, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                null, stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, null, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, null, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, null, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, stub, null, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, null, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, stub, stub, null, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, stub, null, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, stub, stub, stub, null, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, stub, stub, null, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, stub, stub, stub, stub, null, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, null));
+                stub, stub, stub, stub, stub, stub, stub, stub, null, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, null));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, stub, stub, resolveTerms, null, NO_TRANSLATIONS));
+                stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, null, NO_TRANSLATIONS));
     }
 
     @Test
@@ -211,7 +217,7 @@ class BoundedContextMcpToolsTest {
         BoundedContextMcpTools adapterWithHints = new BoundedContextMcpTools(
                 stubWithMaintainedLanguages, stubWithMaintainedLanguages, stubWithMaintainedLanguages,
                 stubWithMaintainedLanguages, stubWithMaintainedLanguages, stubWithMaintainedLanguages,
-                stubWithMaintainedLanguages, resolveTerms,
+                stubWithMaintainedLanguages, stubWithMaintainedLanguages, resolveTerms,
                 anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
                 hints(Map.of("name", Set.of("en", "de"))));
 
@@ -363,28 +369,96 @@ class BoundedContextMcpToolsTest {
         assertTrue(ex.getMessage().contains("FRENEMIES"), ex.getMessage());
     }
 
+    @Test
+    void unlinkContextPassesTheParsedRelationshipTypeThroughToTheInPort() {
+        String rendered = adapter.unlinkContext(null, "BC-1", "BC-2", "CUSTOMER_SUPPLIER", ANCHOR);
+
+        assertEquals(new BoundedContextCode("BC-1"), stub.lastUnlinkedUpstreamCode);
+        assertEquals(new BoundedContextCode("BC-2"), stub.lastUnlinkedDownstreamCode);
+        assertEquals(RelationshipType.CUSTOMER_SUPPLIER, stub.lastUnlinkedRelationshipType);
+        assertEquals(PROJECT, stub.lastProjectId);
+        assertTrue(rendered.contains("BC-1"), rendered);
+        assertTrue(rendered.contains("BC-2"), rendered);
+        assertTrue(rendered.contains("CUSTOMER_SUPPLIER"), rendered);
+    }
+
+    @Test
+    void unlinkContextRejectsAnUnknownRelationshipTypeWithADidacticMessage() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> adapter.unlinkContext(null, "BC-1", "BC-2", "FRENEMIES", ANCHOR));
+
+        assertTrue(ex.getMessage().contains("PARTNERSHIP"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("FRENEMIES"), ex.getMessage());
+    }
+
+    @Test
+    void getRendersRelationshipsInBothDirections() {
+        BoundedContextCode peerCode = new BoundedContextCode("BC-5");
+        stub.nextGetDetail = new BoundedContextDetail(boundedContextWithTerms("BC-1"), List.of(
+                new RelatedContext(new ContextRelationshipId(ResourceId.of("https://w3id.org/arknet/id/rel-1")),
+                        RelatedContext.Direction.UPSTREAM_OF, DOWNSTREAM_ID, peerCode,
+                        RelationshipType.PUBLISHED_LANGUAGE),
+                new RelatedContext(new ContextRelationshipId(ResourceId.of("https://w3id.org/arknet/id/rel-2")),
+                        RelatedContext.Direction.DOWNSTREAM_OF, ID, new BoundedContextCode("BC-9"),
+                        RelationshipType.CONFORMIST)));
+
+        String rendered = adapter.get(null, "BC-1", null, ANCHOR);
+
+        assertTrue(rendered.contains("[upstream of: BC-5 (PUBLISHED_LANGUAGE)]"), rendered);
+        assertTrue(rendered.contains("[downstream of: BC-9 (CONFORMIST)]"), rendered);
+    }
+
+    @Test
+    void getRendersNoRelationshipsSuffixWhenThereAreNone() {
+        stub.nextGetDetail = new BoundedContextDetail(boundedContextWithTerms("BC-1"), List.of());
+
+        String rendered = adapter.get(null, "BC-1", null, ANCHOR);
+
+        assertTrue(!rendered.contains("upstream of"), rendered);
+        assertTrue(!rendered.contains("downstream of"), rendered);
+    }
+
+    @Test
+    void listRendersRelationshipsPerContext() {
+        stub.allBoundedContexts = List.of(boundedContextWithTerms("BC-1"), boundedContextWithTerms("BC-2"));
+        stub.relationshipsByCode = Map.of(new BoundedContextCode("BC-1"), List.of(
+                new RelatedContext(new ContextRelationshipId(ResourceId.of("https://w3id.org/arknet/id/rel-1")),
+                        RelatedContext.Direction.UPSTREAM_OF, DOWNSTREAM_ID, new BoundedContextCode("BC-2"),
+                        RelationshipType.PUBLISHED_LANGUAGE)));
+
+        String rendered = adapter.list(null, null, ANCHOR);
+
+        assertTrue(rendered.contains("BC-1 OrderManagement (Owns the customer order lifecycle end to end.) "
+                + "{CORE_DOMAIN} <orders-team> [upstream of: BC-2 (PUBLISHED_LANGUAGE)]"), rendered);
+    }
+
     private static BoundedContext boundedContextWithTerms(String code, ResourceId... termIds) {
         List<TermRef> terms = Arrays.stream(termIds).map(TermRef::new).toList();
         return new BoundedContext(ID, new BoundedContextCode(code), "OrderManagement",
                 "Owns the customer order lifecycle end to end.", Subdomain.CORE_DOMAIN, "orders-team", terms);
     }
 
-    /** Structural stub implementing the six driving in-ports. */
+    /** Structural stub implementing the seven driving in-ports. */
     private static final class Stub
             implements AddBoundedContext, ListBoundedContexts, DescribeBoundedContextDisplayFallback,
-            GetBoundedContext, UpdateBoundedContext, LinkTerm, LinkContext {
+            GetBoundedContext, UpdateBoundedContext, LinkTerm, LinkContext, UnlinkContext {
 
         private BoundedContextCode lastLinkedBoundedContext;
         private String lastLinkedTermCode;
         private ResourceId nextLinkedTermResourceId;
         private List<ResourceId> nextLinkedTerms = List.of();
         private List<BoundedContext> allBoundedContexts = List.of();
+        private Map<BoundedContextCode, List<RelatedContext>> relationshipsByCode = Map.of();
+        private BoundedContextDetail nextGetDetail;
         private NewBoundedContext lastAddCommand;
         /** Records which project the adapter routed to, so a test can assert the routing itself. */
         private ProjectId lastProjectId;
         private BoundedContextCode lastUpstreamCode;
         private BoundedContextCode lastDownstreamCode;
         private RelationshipType lastRelationshipType;
+        private BoundedContextCode lastUnlinkedUpstreamCode;
+        private BoundedContextCode lastUnlinkedDownstreamCode;
+        private RelationshipType lastUnlinkedRelationshipType;
         private String lastListDisplayLocale;
         private String lastGetDisplayLocale;
         private Map<BoundedContextCode, BoundedContextDisplayFallback> fallbacks = Map.of();
@@ -402,9 +476,12 @@ class BoundedContextMcpToolsTest {
         }
 
         @Override
-        public List<BoundedContext> list(ProjectId projectId, String displayLocale) {
+        public List<BoundedContextDetail> list(ProjectId projectId, String displayLocale) {
             lastListDisplayLocale = displayLocale;
-            return allBoundedContexts;
+            return allBoundedContexts.stream()
+                    .map(bc -> new BoundedContextDetail(bc,
+                            relationshipsByCode.getOrDefault(bc.code(), List.of())))
+                    .toList();
         }
 
         @Override
@@ -414,9 +491,10 @@ class BoundedContextMcpToolsTest {
         }
 
         @Override
-        public Optional<BoundedContext> get(ProjectId projectId, BoundedContextCode code, String displayLocale) {
+        public Optional<BoundedContextDetail> get(ProjectId projectId, BoundedContextCode code,
+                String displayLocale) {
             lastGetDisplayLocale = displayLocale;
-            return Optional.empty();
+            return Optional.ofNullable(nextGetDetail);
         }
 
         @Override
@@ -457,6 +535,15 @@ class BoundedContextMcpToolsTest {
             return new ContextRelationship(
                     new ContextRelationshipId(ResourceId.of("https://w3id.org/arknet/id/relationship-1")),
                     ID, DOWNSTREAM_ID, relationshipType);
+        }
+
+        @Override
+        public void unlinkContext(ProjectId projectId, BoundedContextCode upstreamCode,
+                BoundedContextCode downstreamCode, RelationshipType relationshipType) {
+            lastProjectId = projectId;
+            lastUnlinkedUpstreamCode = upstreamCode;
+            lastUnlinkedDownstreamCode = downstreamCode;
+            lastUnlinkedRelationshipType = relationshipType;
         }
     }
 

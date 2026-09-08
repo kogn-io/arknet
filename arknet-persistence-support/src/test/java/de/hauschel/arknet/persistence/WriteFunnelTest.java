@@ -18,6 +18,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -935,6 +936,84 @@ class WriteFunnelTest {
         assertThrows(NullPointerException.class,
                 () -> funnel.compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, expectedHead, candidate(),
                         null, Signals::unexpected, Signals::unexpected, null));
+    }
+
+    /**
+     * {@code findExisting} finding nothing degenerates to {@link WriteFunnel#create}'s own
+     * semantics: both guards run, {@code body} runs and {@code subjectIri} itself is returned.
+     */
+    @Test
+    void createIfAbsentWritesAndReturnsSubjectIriWhenFindExistingFindsNothing() {
+        Fixture fixture = new Fixture(List.of(false, false));
+
+        List<DatasetTx> bodyCalls = new ArrayList<>();
+        String result = fixture.funnel().createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, tx -> Optional.empty(), Signals::unexpected, Signals::unexpected,
+                bodyCalls::add);
+
+        assertEquals(SUBJECT_IRI, result);
+        assertEquals(1, bodyCalls.size());
+        assertEquals(2, fixture.tx.containsCalls.size(), "both identity and code guards must still run");
+        assertTrue(fixture.handle.closed);
+    }
+
+    /**
+     * {@code findExisting} finding an existing subject short-circuits the write entirely: no guard
+     * runs, no body runs, and the existing subject's own IRI is returned instead of
+     * {@code subjectIri}.
+     */
+    @Test
+    void createIfAbsentSkipsTheWriteAndReturnsTheExistingSubjectWhenFindExistingFindsOne() {
+        Fixture fixture = new Fixture(List.of());
+        String existingIri = "https://example.org/thing/existing";
+
+        String result = fixture.funnel().createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, tx -> Optional.of(existingIri), Signals::unexpected, Signals::unexpected,
+                Signals.noBody());
+
+        assertEquals(existingIri, result);
+        assertEquals(0, fixture.tx.containsCalls.size(), "no guard may run once findExisting found a match");
+        assertTrue(fixture.handle.closed);
+    }
+
+    @Test
+    void createIfAbsentStillRejectsAnIdentityCollisionWhenFindExistingFindsNothing() {
+        Fixture fixture = new Fixture(List.of(true));
+        RuntimeException signal = new RuntimeException("already exists");
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                        candidate(), null, tx -> Optional.empty(), () -> signal, Signals::unexpected,
+                        Signals.noBody()));
+
+        assertSame(signal, thrown);
+        assertFalse(fixture.bodyRan);
+    }
+
+    @Test
+    void createIfAbsentRejectsNullArguments() {
+        Fixture fixture = new Fixture(List.of());
+        WriteFunnel funnel = fixture.funnel();
+        Function<DatasetTx, Optional<String>> findExisting = tx -> Optional.empty();
+
+        assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(null, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, findExisting, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, null, SUBJECT_IRI,
+                CODE, candidate(), null, findExisting, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, GRAPH_IRI, null, CODE,
+                candidate(), null, findExisting, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
+                null, candidate(), null, findExisting, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
+                CODE, null, null, findExisting, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
+                CODE, candidate(), null, null, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
+                CODE, candidate(), null, findExisting, null, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
+                CODE, candidate(), null, findExisting, Signals::unexpected, null, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
+                CODE, candidate(), null, findExisting, Signals::unexpected, Signals::unexpected, null));
     }
 
     /** A conforming, minimal gate wired the same way {@link Fixture#funnelAt} builds one. */

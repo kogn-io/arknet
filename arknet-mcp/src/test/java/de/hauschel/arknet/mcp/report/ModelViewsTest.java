@@ -19,6 +19,7 @@ import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrStatus;
+import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
@@ -93,7 +94,7 @@ class ModelViewsTest {
                         (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
                 emptyConstraintCards(),
-                new BoundedContextCards((projectId, displayLocale) -> List.of(boundedContext())),
+                new BoundedContextCards((projectId, displayLocale) -> List.of(boundedContextDetail())),
                 emptyAdrCards(),
                 emptyActorCards(),
                 emptyRoleCards());
@@ -142,7 +143,7 @@ class ModelViewsTest {
                         (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
                 new ConstraintCards((projectId, displayLocale) -> List.of(constraint())),
-                new BoundedContextCards((projectId, displayLocale) -> List.of(boundedContext())),
+                new BoundedContextCards((projectId, displayLocale) -> List.of(boundedContextDetail())),
                 new AdrCards((projectId, displayLocale) -> List.of(adrDetail()),
                         (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
                 new ActorCards((projectId, displayLocale) -> List.of(actor())),
@@ -177,6 +178,10 @@ class ModelViewsTest {
                 new BoundedContextId(ResourceId.of("https://w3id.org/arknet/id/bc-1")),
                 new BoundedContextCode("BC-1"), "Ordering", "Bestellungen aufnehmen und verfolgen.",
                 Subdomain.CORE_DOMAIN, null, List.of());
+    }
+
+    private static BoundedContextDetail boundedContextDetail() {
+        return new BoundedContextDetail(boundedContext(), List.of());
     }
 
     private static Constraint constraint() {

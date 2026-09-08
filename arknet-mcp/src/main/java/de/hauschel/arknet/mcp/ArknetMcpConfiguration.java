@@ -636,8 +636,8 @@ public class ArknetMcpConfiguration {
             final BoundedContextService service, final ResolveTerms resolveTerms,
             final ProjectResolver projectResolver, final StaleTranslationHint staleTranslationHint) {
         return new BoundedContextMcpTools(
-                service, service, service, service, service, service, service, resolveTerms, projectResolver,
-                staleTranslationHint);
+                service, service, service, service, service, service, service, service, resolveTerms,
+                projectResolver, staleTranslationHint);
     }
 
     // --- ADR hexagon -----------------------------------------------------------

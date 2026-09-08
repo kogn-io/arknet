@@ -4,19 +4,25 @@
 package de.hauschel.arknet.bc.application;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
+import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
 import de.hauschel.arknet.bc.application.port.in.DescribeBoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.LinkContext;
 import de.hauschel.arknet.bc.application.port.in.LinkTerm;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
+import de.hauschel.arknet.bc.application.port.in.RelatedContext;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
+import de.hauschel.arknet.bc.application.port.in.UnlinkContext;
 import de.hauschel.arknet.bc.application.port.in.UpdateBoundedContext;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
@@ -29,6 +35,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.ContextRelationship;
 import de.hauschel.arknet.bc.domain.ContextRelationshipId;
+import de.hauschel.arknet.bc.domain.ContextRelationshipNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.TermRef;
@@ -52,11 +59,15 @@ import de.hauschel.arknet.kernel.ProjectId;
  * one above the highest running number currently used in the target project (numbering is
  * independent per project, starting at 1). Linking a glossary term is idempotent - a term may
  * be linked to a bounded context at any time; the edge lives inside the aggregate and is
- * therefore carried along by every subsequent replace-by-identity write. {@link #linkContext}, in
- * contrast, is pure create with no idempotency check: it resolves both bounded-context codes
- * against {@link #repository}, mints a fresh {@link ContextRelationshipId} and persists the
+ * therefore carried along by every subsequent replace-by-identity write. {@link #linkContext}
+ * resolves both bounded-context codes against {@link #repository}, mints a fresh
+ * {@link ContextRelationshipId} and asks {@link #contextRelationshipRepository} to persist the
  * resulting {@link ContextRelationship} as its own resource - never as a field on either bounded
- * context.</p>
+ * context - unless the exact same (upstream, downstream, relationshipType) triple is already
+ * recorded, in which case that pre-existing relationship is returned instead (issue #565,
+ * mirroring {@link #linkTerm}'s own idempotency). {@link #unlinkContext} is its counterpart: it
+ * removes exactly that triple, and - unlike an already-linked term - naming a triple that is not
+ * currently recorded is never a silent no-op.</p>
  *
  * <p><strong>Multilingual, mirroring {@code ConstraintService}'s policy (kogn-io/arknet#520).
  * </strong> {@code name}/{@code domainVision} are language-tagged; {@link #add} and {@link #update}
@@ -84,8 +95,8 @@ import de.hauschel.arknet.kernel.ProjectId;
  * remote/multi-writer concern.</p>
  */
 public class BoundedContextService implements AddBoundedContext, ListBoundedContexts,
-        GetBoundedContext, LinkTerm, ResolveBoundedContexts, LinkContext, DescribeBoundedContextDisplayFallback,
-        UpdateBoundedContext {
+        GetBoundedContext, LinkTerm, ResolveBoundedContexts, LinkContext, UnlinkContext,
+        DescribeBoundedContextDisplayFallback, UpdateBoundedContext {
 
     private static final String CODE_PREFIX = "BC";
 
@@ -146,9 +157,20 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     }
 
     @Override
-    public List<BoundedContext> list(ProjectId projectId, String displayLocale) {
+    public List<BoundedContextDetail> list(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
-        return repository.findAll(projectId, displayLocale);
+        List<BoundedContext> all = repository.findAll(projectId, displayLocale);
+        if (all.isEmpty()) {
+            return List.of();
+        }
+        // One bulk read of every relationship in the project, not one findByContext call per
+        // context - bc_list's whole point is showing every context's edges in a single pass.
+        List<ContextRelationship> relationships = contextRelationshipRepository.findAll(projectId);
+        Map<BoundedContextId, BoundedContextCode> peerCodes = resolvePeerCodes(projectId, all, relationships);
+        return all.stream()
+                .map(context -> new BoundedContextDetail(context,
+                        relatedContextsOf(context.id(), relationships, peerCodes)))
+                .toList();
     }
 
     @Override
@@ -159,10 +181,90 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     }
 
     @Override
-    public Optional<BoundedContext> get(ProjectId projectId, BoundedContextCode code, String displayLocale) {
+    public Optional<BoundedContextDetail> get(ProjectId projectId, BoundedContextCode code, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.findByCode(projectId, code, displayLocale);
+        return repository.findByCode(projectId, code, displayLocale).map(context -> detailOf(projectId, context));
+    }
+
+    /**
+     * Wraps one bounded context into the {@link BoundedContextDetail} projection {@link #get}
+     * returns: every relationship it carries, in either direction, with the peer's business code
+     * resolved. Mirrors {@code AdrService#detailOf} - one extra read (here:
+     * {@link ContextRelationshipRepository#findByContext}) plus a peer-code resolution, only on the
+     * single-context path; {@link #list} derives every context's relationships from one bulk read
+     * instead.
+     */
+    private BoundedContextDetail detailOf(ProjectId projectId, BoundedContext context) {
+        List<ContextRelationship> relationships =
+                contextRelationshipRepository.findByContext(projectId, context.id());
+        if (relationships.isEmpty()) {
+            return new BoundedContextDetail(context, List.of());
+        }
+        Map<BoundedContextId, BoundedContextCode> peerCodes =
+                resolvePeerCodes(projectId, List.of(context), relationships);
+        return new BoundedContextDetail(context, relatedContextsOf(context.id(), relationships, peerCodes));
+    }
+
+    /**
+     * Resolves the business code of every bounded context {@code relationships} references (as
+     * upstream or downstream) that is not already known from {@code contexts} - via
+     * {@link #resolveExisting}, this service's own batch identity-to-code lookup, exactly the
+     * "peer code resolved here, not shape by shape" choice {@code AdrDetail#supersedes} documents.
+     * An id that resolves to nothing (e.g. a peer deleted store-first) is simply absent from the
+     * result, same as {@link #resolveExisting} promises - {@link #relatedContextsOf} then drops
+     * that one relationship rather than constructing a {@link RelatedContext} with no peer code.
+     */
+    private Map<BoundedContextId, BoundedContextCode> resolvePeerCodes(ProjectId projectId,
+            List<BoundedContext> contexts, List<ContextRelationship> relationships) {
+        Map<BoundedContextId, BoundedContextCode> known = new LinkedHashMap<>();
+        for (BoundedContext context : contexts) {
+            known.put(context.id(), context.code());
+        }
+        Set<BoundedContextId> unresolved = new LinkedHashSet<>();
+        for (ContextRelationship relationship : relationships) {
+            if (!known.containsKey(relationship.upstream())) {
+                unresolved.add(relationship.upstream());
+            }
+            if (!known.containsKey(relationship.downstream())) {
+                unresolved.add(relationship.downstream());
+            }
+        }
+        if (!unresolved.isEmpty()) {
+            ResourceId[] ids = unresolved.stream().map(BoundedContextId::value).toArray(ResourceId[]::new);
+            for (ResolveBoundedContexts.ResolvedBoundedContext resolved : resolveExisting(projectId, ids)) {
+                known.put(new BoundedContextId(resolved.id()), resolved.code());
+            }
+        }
+        return known;
+    }
+
+    /**
+     * Renders every relationship in {@code relationships} that names {@code owner} as either
+     * upstream or downstream into a {@link RelatedContext}, from {@code owner}'s point of view - a
+     * relationship whose peer code {@code peerCodes} could not resolve is dropped rather than
+     * rendered with no code.
+     */
+    private static List<RelatedContext> relatedContextsOf(BoundedContextId owner,
+            List<ContextRelationship> relationships, Map<BoundedContextId, BoundedContextCode> peerCodes) {
+        List<RelatedContext> related = new ArrayList<>();
+        for (ContextRelationship relationship : relationships) {
+            boolean ownerIsUpstream = owner.equals(relationship.upstream());
+            boolean ownerIsDownstream = owner.equals(relationship.downstream());
+            if (!ownerIsUpstream && !ownerIsDownstream) {
+                continue;
+            }
+            BoundedContextId peer = ownerIsUpstream ? relationship.downstream() : relationship.upstream();
+            BoundedContextCode peerCode = peerCodes.get(peer);
+            if (peerCode == null) {
+                continue;
+            }
+            RelatedContext.Direction direction =
+                    ownerIsUpstream ? RelatedContext.Direction.UPSTREAM_OF : RelatedContext.Direction.DOWNSTREAM_OF;
+            related.add(new RelatedContext(relationship.id(), direction, peer, peerCode,
+                    relationship.relationshipType()));
+        }
+        return related;
     }
 
     @Override
@@ -248,8 +350,35 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
                 .orElseThrow(() -> new BoundedContextNotFoundException(projectId, downstreamCode))
                 .id();
         ContextRelationshipId id = new ContextRelationshipId(resourceIdFactory.newId());
-        ContextRelationship relationship = new ContextRelationship(id, upstream, downstream, relationshipType);
-        return contextRelationshipRepository.create(projectId, relationship);
+        ContextRelationship candidate = new ContextRelationship(id, upstream, downstream, relationshipType);
+        // createIfAbsent mints nothing new if this exact triple is already recorded - see
+        // ContextRelationshipRepository's class javadoc for why that check must run inside the
+        // out-adapter's own write transaction rather than as a read here beforehand.
+        return contextRelationshipRepository.createIfAbsent(projectId, candidate);
+    }
+
+    @Override
+    public void unlinkContext(ProjectId projectId, BoundedContextCode upstreamCode, BoundedContextCode downstreamCode,
+            RelationshipType relationshipType) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(upstreamCode, "upstreamCode");
+        Objects.requireNonNull(downstreamCode, "downstreamCode");
+        Objects.requireNonNull(relationshipType, "relationshipType");
+        BoundedContextId upstream = repository.findByCode(projectId, upstreamCode, null)
+                .orElseThrow(() -> new BoundedContextNotFoundException(projectId, upstreamCode))
+                .id();
+        BoundedContextId downstream = repository.findByCode(projectId, downstreamCode, null)
+                .orElseThrow(() -> new BoundedContextNotFoundException(projectId, downstreamCode))
+                .id();
+        try {
+            contextRelationshipRepository.deleteByEdge(projectId, upstream, downstream, relationshipType);
+        } catch (ContextRelationshipNotFoundException idAddressedSignal) {
+            // The out-port only ever holds opaque identities, so its own not-found signal carries
+            // none of the codes the caller actually typed - re-thrown here, one layer up, with the
+            // codes this method already resolved (see ContextRelationshipNotFoundException's class
+            // javadoc for why this translation lives here rather than at the out-port).
+            throw new ContextRelationshipNotFoundException(projectId, upstreamCode, downstreamCode, relationshipType);
+        }
     }
 
     /**

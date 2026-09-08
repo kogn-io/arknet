@@ -42,6 +42,9 @@ import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.bc.application.port.out.TermLookup;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextId;
+import de.hauschel.arknet.bc.domain.ContextRelationship;
+import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -359,7 +362,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         assertEquals(2, result.usesTerms().size(),
                 "the retry must return the state it re-read, not its stale first read");
         assertTrue(result.usesTerms().containsAll(List.of(new TermRef(TERM_1), new TermRef(TERM_2))));
-        BoundedContext stored = straightThrough.get(WS, code, null).orElseThrow();
+        BoundedContext stored = straightThrough.get(WS, code, null).orElseThrow().context();
         assertEquals(2, stored.usesTerms().size(), "both writers' edges must survive - neither is silently lost");
     }
 
@@ -409,13 +412,13 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         racing.update(WS, code, "Auftragsverwaltung", null, "de", null);
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
-        BoundedContext asEnglish = straightThrough.get(WS, code, "en").orElseThrow();
+        BoundedContext asEnglish = straightThrough.get(WS, code, "en").orElseThrow().context();
         assertEquals("Owns the lifecycle of a customer order, corrected.", asEnglish.domainVision(),
                 "the concurrent domainVision correction must not have been lost by the retry");
         assertEquals("OrderManagement", asEnglish.name(),
                 "the pre-existing English name must survive the racer's own German-only correction - only "
                         + "capture-before-delete/reattach keeps it, a plain replace would drop it");
-        BoundedContext asGerman = straightThrough.get(WS, code, "de").orElseThrow();
+        BoundedContext asGerman = straightThrough.get(WS, code, "de").orElseThrow().context();
         assertEquals("Auftragsverwaltung", asGerman.name(),
                 "the racer's own name addition must not have been lost by its own retry");
         assertEquals("Verwaltet den Lebenszyklus einer Kundenbestellung.", asGerman.domainVision(),
@@ -444,10 +447,34 @@ class BoundedContextServiceRealStoreConcurrencyTest {
                 new UuidResourceIdFactory(), termLookup, unusedContextRelationshipRepository());
     }
 
-    /** Neither concurrency race this class exercises reaches {@code bc_link_context}. */
+    /**
+     * Neither concurrency race this class exercises reaches {@code bc_link_context}/
+     * {@code bc_unlink_context} - but {@code bc_get} (via {@link BoundedContextService#get}) always
+     * reads {@link ContextRelationshipRepository#findByContext} since issue #565, so the read paths
+     * answer "no relationships" rather than throwing.
+     */
     private static ContextRelationshipRepository unusedContextRelationshipRepository() {
-        return (projectId, relationship) -> {
-            throw new UnsupportedOperationException("not exercised by this test");
+        return new ContextRelationshipRepository() {
+            @Override
+            public ContextRelationship createIfAbsent(ProjectId projectId, ContextRelationship relationship) {
+                throw new UnsupportedOperationException("not exercised by this test");
+            }
+
+            @Override
+            public void deleteByEdge(ProjectId projectId, BoundedContextId upstream, BoundedContextId downstream,
+                    RelationshipType relationshipType) {
+                throw new UnsupportedOperationException("not exercised by this test");
+            }
+
+            @Override
+            public List<ContextRelationship> findByContext(ProjectId projectId, BoundedContextId context) {
+                return List.of();
+            }
+
+            @Override
+            public List<ContextRelationship> findAll(ProjectId projectId) {
+                return List.of();
+            }
         };
     }
 

@@ -343,6 +343,85 @@ public final class WriteFunnel {
     }
 
     /**
+     * Runs a guarded "create if absent" (issue #565): {@code findExisting} runs first, inside the
+     * write transaction, to look for a resource an application-defined uniqueness rule already
+     * considers equivalent to {@code candidate} - not the identity/code guard {@link #create}
+     * always runs, but a caller-supplied one (e.g. "a relationship with this exact upstream/
+     * downstream/type triple"). If it finds one, the transaction is left with no write and no
+     * revision, and this method returns that resource's own subject IRI - never {@code subjectIri}
+     * itself in that case. Otherwise this degenerates to {@link #create}'s own semantics, still
+     * inside the very same transaction the {@code findExisting} check ran in: the identity and code
+     * guards run, {@code body} writes, a revision is recorded, and {@code subjectIri} is returned.
+     *
+     * <p><strong>Why {@code findExisting} runs inside the transaction, not as a read
+     * beforehand.</strong> A separate read-then-conditionally-write sequence would leave a
+     * check-then-act race between the two calls; running the check as the very first thing inside
+     * this method's own write transaction closes that window the same way {@link #create}'s
+     * identity/code checks already do.</p>
+     *
+     * @param dataset       the dataset (project) to write into
+     * @param graphIri      the named graph the checks are scoped to
+     * @param subjectIri    the candidate's own opaque IRI; expected IRIREF-safe by construction
+     * @param code          the human-readable business code checked against
+     *                      {@code dcterms:identifier} (escaped here, pass it raw) - a caller with no
+     *                      business-code concept of its own (e.g. a relationship) may pass
+     *                      {@code subjectIri} again, which can then structurally never collide
+     * @param candidate     the instance graph handed to the SHACL gate before the transaction
+     * @param assertedContext validation-only context triples for the gate, or {@code null} if the
+     *                      shapes need none
+     * @param findExisting  runs first, inside the write transaction; a present result short-circuits
+     *                      the write and is returned as-is
+     * @param alreadyExists the caller's signal for an opaque-identity collision on {@code subjectIri}
+     *                      itself (distinct from {@code findExisting} finding a different,
+     *                      pre-existing resource)
+     * @param duplicateCode the caller's signal for a business-code collision
+     * @param body          the write itself, given the live transaction after {@code findExisting}
+     *                      found nothing and both guards passed
+     * @return {@code subjectIri} if {@code body} ran, or the subject IRI {@code findExisting} found
+     *         otherwise
+     */
+    public String createIfAbsent(DatasetId dataset, String graphIri, String subjectIri, String code,
+            ReadableGraph candidate, ReadableGraph assertedContext,
+            Function<DatasetTx, Optional<String>> findExisting,
+            Supplier<RuntimeException> alreadyExists, Supplier<RuntimeException> duplicateCode,
+            Consumer<DatasetTx> body) {
+        Objects.requireNonNull(dataset, "dataset");
+        Objects.requireNonNull(graphIri, "graphIri");
+        Objects.requireNonNull(subjectIri, "subjectIri");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(candidate, "candidate");
+        Objects.requireNonNull(findExisting, "findExisting");
+        Objects.requireNonNull(alreadyExists, "alreadyExists");
+        Objects.requireNonNull(duplicateCode, "duplicateCode");
+        Objects.requireNonNull(body, "body");
+
+        enforceGate(candidate, assertedContext);
+
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            return handle.transactor().inTransaction(tx -> {
+                Optional<String> existing = findExisting.apply(tx);
+                if (existing.isPresent()) {
+                    return existing.get();
+                }
+                IRI graph = rdf.createIRI(graphIri);
+                IRI subject = rdf.createIRI(subjectIri);
+                if (tx.contains(graph, subject, null, null)) {
+                    throw alreadyExists.get();
+                }
+                IRI identifierProperty = rdf.createIRI(IDENTIFIER_PROPERTY);
+                Literal codeLiteral = rdf.createLiteral(code);
+                if (tx.contains(graph, null, identifierProperty, codeLiteral)) {
+                    throw duplicateCode.get();
+                }
+                Optional<IRI> previousHead = readHead(tx, subjectIri);
+                body.accept(tx);
+                recordRevision(tx, subjectIri, previousHead);
+                return subjectIri;
+            });
+        }
+    }
+
+    /**
      * Runs a guarded update: the subject must already exist; only then does {@code body} run,
      * inside the same write transaction as the check. No code check (an update never rewrites
      * the code triple through this path) and no conflict translation (see the class javadoc).

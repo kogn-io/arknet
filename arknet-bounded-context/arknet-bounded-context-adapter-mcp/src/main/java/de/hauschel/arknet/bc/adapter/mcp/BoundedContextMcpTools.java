@@ -18,11 +18,14 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
+import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
 import de.hauschel.arknet.bc.application.port.in.DescribeBoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.LinkContext;
 import de.hauschel.arknet.bc.application.port.in.LinkTerm;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
+import de.hauschel.arknet.bc.application.port.in.RelatedContext;
+import de.hauschel.arknet.bc.application.port.in.UnlinkContext;
 import de.hauschel.arknet.bc.application.port.in.UpdateBoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
@@ -43,8 +46,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 /**
  * Driving (in) adapter of the bounded-context component: exposes the bounded-context use-cases as
  * MCP tools ({@code bc_add}, {@code bc_list}, {@code bc_get}, {@code bc_update},
- * {@code bc_link_term}, {@code bc_link_context}) and delegates each tool call to the corresponding
- * in-port.
+ * {@code bc_link_term}, {@code bc_link_context}, {@code bc_unlink_context}) and delegates each
+ * tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the bounded-context hexagon (symmetric to the out-adapter
  * {@code arknet-bounded-context-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -141,6 +144,7 @@ public final class BoundedContextMcpTools {
     private final UpdateBoundedContext updateBoundedContext;
     private final LinkTerm linkTerm;
     private final LinkContext linkContext;
+    private final UnlinkContext unlinkContext;
     private final ResolveTerms resolveTerms;
     private final ProjectResolver projects;
     private final StaleTranslationHint staleTranslations;
@@ -157,6 +161,7 @@ public final class BoundedContextMcpTools {
      * @param updateBoundedContext in-port backing {@code bc_update} (kogn-io/arknet#520)
      * @param linkTerm            in-port backing {@code bc_link_term}
      * @param linkContext         in-port backing {@code bc_link_context}
+     * @param unlinkContext       in-port backing {@code bc_unlink_context} (kogn-io/arknet#565)
      * @param resolveTerms        ubiquitous-language driving port used only to render a linked
      *                            term's business code instead of its bare IRI
      * @param projects          resolves each call's target project from its origin directory
@@ -171,6 +176,7 @@ public final class BoundedContextMcpTools {
             final UpdateBoundedContext updateBoundedContext,
             final LinkTerm linkTerm,
             final LinkContext linkContext,
+            final UnlinkContext unlinkContext,
             final ResolveTerms resolveTerms,
             final ProjectResolver projects,
             final StaleTranslationHint staleTranslations) {
@@ -182,6 +188,7 @@ public final class BoundedContextMcpTools {
         this.updateBoundedContext = Objects.requireNonNull(updateBoundedContext, "updateBoundedContext");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
         this.linkContext = Objects.requireNonNull(linkContext, "linkContext");
+        this.unlinkContext = Objects.requireNonNull(unlinkContext, "unlinkContext");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.projects = Objects.requireNonNull(projects, "projects");
         this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
@@ -253,10 +260,12 @@ public final class BoundedContextMcpTools {
         return format(project.id(), created);
     }
 
-    @McpTool(name = "bc_list", description = "List all managed bounded contexts. A context shown under a "
-            + "fallen-back language (its name/domainVision is missing in the requested/project-default "
-            + "language) carries an inline [fallback: ...] tag naming the language actually shown - see "
-            + "displayLocale.",
+    @McpTool(name = "bc_list", description = "List all managed bounded contexts. Every context relationship "
+            + "it carries (bc_link_context) is shown inline, e.g. "
+            + "'[upstream of: BC-1 (PUBLISHED_LANGUAGE)] [downstream of: BC-5 (CONFORMIST)]'. A context "
+            + "shown under a fallen-back language (its name/domainVision is missing in the requested/"
+            + "project-default language) carries an inline [fallback: ...] tag naming the language "
+            + "actually shown - see displayLocale.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
@@ -278,20 +287,24 @@ public final class BoundedContextMcpTools {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
         final String effective = effectiveDisplayLocale(project, displayLocale);
-        final List<BoundedContext> all = listBoundedContexts.list(projectId, effective);
+        final List<BoundedContextDetail> all = listBoundedContexts.list(projectId, effective);
         if (all.isEmpty()) {
             return "(no bounded contexts)";
         }
         // One batch resolution across every context's linked terms, not one per context.
-        final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(projectId, all);
+        final List<BoundedContext> contexts = all.stream().map(BoundedContextDetail::context).toList();
+        final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(projectId, contexts);
         final Map<BoundedContextCode, BoundedContextDisplayFallback> fallbacks =
                 describeBoundedContextDisplayFallback.describe(projectId, effective);
         return all.stream()
-                .map(bc -> format(bc, termsById) + fallbackSuffix(fallbacks.get(bc.code())))
+                .map(detail -> format(detail.context(), termsById) + relationshipsSuffix(detail.relationships())
+                        + fallbackSuffix(fallbacks.get(detail.context().code())))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no bounded contexts)");
     }
 
-    @McpTool(name = "bc_get", description = "Fetch a single bounded context by its identity (e.g. BC-1).",
+    @McpTool(name = "bc_get", description = "Fetch a single bounded context by its identity (e.g. BC-1). "
+            + "Every context relationship it carries (bc_link_context) is shown inline, e.g. "
+            + "'[upstream of: BC-1 (PUBLISHED_LANGUAGE)] [downstream of: BC-5 (CONFORMIST)]'.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String get(
             final McpSyncRequestContext context,
@@ -313,7 +326,7 @@ public final class BoundedContextMcpTools {
         final BoundedContextCode code = new BoundedContextCode(id);
         final String effective = effectiveDisplayLocale(project, displayLocale);
         return getBoundedContext.get(project.id(), code, effective)
-                .map(bc -> format(project.id(), bc))
+                .map(detail -> format(project.id(), detail.context()) + relationshipsSuffix(detail.relationships()))
                 .orElse("Bounded context not found: " + code.value());
     }
 
@@ -321,8 +334,9 @@ public final class BoundedContextMcpTools {
             description = "Correct an already-created bounded context's name and/or domain vision, or state "
                     + "either of them in a further language. Both arguments are optional - an omitted one "
                     + "leaves that field unchanged. Does NOT touch subdomain, ownedBy, linked terms "
-                    + "(bc_link_term) or context relationships (bc_link_context) - those stay fixed since "
-                    + "creation (or the last bc_link_term). Cannot change the context's code (BC-N): it is "
+                    + "(bc_link_term) or context relationships (bc_link_context/bc_unlink_context) - those "
+                    + "stay fixed since creation (or the last such call). Cannot change the context's code "
+                    + "(BC-N): it is "
                     + "fixed at creation, and everything already referring to the context refers to that "
                     + "code." + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
     public String update(
@@ -387,8 +401,12 @@ public final class BoundedContextMcpTools {
                     + "Valid relationship types: PARTNERSHIP, SHARED_KERNEL, CUSTOMER_SUPPLIER, "
                     + "CONFORMIST, ANTICORRUPTION_LAYER, OPEN_HOST_SERVICE, PUBLISHED_LANGUAGE, "
                     + "SEPARATE_WAYS. Pure CRUD: this tool never judges or suggests which relationship "
-                    + "type applies - that call is yours. Not idempotent: every call creates a new "
-                    + "relationship, even a duplicate of one already recorded.")
+                    + "type applies - that call is yours. Idempotent over the exact "
+                    + "(upstream, downstream, relationshipType) triple: calling it again with the same "
+                    + "three values returns the relationship already recorded rather than creating a "
+                    + "second one; two different types between the same pair remain two distinct "
+                    + "relationships. Recorded relationships show up on bc_get/bc_list; remove one with "
+                    + "bc_unlink_context.")
     public String linkContext(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Upstream bounded-context identity, e.g. BC-1 (the context "
@@ -415,11 +433,43 @@ public final class BoundedContextMcpTools {
         return "%s -[%s]-> %s".formatted(upstreamBcId, created.relationshipType(), downstreamBcId);
     }
 
+    @McpTool(name = "bc_unlink_context",
+            description = "Remove a previously recorded DDD context-mapping relationship between two "
+                    + "bounded contexts, addressed by the exact same (upstream, downstream, "
+                    + "relationshipType) triple bc_link_context took to create it. Never a silent "
+                    + "no-op: a triple that is not currently recorded - a typo in the type, or the "
+                    + "direction swapped - is rejected rather than quietly doing nothing, so a mistaken "
+                    + "unlink call cannot be confused with a successful one.")
+    public String unlinkContext(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Upstream bounded-context identity, e.g. BC-1")
+            final String upstreamBcId,
+            @McpToolParam(description = "Downstream bounded-context identity, e.g. BC-2")
+            final String downstreamBcId,
+            @McpToolParam(description = "Relationship type: PARTNERSHIP, SHARED_KERNEL, "
+                    + "CUSTOMER_SUPPLIER, CONFORMIST, ANTICORRUPTION_LAYER, OPEN_HOST_SERVICE, "
+                    + "PUBLISHED_LANGUAGE or SEPARATE_WAYS")
+            final String relationshipType,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final RelationshipType type = parseRelationshipType(relationshipType);
+        unlinkContext.unlinkContext(
+                project.id(), new BoundedContextCode(upstreamBcId), new BoundedContextCode(downstreamBcId), type);
+        return "removed %s -[%s]-> %s".formatted(upstreamBcId, type, downstreamBcId);
+    }
+
     /**
      * Parses {@code value} against {@link RelationshipType}, rejecting anything else - including
      * an unparseable or blank value - with this tool's own didactic message rather than the JDK's
      * raw {@code No enum constant ...}, mirroring {@code adr_set_status}'s {@code AdrStatus}
-     * parsing idiom.
+     * parsing idiom. Shared by {@link #linkContext} and {@link #unlinkContext} - both address a
+     * relationship by the same triple, so both parse the type the same way.
      */
     private static RelationshipType parseRelationshipType(final String value) {
         RelationshipType parsed;
@@ -430,9 +480,9 @@ public final class BoundedContextMcpTools {
         }
         if (parsed == null) {
             throw new IllegalArgumentException(
-                    "bc_link_context only supports PARTNERSHIP, SHARED_KERNEL, CUSTOMER_SUPPLIER, "
-                            + "CONFORMIST, ANTICORRUPTION_LAYER, OPEN_HOST_SERVICE, PUBLISHED_LANGUAGE or "
-                            + "SEPARATE_WAYS as a relationship type, not " + value);
+                    "only PARTNERSHIP, SHARED_KERNEL, CUSTOMER_SUPPLIER, CONFORMIST, ANTICORRUPTION_LAYER, "
+                            + "OPEN_HOST_SERVICE, PUBLISHED_LANGUAGE or SEPARATE_WAYS are valid relationship "
+                            + "types, not " + value);
         }
         return parsed;
     }
@@ -510,6 +560,29 @@ public final class BoundedContextMcpTools {
 
     private static String displayTag(final String tag) {
         return tag.isEmpty() ? "untagged" : tag;
+    }
+
+    /**
+     * Renders every {@link RelatedContext} a {@code bc_get}/{@code bc_list} result carries as one
+     * inline bracket per relationship, e.g.
+     * {@code [upstream of: BC-1 (PUBLISHED_LANGUAGE)] [downstream of: BC-5 (CONFORMIST)]} - the
+     * same short form on both tools (kogn-io/arknet#565), {@code bc_list} keeping every context on
+     * its own single line exactly as it already does for {@link #fallbackSuffix}. Empty when
+     * {@code relationships} is empty, so a context with no recorded relationship renders exactly as
+     * it did before this issue.
+     */
+    private static String relationshipsSuffix(final List<RelatedContext> relationships) {
+        if (relationships.isEmpty()) {
+            return "";
+        }
+        final StringBuilder suffix = new StringBuilder();
+        for (final RelatedContext related : relationships) {
+            final String label = related.direction() == RelatedContext.Direction.UPSTREAM_OF
+                    ? "upstream of" : "downstream of";
+            suffix.append(" [").append(label).append(": ").append(related.peerCode().value())
+                    .append(" (").append(related.relationshipType()).append(")]");
+        }
+        return suffix.toString();
     }
 
     /** Mirrors {@code ToolArguments#effectiveDisplayLocale} exactly. */
