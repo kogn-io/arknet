@@ -24,3 +24,6 @@ recherche/
 
 # Generierte Doku-Artefakte (aus dem Build, nicht ins Repo)
 docs/generated/
+
+# Session-Arbeitsmaterial (Plaene, Review-Kontexte; nicht ins Repo)
+.prompts/
