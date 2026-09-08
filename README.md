@@ -323,9 +323,10 @@ Bounded Context BC (`arknet-bounded-context`) -- BoundedContext lifecycle (assig
 
 | Tool | Description |
 |------|-------------|
-| `bc_add` | Create a new bounded context |
-| `bc_list` | List all bounded contexts |
-| `bc_get` | Fetch a single bounded context with its linked glossary terms |
+| `bc_add` | Create a new bounded context. Name and domain vision are natively multilingual -- an optional `language` argument tags the literals being written (BCP-47, e.g. `"en"`); omitted, it falls back to the project's configured default language, and rejects the call if the project has none either |
+| `bc_list` | List all bounded contexts. A context shown under a fallen-back display language carries an inline `[fallback: ...]` tag |
+| `bc_get` | Fetch a single bounded context with its linked glossary terms. An optional `displayLocale` argument picks which language variant of a multilingual name/domain vision to return, falling back to the calling project's `defaultLanguage`, then to an untagged value |
+| `bc_update` | Correct a bounded context's name and/or domain vision, or state either of them in a further language (each optional, unchanged if omitted). Subdomain, `ownedBy`, linked terms and context relationships stay as created or last linked; the code (BC-N) never changes. `language` scopes the write to that one language's literal, leaving other variants untouched -- except a stale untagged one, swept away once the resolved tag equals the project's default. A project that maintains several languages gets the same closing stale-translation signal `constraint_update` describes |
 | `bc_link_term` | Link a bounded context to a glossary term (`arkddd:ubiquitousLanguageTerm`; the term must exist) |
 | `bc_link_context` | Record a directed DDD context-mapping relationship between two existing bounded contexts (`arkddd:ContextRelationship`; both must exist), classified by one of eight `arkddd:RelationshipType` values. Pure CRUD, not idempotent -- every call creates a new relationship |
 
@@ -347,10 +348,10 @@ Actor BC (`arknet-actor`) -- actors as resources of their own: someone or someth
 
 | Tool | Description |
 |------|-------------|
-| `actor_add` | Register a new actor, classified `HUMAN` (a natural person), `SYSTEM` (an external system or service), `LEGAL` (a legal person -- organization, company, association) or `GROUP` (a group without a legal form of its own -- department, committee, team). All four share one running number (`ACTOR-N`); type and code are fixed at creation |
-| `actor_list` | List all managed actors |
-| `actor_get` | Fetch a single actor by identity (e.g. ACTOR-1) |
-| `actor_update` | Correct an actor's name and/or description (each optional, unchanged if omitted -- omitting the description does not remove it). Type and code stay as created |
+| `actor_add` | Register a new actor, classified `HUMAN` (a natural person), `SYSTEM` (an external system or service), `LEGAL` (a legal person -- organization, company, association) or `GROUP` (a group without a legal form of its own -- department, committee, team). All four share one running number (`ACTOR-N`); type and code are fixed at creation. Name and description are natively multilingual -- an optional `language` argument tags the literals being written, falling back to the project's default language and rejecting the call if neither is set |
+| `actor_list` | List all managed actors. An actor shown under a fallen-back display language carries an inline `[fallback: ...]` tag |
+| `actor_get` | Fetch a single actor by identity (e.g. ACTOR-1). An optional `displayLocale` argument picks which language variant of a multilingual name/description to return, falling back to the calling project's `defaultLanguage`, then to an untagged value |
+| `actor_update` | Correct an actor's name and/or description, or state either in a further language (each optional, unchanged if omitted -- omitting the description does not remove it). Type and code stay as created. `language` scopes the write to that one language's literal, leaving other variants untouched -- except a stale untagged one, swept away once the resolved tag equals the project's default. A project that maintains several languages gets the same closing stale-translation signal `constraint_update` describes |
 | `actor_delete` | Delete an actor and every triple it carries -- the whole resource, not a field correction. Rejected if a role's `filledBy` still occupies it. A resource that is also a glossary term (`term_add`) keeps its glossary entry |
 | `role_add` | Register a new role: a named function in which someone or something acts or holds an interest, named independently of who fills it. Optional `filledBy` (actor codes) may leave the role unfilled |
 | `role_list` | List all managed roles. A role shown under a fallen-back display language carries an inline `[fallback: ...]` tag |
