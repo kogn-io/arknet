@@ -261,7 +261,7 @@ public final class BoundedContextMcpTools {
     }
 
     @McpTool(name = "bc_list", description = "List all managed bounded contexts. Every context relationship "
-            + "it carries (bc_link_context) is shown inline, e.g. "
+            + "a context carries (bc_link_context) is shown inline, e.g. "
             + "'[upstream of: BC-1 (PUBLISHED_LANGUAGE)] [downstream of: BC-5 (CONFORMIST)]'. A context "
             + "shown under a fallen-back language (its name/domainVision is missing in the requested/"
             + "project-default language) carries an inline [fallback: ...] tag naming the language "

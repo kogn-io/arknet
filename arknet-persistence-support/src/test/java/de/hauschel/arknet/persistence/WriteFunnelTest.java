@@ -20,6 +20,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
@@ -990,6 +991,82 @@ class WriteFunnelTest {
         assertFalse(fixture.bodyRan);
     }
 
+    /**
+     * A {@code null} code skips the code guard entirely (issue #575 review) - only the identity
+     * {@code contains} check runs, never the second, code-uniqueness one. This is what lets
+     * {@code KognioRdfContextRelationshipRepository} pass {@code null} honestly instead of a code
+     * value engineered to never match.
+     */
+    @Test
+    void createIfAbsentSkipsTheCodeGuardWhenCodeIsNull() {
+        Fixture fixture = new Fixture(List.of(false));
+
+        String result = fixture.funnel().createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, null,
+                candidate(), null, tx -> Optional.empty(), Signals::unexpected, Signals::unexpected, tx -> { });
+
+        assertEquals(SUBJECT_IRI, result);
+        assertEquals(1, fixture.tx.containsCalls.size(), "only the identity guard may run when code is null");
+        assertSubjectExistenceCheck(fixture.tx.containsCalls.get(0), GRAPH_IRI, SUBJECT_IRI);
+    }
+
+    /**
+     * The second interleaving (issue #575 review): both racers see {@code findExisting} return
+     * empty, both pass the guards, and the loser's commit is rejected. The loser must get the
+     * winner's now-committed subject IRI back, not the raw store conflict - the whole point of
+     * reaching for {@code createIfAbsent} over {@code create}.
+     */
+    @Test
+    void createIfAbsentTranslatesALostCommitConflictIntoTheWinnersExistingSubject() {
+        RuntimeException storeConflict = new RuntimeException("store commit conflict");
+        Fixture fixture = new Fixture(List.of(false, false), storeConflict, e -> e == storeConflict);
+        String winnerIri = "https://example.org/thing/winner";
+        AtomicInteger findExistingCalls = new AtomicInteger();
+        Function<DatasetTx, Optional<String>> findExisting = tx -> findExistingCalls.incrementAndGet() == 1
+                ? Optional.empty() : Optional.of(winnerIri);
+
+        String result = fixture.funnel().createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, findExisting, Signals::unexpected, Signals::unexpected, tx -> { });
+
+        assertEquals(winnerIri, result);
+        assertEquals(2, findExistingCalls.get(), "must retry findExisting once after the conflict");
+    }
+
+    /**
+     * A conflict this triple-based idempotency cannot explain (the retry finds nothing either)
+     * must not be swallowed - the original store conflict propagates unchanged, the same residual
+     * case {@link WriteFunnel#create}'s own {@code commitConflict} leaves open.
+     */
+    @Test
+    void createIfAbsentRethrowsTheConflictWhenTheRetryFindsNothingEither() {
+        RuntimeException storeConflict = new RuntimeException("store commit conflict");
+        Fixture fixture = new Fixture(List.of(false, false), storeConflict, e -> e == storeConflict);
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                        candidate(), null, tx -> Optional.empty(), Signals::unexpected, Signals::unexpected,
+                        tx -> { }));
+
+        assertSame(storeConflict, thrown);
+    }
+
+    /** An unrecognised failure (not a write conflict) must never trigger the retry at all. */
+    @Test
+    void createIfAbsentDoesNotRetryOnAnUnrecognisedFailure() {
+        RuntimeException unrelated = new IllegalStateException("unrelated failure");
+        Fixture fixture = new Fixture(List.of(false, false), unrelated, e -> false);
+        AtomicInteger findExistingCalls = new AtomicInteger();
+        Function<DatasetTx, Optional<String>> findExisting = tx -> {
+            findExistingCalls.incrementAndGet();
+            return Optional.empty();
+        };
+
+        assertThrows(IllegalStateException.class,
+                () -> fixture.funnel().createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                        candidate(), null, findExisting, Signals::unexpected, Signals::unexpected, tx -> { }));
+
+        assertEquals(1, findExistingCalls.get(), "no retry for a failure isWriteConflict does not recognise");
+    }
+
     @Test
     void createIfAbsentRejectsNullArguments() {
         Fixture fixture = new Fixture(List.of());
@@ -1002,8 +1079,9 @@ class WriteFunnelTest {
                 CODE, candidate(), null, findExisting, Signals::unexpected, Signals::unexpected, Signals.noBody()));
         assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, GRAPH_IRI, null, CODE,
                 candidate(), null, findExisting, Signals::unexpected, Signals::unexpected, Signals.noBody()));
-        assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
-                null, candidate(), null, findExisting, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        // code == null is a legitimate caller intent (skip the code guard entirely, see
+        // createIfAbsentSkipsTheCodeGuardWhenCodeIsNull) - not validated here, same as delete's
+        // own code parameter.
         assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
                 CODE, null, null, findExisting, Signals::unexpected, Signals::unexpected, Signals.noBody()));
         assertThrows(NullPointerException.class, () -> funnel.createIfAbsent(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
@@ -1257,11 +1335,20 @@ class WriteFunnelTest {
         }
     }
 
-    /** Runs the work, then fails "at commit" if configured - after the body already executed. */
+    /**
+     * Runs the work, then fails "at commit" if configured - after the body already executed. Fires
+     * {@code commitFailure} at most once: a real conflict happens once per racer, and
+     * {@code createIfAbsent}'s post-conflict retry re-acquires a transaction on the very same
+     * {@link FakeLifecycle}/{@link FakeHandle} in these tests (unlike the real store, which hands
+     * out a genuinely fresh one) - without the one-shot guard, that retry would trip the identical
+     * failure again instead of observing the "winner has since committed" state a test arms via
+     * its own {@code findExisting} stub.
+     */
     private static final class FakeTransactor implements DatasetTransactor {
 
         private final DatasetTx tx;
         private final RuntimeException commitFailure;
+        private boolean commitFailureConsumed;
 
         private FakeTransactor(DatasetTx tx, RuntimeException commitFailure) {
             this.tx = tx;
@@ -1271,7 +1358,8 @@ class WriteFunnelTest {
         @Override
         public <T> T inTransaction(Function<DatasetTx, T> work) {
             T result = work.apply(tx);
-            if (commitFailure != null) {
+            if (commitFailure != null && !commitFailureConsumed) {
+                commitFailureConsumed = true;
                 throw commitFailure;
             }
             return result;

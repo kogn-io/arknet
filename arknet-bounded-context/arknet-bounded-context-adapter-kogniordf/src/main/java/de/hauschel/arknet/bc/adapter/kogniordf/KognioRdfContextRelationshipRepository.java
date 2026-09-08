@@ -53,10 +53,10 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * runs its identity/code guards in, closing the check-then-act race a separate read beforehand would
  * leave open (see {@link ContextRelationshipRepository}'s class javadoc). {@link ContextRelationship}
  * carries no human-readable business code of its own (unlike {@code BoundedContextCode}), so there is
- * no second uniqueness rule beyond the triple check and the identity collision - the {@code code}
- * parameter {@link WriteFunnel#createIfAbsent} still requires is passed as the relationship's own
- * freshly minted subject IRI, a value this adapter never writes as a {@code dcterms:identifier}
- * triple, so that check can structurally never match an existing triple.</p>
+ * no second uniqueness rule beyond the triple check and the identity collision - {@code code} is
+ * passed as {@code null}, skipping that guard entirely, the same honest shape
+ * {@code WriteFunnel#delete}'s code-retention overload already uses for a caller with nothing to
+ * check there.</p>
  *
  * <p><strong>Relationship-type IRI mapping mirrors {@code Subdomain}'s.</strong> The eight private
  * {@code String} constants below are named exactly like the {@link RelationshipType} enum
@@ -172,11 +172,11 @@ public class KognioRdfContextRelationshipRepository implements ContextRelationsh
                 + "<" + RELATIONSHIP_TYPE_PROPERTY + "> <"
                 + relationshipTypeIriFor(relationship.relationshipType()) + "> } }";
 
-        // See the class javadoc's "idempotent create" note for why the freshly minted subject IRI
-        // itself doubles as the funnel's "code" parameter, and why the identity guard collapses onto
-        // the same ResourceAlreadyExistsException here.
+        // A relationship carries no business code of its own (unlike BoundedContextCode) - code =
+        // null skips that guard entirely, the same honest shape WriteFunnel#delete already uses for
+        // a caller with nothing to check there.
         String resultIri = funnel.createIfAbsent(new DatasetId(projectId.value()), BOUNDED_CONTEXT_GRAPH,
-                subjectIriString, subjectIriString, graph, assertedContext,
+                subjectIriString, null, graph, assertedContext,
                 tx -> tx.select(edgeAsk).map(row -> iriOf(row, "s").getIRIString()).findFirst(),
                 () -> new ResourceAlreadyExistsException(projectId, relationship.id().value()),
                 () -> new ResourceAlreadyExistsException(projectId, relationship.id().value()),
@@ -198,22 +198,31 @@ public class KognioRdfContextRelationshipRepository implements ContextRelationsh
         Objects.requireNonNull(relationshipType, "relationshipType");
 
         DatasetId dataset = new DatasetId(projectId.value());
-        String subjectIriString;
+        List<String> subjectIris;
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             String query = edgeSelect(upstream, downstream, relationshipType);
-            subjectIriString = handle.sparqlQuery().select(query).findFirst()
+            subjectIris = handle.sparqlQuery().select(query)
                     .map(row -> iriOf(row, "s").getIRIString())
-                    .orElseThrow(() -> new ContextRelationshipNotFoundException(
-                            projectId, null, null, relationshipType));
+                    .toList();
         }
-        String subject = SparqlTerms.iriRef(subjectIriString);
+        if (subjectIris.isEmpty()) {
+            throw new ContextRelationshipNotFoundException(projectId, null, null, relationshipType);
+        }
 
-        // No business code to retain (issue #350's scheme has no reader here - a relationship
-        // carries no BoundedContextCode-style label) - the five-parameter overload forwards
-        // code = null.
-        funnel.delete(dataset, BOUNDED_CONTEXT_GRAPH, subjectIriString,
-                () -> new ContextRelationshipNotFoundException(projectId, null, null, relationshipType),
-                tx -> tx.update("DELETE WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " ?p ?o } }"));
+        // Every resource carrying this exact triple is removed, not just the first found: issue
+        // #438's pre-#565 pure create left the live store able to hold more than one relationship
+        // for the same triple (tracked for cleanup as #573), and leaving a duplicate behind would
+        // make bc_unlink_context report success while bc_get/impact_analysis still show the edge.
+        // No business code to retain per subject (issue #350's scheme has no reader here - a
+        // relationship carries no BoundedContextCode-style label) - the five-parameter overload
+        // forwards code = null.
+        for (String subjectIriString : subjectIris) {
+            String subject = SparqlTerms.iriRef(subjectIriString);
+            funnel.delete(dataset, BOUNDED_CONTEXT_GRAPH, subjectIriString,
+                    () -> new ContextRelationshipNotFoundException(projectId, null, null, relationshipType),
+                    tx -> tx.update(
+                            "DELETE WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " ?p ?o } }"));
+        }
     }
 
     @Override
@@ -227,7 +236,8 @@ public class KognioRdfContextRelationshipRepository implements ContextRelationsh
                 + "<" + UPSTREAM_PROPERTY + "> ?upstream ; "
                 + "<" + DOWNSTREAM_PROPERTY + "> ?downstream ; "
                 + "<" + RELATIONSHIP_TYPE_PROPERTY + "> ?type . "
-                + "FILTER(?upstream = <" + contextIri + "> || ?downstream = <" + contextIri + ">) } }";
+                + "FILTER(?upstream = <" + contextIri + "> || ?downstream = <" + contextIri + ">) } } "
+                + "ORDER BY ?s";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return readRelationships(handle.sparqlQuery().select(query));
         }
@@ -241,7 +251,8 @@ public class KognioRdfContextRelationshipRepository implements ContextRelationsh
                 + "?s a <" + CONTEXT_RELATIONSHIP_TYPE + "> ; "
                 + "<" + UPSTREAM_PROPERTY + "> ?upstream ; "
                 + "<" + DOWNSTREAM_PROPERTY + "> ?downstream ; "
-                + "<" + RELATIONSHIP_TYPE_PROPERTY + "> ?type } }";
+                + "<" + RELATIONSHIP_TYPE_PROPERTY + "> ?type } } "
+                + "ORDER BY ?s";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return readRelationships(handle.sparqlQuery().select(query));
         }

@@ -23,7 +23,10 @@ import de.hauschel.arknet.bc.domain.RelationshipType;
  * @param peerId           the other bounded context's opaque identity
  * @param peerCode         the other bounded context's business code (e.g. {@code BC-1}), resolved
  *                         by the application service - a human who typed a code expects to see a
- *                         code again, not an IRI they cannot re-type
+ *                         code again, not an IRI they cannot re-type. A dangling relationship whose
+ *                         peer no longer resolves (deleted store-first, an import/merge accident)
+ *                         still appears, under a fixed placeholder code rather than being dropped -
+ *                         exactly the class of defect issue #565 exists to surface
  * @param relationshipType the DDD context-mapping pattern classifying this relationship
  */
 public record RelatedContext(ContextRelationshipId relationshipId, Direction direction, BoundedContextId peerId,

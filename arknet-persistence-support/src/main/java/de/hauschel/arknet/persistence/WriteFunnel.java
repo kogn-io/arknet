@@ -359,13 +359,31 @@ public final class WriteFunnel {
      * this method's own write transaction closes that window the same way {@link #create}'s
      * identity/code checks already do.</p>
      *
+     * <p><strong>The second interleaving (issue #575 review).</strong> The in-transaction
+     * {@code findExisting} check only catches a concurrent {@code createIfAbsent} that already
+     * fully committed; two genuinely <em>overlapping</em> {@code SERIALIZABLE} transactions both
+     * see {@link Optional#empty()}, both pass the identity/code guards, and only the loser's commit
+     * is rejected - the same "second interleaving" {@link #create} documents at the class level.
+     * Unlike {@link #create}, the caller's whole point in reaching for this method is idempotency,
+     * not rejection: a loser here must still get back the winner's now-committed resource, not a
+     * raw store conflict. A recognised conflict therefore re-runs {@code findExisting} once more,
+     * in a brand-new transaction acquired fresh from {@code dataset} (mirroring
+     * {@code KognioRdfProjectRegistry#attributeLostRegistration}'s own fresh-read-after-rollback
+     * shape) - the winner's write has by then committed, so this second look-up is expected to
+     * find it. Only if that second look-up still finds nothing (a conflict this triple-based
+     * idempotency cannot explain) does the original conflict propagate unchanged, exactly the
+     * residual case {@link #create}'s own {@code commitConflict} leaves open via
+     * {@link UnaryOperator#identity()}.</p>
+     *
      * @param dataset       the dataset (project) to write into
      * @param graphIri      the named graph the checks are scoped to
      * @param subjectIri    the candidate's own opaque IRI; expected IRIREF-safe by construction
      * @param code          the human-readable business code checked against
-     *                      {@code dcterms:identifier} (escaped here, pass it raw) - a caller with no
-     *                      business-code concept of its own (e.g. a relationship) may pass
-     *                      {@code subjectIri} again, which can then structurally never collide
+     *                      {@code dcterms:identifier} (escaped here, pass it raw), or {@code null}
+     *                      to skip that guard entirely - for a caller with no business-code concept
+     *                      of its own (e.g. a relationship), the same honest "no code" shape
+     *                      {@link #delete(DatasetId, String, String, String, Supplier, Consumer)}
+     *                      already uses, rather than a code value engineered to never match
      * @param candidate     the instance graph handed to the SHACL gate before the transaction
      * @param assertedContext validation-only context triples for the gate, or {@code null} if the
      *                      shapes need none
@@ -374,7 +392,8 @@ public final class WriteFunnel {
      * @param alreadyExists the caller's signal for an opaque-identity collision on {@code subjectIri}
      *                      itself (distinct from {@code findExisting} finding a different,
      *                      pre-existing resource)
-     * @param duplicateCode the caller's signal for a business-code collision
+     * @param duplicateCode the caller's signal for a business-code collision; never invoked when
+     *                      {@code code} is {@code null}
      * @param body          the write itself, given the live transaction after {@code findExisting}
      *                      found nothing and both guards passed
      * @return {@code subjectIri} if {@code body} ran, or the subject IRI {@code findExisting} found
@@ -388,7 +407,6 @@ public final class WriteFunnel {
         Objects.requireNonNull(dataset, "dataset");
         Objects.requireNonNull(graphIri, "graphIri");
         Objects.requireNonNull(subjectIri, "subjectIri");
-        Objects.requireNonNull(code, "code");
         Objects.requireNonNull(candidate, "candidate");
         Objects.requireNonNull(findExisting, "findExisting");
         Objects.requireNonNull(alreadyExists, "alreadyExists");
@@ -398,26 +416,51 @@ public final class WriteFunnel {
         enforceGate(candidate, assertedContext);
 
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
-            return handle.transactor().inTransaction(tx -> {
-                Optional<String> existing = findExisting.apply(tx);
-                if (existing.isPresent()) {
-                    return existing.get();
+            try {
+                return handle.transactor().inTransaction(tx -> {
+                    Optional<String> existing = findExisting.apply(tx);
+                    if (existing.isPresent()) {
+                        return existing.get();
+                    }
+                    IRI graph = rdf.createIRI(graphIri);
+                    IRI subject = rdf.createIRI(subjectIri);
+                    if (tx.contains(graph, subject, null, null)) {
+                        throw alreadyExists.get();
+                    }
+                    if (code != null) {
+                        IRI identifierProperty = rdf.createIRI(IDENTIFIER_PROPERTY);
+                        Literal codeLiteral = rdf.createLiteral(code);
+                        if (tx.contains(graph, null, identifierProperty, codeLiteral)) {
+                            throw duplicateCode.get();
+                        }
+                    }
+                    Optional<IRI> previousHead = readHead(tx, subjectIri);
+                    body.accept(tx);
+                    recordRevision(tx, subjectIri, previousHead);
+                    return subjectIri;
+                });
+            } catch (RuntimeException e) {
+                if (isWriteConflict.test(e)) {
+                    Optional<String> foundAfterRollback = retryFindExistingAfterConflict(dataset, findExisting);
+                    if (foundAfterRollback.isPresent()) {
+                        return foundAfterRollback.get();
+                    }
                 }
-                IRI graph = rdf.createIRI(graphIri);
-                IRI subject = rdf.createIRI(subjectIri);
-                if (tx.contains(graph, subject, null, null)) {
-                    throw alreadyExists.get();
-                }
-                IRI identifierProperty = rdf.createIRI(IDENTIFIER_PROPERTY);
-                Literal codeLiteral = rdf.createLiteral(code);
-                if (tx.contains(graph, null, identifierProperty, codeLiteral)) {
-                    throw duplicateCode.get();
-                }
-                Optional<IRI> previousHead = readHead(tx, subjectIri);
-                body.accept(tx);
-                recordRevision(tx, subjectIri, previousHead);
-                return subjectIri;
-            });
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Re-runs {@code findExisting} once more, in a brand-new transaction acquired fresh from
+     * {@code dataset} - see {@link #createIfAbsent}'s class-level "second interleaving" note for
+     * why this runs at all and why a fresh acquisition rather than the caller's own (already
+     * rolled-back) handle.
+     */
+    private Optional<String> retryFindExistingAfterConflict(
+            DatasetId dataset, Function<DatasetTx, Optional<String>> findExisting) {
+        try (DatasetHandle retryHandle = lifecycle.acquire(dataset)) {
+            return retryHandle.transactor().inTransaction(findExisting::apply);
         }
     }
 

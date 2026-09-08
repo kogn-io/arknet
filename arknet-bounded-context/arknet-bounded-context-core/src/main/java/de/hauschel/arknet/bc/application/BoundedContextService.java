@@ -212,8 +212,8 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
      * {@link #resolveExisting}, this service's own batch identity-to-code lookup, exactly the
      * "peer code resolved here, not shape by shape" choice {@code AdrDetail#supersedes} documents.
      * An id that resolves to nothing (e.g. a peer deleted store-first) is simply absent from the
-     * result, same as {@link #resolveExisting} promises - {@link #relatedContextsOf} then drops
-     * that one relationship rather than constructing a {@link RelatedContext} with no peer code.
+     * result, same as {@link #resolveExisting} promises - {@link #relatedContextsOf} then renders
+     * that one relationship under {@link #UNRESOLVED_PEER_CODE} rather than dropping it.
      */
     private Map<BoundedContextId, BoundedContextCode> resolvePeerCodes(ProjectId projectId,
             List<BoundedContext> contexts, List<ContextRelationship> relationships) {
@@ -240,10 +240,20 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     }
 
     /**
+     * The placeholder code a dangling relationship (its peer identity no longer resolves - deleted
+     * store-first, or an import/merge accident) renders under, rather than being dropped and
+     * turning invisible everywhere except {@code impact_analysis}/{@code resource_get} - exactly
+     * the class of defect issue #565 set out to make visible in the first place (issue #575
+     * review).
+     */
+    private static final BoundedContextCode UNRESOLVED_PEER_CODE = new BoundedContextCode("<unresolved>");
+
+    /**
      * Renders every relationship in {@code relationships} that names {@code owner} as either
-     * upstream or downstream into a {@link RelatedContext}, from {@code owner}'s point of view - a
-     * relationship whose peer code {@code peerCodes} could not resolve is dropped rather than
-     * rendered with no code.
+     * upstream or downstream into a {@link RelatedContext}, from {@code owner}'s point of view. A
+     * relationship whose peer identity {@code peerCodes} could not resolve is still rendered, under
+     * {@link #UNRESOLVED_PEER_CODE} - see that constant's javadoc for why dropping it silently
+     * would be the wrong choice.
      */
     private static List<RelatedContext> relatedContextsOf(BoundedContextId owner,
             List<ContextRelationship> relationships, Map<BoundedContextId, BoundedContextCode> peerCodes) {
@@ -255,10 +265,7 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
                 continue;
             }
             BoundedContextId peer = ownerIsUpstream ? relationship.downstream() : relationship.upstream();
-            BoundedContextCode peerCode = peerCodes.get(peer);
-            if (peerCode == null) {
-                continue;
-            }
+            BoundedContextCode peerCode = peerCodes.getOrDefault(peer, UNRESOLVED_PEER_CODE);
             RelatedContext.Direction direction =
                     ownerIsUpstream ? RelatedContext.Direction.UPSTREAM_OF : RelatedContext.Direction.DOWNSTREAM_OF;
             related.add(new RelatedContext(relationship.id(), direction, peer, peerCode,

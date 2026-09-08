@@ -7,9 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterEach;
@@ -106,12 +106,14 @@ class BoundedContextContextRelationshipDogfoodingTest {
                 .collect(Collectors.groupingBy(RelatedContext::direction));
         assertEquals(4, byDirection.getOrDefault(RelatedContext.Direction.UPSTREAM_OF, List.of()).size());
         assertEquals(1, byDirection.getOrDefault(RelatedContext.Direction.DOWNSTREAM_OF, List.of()).size());
-        assertEquals(List.of(bc1, bc2, bc3, bc4).stream()
-                        .sorted(Comparator.comparing(BoundedContextCode::value)).toList(),
+        // Membership, not order: findAll/findByContext promise a reproducible order (ORDER BY the
+        // relationship's own opaque identity, see KognioRdfContextRelationshipRepository), not one
+        // keyed on the peer's business code - a dedicated ordering test covers the reproducibility
+        // itself (KognioRdfContextRelationshipRepositoryTest#findAllOrdersReproducibly).
+        assertEquals(Set.of(bc1, bc2, bc3, bc4),
                 byDirection.get(RelatedContext.Direction.UPSTREAM_OF).stream()
                         .map(RelatedContext::peerCode)
-                        .sorted(Comparator.comparing(BoundedContextCode::value))
-                        .toList());
+                        .collect(Collectors.toSet()));
         assertEquals(bc6, byDirection.get(RelatedContext.Direction.DOWNSTREAM_OF).get(0).peerCode());
     }
 

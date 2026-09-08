@@ -27,6 +27,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.ContextRelationship;
+import de.hauschel.arknet.bc.domain.ContextRelationshipId;
 import de.hauschel.arknet.bc.domain.ContextRelationshipNotFoundException;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
@@ -552,6 +553,32 @@ class BoundedContextServiceTest {
         assertEquals(RelatedContext.Direction.UPSTREAM_OF, firstDetail.relationships().get(0).direction());
         assertEquals(1, secondDetail.relationships().size());
         assertEquals(RelatedContext.Direction.DOWNSTREAM_OF, secondDetail.relationships().get(0).direction());
+    }
+
+    /**
+     * A dangling relationship (its peer identity does not resolve to any known bounded context -
+     * deleted store-first, or an import/merge accident) must still be rendered, under a fixed
+     * placeholder code, rather than silently dropped - dropping it would hide exactly the class of
+     * defect issue #565 set out to make visible (issue #575 review). Reproduced by adding a
+     * relationship straight through the out-port, bypassing {@code linkContext}'s own code
+     * resolution, which would otherwise reject the unknown peer.
+     */
+    @Test
+    void getRendersAnUnresolvablePeerUnderAPlaceholderRatherThanDroppingTheRelationship() {
+        BoundedContext bc1 = service.add(WS, newBoundedContext(), null);
+        BoundedContextId danglingPeer =
+                new BoundedContextId(ResourceId.of("https://w3id.org/arknet/id/deleted-peer"));
+        contextRelationshipRepository.createIfAbsent(WS, new ContextRelationship(
+                new ContextRelationshipId(resourceIdFactory.newId()), bc1.id(), danglingPeer,
+                RelationshipType.CONFORMIST));
+
+        BoundedContextDetail detail = service.get(WS, bc1.code(), null).orElseThrow();
+
+        assertEquals(1, detail.relationships().size());
+        RelatedContext dangling = detail.relationships().get(0);
+        assertEquals(RelatedContext.Direction.UPSTREAM_OF, dangling.direction());
+        assertEquals(danglingPeer, dangling.peerId());
+        assertEquals(new BoundedContextCode("<unresolved>"), dangling.peerCode());
     }
 
     private static NewBoundedContext newBoundedContext() {

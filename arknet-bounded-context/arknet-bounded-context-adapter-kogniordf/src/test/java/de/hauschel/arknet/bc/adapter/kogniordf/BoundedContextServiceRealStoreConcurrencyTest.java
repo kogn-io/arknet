@@ -426,6 +426,115 @@ class BoundedContextServiceRealStoreConcurrencyTest {
                         + "correction - only capture-before-delete/reattach keeps it, a plain replace would drop it");
     }
 
+    /**
+     * The second interleaving (issue #575 review, PR #575) for {@code bc_link_context}: two
+     * concurrent calls recording the exact same (upstream, downstream, relationshipType) triple
+     * both pass {@code createIfAbsent}'s in-transaction {@code findExisting} check before either
+     * commits (neither sees the other's uncommitted write under {@code SERIALIZABLE} isolation),
+     * and only the loser's commit is rejected - by the store, not by the guard. Before the fix,
+     * that rejection reached the loser as the raw {@code ConcurrencyConflictException}; the whole
+     * point of {@code createIfAbsent} over a plain {@code create} is that the loser gets back the
+     * winner's already-recorded relationship instead, exactly as a caller that lost only because
+     * it asked a beat too late would expect.
+     *
+     * <p>Pinned deterministically via {@link GuardSyncTx} (fires after the one {@code contains}
+     * guard {@code createIfAbsent} issues here - the identity check; a relationship carries no
+     * business code, so the code guard is skipped entirely, see {@link #contextRelationshipRacerService})
+     * plus a {@link CyclicBarrier}/{@link CountDownLatch} pair, mirroring
+     * {@link #concurrentAddCallsUnderGenuinelyOverlappingTransactions_bothGetDistinctCodes} exactly,
+     * against the real, on-disk {@code NativeStore} and the real, gated
+     * {@link KognioRdfContextRelationshipRepository} - not the stub every other test in this class
+     * uses for the context-relationship port.</p>
+     */
+    @Test
+    void concurrentLinkContextCallsWithTheSameTripleUnderGenuinelyOverlappingTransactions_loserGetsWinnersRelationship()
+            throws InterruptedException {
+        BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
+                realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+        TermLookup unusedTermLookup = (projectId, termCode) -> {
+            throw new UnsupportedOperationException("not exercised by this test");
+        };
+        BoundedContextService straightThrough = new BoundedContextService(boundedContexts,
+                new UuidResourceIdFactory(), unusedTermLookup, unusedContextRelationshipRepository());
+        BoundedContextCode upstreamCode = straightThrough.add(WS, newBoundedContext("upstream-team"), null).code();
+        BoundedContextCode downstreamCode = straightThrough.add(WS, new NewBoundedContext("Shipping",
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null, "en"), null)
+                .code();
+
+        CyclicBarrier bothGuardsChecked = new CyclicBarrier(2);
+        CountDownLatch winnerCommitted = new CountDownLatch(1);
+        BoundedContextService winnerService = contextRelationshipRacerService(boundedContexts,
+                () -> awaitBarrier(bothGuardsChecked));
+        BoundedContextService loserService = contextRelationshipRacerService(boundedContexts, () -> {
+            awaitBarrier(bothGuardsChecked);
+            awaitLatch(winnerCommitted);
+        });
+
+        AtomicReference<ContextRelationship> winnerResult = new AtomicReference<>();
+        AtomicReference<ContextRelationship> loserResult = new AtomicReference<>();
+        AtomicReference<Throwable> loserFailure = new AtomicReference<>();
+
+        Thread winnerThread = new Thread(() -> {
+            try {
+                winnerResult.set(winnerService.linkContext(
+                        WS, upstreamCode, downstreamCode, RelationshipType.CUSTOMER_SUPPLIER));
+            } finally {
+                winnerCommitted.countDown();
+            }
+        }, "racer-A");
+        Thread loserThread = new Thread(() -> {
+            try {
+                loserResult.set(loserService.linkContext(
+                        WS, upstreamCode, downstreamCode, RelationshipType.CUSTOMER_SUPPLIER));
+            } catch (RuntimeException e) {
+                loserFailure.set(e);
+            }
+        }, "racer-B");
+
+        winnerThread.start();
+        loserThread.start();
+        winnerThread.join();
+        loserThread.join();
+
+        assertNull(loserFailure.get(), () -> "loser must not see a raw store conflict: " + loserFailure.get());
+        assertNotNull(winnerResult.get());
+        assertNotNull(loserResult.get());
+        assertEquals(winnerResult.get(), loserResult.get(),
+                "the loser must get back the winner's already-recorded relationship, not a second one");
+
+        ContextRelationshipRepository straightThroughContextRelationships =
+                KognioRdfContextRelationshipRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT);
+        List<ContextRelationship> stored = straightThroughContextRelationships.findByContext(
+                WS, winnerResult.get().upstream());
+        assertEquals(1, stored.size(), "exactly one relationship must have been persisted, not two");
+    }
+
+    /**
+     * A service wired over the shared, real {@code boundedContexts} port but a guarded
+     * {@link ContextRelationshipRepository}: {@code afterFirstGuard} fires once, right after
+     * {@code createIfAbsent}'s sole guard - the identity check, since a {@link ContextRelationship}
+     * carries no business code and so skips the code guard entirely (issue #575 review) - passes,
+     * exactly where {@link #guardedService} pins the analogous race for {@code bc_add}'s
+     * identity-then-code pair.
+     */
+    private BoundedContextService contextRelationshipRacerService(
+            BoundedContextRepository boundedContexts, Runnable afterFirstGuard) {
+        AtomicBoolean armed = new AtomicBoolean(true);
+        DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
+            if (armed.compareAndSet(true, false)) {
+                return new GuardSyncTx(tx, 1, afterFirstGuard);
+            }
+            return tx;
+        });
+        ContextRelationshipRepository contextRelationships =
+                KognioRdfContextRelationshipRepositoryFactory.over(guarded, DisplayLocale.DEFAULT);
+        TermLookup unusedTermLookup = (projectId, termCode) -> {
+            throw new UnsupportedOperationException("not exercised by this test");
+        };
+        return new BoundedContextService(
+                boundedContexts, new UuidResourceIdFactory(), unusedTermLookup, contextRelationships);
+    }
+
     private static NewBoundedContext newBoundedContext(String owner) {
         return new NewBoundedContext("OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",

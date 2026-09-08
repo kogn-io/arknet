@@ -48,8 +48,12 @@ public interface ContextRelationshipRepository {
     ContextRelationship createIfAbsent(ProjectId projectId, ContextRelationship relationship);
 
     /**
-     * Removes the relationship carrying the exact (upstream, downstream, relationshipType) triple,
-     * if one is currently recorded.
+     * Removes every relationship carrying the exact (upstream, downstream, relationshipType)
+     * triple - normally at most one, but {@code createIfAbsent} only started guarding this triple
+     * with #565; a triple recorded earlier under the pre-#565 pure {@code create} may still have
+     * more than one resource (tracked for cleanup as issue #573), and leaving one behind would let
+     * {@code bc_get}/{@code impact_analysis} keep showing an edge {@code bc_unlink_context} just
+     * reported removed.
      *
      * @param projectId        the project (architecture model) the relationship lives in
      * @param upstream         the upstream bounded context's opaque identity
@@ -68,8 +72,8 @@ public interface ContextRelationshipRepository {
      *
      * @param projectId the project (architecture model) to read from
      * @param context   the bounded context's opaque identity to find relationships for
-     * @return every relationship naming {@code context} as either upstream or downstream, in no
-     *         particular order, never {@code null}
+     * @return every relationship naming {@code context} as either upstream or downstream, ordered
+     *         by the relationship's own opaque identity, never {@code null}
      */
     List<ContextRelationship> findByContext(ProjectId projectId, BoundedContextId context);
 
@@ -79,8 +83,8 @@ public interface ContextRelationshipRepository {
      * relationships at once rather than one lookup per context.
      *
      * @param projectId the project (architecture model) to read from
-     * @return every relationship recorded in {@code projectId}, in no particular order, never
-     *         {@code null}
+     * @return every relationship recorded in {@code projectId}, ordered by the relationship's own
+     *         opaque identity, never {@code null}
      */
     List<ContextRelationship> findAll(ProjectId projectId);
 }

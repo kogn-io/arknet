@@ -14,9 +14,9 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p>An expected domain outcome (not a programming error): the whole point of recording this
  * signal is that a typo in the relationship type or a swapped direction must fail loudly rather
  * than silently removing nothing or the wrong edge - unlike linking an already-linked term or
- * relationship, unlinking a triple that is not there is never a silent no-op. Driving adapters -
- * e.g. the MCP tools - translate this into a user-facing "no such relationship" message rather
- * than a stack trace.</p>
+ * relationship, unlinking a triple that is not there is never a silent no-op. This surfaces as the
+ * {@code bc_unlink_context} tool call's own error message rather than a stack trace - no driving
+ * adapter needs to catch and translate it itself.</p>
  *
  * <p><strong>Codes are optional.</strong> {@code upstreamCode}/{@code downstreamCode} may be
  * {@code null}: the out-adapter (which only ever holds opaque {@link BoundedContextId}s, never a

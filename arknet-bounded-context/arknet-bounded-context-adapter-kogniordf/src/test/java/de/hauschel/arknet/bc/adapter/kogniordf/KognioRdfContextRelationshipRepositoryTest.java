@@ -296,4 +296,93 @@ class KognioRdfContextRelationshipRepositoryTest {
         assertThrows(ContextRelationshipNotFoundException.class, () -> repository.deleteByEdge(
                 WORKSPACE_A, upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER));
     }
+
+    /**
+     * Regression guard for issue #575's review: the pre-#565 pure {@code create} could - and, per
+     * issue #573, still does in the live store - leave more than one resource carrying the exact
+     * same (upstream, downstream, relationshipType) triple. {@code deleteByEdge} must remove every
+     * one of them, not just the first found, or {@code bc_unlink_context} would report success
+     * while {@code bc_get}/{@code impact_analysis} keep showing the edge. The two duplicates are
+     * written directly to the store (bypassing {@code createIfAbsent}'s own dedup, which this test
+     * would otherwise defeat) to reproduce exactly the pre-#565 shape.
+     */
+    @Test
+    void deleteByEdgeRemovesEveryDuplicateResourceForTheSameTriple() {
+        BoundedContextId upstream = freshBoundedContextId();
+        BoundedContextId downstream = freshBoundedContextId();
+        ContextRelationshipId first = freshId();
+        ContextRelationshipId second = freshId();
+        writeRelationshipDirectly(first, upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
+        writeRelationshipDirectly(second, upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
+        assertEquals(2, repository.findByContext(WORKSPACE_A, upstream).size(),
+                "fixture must actually reproduce two duplicate resources before the deletion is exercised");
+
+        repository.deleteByEdge(WORKSPACE_A, upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
+
+        assertEquals(List.of(), repository.findByContext(WORKSPACE_A, upstream));
+        assertEquals(List.of(), repository.findAll(WORKSPACE_A));
+    }
+
+    /**
+     * {@code findAll}/{@code findByContext} promise a reproducible order (issue #575 review) - two
+     * calls against the same, unchanged data must return the identical order, which matters once
+     * {@code bc_list}'s rendering feeds a committed report (kogn-io/arknet#570's
+     * {@code docs/adr-export/}).
+     */
+    @Test
+    void findAllOrdersReproducibly() {
+        BoundedContextId a = freshBoundedContextId();
+        BoundedContextId b = freshBoundedContextId();
+        BoundedContextId c = freshBoundedContextId();
+        for (int i = 0; i < 5; i++) {
+            repository.createIfAbsent(WORKSPACE_A,
+                    new ContextRelationship(freshId(), a, b, RelationshipType.PUBLISHED_LANGUAGE));
+            repository.createIfAbsent(WORKSPACE_A,
+                    new ContextRelationship(freshId(), b, c, RelationshipType.SEPARATE_WAYS));
+        }
+
+        List<ContextRelationship> firstRead = repository.findAll(WORKSPACE_A);
+        List<ContextRelationship> secondRead = repository.findAll(WORKSPACE_A);
+
+        assertEquals(firstRead, secondRead);
+    }
+
+    /**
+     * Writes a {@link ContextRelationship}'s four triples straight into the store, bypassing
+     * {@link ContextRelationshipRepository#createIfAbsent} entirely - the only way to reproduce a
+     * pre-#565 duplicate triple, since {@code createIfAbsent} itself now refuses to create one.
+     */
+    private void writeRelationshipDirectly(ContextRelationshipId id, BoundedContextId upstream,
+            BoundedContextId downstream, RelationshipType type) {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI(id.value().value());
+        Graph graph = rdf.createGraph();
+        graph.add(subject, VocabRdf.TYPE, rdf.createIRI(CONTEXT_RELATIONSHIP_TYPE));
+        graph.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#upstream"),
+                rdf.createIRI(upstream.value().value()));
+        graph.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#downstream"),
+                rdf.createIRI(downstream.value().value()));
+        graph.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#relationshipType"),
+                rdf.createIRI("https://w3id.org/arknet/ddd#" + relationshipTypeIndividual(type)));
+        IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(graphIri, graph);
+                return null;
+            });
+        }
+    }
+
+    private static String relationshipTypeIndividual(RelationshipType type) {
+        return switch (type) {
+            case PARTNERSHIP -> "Partnership";
+            case SHARED_KERNEL -> "SharedKernel";
+            case CUSTOMER_SUPPLIER -> "CustomerSupplier";
+            case CONFORMIST -> "Conformist";
+            case ANTICORRUPTION_LAYER -> "AnticorruptionLayer";
+            case OPEN_HOST_SERVICE -> "OpenHostService";
+            case PUBLISHED_LANGUAGE -> "PublishedLanguage";
+            case SEPARATE_WAYS -> "SeparateWays";
+        };
+    }
 }
