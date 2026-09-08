@@ -14,17 +14,17 @@ nothing the store already holds (glossary, records, context map).
 
 - **Bounded Context** (TERM-19): a boundary within which a domain model and its terms
   hold uniformly. In the build a Maven parent and nothing else: no hexagon, no core
-  (ADR-52).
+  (ADR-48).
 - **Ubiquitous Language** (TERM-25): the one language of a Bounded Context.
 - **Component** (TERM-26): one or more form a Bounded Context and speak its
   Ubiquitous Language; each has a responsibility of its own behind an interface. A
-  Component is a hexagon, built as the modules `core | adapter-<tech>`. An `api` module
-  is an extension stage, built only once a module outside the Component calls an
-  in-port at compile time; arknet has no such caller (ADR-48).
+  Component is a hexagon, built as the modules `core | adapter-<tech>` (ADR-48). An
+  `api` module is an extension stage, built only once a module outside the Component
+  calls an in-port at compile time; arknet has no such caller (ADR-58).
 - **Application**: the only deployable unit, outside every Bounded Context, holding the
   composition root (ADR-55).
 - **Vocabulary** `<bc>-shared`: typed identities and ownerless value objects of one
-  Bounded Context, no behaviour (ADR-48).
+  Bounded Context, no behaviour (ADR-57).
 - **Shared Kernel**: the model terms every context carries -- project identity,
   resource identity, business-code assignment, language (ADR-56).
 
@@ -68,8 +68,8 @@ Context map as recorded in the store, against the code:
   (ubiquitous-language), context-internal; and the Shared Kernel of every context
   (ADR-56). The store records a shared kernel only pairwise, so that statement waits
   for #77.
-- Read side as built: the in-adapter borrows the neighbour's read in-port (Borrowed
-  In-Port, TERM-22). The target has no such edge (ADR-49), see section 4.
+- Read side as built: the in-adapter borrows the neighbour's read in-port (a
+  "Borrowed In-Port"). The target has no such edge (ADR-49), see section 4.
 
 ## 3. Building blocks
 
@@ -77,12 +77,12 @@ As built: seven Components, three modules each (`core`, `adapter-kogniordf`,
 `adapter-mcp`), no `api` module, no `<bc>-shared`, no parent per Bounded Context --
 the Component is the Maven parent.
 
-Target (ADR-48): the Components stay as they are and the Bounded Contexts become Maven
-parents above them; no core is merged. The two contexts with two Components get a
+Target: the Components stay as they are and the Bounded Contexts become Maven parents
+above them; no core is merged (ADR-48). The two contexts with two Components get a
 `<bc>-shared` (typed codes, the context's one `TermRef`); Actor, Architecture &
-Decisions and Model Analysis hold one Component each and need none. No `api` module.
-Model Analysis becomes an eighth Component (ADR-54). Implementation: #439, #441, #560,
-#561.
+Decisions and Model Analysis hold one Component each and need none (ADR-57). No `api`
+module (ADR-58). Model Analysis becomes an eighth Component (ADR-54). Implementation:
+#439, #441, #560, #561.
 
 | Target Bounded Context       | Component (today = Maven parent) | Modules                                   |
 |------------------------------|----------------------------------|-------------------------------------------|
@@ -127,18 +127,17 @@ The core defines its own out-port for whatever it needs from a neighbour; the
 `adapter-kogniordf` serves it through the neighbour's Published Language in both
 directions (code to identity when writing, identity to code when reading), and
 in-port results carry foreign codes themselves. Every `-adapter-mcp` then depends on
-its own core only; no module of a Component depends on a module of another. TERM-22
-goes with the Borrowed In-Port (#439, #441).
+its own core only; no module of a Component depends on a module of another.
 
 ## 5. Check against the schema's mandatory parts
 
 | Mandatory per schema                          | arknet as built                                     |
 |-----------------------------------------------|-----------------------------------------------------|
 | Bounded Context as Maven parent               | missing; today the parent is the Component (#439, #441, #560) |
-| `api` per Component                           | not required: extension stage, no foreign in-port caller in arknet (ADR-48) |
+| `api` per Component                           | not required: extension stage, no foreign in-port caller in arknet (ADR-58) |
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
-| `<bc>-shared` once ownerless identities exist | missing; one each for Product & Requirements and Domain Modelling (ADR-48; #439, #441) |
+| `<bc>-shared` once ownerless identities exist | missing; one each for Product & Requirements and Domain Modelling (ADR-57; #439, #441) |
 | Application outside every Bounded Context     | present (arknet-mcp)                                 |
 | dependency rules as a checker                 | partial: the ArchUnit rules do not yet carry the schema's rule that no module of a Component depends on a module of another (ADR-49; Part B) |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |

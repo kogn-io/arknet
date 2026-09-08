@@ -3274,9 +3274,6 @@ The target type of the carrying edges is thereby wrong, right down into validati
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/71f551a8-2c6c-4071-a4c1-1982e0cea814>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-04T13:22:55.821853907Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
-  <https://w3id.org/arknet/id/130e82c2-e6d4-488a-968d-3a377a6fc4b9> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/576fbe33-4b30-4aea-8820-b51d93bf4fe8> .
-  
   <https://w3id.org/arknet/activity/604f070f-afe4-4e50-b99e-333895b6a29b> a <http://www.w3.org/ns/prov#Activity> .
   
   <https://w3id.org/arknet/revision/b1c86398-800a-4405-a8f8-dff7dd1cb75d> a <http://www.w3.org/ns/prov#Entity>,
@@ -3289,10 +3286,12 @@ The target type of the carrying edges is thereby wrong, right down into validati
   
   <https://w3id.org/arknet/revision/576fbe33-4b30-4aea-8820-b51d93bf4fe8> a <http://www.w3.org/ns/prov#Entity>,
       <https://w3id.org/arknet/provenance#Revision>;
+    <http://purl.org/dc/terms/identifier> "TERM-22";
     <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/130e82c2-e6d4-488a-968d-3a377a6fc4b9>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/39f85c67-cdd7-4ce1-b518-8d29095a6922>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-04T16:39:43.006531688Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/b1c86398-800a-4405-a8f8-dff7dd1cb75d> .
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/b1c86398-800a-4405-a8f8-dff7dd1cb75d>;
+    <http://www.w3.org/ns/prov#invalidatedAtTime> "2026-09-08T14:47:05.527672726Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/activity/b85b3b81-dc6d-4488-9162-eb42eb4f9249> a <http://www.w3.org/ns/prov#Activity> .
   
@@ -3721,13 +3720,6 @@ The target type of the carrying edges is thereby wrong, right down into validati
     <http://www.w3.org/2004/02/skos/core#prefLabel> "Role"@en, "Role"@de;
     <http://www.w3.org/2004/02/skos/core#definition> "Eine Rolle ist eine benannte Funktion, in der gehandelt oder ein Interesse vertreten wird — etwa als Handelnder in einem Use Case oder als Interessenträger hinter einer Anforderung. Sie wird unabhängig davon benannt, wer sie ausfüllt: eine Rolle darf unbesetzt bleiben oder mehrere Actors nennen, und wer sie ausfüllt, kann wechseln, ohne dass die Rolle eine andere wird."@de,
       "A Role is a named function in which someone acts or represents an interest — as an acting party in a use case, say, or as the stakeholder behind a requirement. It is named independently of who fills it: a role may stay unfilled or name several Actors, and whoever fills it may change without the role becoming a different one."@en .
-  
-  <https://w3id.org/arknet/id/130e82c2-e6d4-488a-968d-3a377a6fc4b9> a <http://www.w3.org/2004/02/skos/core#Concept>;
-    <http://purl.org/dc/terms/identifier> "TERM-22";
-    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
-    <http://www.w3.org/2004/02/skos/core#prefLabel> "Borrowed In-Port"@de, "Borrowed In-Port"@en;
-    <http://www.w3.org/2004/02/skos/core#definition> "Ein Borrowed In-Port ist ein In-Port eines Bounded Context, den ein Adapter eines *anderen* Bounded Context lesend mitbenutzt, um eine Auskunft zu erhalten, die nur der besitzende Kontext geben kann — etwa die Abbildung einer opaken Identität auf ihren Business-Code. Der Port bleibt im Besitz seines Kontexts; der leihende Adapter komponiert ihn nur und schreibt nichts über ihn. Die Grenze „kein Bounded Context hängt an einem anderen“ gilt für die Kerne, nicht für die Adapter, die um sie herum komponieren."@de,
-      "A Borrowed In-Port is an in-port of one bounded context that an adapter of a *different* bounded context reads through, to obtain an answer only the owning context can give — such as mapping an opaque identity to its business code. The port stays owned by its context; the borrowing adapter merely composes it and never writes through it. The boundary \"no bounded context depends on another\" binds the cores, not the adapters that compose around them."@en .
 }
 
 <https://w3id.org/arknet/model/adr> {
@@ -3931,6 +3923,14 @@ The other way is a record as a pure value that knows nothing of RDF, with an out
     <https://w3id.org/arknet/requirements#usesTerm> <https://w3id.org/arknet/id/c2df3868-3a66-46ca-8621-677374d02aa6>;
     <https://w3id.org/arknet/requirements#rationale> "Ein Glossar besteht, damit es je Begriff ein Wort gibt. Ein übersetztes Label erzeugt zwei Wörter für denselben Begriff, und ein Leser kann nicht erkennen, ob das ein Begriff ist oder zwei. Die Erkennung von Erwähnungen in Prosa löst einen Begriff über ein Label zur Zeit auf; ein einziges Wort trifft in jeder Sprachfassung, ein übersetztes nur in seiner eigenen. Preis: Ein Leser, dessen Sprache das Label nicht ist, erschließt den Namen erst aus der Definition."@de,
       "A glossary exists so that there is one word per concept. A translated label produces two words for the same concept, and a reader cannot tell whether that is one concept or two. Mention detection in prose resolves a concept through one label at a time; a single word matches in every language version, a translated one only in its own. Price: a reader whose language the label is not in learns the name only from the definition."@en .
+  
+  <https://w3id.org/arknet/id/8f889b22-c43e-4069-95b5-b3bb9c528053> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 1;
+    <https://w3id.org/arknet/requirements#criterionText> "Das Anlegen oder Korrigieren einer Definition in einer weiteren Sprache lässt das Label unverändert und erzeugt kein zweites, abweichendes Label."@de,
+      "Adding or correcting a definition in a further language leaves the label unchanged and creates no second, differing label."@en .
+  
+  <https://w3id.org/arknet/id/a982a878-115d-40be-8e49-1b68f5f185d0> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 2 .
 }
 
 <https://w3id.org/arknet/model/provenance> {
@@ -5125,14 +5125,8 @@ The core of this decision is the distinction between \"unbuilt\" and \"outside\"
 }
 
 <https://w3id.org/arknet/model/requirements> {
-  <https://w3id.org/arknet/id/8f889b22-c43e-4069-95b5-b3bb9c528053> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
-    <https://w3id.org/arknet/requirements#position> 1;
-    <https://w3id.org/arknet/requirements#criterionText> "Das Anlegen oder Korrigieren einer Definition in einer weiteren Sprache lässt das Label unverändert und erzeugt kein zweites, abweichendes Label."@de,
-      "Adding or correcting a definition in a further language leaves the label unchanged and creates no second, differing label."@en .
-  
-  <https://w3id.org/arknet/id/a982a878-115d-40be-8e49-1b68f5f185d0> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
-    <https://w3id.org/arknet/requirements#position> 2;
-    <https://w3id.org/arknet/requirements#criterionText> "Ein Schreibaufruf, der unter einem Sprachtag ein Label mitgibt, das vom bestehenden Label des Terms abweicht, wird mit einer erklärenden Meldung abgelehnt, die das bestehende Label nennt."@de,
+  <https://w3id.org/arknet/id/a982a878-115d-40be-8e49-1b68f5f185d0> <https://w3id.org/arknet/requirements#criterionText>
+      "Ein Schreibaufruf, der unter einem Sprachtag ein Label mitgibt, das vom bestehenden Label des Terms abweicht, wird mit einer erklärenden Meldung abgelehnt, die das bestehende Label nennt."@de,
       "A write call that supplies, under some language tag, a label differing from the term's existing label is rejected with an explanatory message that names the existing label."@en .
   
   <https://w3id.org/arknet/id/e0a35b9c-94f4-4584-98f9-eca8aa33eb3c> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
@@ -5708,7 +5702,7 @@ The core of this decision is the distinction between \"unbuilt\" and \"outside\"
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/3e20cfa9-fee1-459d-817d-601b3663e648> .
   
   <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/2f423d76-405f-4b8b-b482-c002509d97ec> .
+      <https://w3id.org/arknet/revision/0663e197-8197-4a7b-8011-41b5e056f1db> .
 }
 
 <https://w3id.org/arknet/model/roles> {
@@ -6353,39 +6347,30 @@ The core of this decision is the distinction between \"unbuilt\" and \"outside\"
   <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
     <http://purl.org/dc/terms/identifier> "ADR-48";
     <https://w3id.org/arknet/core#name> "Die Komponenten bleiben; jeder Bounded Context wird ein Maven-Parent über seinen Komponenten"@de,
-      "The components stay; each Bounded Context becomes a Maven parent over its components"@en;
+      "The components stay; every Bounded Context becomes a Maven parent over its components"@en;
     <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Proposed>;
     <https://w3id.org/arknet/architecture#adrContext> """Der Kontextschnitt legt fest, welche Bounded Contexts es gibt und dass ein Kontext eine oder mehrere Komponenten hält. Offen war, wie viele Komponenten die zwei Kontexte halten, die je zwei gewachsene Hexagone zusammenfassen: der Anforderungskontext die Komponenten für Requirements und für Use Cases, der Domänenmodellierungskontext die für das Glossar und für die Bounded Contexts. Jedes dieser Hexagone hat einen eigenen, technologiefreien Kern und zwei Adaptermodule.
 
 Der erste Entwurf dieser Entscheidung wollte je Kontext genau ein Hexagon: Kerne verschmelzen, Module nach dem Kontext umbenennen. Sein Grund war ein Auflösungsumweg, über den zwei Kerne desselben Kontexts einander erreichen mussten, weil kein Kern an einem Nachbarkern hängen darf. Seither ist grundsätzlich geklärt, dass ein Bounded Context im Build ein Maven-Parent ohne eigene technische Gestalt ist und eine Komponente das Hexagon; und ein Nachbar darf über die Published Language gelesen werden, auch innerhalb eines Kontexts. Damit entfällt der Umweg, ohne dass ein Kern verschmolzen wird.
 
 Der veröffentlichte Requirements-Namensraum trägt Requirement, Constraint und Use Case und spannte über zwei der gewachsenen Hexagone; die Namensraum-Regel verlangt, dass ein Namensraum genau einen Kontext deckt."""@de,
-      """The context cut settles which Bounded Contexts exist and that a context holds one or more components. Open was how many components the two contexts hold that each bundle two grown hexagons: the requirements context the components for requirements and for use cases, the domain modelling context the ones for the glossary and for the bounded contexts. Each of these hexagons has its own, technology-free core and two adapter modules.
+      """The context cut determines which Bounded Contexts exist and that a context holds one or more components. Open was how many components the two contexts hold that each combine two grown hexagons: the requirements context the components for requirements and for use cases, the domain modelling context the ones for the glossary and for the Bounded Contexts. Each of these hexagons has its own, technology-free core and two adapter modules.
 
-The first draft of this decision wanted exactly one hexagon per context: merge cores, rename modules after the context. Its reason was a resolution detour that two cores of the same context had to take to reach each other, because no core may depend on a neighbouring core. Since then it has been settled in principle that a Bounded Context in the build is a Maven parent with no technical shape of its own and a component is the hexagon; and a neighbour may be read via the Published Language, even within a context. That removes the detour without merging a core.
+The first draft of this decision wanted exactly one hexagon per context: merge cores, rename modules after the context. Its reason was a resolution detour, over which two cores of the same context had to reach each other, because no core may depend on a neighbouring core. Since then it is settled in principle that a Bounded Context in the build is a Maven parent without its own technical shape and a component is the hexagon; and a neighbour may be read via the Published Language, even within a context. That makes the detour obsolete, without merging a core.
 
-The published requirements namespace carries Requirement, Constraint and Use Case and spanned two of the grown hexagons; the namespace rule requires that a namespace cover exactly one context."""@en;
+The published requirements namespace carries Requirement, Constraint and Use Case and spanned two of the grown hexagons; the namespace rule demands that a namespace covers exactly one context."""@en;
     <https://w3id.org/arknet/architecture#adrDecision> """Die Komponenten bleiben, wie sie sind; kein Kern wird verschmolzen, kein Komponentenname geändert. Jeder Bounded Context wird ein Maven-Parent über seinen Komponenten: Produkt & Anforderungen über den Komponenten für Requirements und für Use Cases, Domänenmodellierung über denen für das Glossar und für die Bounded Contexts. Architektur & Entscheidungen, Akteur, Projekt-Registry und Modellanalyse halten je eine Komponente unter ihrem Parent.
 
-Die zwei Kontexte mit zwei Komponenten bekommen ein Vokabularmodul: die typisierten Business-Codes, die beide Komponenten des Kontexts tragen, und der eine Verweistyp des Kontexts auf einen Glossarbegriff. Ein Kontext mit einer Komponente braucht keins; der Verweistyp auf einen Glossarbegriff bleibt je Kontext eine eigene Kopie.
+Ein Bounded Context hat im Build keine eigene technische Gestalt: der Parent aggregiert, hält keinen Code und keine Ports. Jede Komponente ist ein Hexagon aus einem technologiefreien Kern und einem Adaptermodul je Technologie. Der Komponentenname benennt die Komponente, der Parent den Kontext; die Namensraum-Regel wird vom Kontext erfüllt, ohne dass eine IRI geändert wird."""@de,
+      """The components stay as they are; no core is merged, no component name changed. Every Bounded Context becomes a Maven parent over its components: Product & Requirements over the components for requirements and for use cases, Domain Modelling over the ones for the glossary and for the Bounded Contexts. Architecture & Decisions, Actor, Project Registry and Model Analysis each hold one component under their parent.
 
-Ein API-Modul je Komponente wird nicht gebaut. Es trüge eine Grenze nur für ein fremdes Modul, das einen In-Port zur Compile-Zeit ruft, und ein solches Modul gibt es nicht: die Schnittstellen der In-Ports bleiben im Kern, und dass ein Adapter aus seinem Kern nur die In-Ports und die Domänentypen sieht, hält eine Architekturregel.
-
-Der Komponentenname benennt die Komponente, der Parent den Kontext; die Namensraum-Regel wird vom Kontext erfüllt, ohne dass eine IRI geändert wird."""@de,
-      """The components stay as they are; no core is merged, no component name changed. Each Bounded Context becomes a Maven parent over its components: Product & Requirements over the components for requirements and for use cases, Domain Modelling over the ones for the glossary and for the bounded contexts. Architecture & Decisions, Actor, Project Registry and Model Analysis each hold one component under their parent.
-
-The two contexts with two components get a vocabulary module: the typed business codes that both components of the context carry, and the context's one reference type to a glossary term. A context with one component needs none; the reference type to a glossary term stays a separate copy per context.
-
-An api module per component is not built. It would carry a boundary only for a foreign module that calls an in-port at compile time, and no such module exists: the in-port interfaces stay in the core, and an architecture rule holds that an adapter sees only the in-ports and the domain types of its own core.
-
-The component name names the component, the parent the context; the namespace rule is fulfilled by the context, without changing any IRI."""@en;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/aecaad60-d15e-46de-a2cf-cf9ca924f872>,
-      <https://w3id.org/arknet/id/d2d3fe82-3d31-49d0-945f-bc58e87807b9>, <https://w3id.org/arknet/id/5d37c133-1106-482a-9d4c-f29b46266323>,
-      <https://w3id.org/arknet/id/28b5dae4-036b-4c9a-a647-bda7b05a8533>, <https://w3id.org/arknet/id/57a524a2-9204-4994-b329-a3a1ae478167>,
-      <https://w3id.org/arknet/id/bf0f6701-aa0d-4e43-9124-c8aabd1bae06>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/990ad82d-c4e7-4b5a-9fa3-ce751a77639d>,
-      <https://w3id.org/arknet/id/111d2ef2-c022-4b34-8213-77a09df92459>, <https://w3id.org/arknet/id/49215275-1532-4b71-a46f-1be9184ab7db>,
-      <https://w3id.org/arknet/id/c145e6e3-e255-4a57-a446-5058b38fcc90>, <https://w3id.org/arknet/id/3e511ca7-58fa-459d-b3b9-579b530e372b>;
+A Bounded Context has no technical shape of its own in the build: the parent aggregates, holds no code and no ports. Every component is a hexagon made of a technology-free core and one adapter module per technology. The component name names the component, the parent the context; the namespace rule is satisfied by the context, without any IRI being changed."""@en;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/83a5f46a-1f67-419a-b68a-eb61b81e2df8>,
+      <https://w3id.org/arknet/id/0457f0ce-b876-49a6-8f49-f1abb9c639ef>, <https://w3id.org/arknet/id/1cf3fd6a-9c34-4f47-b1a9-1b319b5dd9d0>,
+      <https://w3id.org/arknet/id/317946f6-59cb-46ce-afdb-fa202a66d99d>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/a574c212-ab20-4ab5-95e4-5d4fc3d6658b>,
+      <https://w3id.org/arknet/id/71de6fa2-fbd1-4fd5-9e88-151a346ce794>, <https://w3id.org/arknet/id/a38ca202-6655-4d65-8f9b-856d98932363>,
+      <https://w3id.org/arknet/id/6e448fe7-7b6e-4677-89b2-b1bc57ad4b68>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/acf820e0-d3a5-4e84-95e5-948538994549>,
       <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>, <https://w3id.org/arknet/id/dbad2180-8120-46ea-8b02-18b22118de39>,
       <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea>, <https://w3id.org/arknet/id/3f9264eb-10fe-4d04-911c-0b627ab9fa36>,
@@ -6820,6 +6805,15 @@ Cross-context evaluations that follow the edges of the metamodel do not belong i
     <https://w3id.org/arknet/architecture#optionRationale> "Nutzt denselben Speicher und Schreibweg, ohne die Auflösung zirkulär zu machen."@de,
       "Uses the same store and write path without making the resolution circular."@en;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/d625fcb0-582f-4952-92ba-7212507f8b5f> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die drei Folgen der Einbahnstraße verschwinden: ein Actor braucht keine Glossardefinition, er kollidiert nicht mehr mit einem gleichnamigen Fachbegriff, und ein Begriff, der eine Klasse erklärt, ist kein Actor mehr."@de,
+      "The three consequences of the one-way street disappear: an Actor needs no glossary definition, it no longer collides with a subject-matter term of the same name, and a term that explains a class is no longer an Actor."@en .
+  
+  <https://w3id.org/arknet/id/da9fefca-f8f6-4fa0-b77b-6986cb2e592a> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2 .
 }
 
 <https://w3id.org/arknet/model/provenance> {
@@ -7468,7 +7462,9 @@ Cross-context evaluations that follow the edges of the metamodel do not belong i
   <https://w3id.org/arknet/revision/0ae9c321-ff0e-4098-a450-81cfe4890d18> a <http://www.w3.org/ns/prov#Entity>,
       <https://w3id.org/arknet/provenance#Revision>;
     <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/8196847e-ff13-4afe-b0ae-d5deb7e28ae9>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/2bf0fc5c-9f39-4691-99fd-fa6c4b6cef34> .
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/2bf0fc5c-9f39-4691-99fd-fa6c4b6cef34>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:26:09.719414289Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/2ce178cd-644a-4ec3-85e9-dc78f76c262e> .
 }
 
 <https://w3id.org/arknet/model/ubiquitous-language> {
@@ -7629,239 +7625,9 @@ Cross-context evaluations that follow the edges of the metamodel do not belong i
     <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#SupportingDomain> .
 }
 
-<https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/revision/0ae9c321-ff0e-4098-a450-81cfe4890d18> <http://www.w3.org/ns/prov#generatedAtTime>
-      "2026-09-08T12:26:09.719414289Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/2ce178cd-644a-4ec3-85e9-dc78f76c262e> .
-  
-  <https://w3id.org/arknet/activity/b6123031-db90-41ae-9a54-70fcd41099d4> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/1bff8a2b-bcc3-4151-a277-b7be1762d3f0> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b6123031-db90-41ae-9a54-70fcd41099d4>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:26:11.961145816Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/3848e41d-4ebc-468a-a901-d89c97d06623> .
-  
-  <https://w3id.org/arknet/activity/17729174-c33f-49f4-be70-db49251ac215> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/8042e220-cd6a-467f-a764-7fd32cedafed> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/7777a2c0-87ff-48fa-ba58-6d6e3e4c2834>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/17729174-c33f-49f4-be70-db49251ac215>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:26:13.952622593Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/86cd7544-823e-4e75-8f21-24047f742af5> .
-  
-  <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/57fea50d-4586-4154-a6b2-0bd4ae81675c> .
-  
-  <https://w3id.org/arknet/activity/4fb60c19-b0fc-4658-a9eb-5dfbc14c2e3e> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/23fed184-48de-453c-8f5b-126c3bb84054> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/4fb60c19-b0fc-4658-a9eb-5dfbc14c2e3e>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:56:09.525897372Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
-  
-  <https://w3id.org/arknet/id/da96d2d2-4c85-4ea3-b5a8-0e68416a56ed> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/654c7a34-5589-4410-8e46-409274cebd88> .
-  
-  <https://w3id.org/arknet/activity/6a9b20f4-b4ab-41a2-ba3c-60a30e59d633> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/d2f4247f-e213-4fe3-8781-31ecdf6481a1> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/da96d2d2-4c85-4ea3-b5a8-0e68416a56ed>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/6a9b20f4-b4ab-41a2-ba3c-60a30e59d633>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:56:41.558028281Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
-  
-  <https://w3id.org/arknet/id/3f9264eb-10fe-4d04-911c-0b627ab9fa36> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/6fdf4279-85f7-4685-9cea-4cac7482dc6e> .
-  
-  <https://w3id.org/arknet/activity/45392ed7-dfac-4e6e-b64e-3609fb8dfb2f> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/2ad7b8bd-84c3-4e62-a56f-620fd5dfc4e3> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/3f9264eb-10fe-4d04-911c-0b627ab9fa36>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/45392ed7-dfac-4e6e-b64e-3609fb8dfb2f>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:57:08.327044304Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
-  
-  <https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/00351580-07d0-4c36-9663-e094283d8597> .
-  
-  <https://w3id.org/arknet/activity/95258752-0a37-4d64-a12d-96c94103e3ad> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/6102e324-bd8c-49a8-83b0-8f21fea88ece> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/95258752-0a37-4d64-a12d-96c94103e3ad>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:57:27.370369425Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
-  
-  <https://w3id.org/arknet/id/eab4b228-84f7-467a-9927-62c380be2e0c> <https://w3id.org/arknet/provenance#head>
-      <https://w3id.org/arknet/revision/437e2982-dab6-44e1-b10e-5b8b9e7325d7> .
-  
-  <https://w3id.org/arknet/activity/787e8c5c-e0d3-4123-b217-f1bb388635e8> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/0534de93-4eb8-455e-a4d7-fafb276ebd3d> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/eab4b228-84f7-467a-9927-62c380be2e0c>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/787e8c5c-e0d3-4123-b217-f1bb388635e8>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:57:50.100785987Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
-  
-  <https://w3id.org/arknet/activity/316022da-b56f-46cb-bae3-714e0c5ae39d> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/d9779a9d-b490-4346-8490-d1ac59a3a159> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/316022da-b56f-46cb-bae3-714e0c5ae39d>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:58:15.095680255Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/06d8189a-bb2d-40c7-9e7e-1bd24cb256d7> .
-  
-  <https://w3id.org/arknet/activity/1723a495-9a25-4a19-8ac9-bef25f98c346> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/abcd1116-9bcc-4121-9d56-230c43b9cac8> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/dbad2180-8120-46ea-8b02-18b22118de39>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1723a495-9a25-4a19-8ac9-bef25f98c346>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:58:26.457016546Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/ba894a02-0227-4285-b0b3-4ff8f4a6498e> .
-  
-  <https://w3id.org/arknet/activity/aea96804-2304-41a8-a09c-c88a9f5f7e52> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/b4e317f0-e297-448f-b873-108a873a349b> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/aea96804-2304-41a8-a09c-c88a9f5f7e52>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:58:54.669222261Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/d9779a9d-b490-4346-8490-d1ac59a3a159> .
-  
-  <https://w3id.org/arknet/activity/5b554b07-49f1-4c53-936b-4c92e2f938b6> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/c629b5f8-a5d7-42fd-95b1-a597fea5e5eb> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/dbad2180-8120-46ea-8b02-18b22118de39>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/5b554b07-49f1-4c53-936b-4c92e2f938b6>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:59:11.454333566Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/abcd1116-9bcc-4121-9d56-230c43b9cac8> .
-  
-  <https://w3id.org/arknet/activity/56f23ae8-9196-4f2e-a91c-4fdafcd0fd53> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/f2aa6aa2-89a9-4b1b-807b-a88a86e102c3> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/56f23ae8-9196-4f2e-a91c-4fdafcd0fd53>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:59:13.861128448Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/23fed184-48de-453c-8f5b-126c3bb84054> .
-  
-  <https://w3id.org/arknet/activity/337b3052-868e-4c03-b269-908ef0611e51> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/05ea7ec6-c45b-4a6e-90af-803eb522ccaf> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/337b3052-868e-4c03-b269-908ef0611e51>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:59:15.843479565Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/6102e324-bd8c-49a8-83b0-8f21fea88ece> .
-  
-  <https://w3id.org/arknet/activity/a0606a25-942b-43f8-8c64-c5d22ca751a6> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/803aa003-5bbf-4401-b59b-091f324a372f> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/a0606a25-942b-43f8-8c64-c5d22ca751a6>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:59:17.775388828Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/014aa743-361d-4014-9224-b853d2259433> .
-  
-  <https://w3id.org/arknet/activity/d5e76450-1dd6-4615-bc21-84f412a03ad7> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/a13dc38a-da94-447c-b1e2-85966bbaf227> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/d5e76450-1dd6-4615-bc21-84f412a03ad7>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:04:21.844242969Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/b4e317f0-e297-448f-b873-108a873a349b> .
-  
-  <https://w3id.org/arknet/activity/1665aba2-8f32-46cb-908a-52641a3ded21> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/cbb9cfac-65b8-496a-abff-3f1278683f0f> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/dbad2180-8120-46ea-8b02-18b22118de39>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1665aba2-8f32-46cb-908a-52641a3ded21>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:04:33.327602216Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/c629b5f8-a5d7-42fd-95b1-a597fea5e5eb> .
-  
-  <https://w3id.org/arknet/activity/3fa3e891-015c-4d4b-8bb8-73c05a6543fd> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/57fea50d-4586-4154-a6b2-0bd4ae81675c> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/3fa3e891-015c-4d4b-8bb8-73c05a6543fd>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:04:44.924324352Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/f2aa6aa2-89a9-4b1b-807b-a88a86e102c3> .
-  
-  <https://w3id.org/arknet/activity/7bc83626-4f2a-4654-aebf-77c3df3c9cbb> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/654c7a34-5589-4410-8e46-409274cebd88> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/da96d2d2-4c85-4ea3-b5a8-0e68416a56ed>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/7bc83626-4f2a-4654-aebf-77c3df3c9cbb>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:04:53.611104966Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/d2f4247f-e213-4fe3-8781-31ecdf6481a1> .
-  
-  <https://w3id.org/arknet/activity/a835268c-513c-4193-be0c-997db82916dd> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/6fdf4279-85f7-4685-9cea-4cac7482dc6e> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/3f9264eb-10fe-4d04-911c-0b627ab9fa36>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/a835268c-513c-4193-be0c-997db82916dd>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:05:05.416979660Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/2ad7b8bd-84c3-4e62-a56f-620fd5dfc4e3> .
-  
-  <https://w3id.org/arknet/activity/929c8d6a-080b-419d-81ee-3e5e3864596b> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/00351580-07d0-4c36-9663-e094283d8597> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/929c8d6a-080b-419d-81ee-3e5e3864596b>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:05:14.048081370Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/05ea7ec6-c45b-4a6e-90af-803eb522ccaf> .
-  
-  <https://w3id.org/arknet/activity/4eccad4f-4902-4f6d-83cb-e447d329d7ca> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/437e2982-dab6-44e1-b10e-5b8b9e7325d7> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/eab4b228-84f7-467a-9927-62c380be2e0c>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/4eccad4f-4902-4f6d-83cb-e447d329d7ca>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:05:23.140297048Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/0534de93-4eb8-455e-a4d7-fafb276ebd3d> .
-  
-  <https://w3id.org/arknet/activity/591d9430-2989-4597-bfc8-e8e4091c862e> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/2f423d76-405f-4b8b-b482-c002509d97ec> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/591d9430-2989-4597-bfc8-e8e4091c862e>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:07:35.721410345Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/a13dc38a-da94-447c-b1e2-85966bbaf227> .
-  
-  <https://w3id.org/arknet/activity/7d404197-311c-4e33-981a-aa381bd5ab20> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/9f259e13-36f3-4202-b440-f8c87e02a31f> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/dbad2180-8120-46ea-8b02-18b22118de39>;
-    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/7d404197-311c-4e33-981a-aa381bd5ab20>;
-    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:07:37.978922747Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
-    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/cbb9cfac-65b8-496a-abff-3f1278683f0f> .
-}
-
 <https://w3id.org/arknet/model/adr> {
-  <https://w3id.org/arknet/id/d625fcb0-582f-4952-92ba-7212507f8b5f> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die drei Folgen der Einbahnstraße verschwinden: ein Actor braucht keine Glossardefinition, er kollidiert nicht mehr mit einem gleichnamigen Fachbegriff, und ein Begriff, der eine Klasse erklärt, ist kein Actor mehr."@de,
-      "The three consequences of the one-way street disappear: an Actor needs no glossary definition, it no longer collides with a subject-matter term of the same name, and a term that explains a class is no longer an Actor."@en .
-  
-  <https://w3id.org/arknet/id/da9fefca-f8f6-4fa0-b77b-6986cb2e592a> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+  <https://w3id.org/arknet/id/da9fefca-f8f6-4fa0-b77b-6986cb2e592a> <https://w3id.org/arknet/architecture#consequenceType>
+      <https://w3id.org/arknet/architecture#Positive>;
     <https://w3id.org/arknet/architecture#consequenceStatement> "Bestehende Kanten von Use Cases zu Actors halten den Trägerwechsel aus, weil sie seit jeher nur die opake Ressourcen-Identität halten und keinen glossarspezifischen Typ."@de,
       "Existing edges from use cases to Actors withstand the carrier change, because they have always held only the opaque resource identity and no glossary-specific type."@en .
   
@@ -8044,32 +7810,28 @@ Drei stützende Kontexte liegen außerhalb der acht Lifecycle-Kontexte, weil ihr
 - Projekt-Registry trägt Projekt, Anker und die Sprachzusagen eines Projekts.
 - Modellanalyse besitzt keine Ressource; sie liest das Modell über Kontextgrenzen hinweg und schreibt nie.
 
-Ein Bounded Context ist eine Modellgrenze ohne eigene technische Gestalt: im Build ein Maven-Parent, sonst nichts. Er hält eine oder mehrere Komponenten, und jede Komponente ist ein Hexagon. Kontextgrenze und Hexagon-Grenze sind zwei verschiedene Dinge.
-
 Die Liste ist der Bauzustand gegen den Zielschnitt, kein geschlossener Katalog: ein weiterer Lifecycle-Kontext wird angebaut, ohne dass die bestehenden sich ändern, und bekommt seinen Platz in einer eigenen Entscheidung."""@de,
       """The tool consists of six Bounded Contexts.
 
-Three core contexts are the realised excerpt of the lifecycle target cut:
+Three core contexts are the realised slice of the lifecycle target cut:
 
-- Product & Requirements carries Requirement, Constraint, AcceptanceCriterion and Use Case together with its steps.
+- Product & Requirements carries requirement, constraint, acceptance criterion and use case together with its steps.
 - Domain Modelling carries glossary term, Bounded Context and context relationship.
-- Architecture & Decisions carries the decision record together with consequences and considered options.
+- Architecture & Decisions carries the decision record together with its consequences and considered options.
 
-Three supporting contexts lie outside the eight lifecycle contexts, because their language belongs to none of them:
+Three supporting contexts sit outside the eight lifecycle contexts, because their language belongs to none of them:
 
-- Actor carries Actor and Role.
+- Actor carries actor and role.
 - Project Registry carries project, anchor and a project's language commitments.
 - Model Analysis owns no resource; it reads the model across context boundaries and never writes.
 
-A Bounded Context is a model boundary with no technical shape of its own: in the build a Maven parent, nothing else. It holds one or more components, and each component is a hexagon. Context boundary and hexagon boundary are two different things.
-
 The list is the build state against the target cut, not a closed catalogue: a further lifecycle context is added on without the existing ones changing, and gets its place in a decision of its own."""@en;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/38e1109e-2630-4901-a494-18275581f0b5>,
-      <https://w3id.org/arknet/id/22405d17-b6be-4a3e-af9f-a64dedfe8e71>, <https://w3id.org/arknet/id/a57681d3-0f88-4101-bfb7-e6d40aa89d15>,
-      <https://w3id.org/arknet/id/b13a2006-4fea-41c4-979f-c232deb3c0f7>, <https://w3id.org/arknet/id/9a259f41-81c8-4690-b982-45cbf96fe4d7>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/3441399f-39f1-4aa6-8d89-2b6a04f09df9>,
-      <https://w3id.org/arknet/id/badfb5bc-6fa1-4a90-ad71-c9e46df29305>, <https://w3id.org/arknet/id/a6c77691-1335-4c76-8baf-b339253345d7>,
-      <https://w3id.org/arknet/id/4fa1cef9-c71c-4444-bfc1-bd5b18d731d8>;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/3702d73a-03ef-4f76-8c5f-135c09b6cae3>,
+      <https://w3id.org/arknet/id/8ebf89e7-5155-4309-804d-1b6ccb5d1001>, <https://w3id.org/arknet/id/63bae4f9-5522-4fdd-a7b3-5df0d7b9be6f>,
+      <https://w3id.org/arknet/id/81f28dc2-68a6-4210-a744-7306a9565678>, <https://w3id.org/arknet/id/f62ce3e5-bdf2-44f8-ab0c-d7711b345729>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/f6c0189b-ed87-4f37-9cb5-ae85665bfd1f>,
+      <https://w3id.org/arknet/id/3c38446b-bf52-4376-9544-545dc198821a>, <https://w3id.org/arknet/id/0d265e8e-bf7e-4a87-9dd5-192f64568e7f>,
+      <https://w3id.org/arknet/id/3dc9571b-625e-4cdb-b919-6170d9558281>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750>,
       <https://w3id.org/arknet/id/acf820e0-d3a5-4e84-95e5-948538994549>, <https://w3id.org/arknet/id/e2fd7f3a-3c3f-44c4-8d02-8c13567151fd>,
       <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>, <https://w3id.org/arknet/id/18b97932-77b7-4ec1-9f4c-0bb33e9e69bd>,
@@ -8200,18 +7962,18 @@ Im Bestand hängt jeder Kern an einem Modul, das nie einer dieser drei Kategorie
       """By default, the module schema knows no shared vocabulary above a Bounded Context: what two contexts both need, each has for itself, unless a Shared Kernel has been decided. A Shared Kernel is a context-map relationship with a price, not a reflex; a technical library without model terms is neither a Shared Kernel nor a vocabulary.
 
 In the existing stock, every core depends on a module that was never assigned to any of these three categories. It mixes model terms that every core carries (project identity, resource identity, assignment of business codes, language tag and display locale) with mechanics that no core uses (resolving an anchor to a project, the hint about possibly stale translations, the language-tagged literal of persistence)."""@en;
-    <https://w3id.org/arknet/architecture#adrDecision> """Es gibt einen Shared Kernel aller Bounded Contexts, als Beziehung in der Kontextkarte deklariert. Aufnahmeregel: ein Modellbegriff, den mindestens zwei Kontexte tragen. Darunter fallen die Projektidentität, die Ressourcenidentität, die Vergabe der Business-Codes sowie Sprachkennung und Anzeigesprache; Sprache ist Modell, weil die Kerne sie tragen.
+    <https://w3id.org/arknet/architecture#adrDecision> """Es gibt einen Shared Kernel aller Bounded Contexts, als Beziehung in der Kontextkarte deklariert. Er enthält genau die Modellbegriffe, die mindestens zwei Kontexte tragen, und das ist zugleich seine Aufnahmeregel: die Projektidentität, die Ressourcenidentität, die Vergabe der Business-Codes sowie Sprachkennung und Anzeigesprache. Sprache ist Modell, weil die Kerne sie tragen.
 
-Mechanik gehört nicht hinein. Die Auflösung eines Ankers zum Projekt und der Hinweis auf veraltete Übersetzungen ziehen in ein technisches Support-Modul der Werkzeugadapter; das sprachgetaggte Literal zieht in die Persistenz-Bibliothek. Der Shared Kernel hält kein Verhalten über den Wert hinaus und keine Ports."""@de,
-      """There is a Shared Kernel of all Bounded Contexts, declared as a relationship in the context map. Admission rule: a model term that at least two contexts carry. This covers project identity, resource identity, the assignment of business codes, as well as language tag and display locale; language is model because the cores carry it.
+Jeder Kern hängt an diesem einen geteilten Modul und an keinem anderen. Es hält Werte und ihre Regeln, sonst nichts."""@de,
+      """There is a Shared Kernel of all Bounded Contexts, declared as a relationship in the context map. It contains exactly the model terms that at least two contexts carry, and that is at the same time its admission rule: project identity, resource identity, the assignment of business codes, as well as language tag and display locale. Language is model, because the cores carry it.
 
-Mechanics do not belong in it. Resolving an anchor to a project and the hint about stale translations move into a technical support module of the tool adapters; the language-tagged literal moves into the persistence library. The Shared Kernel holds no behaviour beyond the value and no ports."""@en;
-    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/ebc33025-9e82-43e2-8736-fb7a4956fd3f>,
-      <https://w3id.org/arknet/id/c06d4a5e-bc9b-4f05-9d65-52005e4bb81b>, <https://w3id.org/arknet/id/f3007bae-13d4-4b3d-837c-18c695ed6b09>,
-      <https://w3id.org/arknet/id/df77e75d-d0fa-4659-98f3-8668377ff7b7>, <https://w3id.org/arknet/id/e552460a-0fe0-47df-91e8-8e61c8d1f6ed>;
-    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/4f8e8066-cec1-4fe2-ab36-90b3b07723f2>,
-      <https://w3id.org/arknet/id/50c1c412-4536-485f-a410-d90b00f4f3fc>, <https://w3id.org/arknet/id/e038fd4c-f6ab-4807-ab70-426fb178f930>,
-      <https://w3id.org/arknet/id/edf3773b-2331-4e7a-8a47-15030d3d33f6>;
+Every core depends on this one shared module and on no other. It holds values and their rules, nothing else."""@en;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/b3a2a5cf-9ea1-4dc5-bd5c-9cc800d65608>,
+      <https://w3id.org/arknet/id/2097aec0-9b21-4278-b665-bd5e4ae586b7>, <https://w3id.org/arknet/id/b53ec0ac-691b-493b-af05-6d49311bec59>,
+      <https://w3id.org/arknet/id/6ec91dc0-8478-4b7e-ba22-73b481f3ef28>, <https://w3id.org/arknet/id/51164c2d-1b7d-43ea-901c-49fef6cf5536>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/ef841266-e541-4697-b39b-400b0ea08eea>,
+      <https://w3id.org/arknet/id/3e702581-ced4-4623-92ba-6ebd5315573f>, <https://w3id.org/arknet/id/31f90fd5-f931-4716-b40f-ecc6d9e947ea>,
+      <https://w3id.org/arknet/id/d0ebac66-3aa6-4f2a-ac2b-2b4c20b0b0bb>;
     <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/d033d67e-4c59-49b3-a310-e791eacdc711>,
       <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea>;
     <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4>,
@@ -8275,66 +8037,6 @@ Mechanics do not belong in it. Resolving an anchor to a project and the hint abo
     <https://w3id.org/arknet/architecture#optionRationale> "Reduziert die dichtesten Cross-Kontext-Kanten auf kontextinterne Kanten und läuft auf das Zielbild zu."@de,
       "Reduces the densest cross-context edges to intra-context edges and runs toward the target picture."@en;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/38e1109e-2630-4901-a494-18275581f0b5> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Jeder Kontext, durch den ein Aufruf läuft oder der das Modell liest, steht auf der Kontextkarte; die Karte verschweigt keine Abhängigkeit mehr."@de,
-      "Every context a call runs through, or that reads the model, stands on the context map; the map no longer conceals any dependency."@en .
-  
-  <https://w3id.org/arknet/id/22405d17-b6be-4a3e-af9f-a64dedfe8e71> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die dichtesten Kanten des Modells (Use Case zu Requirement, Bounded Context zu Glossarbegriff) sind kontextintern."@de,
-      "The densest edges of the model (use case to requirement, Bounded Context to glossary term) are internal to a context."@en .
-  
-  <https://w3id.org/arknet/id/a57681d3-0f88-4101-bfb7-e6d40aa89d15> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Zählung ist eindeutig und im Modell selbst ablesbar: drei Kernkontexte, drei stützende, unterschieden über die Subdomänen-Einordnung jedes Kontexts."@de,
-      "The count is unambiguous and readable in the model itself: three core contexts, three supporting, distinguished via the subdomain classification of each context."@en .
-  
-  <https://w3id.org/arknet/id/b13a2006-4fea-41c4-979f-c232deb3c0f7> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Umbau betrifft Modulbäume und Verdrahtung, ohne dass ein Nutzer davon etwas sieht."@de,
-      "The restructuring affects module trees and wiring, without a user seeing anything of it."@en .
-  
-  <https://w3id.org/arknet/id/9a259f41-81c8-4690-b982-45cbf96fe4d7> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 5;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Stellung der stützenden Kontexte (die Registry stromaufwärts von allen, die Modellanalyse lesend von allen) ist gegen die drei Kernkontexte festgestellt; jeder weitere Lifecycle-Kontext muss sie neu bestätigen."@de,
-      "The position of the supporting contexts (the Registry upstream of all, Model Analysis reading from all) is established against the three core contexts; every further lifecycle context has to reconfirm it."@en .
-  
-  <https://w3id.org/arknet/id/3441399f-39f1-4aa6-8d89-2b6a04f09df9> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Sechs Kontexte: drei Kernkontexte aus dem Zielschnitt, drei stützende außerhalb"@de,
-      "Six contexts: three core contexts from the target cut, three supporting outside it"@en;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Benennt jeden Kontext, der im Werkzeug eine eigene Sprache spricht, und ordnet ihn gegen den Zielschnitt ein, statt drei davon als Querschnitt oder Infrastruktur unsichtbar zu lassen."@de,
-      "Names every context that speaks its own language in the tool, and places it against the target cut, instead of leaving three of them invisible as a cross-cutting concern or infrastructure."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/badfb5bc-6fa1-4a90-ad71-c9e46df29305> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Nur die drei Kernkontexte als Kontexte führen, Akteur, Registry und Analyse als Querschnitt oder Infrastruktur"@de,
-      "List only the three core contexts as contexts, Actor, Registry and Analysis as a cross-cutting concern or infrastructure"@en;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Die Kontextkarte verschwiege drei Hexagone, durch die jeder Aufruf läuft oder die jeden Kontext lesen; genau diese unsichtbare Abhängigkeit hatte die Vorgängerentscheidung zur Registry als ihren Preis benannt."@de,
-      "The context map would conceal three hexagons that every call runs through or that read every context; exactly this invisible dependency is what the predecessor decision on the Registry named as its price."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/a6c77691-1335-4c76-8baf-b339253345d7> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Kontext und Hexagon gleichsetzen"@de, "Equate context and hexagon"@en;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Erzwänge entweder, die zwei Komponenten eines Kernkontexts zu verschmelzen, oder sechs Kernkontexte zu behaupten, wo drei Sprachen gesprochen werden. Sprachgrenzen und Modulgrenzen sind verschiedene Dinge."@de,
-      "Would force either merging the two components of a core context, or claiming six core contexts where three languages are spoken. Language boundaries and module boundaries are different things."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/4fa1cef9-c71c-4444-bfc1-bd5b18d731d8> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Ein einziger Kontext für alles"@de, "A single context for everything"@en;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#optionRationale> "Zwischen der Sprache der Anforderungen, der des Glossars und der der Entscheidungen verlaufen echte Sprachbrüche; sie in einen Kontext zu legen hieße, denselben Begriff mit zwei Bedeutungen zu führen."@de,
-      "Real language breaks run between the language of the requirements, that of the glossary and that of the decisions; putting them into one context would mean carrying the same term with two meanings."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
   
   <https://w3id.org/arknet/id/1b1a88ee-b8b1-4c81-9bb2-46c2cffee1e5> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 1;
@@ -8534,142 +8236,6 @@ Mechanics do not belong in it. Resolving an anchor to a project and the hint abo
       "Makes the root the one module that knows every context: a context without a domain under another name."@en;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
   
-  <https://w3id.org/arknet/id/ebc33025-9e82-43e2-8736-fb7a4956fd3f> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Typisierte Identitäten existieren einmal statt sechsmal, und eine Projektidentität bedeutet in jedem Kontext dasselbe, ohne übersetzt zu werden."@de,
-      "Typed identities exist once instead of six times, and a project identity means the same thing in every context, without being translated."@en .
-  
-  <https://w3id.org/arknet/id/c06d4a5e-bc9b-4f05-9d65-52005e4bb81b> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Aufnahmeregel ist prüfbar: ein Typ, den nur ein Kontext trägt oder der Verhalten hat, gehört nicht hinein."@de,
-      "The admission rule is checkable: a type that only one context carries, or that has behaviour, does not belong in it."@en .
-  
-  <https://w3id.org/arknet/id/f3007bae-13d4-4b3d-837c-18c695ed6b09> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Jede Änderung im Shared Kernel trifft alle sechs Kontexte und braucht Abstimmung; das ist der Preis eines Shared Kernel und der Grund, ihn klein zu halten."@de,
-      "Every change in the Shared Kernel hits all six contexts and needs coordination; that is the price of a Shared Kernel and the reason to keep it small."@en .
-  
-  <https://w3id.org/arknet/id/df77e75d-d0fa-4659-98f3-8668377ff7b7> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Kein Kern ist ohne den Shared Kernel baubar; die Kopplung ist gewollt, aber sie ist eine."@de,
-      "No core is buildable without the Shared Kernel; the coupling is intentional, but it is one."@en .
-  
-  <https://w3id.org/arknet/id/e552460a-0fe0-47df-91e8-8e61c8d1f6ed> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 5;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Werkzeugadapter hängen zusätzlich an einem Support-Modul, das kein Kern kennt; eine Abhängigkeitsregel muss halten, dass kein Kern es importiert."@de,
-      "The tool adapters additionally depend on a support module that no core knows; a dependency rule has to hold that no core imports it."@en .
-  
-  <https://w3id.org/arknet/id/4f8e8066-cec1-4fe2-ab36-90b3b07723f2> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Shared Kernel aller Kontexte für Modellbegriffe, Mechanik in Support-Module"@de,
-      "Shared Kernel of all contexts for model terms, mechanics into support modules"@en;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Teilt bewusst und klein, was in jedem Kontext dasselbe bedeutet, und trennt es von der Mechanik, die kein Kern braucht."@de,
-      "Deliberately and narrowly shares what means the same thing in every context, and separates it from the mechanics that no core needs."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/50c1c412-4536-485f-a410-d90b00f4f3fc> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Jeder Kontext hält eine eigene Kopie"@de, "Each context holds a copy of its own"@en;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Der Schema-Default. Sechs Kopien derselben Identitätstypen, die an jeder Kontextgrenze konvertiert werden müssten, obwohl eine Projektidentität überall dieselbe Bedeutung hat; der Bedeutungstest spricht für einen gemeinsamen Begriff."@de,
-      "The schema default. Six copies of the same identity types that would have to be converted at every context boundary, even though a project identity means the same thing everywhere; the meaning test speaks for a shared term."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/e038fd4c-f6ab-4807-ab70-426fb178f930> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Das Modul unverändert als Sammelbecken belassen"@de,
-      "Leave the module unchanged as a catch-all"@en;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Kerne hängen dann an Mechanik, die sie nicht nutzen, und eine Aufnahmeregel lässt sich nicht formulieren; genau das Sammelbecken, vor dem die Definition des Shared Kernel warnt."@de,
-      "Cores would then depend on mechanics they do not use, and an admission rule cannot be formulated; exactly the catch-all that the definition of the Shared Kernel warns against."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/edf3773b-2331-4e7a-8a47-15030d3d33f6> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Das Modul als technische Bibliothek ohne Modellbegriffe führen"@de,
-      "Run the module as a technical library without model terms"@en;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#optionRationale> "Die Typen darin sind Modellbegriffe: ein Kern spricht von der Projektidentität und der Sprache eines Literals. Eine Bibliothek, die Modellbegriffe trägt, ist keine."@de,
-      "The types in it are model terms: a core speaks of project identity and the language of a literal. A library that carries model terms is not one."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/aecaad60-d15e-46de-a2cf-cf9ca924f872> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Kein Kern wird angefasst; der Umbau besteht aus Maven-Struktur, dem Vokabularmodul und Verdrahtung."@de,
-      "No core is touched; the restructuring consists of Maven structure, the vocabulary module and wiring."@en .
-  
-  <https://w3id.org/arknet/id/d2d3fe82-3d31-49d0-945f-bc58e87807b9> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Kontextgrenze ist im Modulbaum ablesbar, ohne dass Hexagone verschmelzen: der Parent zeigt den Kontext, die Kinder die Komponenten."@de,
-      "The context boundary is readable in the module tree without hexagons merging: the parent shows the context, the children the components."@en .
-  
-  <https://w3id.org/arknet/id/5d37c133-1106-482a-9d4c-f29b46266323> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Requirements-Namensraum deckt genau einen Kontext ab und erfüllt die Namensraum-Regel, ohne dass eine IRI geändert oder ein Store migriert wird."@de,
-      "The requirements namespace covers exactly one context and fulfils the namespace rule, without changing an IRI or migrating a store."@en .
-  
-  <https://w3id.org/arknet/id/28b5dae4-036b-4c9a-a647-bda7b05a8533> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Eine kontextinterne Kante zwischen zwei Komponenten wird wie eine kontextübergreifende gebaut, über Out-Port und Published Language; dass beide Enden im selben Kontext liegen, ist im Code nur am Parent und am Vokabularmodul ablesbar."@de,
-      "An edge internal to a context between two components is built like a cross-context one, via out-port and Published Language; that both ends lie in the same context is readable in the code only from the parent and the vocabulary module."@en .
-  
-  <https://w3id.org/arknet/id/57a524a2-9204-4994-b329-a3a1ae478167> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 5;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Kontext mit zwei Komponenten hat zwei Kerne, die denselben Begriff je als eigene Kopie halten können; die Aufnahmeregel des Vokabularmoduls (nur besitzerlose Identitäten und Verweistypen) muss im Review gehalten werden."@de,
-      "A context with two components has two cores that can each hold the same term as a separate copy; the vocabulary module's admission rule (only ownerless identities and reference types) has to be upheld in review."@en .
-  
-  <https://w3id.org/arknet/id/bf0f6701-aa0d-4e43-9124-c8aabd1bae06> a <https://w3id.org/arknet/architecture#Consequence>;
-    <https://w3id.org/arknet/core#position> 6;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Wird später ein fremdes Modul gebaut, das einen In-Port zur Compile-Zeit ruft, kommt das API-Modul der gerufenen Komponente als Ausbaustufe hinzu; die Regel dazu steht im Modulschema, nicht in dieser Entscheidung."@de,
-      "If a foreign module that calls an in-port at compile time is built later, the api module of the called component is added as an extension stage; the rule for that stands in the module schema, not in this decision."@en .
-  
-  <https://w3id.org/arknet/id/990ad82d-c4e7-4b5a-9fa3-ce751a77639d> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Komponenten bleiben, jeder Kontext wird ein Maven-Parent, Vokabularmodul für die zwei Kontexte mit zwei Komponenten, kein API-Modul"@de,
-      "Components stay, each context becomes a Maven parent, vocabulary module for the two contexts with two components, no api module"@en;
-    <https://w3id.org/arknet/core#position> 1;
-    <https://w3id.org/arknet/architecture#optionRationale> "Macht die Kontextgrenze im Build sichtbar und erfüllt die Namensraum-Regel, ohne einen Kern zu verschmelzen oder ein Modul umzubenennen; der Umweg, den das Verschmelzen beseitigen sollte, entfällt schon durch das Lesen über die Published Language."@de,
-      "Makes the context boundary visible in the build and fulfils the namespace rule without merging a core or renaming a module; the detour that merging was meant to remove already disappears through reading via the Published Language."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
-  
-  <https://w3id.org/arknet/id/111d2ef2-c022-4b34-8213-77a09df92459> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Je Kontext genau ein Hexagon, Kerne verschmelzen, Module nach dem Kontext benennen"@de,
-      "Exactly one hexagon per context, merge cores, name modules after the context"@en;
-    <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#optionRationale> "Der erste Entwurf. Verschmilzt zwei Kerne, um einen Umweg zu beseitigen, der auch ohne Verschmelzen entfällt; benennt drei Modulbäume um; koppelt die Größe eines Kontexts an die Größe eines Kerns und setzt Kontextgrenze und Hexagon-Grenze gleich, obwohl beides verschiedene Dinge sind."@de,
-      "The first draft. Merges two cores to remove a detour that disappears without merging as well; renames three module trees; couples the size of a context to the size of a core and equates context boundary and hexagon boundary, even though the two are different things."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/49215275-1532-4b71-a46f-1be9184ab7db> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Komponenten bleiben, aber ohne Parent je Kontext; die Kontextgrenze bleibt allein begrifflich"@de,
-      "Components stay, but without a parent per context; the context boundary remains conceptual only"@en;
-    <https://w3id.org/arknet/core#position> 3;
-    <https://w3id.org/arknet/architecture#optionRationale> "Der kleinste Eingriff, aber der Kontext wäre im Build unsichtbar und die Namensraum-Regel hätte keinen Gegenstand; das Modulschema verlangt den Parent als Pflichtteil."@de,
-      "The smallest intervention, but the context would be invisible in the build and the namespace rule would have no subject; the module schema requires the parent as a mandatory part."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/c145e6e3-e255-4a57-a446-5058b38fcc90> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Ein API-Modul je Komponente bauen"@de, "Build an api module per component"@en;
-    <https://w3id.org/arknet/core#position> 4;
-    <https://w3id.org/arknet/architecture#optionRationale> "Trägt eine Grenze nur für ein fremdes Modul, das einen In-Port zur Compile-Zeit ruft. Ohne einen solchen Aufrufer ist es ein leeres Modul, dessen einzige Wirkung ein zweiter Ort für die In-Port-Schnittstellen wäre."@de,
-      "Carries a boundary only for a foreign module that calls an in-port at compile time. Without such a caller it is an empty module whose only effect would be a second place for the in-port interfaces."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
-  <https://w3id.org/arknet/id/3e511ca7-58fa-459d-b3b9-579b530e372b> a <https://w3id.org/arknet/architecture#ConsideredOption>;
-    <https://w3id.org/arknet/core#name> "Ein einziges Modell-Modul für alle Kontexte"@de,
-      "A single model module for all contexts"@en;
-    <https://w3id.org/arknet/core#position> 5;
-    <https://w3id.org/arknet/architecture#optionRationale> "Die konsequenteste Antwort auf den Befund, der gewachsene Schnitt sei zu fein, aber sie hebt die Sprachgrenzen auf, die der Kontextschnitt als echt festgestellt hat, und nimmt der Namensraum-Regel ihren Gegenstand."@de,
-      "The most consistent answer to the finding that the grown cut is too fine-grained, but it abolishes the language boundaries that the context cut established as real, and takes away the namespace rule's subject."@en;
-    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
-  
   <https://w3id.org/arknet/id/44fec420-df4d-4166-b2a5-ec2bda311a7b> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 1;
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
@@ -8738,12 +8304,676 @@ Mechanics do not belong in it. Resolving an anchor to a project and the hint abo
     <https://w3id.org/arknet/architecture#optionRationale> "Lässt Raum für Einzelfälle, verschiebt die Entscheidung aber dorthin, wo der Bauzustand sie beantwortet, statt die Regel vor dem Code festzulegen."@de,
       "Leaves room for individual cases, but shifts the decision to where the build state answers it, instead of settling the rule ahead of the code."@en;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/58edc68b-e71e-4c51-b170-9510ef862ddf> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
+    <http://purl.org/dc/terms/identifier> "ADR-57";
+    <https://w3id.org/arknet/core#name> "Ein Vokabularmodul je Bounded Context mit mehr als einer Komponente"@de,
+      "One vocabulary module per Bounded Context with more than one component"@en;
+    <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Proposed>;
+    <https://w3id.org/arknet/architecture#adrContext> """Zwei Bounded Contexts halten je zwei Komponenten. Beide Komponenten eines solchen Kontexts verweisen auf dieselben Ressourcen über deren Business-Codes: der Use Case auf das Requirement und den Constraint, der Bounded Context auf den Glossarbegriff. Im Bestand trägt jede Komponente dafür eigene, gleichlautende Typen -- die Codes und einen Verweistyp auf den Glossarbegriff -- als Kopie, weil kein Kern an einem Nachbarkern hängen darf.
+
+Das Modulschema sieht für die Sprache eines Kontexts als Code ein Vokabularmodul vor: typisierte Identitäten und besitzerlose Value Objects, kein Verhalten, keine Abhängigkeiten. Es ist Pflicht, sobald ein Kontext besitzerlose Identitäten hat, die mehr als eine Komponente trägt. Oberhalb eines Kontexts gibt es standardmäßig kein Vokabular; was zwei Kontexte beide brauchen, hat jeder für sich, sofern kein Shared Kernel beschlossen ist."""@de,
+      """Two Bounded Contexts each hold two components. Both components of such a context reference the same resources via their business codes: the use case references the requirement and the constraint, the Bounded Context references the glossary term. In the existing stock, each component carries its own, identically named types for this -- the codes and one reference type to the glossary term -- as a copy, because no core may depend on a neighbouring core.
+
+The module schema provides a vocabulary module for the language of a context as code: typed identities and ownerless value objects, no behaviour, no dependencies. It is mandatory as soon as a context has ownerless identities that more than one component carries. Above a context there is by default no vocabulary; what two contexts both need, each has for itself, unless a Shared Kernel has been decided."""@en;
+    <https://w3id.org/arknet/architecture#adrDecision> """Jeder Bounded Context mit mehr als einer Komponente bekommt ein Vokabularmodul, an dem nichts hängt und das an nichts hängt. Es enthält die typisierten Business-Codes, die mehr als eine Komponente des Kontexts trägt, und den einen Verweistyp des Kontexts auf einen Glossarbegriff. Für Produkt & Anforderungen sind das die Codes von Requirement und Constraint samt dem Verweistyp auf den Glossarbegriff; für Domänenmodellierung der Code des Glossarbegriffs.
+
+Ein Kontext mit einer Komponente bekommt kein Vokabularmodul; seine Codes bleiben in seinem Kern. Der Verweistyp auf einen Glossarbegriff bleibt je Kontext eine eigene Kopie, weil er die Sprache des jeweiligen Kontexts ist und kein Begriff, den zwei Kontexte teilen."""@de,
+      """Every Bounded Context with more than one component gets a vocabulary module that nothing depends on and that depends on nothing. It contains the typed business codes that more than one component of the context carries, and the one reference type of the context to a glossary term. For Product & Requirements that is the codes of requirement and constraint together with the reference type to the glossary term; for Domain Modelling the code of the glossary term.
+
+A context with one component gets no vocabulary module; its codes stay in its core. The reference type to a glossary term remains its own copy per context, because it is the language of the respective context and not a term that two contexts share."""@en;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/c08b4f70-efb8-4218-9d5e-234aa8b5119a>,
+      <https://w3id.org/arknet/id/540461f3-5bea-4ea9-add5-d81e9dfd5955>, <https://w3id.org/arknet/id/465e7ac3-5ee8-48ea-a6ce-a6a15cd73ecd>,
+      <https://w3id.org/arknet/id/7432f4f3-52ad-4798-b565-d21fb3adfb59>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/93b2da18-21e0-4a89-a587-5216b96c56fb>,
+      <https://w3id.org/arknet/id/0705b7a4-abcc-4c6c-a461-ddfac1d57b5a>, <https://w3id.org/arknet/id/899d60b4-c85c-4ffe-81f8-3910ef9ad142>,
+      <https://w3id.org/arknet/id/87f93b46-dfdb-4590-a9f4-32ea19bc9db2>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>,
+      <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea>, <https://w3id.org/arknet/id/eab4b228-84f7-467a-9927-62c380be2e0c>;
+    <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/0c5ff58a-96c6-4143-80e2-683586edf6e8>,
+      <https://w3id.org/arknet/id/87ab2eca-efa7-4067-be38-103b0ab6f299>, <https://w3id.org/arknet/id/c2df3868-3a66-46ca-8621-677374d02aa6>,
+      <https://w3id.org/arknet/id/e4942ed2-d1f7-4a1e-9322-9c5f323d767d>, <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9>,
+      <https://w3id.org/arknet/id/d6f351d9-ec26-4041-95f9-77059a89090d>;
+    <https://w3id.org/arknet/architecture#affectsContext> <https://w3id.org/arknet/id/e6ba4963-8b0c-4e13-aec9-b0ec72fc4496>,
+      <https://w3id.org/arknet/id/804ade54-7c54-45d1-804d-d0db6dc2a114> .
+  
+  <https://w3id.org/arknet/id/37aee8be-c193-455f-ba9a-c757b0221941> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
+    <http://purl.org/dc/terms/identifier> "ADR-58";
+    <https://w3id.org/arknet/core#name> "Kein API-Modul je Komponente; die In-Port-Schnittstellen bleiben im Kern"@de,
+      "No api module per component; the in-port interfaces stay in the core"@en;
+    <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Proposed>;
+    <https://w3id.org/arknet/architecture#adrContext> """Das Modulschema kennt je Komponente ein API-Modul mit den Schnittstellen der In-Ports samt ihren Command- und Result-Typen und den veröffentlichten Domain Events. Es trägt eine Grenze zur Compile-Zeit für ein fremdes Modul, das einen In-Port ruft, und ist eine Ausbaustufe mit genau diesem Auslöser: ohne einen solchen Aufrufer ist es ein Modul ohne zweiten Nutzer.
+
+Seit ein Nachbar ausschließlich über die Published Language gelesen wird, ruft in arknet kein Modul außerhalb einer Komponente einen In-Port. Die einzigen Aufrufer sind die Adapter der eigenen Komponente und die Composition Root, und beide ziehen den Kern ohnehin."""@de,
+      """The module schema knows an api module per component with the interfaces of the in-ports together with their command and result types and the published domain events. It carries a boundary at compile time for a foreign module that calls an in-port, and is an extension stage with exactly this trigger: without such a caller it is a module without a second user.
+
+Since a neighbour is read exclusively via the Published Language, no module outside a component calls an in-port in arknet. The only callers are the adapters of the own component and the Composition Root, and both pull in the core anyway."""@en;
+    <https://w3id.org/arknet/architecture#adrDecision> """Es wird kein API-Modul je Komponente gebaut. Die Schnittstellen der In-Ports bleiben im Kern, eine je Anwendungsfall. Dass ein Adapter aus seinem Kern nur die In-Ports und die Domänentypen sieht, hält eine Architekturregel.
+
+Der Auslöser für ein API-Modul bleibt der des Schemas: ein Modul außerhalb der Komponente, das einen In-Port zur Compile-Zeit ruft. Tritt er ein, kommt das API-Modul der gerufenen Komponente hinzu; diese Entscheidung wird dann nicht umgestoßen, sondern der Auslöser ist erfüllt."""@de,
+      """No api module is built per component. The interfaces of the in-ports stay in the core, one per use case. That an adapter sees from its core only the in-ports and the domain types is held by an architecture rule.
+
+The trigger for an api module remains the one of the schema: a module outside the component that calls an in-port at compile time. Should it occur, the api module of the called component is added; this decision is then not overturned, but the trigger is satisfied."""@en;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/5af84c31-dbed-4284-aa5d-f8901e209c84>,
+      <https://w3id.org/arknet/id/7cda9610-c43f-4f66-a860-5327c5b3a242>, <https://w3id.org/arknet/id/e3f832a6-46dc-4488-864e-72d694e58d81>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/9909375a-0089-41d5-ae9f-085eaeb21d44>,
+      <https://w3id.org/arknet/id/726c0f69-0c04-48d3-9fe2-1661d58660b9>, <https://w3id.org/arknet/id/5f9b1541-2c73-4aef-a36c-0cd00271a302>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>,
+      <https://w3id.org/arknet/id/dbad2180-8120-46ea-8b02-18b22118de39>;
+    <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/7c1ae58a-a7db-4e10-b567-c333f14fb9c9>,
+      <https://w3id.org/arknet/id/d6f351d9-ec26-4041-95f9-77059a89090d>;
+    <https://w3id.org/arknet/architecture#affectsContext> <https://w3id.org/arknet/id/e6ba4963-8b0c-4e13-aec9-b0ec72fc4496>,
+      <https://w3id.org/arknet/id/804ade54-7c54-45d1-804d-d0db6dc2a114>, <https://w3id.org/arknet/id/a6870e28-4aa0-4cf5-86da-f8a1fb1f9c70>,
+      <https://w3id.org/arknet/id/2f2943e7-0df6-4238-8a59-99606852aa36>, <https://w3id.org/arknet/id/1d06bb6f-847d-409e-b024-23081ffb9c43>,
+      <https://w3id.org/arknet/id/b96f19b0-a38f-4c76-9064-02912d10e8f5> .
+  
+  <https://w3id.org/arknet/id/83a5f46a-1f67-419a-b68a-eb61b81e2df8> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Kein Kern wird angefasst; der Umbau besteht aus Maven-Struktur und Verdrahtung."@de,
+      "No core is touched; the restructuring consists of Maven structure and wiring."@en .
+  
+  <https://w3id.org/arknet/id/0457f0ce-b876-49a6-8f49-f1abb9c639ef> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Kontextgrenze ist im Modulbaum ablesbar, ohne dass Hexagone verschmelzen: der Parent zeigt den Kontext, die Kinder die Komponenten."@de,
+      "The context boundary is readable in the module tree without hexagons merging: the parent shows the context, the children the components."@en .
+  
+  <https://w3id.org/arknet/id/1cf3fd6a-9c34-4f47-b1a9-1b319b5dd9d0> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Requirements-Namensraum deckt genau einen Kontext ab und erfüllt die Namensraum-Regel, ohne dass eine IRI geändert oder ein Store migriert wird."@de,
+      "The requirements namespace covers exactly one context and fulfils the namespace rule, without changing an IRI or migrating a store."@en .
+  
+  <https://w3id.org/arknet/id/317946f6-59cb-46ce-afdb-fa202a66d99d> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Eine kontextinterne Kante zwischen zwei Komponenten wird wie eine kontextübergreifende gebaut, über Out-Port und Published Language; dass beide Enden im selben Kontext liegen, ist im Code nur am Parent und am Vokabularmodul ablesbar."@de,
+      "An edge internal to a context between two components is built like a cross-context one, via out-port and Published Language; that both ends lie in the same context is readable in the code only from the parent and the vocabulary module."@en .
+  
+  <https://w3id.org/arknet/id/a574c212-ab20-4ab5-95e4-5d4fc3d6658b> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Komponenten bleiben, jeder Kontext wird ein Maven-Parent"@de,
+      "Components stay, every context becomes a Maven parent"@en;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Macht die Kontextgrenze im Build sichtbar und erfüllt die Namensraum-Regel, ohne einen Kern zu verschmelzen oder ein Modul umzubenennen; der Umweg, den das Verschmelzen beseitigen sollte, entfällt schon durch das Lesen über die Published Language."@de,
+      "Makes the context boundary visible in the build and satisfies the namespace rule, without merging a core or renaming a module; the detour that the merge was meant to eliminate already falls away through reading via the Published Language."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/71de6fa2-fbd1-4fd5-9e88-151a346ce794> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Je Kontext genau ein Hexagon, Kerne verschmelzen, Module nach dem Kontext benennen"@de,
+      "Exactly one hexagon per context, merge cores, name modules after the context"@en;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Der erste Entwurf. Verschmilzt zwei Kerne, um einen Umweg zu beseitigen, der auch ohne Verschmelzen entfällt; benennt drei Modulbäume um; koppelt die Größe eines Kontexts an die Größe eines Kerns und setzt Kontextgrenze und Hexagon-Grenze gleich, obwohl beides verschiedene Dinge sind."@de,
+      "The first draft. Merges two cores to remove a detour that disappears without merging as well; renames three module trees; couples the size of a context to the size of a core and equates context boundary and hexagon boundary, even though the two are different things."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/a38ca202-6655-4d65-8f9b-856d98932363> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Komponenten bleiben, aber ohne Parent je Kontext; die Kontextgrenze bleibt allein begrifflich"@de,
+      "Components stay, but without a parent per context; the context boundary remains conceptual only"@en;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Der kleinste Eingriff, aber der Kontext wäre im Build unsichtbar und die Namensraum-Regel hätte keinen Gegenstand; das Modulschema verlangt den Parent als Pflichtteil."@de,
+      "The smallest intervention, but the context would be invisible in the build and the namespace rule would have no subject; the module schema requires the parent as a mandatory part."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/6e448fe7-7b6e-4677-89b2-b1bc57ad4b68> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein einziges Modell-Modul für alle Kontexte"@de,
+      "A single model module for all contexts"@en;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Die konsequenteste Antwort auf den Befund, der gewachsene Schnitt sei zu fein, aber sie hebt die Sprachgrenzen auf, die der Kontextschnitt als echt festgestellt hat, und nimmt der Namensraum-Regel ihren Gegenstand."@de,
+      "The most consistent answer to the finding that the grown cut is too fine-grained, but it abolishes the language boundaries that the context cut established as real, and takes away the namespace rule's subject."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/3702d73a-03ef-4f76-8c5f-135c09b6cae3> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Jeder Kontext, durch den ein Aufruf läuft oder der das Modell liest, steht auf der Kontextkarte; die Karte verschweigt keine Abhängigkeit mehr."@de,
+      "Every context a call runs through, or that reads the model, stands on the context map; the map no longer conceals any dependency."@en .
+  
+  <https://w3id.org/arknet/id/8ebf89e7-5155-4309-804d-1b6ccb5d1001> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die dichtesten Kanten des Modells (Use Case zu Requirement, Bounded Context zu Glossarbegriff) sind kontextintern."@de,
+      "The densest edges of the model (use case to requirement, Bounded Context to glossary term) are internal to a context."@en .
+  
+  <https://w3id.org/arknet/id/63bae4f9-5522-4fdd-a7b3-5df0d7b9be6f> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Zählung ist eindeutig und im Modell selbst ablesbar: drei Kernkontexte, drei stützende, unterschieden über die Subdomänen-Einordnung jedes Kontexts."@de,
+      "The count is unambiguous and readable in the model itself: three core contexts, three supporting, distinguished via the subdomain classification of each context."@en .
+  
+  <https://w3id.org/arknet/id/81f28dc2-68a6-4210-a744-7306a9565678> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Umbau betrifft Modulbäume und Verdrahtung, ohne dass ein Nutzer davon etwas sieht."@de,
+      "The restructuring affects module trees and wiring, without a user seeing anything of it."@en .
+  
+  <https://w3id.org/arknet/id/f62ce3e5-bdf2-44f8-ab0c-d7711b345729> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Stellung der stützenden Kontexte (die Registry stromaufwärts von allen, die Modellanalyse lesend von allen) ist gegen die drei Kernkontexte festgestellt; jeder weitere Lifecycle-Kontext muss sie neu bestätigen."@de,
+      "The position of the supporting contexts (the Registry upstream of all, Model Analysis reading from all) is established against the three core contexts; every further lifecycle context has to reconfirm it."@en .
+  
+  <https://w3id.org/arknet/id/f6c0189b-ed87-4f37-9cb5-ae85665bfd1f> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Sechs Kontexte: drei Kernkontexte aus dem Zielschnitt, drei stützende außerhalb"@de,
+      "Six contexts: three core contexts from the target cut, three supporting outside it"@en;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Benennt jeden Kontext, der im Werkzeug eine eigene Sprache spricht, und ordnet ihn gegen den Zielschnitt ein, statt drei davon als Querschnitt oder Infrastruktur unsichtbar zu lassen."@de,
+      "Names every context that speaks its own language in the tool, and places it against the target cut, instead of leaving three of them invisible as a cross-cutting concern or infrastructure."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/3c38446b-bf52-4376-9544-545dc198821a> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Nur die drei Kernkontexte als Kontexte führen, Akteur, Registry und Analyse als Querschnitt oder Infrastruktur"@de,
+      "List only the three core contexts as contexts, Actor, Registry and Analysis as a cross-cutting concern or infrastructure"@en;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Die Kontextkarte verschwiege drei Hexagone, durch die jeder Aufruf läuft oder die jeden Kontext lesen; genau diese unsichtbare Abhängigkeit hatte die Vorgängerentscheidung zur Registry als ihren Preis benannt."@de,
+      "The context map would conceal three hexagons that every call runs through or that read every context; exactly this invisible dependency is what the predecessor decision on the Registry named as its price."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/0d265e8e-bf7e-4a87-9dd5-192f64568e7f> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Kontext und Hexagon gleichsetzen"@de, "Equate context and hexagon"@en;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Erzwänge entweder, die zwei Komponenten eines Kernkontexts zu verschmelzen, oder sechs Kernkontexte zu behaupten, wo drei Sprachen gesprochen werden. Sprachgrenzen und Modulgrenzen sind verschiedene Dinge."@de,
+      "Would force either merging the two components of a core context, or claiming six core contexts where three languages are spoken. Language boundaries and module boundaries are different things."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/3dc9571b-625e-4cdb-b919-6170d9558281> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein einziger Kontext für alles"@de, "A single context for everything"@en;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Zwischen der Sprache der Anforderungen, der des Glossars und der der Entscheidungen verlaufen echte Sprachbrüche; sie in einen Kontext zu legen hieße, denselben Begriff mit zwei Bedeutungen zu führen."@de,
+      "Real language breaks run between the language of the requirements, that of the glossary and that of the decisions; putting them into one context would mean carrying the same term with two meanings."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/b3a2a5cf-9ea1-4dc5-bd5c-9cc800d65608> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Typisierte Identitäten existieren einmal statt sechsmal, und eine Projektidentität bedeutet in jedem Kontext dasselbe, ohne übersetzt zu werden."@de,
+      "Typed identities exist once instead of six times, and a project identity means the same thing in every context, without being translated."@en .
+  
+  <https://w3id.org/arknet/id/2097aec0-9b21-4278-b665-bd5e4ae586b7> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Aufnahmeregel ist prüfbar: ein Typ, den nur ein Kontext trägt oder der Verhalten hat, gehört nicht hinein."@de,
+      "The admission rule is checkable: a type that only one context carries, or that has behaviour, does not belong in it."@en .
+  
+  <https://w3id.org/arknet/id/b53ec0ac-691b-493b-af05-6d49311bec59> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Jede Änderung im Shared Kernel trifft alle sechs Kontexte und braucht Abstimmung; das ist der Preis eines Shared Kernel und der Grund, ihn klein zu halten."@de,
+      "Every change in the Shared Kernel hits all six contexts and needs coordination; that is the price of a Shared Kernel and the reason to keep it small."@en .
+  
+  <https://w3id.org/arknet/id/6ec91dc0-8478-4b7e-ba22-73b481f3ef28> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Kein Kern ist ohne den Shared Kernel baubar; die Kopplung ist gewollt, aber sie ist eine."@de,
+      "No core is buildable without the Shared Kernel; the coupling is intentional, but it is one."@en .
+  
+  <https://w3id.org/arknet/id/51164c2d-1b7d-43ea-901c-49fef6cf5536> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Mechanik, die das Modul im Bestand mitträgt (Auflösung eines Ankers zum Projekt, Hinweis auf veraltete Übersetzungen, sprachgetaggtes Literal der Persistenz), erfüllt die Aufnahmeregel nicht und zieht in ein Support-Modul der Werkzeugadapter beziehungsweise in die Persistenz-Bibliothek; eine Abhängigkeitsregel hält, dass kein Kern das Support-Modul importiert."@de,
+      "The mechanics that the module carries along in the existing stock (resolving an anchor to the project, the hint about possibly outdated translations, the language-tagged literal of persistence) do not satisfy the admission rule and move into a support module of the tool adapters or into the persistence library respectively; a dependency rule holds that no core imports the support module."@en .
+  
+  <https://w3id.org/arknet/id/ef841266-e541-4697-b39b-400b0ea08eea> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Shared Kernel aller Kontexte für Modellbegriffe, Mechanik in Support-Module"@de,
+      "Shared Kernel of all contexts for model terms, mechanics into support modules"@en;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Teilt bewusst und klein, was in jedem Kontext dasselbe bedeutet, und trennt es von der Mechanik, die kein Kern braucht."@de,
+      "Deliberately and narrowly shares what means the same thing in every context, and separates it from the mechanics that no core needs."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/3e702581-ced4-4623-92ba-6ebd5315573f> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Jeder Kontext hält eine eigene Kopie"@de, "Each context holds a copy of its own"@en;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Der Schema-Default. Sechs Kopien derselben Identitätstypen, die an jeder Kontextgrenze konvertiert werden müssten, obwohl eine Projektidentität überall dieselbe Bedeutung hat; der Bedeutungstest spricht für einen gemeinsamen Begriff."@de,
+      "The schema default. Six copies of the same identity types that would have to be converted at every context boundary, even though a project identity means the same thing everywhere; the meaning test speaks for a shared term."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/31f90fd5-f931-4716-b40f-ecc6d9e947ea> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Das Modul unverändert als Sammelbecken belassen"@de,
+      "Leave the module unchanged as a catch-all"@en;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Kerne hängen dann an Mechanik, die sie nicht nutzen, und eine Aufnahmeregel lässt sich nicht formulieren; genau das Sammelbecken, vor dem die Definition des Shared Kernel warnt."@de,
+      "Cores would then depend on mechanics they do not use, and an admission rule cannot be formulated; exactly the catch-all that the definition of the Shared Kernel warns against."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/d0ebac66-3aa6-4f2a-ac2b-2b4c20b0b0bb> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Das Modul als technische Bibliothek ohne Modellbegriffe führen"@de,
+      "Run the module as a technical library without model terms"@en;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Die Typen darin sind Modellbegriffe: ein Kern spricht von der Projektidentität und der Sprache eines Literals. Eine Bibliothek, die Modellbegriffe trägt, ist keine."@de .
+}
+
+<https://w3id.org/arknet/model/provenance> {
+  <https://w3id.org/arknet/activity/b6123031-db90-41ae-9a54-70fcd41099d4> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/1bff8a2b-bcc3-4151-a277-b7be1762d3f0> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a2fdde31-3d1c-4da2-862f-e014e892855d>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b6123031-db90-41ae-9a54-70fcd41099d4>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:26:11.961145816Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/3848e41d-4ebc-468a-a901-d89c97d06623> .
+  
+  <https://w3id.org/arknet/activity/17729174-c33f-49f4-be70-db49251ac215> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/8042e220-cd6a-467f-a764-7fd32cedafed> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/7777a2c0-87ff-48fa-ba58-6d6e3e4c2834>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/17729174-c33f-49f4-be70-db49251ac215>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:26:13.952622593Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/86cd7544-823e-4e75-8f21-24047f742af5> .
+  
+  <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/00abeb3a-7199-4ff9-854f-122487acf442> .
+  
+  <https://w3id.org/arknet/activity/4fb60c19-b0fc-4658-a9eb-5dfbc14c2e3e> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/23fed184-48de-453c-8f5b-126c3bb84054> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/4fb60c19-b0fc-4658-a9eb-5dfbc14c2e3e>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:56:09.525897372Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/da96d2d2-4c85-4ea3-b5a8-0e68416a56ed> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/654c7a34-5589-4410-8e46-409274cebd88> .
+  
+  <https://w3id.org/arknet/activity/6a9b20f4-b4ab-41a2-ba3c-60a30e59d633> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/d2f4247f-e213-4fe3-8781-31ecdf6481a1> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/da96d2d2-4c85-4ea3-b5a8-0e68416a56ed>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/6a9b20f4-b4ab-41a2-ba3c-60a30e59d633>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:56:41.558028281Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/3f9264eb-10fe-4d04-911c-0b627ab9fa36> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/6fdf4279-85f7-4685-9cea-4cac7482dc6e> .
+  
+  <https://w3id.org/arknet/activity/45392ed7-dfac-4e6e-b64e-3609fb8dfb2f> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/2ad7b8bd-84c3-4e62-a56f-620fd5dfc4e3> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/3f9264eb-10fe-4d04-911c-0b627ab9fa36>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/45392ed7-dfac-4e6e-b64e-3609fb8dfb2f>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:57:08.327044304Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/00351580-07d0-4c36-9663-e094283d8597> .
+  
+  <https://w3id.org/arknet/activity/95258752-0a37-4d64-a12d-96c94103e3ad> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/6102e324-bd8c-49a8-83b0-8f21fea88ece> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/95258752-0a37-4d64-a12d-96c94103e3ad>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:57:27.370369425Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/eab4b228-84f7-467a-9927-62c380be2e0c> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/83ef2185-dcc7-43c8-8353-0886c49656f5> .
+  
+  <https://w3id.org/arknet/activity/787e8c5c-e0d3-4123-b217-f1bb388635e8> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/0534de93-4eb8-455e-a4d7-fafb276ebd3d> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/eab4b228-84f7-467a-9927-62c380be2e0c>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/787e8c5c-e0d3-4123-b217-f1bb388635e8>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:57:50.100785987Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/316022da-b56f-46cb-bae3-714e0c5ae39d> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/d9779a9d-b490-4346-8490-d1ac59a3a159> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/316022da-b56f-46cb-bae3-714e0c5ae39d>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:58:15.095680255Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/06d8189a-bb2d-40c7-9e7e-1bd24cb256d7> .
+  
+  <https://w3id.org/arknet/activity/1723a495-9a25-4a19-8ac9-bef25f98c346> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/abcd1116-9bcc-4121-9d56-230c43b9cac8> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/dbad2180-8120-46ea-8b02-18b22118de39>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1723a495-9a25-4a19-8ac9-bef25f98c346>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:58:26.457016546Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/ba894a02-0227-4285-b0b3-4ff8f4a6498e> .
+  
+  <https://w3id.org/arknet/activity/aea96804-2304-41a8-a09c-c88a9f5f7e52> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/b4e317f0-e297-448f-b873-108a873a349b> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/aea96804-2304-41a8-a09c-c88a9f5f7e52>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:58:54.669222261Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/d9779a9d-b490-4346-8490-d1ac59a3a159> .
+  
+  <https://w3id.org/arknet/activity/5b554b07-49f1-4c53-936b-4c92e2f938b6> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/c629b5f8-a5d7-42fd-95b1-a597fea5e5eb> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/dbad2180-8120-46ea-8b02-18b22118de39>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/5b554b07-49f1-4c53-936b-4c92e2f938b6>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:59:11.454333566Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/abcd1116-9bcc-4121-9d56-230c43b9cac8> .
+  
+  <https://w3id.org/arknet/activity/56f23ae8-9196-4f2e-a91c-4fdafcd0fd53> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/f2aa6aa2-89a9-4b1b-807b-a88a86e102c3> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/56f23ae8-9196-4f2e-a91c-4fdafcd0fd53>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:59:13.861128448Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/23fed184-48de-453c-8f5b-126c3bb84054> .
+  
+  <https://w3id.org/arknet/activity/337b3052-868e-4c03-b269-908ef0611e51> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/05ea7ec6-c45b-4a6e-90af-803eb522ccaf> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/337b3052-868e-4c03-b269-908ef0611e51>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:59:15.843479565Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/6102e324-bd8c-49a8-83b0-8f21fea88ece> .
+  
+  <https://w3id.org/arknet/activity/a0606a25-942b-43f8-8c64-c5d22ca751a6> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/803aa003-5bbf-4401-b59b-091f324a372f> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/ca302edd-6844-406a-8b6e-8b5029114750>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/a0606a25-942b-43f8-8c64-c5d22ca751a6>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T12:59:17.775388828Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/014aa743-361d-4014-9224-b853d2259433> .
+  
+  <https://w3id.org/arknet/activity/d5e76450-1dd6-4615-bc21-84f412a03ad7> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/a13dc38a-da94-447c-b1e2-85966bbaf227> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/d5e76450-1dd6-4615-bc21-84f412a03ad7>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:04:21.844242969Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/b4e317f0-e297-448f-b873-108a873a349b> .
+  
+  <https://w3id.org/arknet/activity/1665aba2-8f32-46cb-908a-52641a3ded21> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/cbb9cfac-65b8-496a-abff-3f1278683f0f> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/dbad2180-8120-46ea-8b02-18b22118de39>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/1665aba2-8f32-46cb-908a-52641a3ded21>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:04:33.327602216Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/c629b5f8-a5d7-42fd-95b1-a597fea5e5eb> .
+  
+  <https://w3id.org/arknet/activity/3fa3e891-015c-4d4b-8bb8-73c05a6543fd> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/57fea50d-4586-4154-a6b2-0bd4ae81675c> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/3fa3e891-015c-4d4b-8bb8-73c05a6543fd>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:04:44.924324352Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/f2aa6aa2-89a9-4b1b-807b-a88a86e102c3> .
+  
+  <https://w3id.org/arknet/activity/7bc83626-4f2a-4654-aebf-77c3df3c9cbb> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/654c7a34-5589-4410-8e46-409274cebd88> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/da96d2d2-4c85-4ea3-b5a8-0e68416a56ed>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/7bc83626-4f2a-4654-aebf-77c3df3c9cbb>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:04:53.611104966Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/d2f4247f-e213-4fe3-8781-31ecdf6481a1> .
+  
+  <https://w3id.org/arknet/activity/a835268c-513c-4193-be0c-997db82916dd> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/6fdf4279-85f7-4685-9cea-4cac7482dc6e> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/3f9264eb-10fe-4d04-911c-0b627ab9fa36>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/a835268c-513c-4193-be0c-997db82916dd>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:05:05.416979660Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/2ad7b8bd-84c3-4e62-a56f-620fd5dfc4e3> .
+  
+  <https://w3id.org/arknet/activity/929c8d6a-080b-419d-81ee-3e5e3864596b> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/00351580-07d0-4c36-9663-e094283d8597> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/929c8d6a-080b-419d-81ee-3e5e3864596b>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:05:14.048081370Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/05ea7ec6-c45b-4a6e-90af-803eb522ccaf> .
+  
+  <https://w3id.org/arknet/activity/4eccad4f-4902-4f6d-83cb-e447d329d7ca> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/437e2982-dab6-44e1-b10e-5b8b9e7325d7> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/eab4b228-84f7-467a-9927-62c380be2e0c>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/4eccad4f-4902-4f6d-83cb-e447d329d7ca>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:05:23.140297048Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/0534de93-4eb8-455e-a4d7-fafb276ebd3d> .
+  
+  <https://w3id.org/arknet/activity/591d9430-2989-4597-bfc8-e8e4091c862e> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/2f423d76-405f-4b8b-b482-c002509d97ec> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/591d9430-2989-4597-bfc8-e8e4091c862e>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:07:35.721410345Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/a13dc38a-da94-447c-b1e2-85966bbaf227> .
+  
+  <https://w3id.org/arknet/activity/7d404197-311c-4e33-981a-aa381bd5ab20> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/9f259e13-36f3-4202-b440-f8c87e02a31f> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/dbad2180-8120-46ea-8b02-18b22118de39>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/7d404197-311c-4e33-981a-aa381bd5ab20>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T13:07:37.978922747Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/cbb9cfac-65b8-496a-abff-3f1278683f0f> .
+  
+  <https://w3id.org/arknet/activity/ab828001-9506-4758-b216-024820d3682c> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/80cbb287-64ba-4f44-91fa-2300179f0b07> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/ab828001-9506-4758-b216-024820d3682c>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T14:46:38.475993125Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/57fea50d-4586-4154-a6b2-0bd4ae81675c> .
+  
+  <https://w3id.org/arknet/activity/7e3b9a6c-0fff-43a4-849e-b0a282608d6d> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/035fae19-e176-4fea-9eb1-1703fd07a75a> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/eab4b228-84f7-467a-9927-62c380be2e0c>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/7e3b9a6c-0fff-43a4-849e-b0a282608d6d>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T14:46:44.528406408Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/437e2982-dab6-44e1-b10e-5b8b9e7325d7> .
+  
+  <https://w3id.org/arknet/activity/8464e4ba-ecca-4569-86c2-9354f4524578> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/3d5fe3a7-475b-48cd-a24d-9f92e1ea4eee> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/8464e4ba-ecca-4569-86c2-9354f4524578>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T14:46:55.350246661Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/2f423d76-405f-4b8b-b482-c002509d97ec> .
+  
+  <https://w3id.org/arknet/activity/8718d4e0-d889-47c7-b099-a61ade382ac9> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/d00199c9-4437-45ec-b70d-a9fa1c3805fb> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/8718d4e0-d889-47c7-b099-a61ade382ac9>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T14:47:09.067107910Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/3d5fe3a7-475b-48cd-a24d-9f92e1ea4eee> .
+  
+  <https://w3id.org/arknet/id/58edc68b-e71e-4c51-b170-9510ef862ddf> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/c6595049-674b-4acf-ac08-4ae414be5cbb> .
+  
+  <https://w3id.org/arknet/activity/8a5600c1-5287-400c-9a3f-896209125a2d> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/78dd335d-4aef-45d5-851b-d6c309d160ed> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/58edc68b-e71e-4c51-b170-9510ef862ddf>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/8a5600c1-5287-400c-9a3f-896209125a2d>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T14:47:30.540775642Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/37aee8be-c193-455f-ba9a-c757b0221941> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/7386f5bc-1848-4558-92be-de970802f988> .
+  
+  <https://w3id.org/arknet/activity/74ee931d-2bed-4a36-a9f3-f9af3d172863> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/6b365b37-8352-4e89-9e07-07c48f9ed384> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/37aee8be-c193-455f-ba9a-c757b0221941>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/74ee931d-2bed-4a36-a9f3-f9af3d172863>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T14:47:47.625194688Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/6705fb00-8366-4ea4-aad8-b5124bdd125e> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/0663e197-8197-4a7b-8011-41b5e056f1db> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a32909bf-9f29-4e44-914e-2d6d38431f41>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/6705fb00-8366-4ea4-aad8-b5124bdd125e>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T14:51:52.965866522Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/d00199c9-4437-45ec-b70d-a9fa1c3805fb> .
+  
+  <https://w3id.org/arknet/activity/3ca41eda-64f7-447e-96b1-0dbb9c82ec13> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/00abeb3a-7199-4ff9-854f-122487acf442> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/d249372b-042f-4d61-8011-e2eb991d95ea>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/3ca41eda-64f7-447e-96b1-0dbb9c82ec13>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T14:51:55.218645687Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/80cbb287-64ba-4f44-91fa-2300179f0b07> .
+}
+
+<https://w3id.org/arknet/model/adr> {
+  <https://w3id.org/arknet/id/d0ebac66-3aa6-4f2a-ac2b-2b4c20b0b0bb> <https://w3id.org/arknet/architecture#optionRationale>
+      "The types in it are model terms: a core speaks of project identity and the language of a literal. A library that carries model terms is not one."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/c08b4f70-efb8-4218-9d5e-234aa8b5119a> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Sprache eines Kontexts als Code liegt an einem Ort; zwei Komponenten desselben Kontexts sprechen dieselben Typen statt gleichlautender Kopien."@de,
+      "The language of a context as code lives in one place; two components of the same context speak the same types instead of identically named copies."@en .
+  
+  <https://w3id.org/arknet/id/540461f3-5bea-4ea9-add5-d81e9dfd5955> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Aufnahmeregel ist prüfbar: jeder Typ im Vokabularmodul beantwortet die Frage, welches Aggregat ihn besitzt, mit keinem."@de,
+      "The admission rule is checkable: every type in the vocabulary module answers the question which aggregate owns it with none."@en .
+  
+  <https://w3id.org/arknet/id/465e7ac3-5ee8-48ea-a6ce-a6a15cd73ecd> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein Typ, den zwei Kerne teilen, wird nur noch in Abstimmung beider geändert; das Vokabularmodul ist ein kleiner Shared Kernel innerhalb des Kontexts."@de,
+      "A type that two cores share is from now on only changed in coordination between both; the vocabulary module is a small Shared Kernel within the context."@en .
+  
+  <https://w3id.org/arknet/id/7432f4f3-52ad-4798-b565-d21fb3adfb59> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Der Verweistyp auf einen Glossarbegriff existiert weiterhin mehrfach, einmal je Kontext, der auf das Glossar verweist."@de,
+      "The reference type to a glossary term continues to exist multiple times, once per context that references the glossary."@en .
+  
+  <https://w3id.org/arknet/id/93b2da18-21e0-4a89-a587-5216b96c56fb> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Vokabularmodul je Kontext mit mehr als einer Komponente"@de,
+      "Vocabulary module per context with more than one component"@en;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Folgt dem Modulschema und gibt den geteilten Codes einen Ort ohne Verhalten und ohne Abhängigkeit."@de,
+      "Follows the module schema and gives the shared codes a place without behaviour and without dependency."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/0705b7a4-abcc-4c6c-a461-ddfac1d57b5a> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Jede Komponente hält weiterhin eigene Kopien der Codes"@de,
+      "Every component continues to hold its own copies of the codes"@en;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Der Bestand. Zwei Typen für denselben Begriff im selben Kontext widersprechen der einen Sprache des Kontexts, und jede Änderung muss zweimal gemacht werden."@de,
+      "The existing stock. Two types for the same term in the same context contradict the one language of the context, and every change has to be made twice."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/899d60b4-c85c-4ffe-81f8-3910ef9ad142> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Alle Codes in den Shared Kernel aller Kontexte"@de,
+      "All codes into the Shared Kernel of all contexts"@en;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Ein Requirement-Code ist die Sprache eines Kontexts, kein Begriff, den mindestens zwei Kontexte tragen; er erfüllt die Aufnahmeregel des Shared Kernel nicht."@de,
+      "A requirement code is the language of one context, not a term that at least two contexts carry; it does not satisfy the admission rule of the Shared Kernel."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/87f93b46-dfdb-4590-a9f4-32ea19bc9db2> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein Vokabularmodul für jeden Kontext, auch mit einer Komponente"@de,
+      "A vocabulary module for every context, even with one component"@en;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Ein Modul ohne zweiten Nutzer trägt keine Grenze; das Schema macht es nur bei besitzerlosen Identitäten zur Pflicht, die mehr als eine Komponente teilt."@de,
+      "A module without a second user carries no boundary; the schema makes it mandatory only for ownerless identities that more than one component shares."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/5af84c31-dbed-4284-aa5d-f8901e209c84> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Sieben Module weniger im Build, und keine Schnittstelle liegt an zwei Orten."@de,
+      "Seven fewer modules in the build, and no interface lives in two places."@en .
+  
+  <https://w3id.org/arknet/id/7cda9610-c43f-4f66-a860-5327c5b3a242> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Was ein Adapter aus seinem Kern sehen darf, erzwingt keine Maven-Grenze, sondern eine Architekturregel; sie muss geschrieben und gehalten werden."@de,
+      "What an adapter may see from its core is not enforced by a Maven boundary but by an architecture rule; it has to be written and upheld."@en .
+  
+  <https://w3id.org/arknet/id/e3f832a6-46dc-4488-864e-72d694e58d81> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Ein späterer fremder Aufrufer eines In-Ports zieht die Schnittstellen aus dem Kern in ein API-Modul; die Verschiebung ist ein Modulschnitt, kein Umbau des Kerns."@de,
+      "A later foreign caller of an in-port pulls the interfaces out of the core into an api module; the move is a module cut, not a restructuring of the core."@en .
+  
+  <https://w3id.org/arknet/id/9909375a-0089-41d5-ae9f-085eaeb21d44> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Kein API-Modul, In-Port-Schnittstellen im Kern, Sicht des Adapters per Architekturregel"@de,
+      "No api module, in-port interfaces in the core, adapter view via architecture rule"@en;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Baut die Grenze erst, wenn jemand über sie ruft, und hält bis dahin, was sie schützen würde, mit einer prüfbaren Regel."@de,
+      "Builds the boundary only once someone calls across it, and until then holds what it would protect with a checkable rule."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/726c0f69-0c04-48d3-9fe2-1661d58660b9> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Ein API-Modul je Komponente"@de, "An api module per component"@en;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Die vollständige Form des Schemas. Ohne fremden Aufrufer wäre es ein leeres Versprechen: sieben Module, deren einzige Wirkung ein zweiter Ort für die In-Port-Schnittstellen ist."@de,
+      "The full form of the schema. Without a foreign caller it would be an empty promise: seven modules whose only effect is a second place for the in-port interfaces."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/5f9b1541-2c73-4aef-a36c-0cd00271a302> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "API-Modul nur für die Komponenten, deren In-Ports die Composition Root ruft"@de,
+      "Api module only for the components whose in-ports the Composition Root calls"@en;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Die Composition Root zieht Kern und Adapter jeder Komponente ohnehin; ein API-Modul erspart ihr nichts und trägt keine Grenze, die sie braucht."@de,
+      "The Composition Root pulls in the core and adapters of every component anyway; an api module saves it nothing and carries no boundary that it needs."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+}
+
+<https://w3id.org/arknet/model/provenance> {
+  <https://w3id.org/arknet/activity/3bc44ed7-74b9-45cc-b667-d20b80ae812f> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/83ef2185-dcc7-43c8-8353-0886c49656f5> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/eab4b228-84f7-467a-9927-62c380be2e0c>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/3bc44ed7-74b9-45cc-b667-d20b80ae812f>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T14:51:57.277737115Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/035fae19-e176-4fea-9eb1-1703fd07a75a> .
+  
+  <https://w3id.org/arknet/activity/bc99e594-c03e-4f46-8003-34033c671a22> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/c6595049-674b-4acf-ac08-4ae414be5cbb> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/58edc68b-e71e-4c51-b170-9510ef862ddf>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/bc99e594-c03e-4f46-8003-34033c671a22>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T14:52:04.497788553Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/78dd335d-4aef-45d5-851b-d6c309d160ed> .
+  
+  <https://w3id.org/arknet/activity/aa547f63-65df-4047-aa4c-5505f066cc8d> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/7386f5bc-1848-4558-92be-de970802f988> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/37aee8be-c193-455f-ba9a-c757b0221941>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/aa547f63-65df-4047-aa4c-5505f066cc8d>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T14:52:09.683367769Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/6b365b37-8352-4e89-9e07-07c48f9ed384> .
 }
 
 <https://w3id.org/arknet/model/export-metadata> {
-    <https://w3id.org/arknet/export/dd51a093-5eb1-4c58-9a6f-3c492be533c7>
+    <https://w3id.org/arknet/export/935b50c6-8a26-4957-b643-08bd0e8ce22f>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#Activity> ;
-        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-08T13:08:28Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
+        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-08T14:52:57Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
         <http://www.w3.org/ns/prov#wasAssociatedWith> <https://w3id.org/arknet/agent/arknet> ;
         <http://www.w3.org/ns/prov#used> <https://w3id.org/arknet/core> , <https://w3id.org/arknet/ddd> , <https://w3id.org/arknet/process> , <https://w3id.org/arknet/requirements> , <https://w3id.org/arknet/architecture> , <https://w3id.org/arknet/provenance> , <https://w3id.org/arknet/project> .
 
