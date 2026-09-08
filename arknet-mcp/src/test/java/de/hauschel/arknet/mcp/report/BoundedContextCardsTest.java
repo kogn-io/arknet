@@ -72,7 +72,7 @@ class BoundedContextCardsTest {
         final BoundedContextCards cards = cardsFor(context(
                 "Nimmt jede Bestellung auf.", List.of(BESTELLUNG)));
 
-        assertThat(cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks())
+        assertThat(cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks())
                 .extracting(Block::label)
                 .doesNotContain("Ubiquitous language", "Ubiquitous language (not named in the vision)");
     }
@@ -83,10 +83,10 @@ class BoundedContextCardsTest {
      */
     @Test
     void ordersCardsByBusinessCodeNumericallyNotLexicographically() {
-        final BoundedContextCards cards = new BoundedContextCards(projectId -> List.of(
+        final BoundedContextCards cards = new BoundedContextCards((projectId, displayLocale) -> List.of(
                 context("BC-2", ID + "bc-2"), context("BC-10", ID + "bc-10"), context("BC-1", ID + "bc-1")));
 
-        assertThat(cards.section(PROJECT, GLOSSARY).cards())
+        assertThat(cards.section(PROJECT, null, GLOSSARY).cards())
                 .extracting(ModelCard::code).containsExactly("BC-1", "BC-2", "BC-10");
     }
 
@@ -95,13 +95,13 @@ class BoundedContextCardsTest {
     }
 
     private static Block block(final BoundedContextCards cards, final String label) {
-        return cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks().stream()
+        return cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks().stream()
                 .filter(b -> b.label().equals(label))
                 .findFirst().orElseThrow(() -> new AssertionError("no block " + label));
     }
 
     private static BoundedContextCards cardsFor(final BoundedContext context) {
-        return new BoundedContextCards(projectId -> List.of(context));
+        return new BoundedContextCards((projectId, displayLocale) -> List.of(context));
     }
 
     private static BoundedContext context(final String vision, final List<ResourceId> linked) {

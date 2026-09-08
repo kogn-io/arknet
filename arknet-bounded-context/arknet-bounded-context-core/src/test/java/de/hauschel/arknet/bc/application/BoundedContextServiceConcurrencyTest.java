@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -21,6 +22,7 @@ import de.hauschel.arknet.bc.application.port.out.RevisionToken;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
+import de.hauschel.arknet.bc.domain.BoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
@@ -29,7 +31,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
- * Regression tests for the two concurrency races {@link BoundedContextService} has to absorb.
+ * Regression tests for the concurrency races {@link BoundedContextService} has to absorb.
  *
  * <p>{@link BoundedContextService#add} used to compute the next business code
  * ({@code BC-N}) client-side via {@code nextCode()} and then {@code create()} it with no retry, so
@@ -38,11 +40,11 @@ import de.hauschel.arknet.kernel.ProjectId;
  * caller-visible {@code DuplicateBoundedContextCodeException} - even though nothing about its own
  * request was wrong.</p>
  *
- * <p>Lost update: {@link BoundedContextService#linkTerm} used to read via
- * {@code findByCode} outside any transaction and write back via an unconditional
- * replace-by-identity {@code update}, so two racing {@code bc_link_term} calls on the same bounded
- * context silently lost one of the two {@code arkddd:ubiquitousLanguageTerm} edges - the second
- * writer never saw the first one's edge and overwrote it without any conflict being reported.</p>
+ * <p>Lost update: {@link BoundedContextService#linkTerm}/{@link BoundedContextService#update} used
+ * to read via {@code findByCode} outside any transaction and write back via an unconditional
+ * replace-by-identity {@code update}, so two racing calls on the same bounded context silently lost
+ * one of the two changes - the second writer never saw the first one's change and overwrote it
+ * without any conflict being reported.</p>
  *
  * <p>Both races are reproduced deterministically, without real threads: a {@link
  * BoundedContextRepository} decorator runs an "other caller"'s complete round trip exactly once,
@@ -90,7 +92,7 @@ class BoundedContextServiceConcurrencyTest {
      */
     @Test
     void concurrentLinkTermCallsForDifferentTermsBothSurvive() {
-        BoundedContextCode code = otherCaller.add(WS, newBoundedContext()).code();
+        BoundedContextCode code = otherCaller.add(WS, newBoundedContext(), null).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-2"));
         BoundedContextService underTest =
@@ -100,8 +102,30 @@ class BoundedContextServiceConcurrencyTest {
 
         assertEquals(2, result.usesTerms().size());
         assertTrue(result.usesTerms().containsAll(List.of(new TermRef(TERM_1), new TermRef(TERM_2))));
-        BoundedContext stored = store.findByCode(WS, code).orElseThrow();
+        BoundedContext stored = store.findByCode(WS, code, null).orElseThrow();
         assertEquals(2, stored.usesTerms().size());
+    }
+
+    /**
+     * Two concurrent {@code bc_update} calls touching different fields (name vs. domainVision) on
+     * the same bounded context must both survive - the same lost-update guard as
+     * {@link #concurrentLinkTermCallsForDifferentTermsBothSurvive}, exercised through
+     * {@link BoundedContextService#update} instead of {@link BoundedContextService#linkTerm}.
+     */
+    @Test
+    void concurrentUpdateCallsForDifferentFieldsBothSurvive() {
+        BoundedContextCode code = otherCaller.add(WS, newBoundedContext(), null).code();
+        RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
+                () -> otherCaller.update(WS, code, null, "Updated vision from the other caller.", "en", null));
+        BoundedContextService underTest =
+                new BoundedContextService(racing, resourceIdFactory, termLookup, contextRelationshipRepository);
+
+        BoundedContext result = underTest.update(WS, code, "UpdatedName", null, "en", null);
+
+        assertEquals("UpdatedName", result.name());
+        BoundedContext stored = store.findByCode(WS, code, null).orElseThrow();
+        assertEquals("UpdatedName", stored.name());
+        assertEquals("Updated vision from the other caller.", stored.domainVision());
     }
 
     /**
@@ -111,7 +135,7 @@ class BoundedContextServiceConcurrencyTest {
      */
     @Test
     void linkTermGivesUpAfterExhaustingRetriesAgainstPermanentContention() {
-        BoundedContextCode code = otherCaller.add(WS, newBoundedContext()).code();
+        BoundedContextCode code = otherCaller.add(WS, newBoundedContext(), null).code();
         BoundedContextService underTest = new BoundedContextService(
                 new AlwaysConflictingRepository(store), resourceIdFactory, termLookup, contextRelationshipRepository);
 
@@ -125,7 +149,7 @@ class BoundedContextServiceConcurrencyTest {
      */
     @Test
     void linkingAnAlreadyLinkedTermWritesNothingEvenUnderPermanentContention() {
-        BoundedContextCode code = otherCaller.add(WS, newBoundedContext()).code();
+        BoundedContextCode code = otherCaller.add(WS, newBoundedContext(), null).code();
         otherCaller.linkTerm(WS, code, "TERM-1");
         BoundedContextService underTest = new BoundedContextService(
                 new AlwaysConflictingRepository(store), resourceIdFactory, termLookup, contextRelationshipRepository);
@@ -138,15 +162,15 @@ class BoundedContextServiceConcurrencyTest {
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
         RaceOnFirstFindAllCodesRepository racing =
-                new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(WS, newBoundedContext()));
+                new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(WS, newBoundedContext(), null));
         BoundedContextService underTest = new BoundedContextService(
                 racing, resourceIdFactory, new InMemoryTermLookup(), contextRelationshipRepository);
 
-        BoundedContext result = underTest.add(WS, newBoundedContext());
+        BoundedContext result = underTest.add(WS, newBoundedContext(), null);
 
         assertEquals(new BoundedContextCode("BC-2"), result.code());
-        assertEquals(2, store.findAll(WS).size());
-        assertTrue(store.findAll(WS).stream()
+        assertEquals(2, store.findAll(WS, null).size());
+        assertTrue(store.findAll(WS, null).stream()
                 .map(BoundedContext::code)
                 .toList()
                 .containsAll(List.of(new BoundedContextCode("BC-1"), new BoundedContextCode("BC-2"))));
@@ -155,7 +179,7 @@ class BoundedContextServiceConcurrencyTest {
     private static NewBoundedContext newBoundedContext() {
         return new NewBoundedContext("OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
-                Subdomain.CORE_DOMAIN, "orders-team");
+                Subdomain.CORE_DOMAIN, "orders-team", "en");
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
@@ -189,29 +213,38 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
-        public void create(ProjectId projectId, BoundedContext boundedContext) {
-            delegate.create(projectId, boundedContext);
+        public void create(ProjectId projectId, BoundedContext boundedContext, String language) {
+            delegate.create(projectId, boundedContext, language);
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated);
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated,
+                String nameLanguage, String domainVisionLanguage, String defaultLanguage) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated, nameLanguage, domainVisionLanguage,
+                    defaultLanguage);
         }
 
         @Override
-        public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code) {
-            return delegate.findByCode(projectId, code);
+        public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code,
+                String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override
         public Optional<CurrentBoundedContext> findCurrentByCode(ProjectId projectId,
-                BoundedContextCode code) {
-            return delegate.findCurrentByCode(projectId, code);
+                BoundedContextCode code, String defaultLanguage) {
+            return delegate.findCurrentByCode(projectId, code, defaultLanguage);
         }
 
         @Override
-        public List<BoundedContext> findAll(ProjectId projectId) {
-            return delegate.findAll(projectId);
+        public List<BoundedContext> findAll(ProjectId projectId, String displayLocale) {
+            return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public Map<BoundedContextCode, BoundedContextDisplayFallback> findAllDisplayFallback(
+                ProjectId projectId, String displayLocale) {
+            return delegate.findAllDisplayFallback(projectId, displayLocale);
         }
 
         @Override
@@ -250,24 +283,27 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
-        public void create(ProjectId projectId, BoundedContext boundedContext) {
-            delegate.create(projectId, boundedContext);
+        public void create(ProjectId projectId, BoundedContext boundedContext, String language) {
+            delegate.create(projectId, boundedContext, language);
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated);
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated,
+                String nameLanguage, String domainVisionLanguage, String defaultLanguage) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated, nameLanguage, domainVisionLanguage,
+                    defaultLanguage);
         }
 
         @Override
-        public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code) {
-            return delegate.findByCode(projectId, code);
+        public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code,
+                String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override
         public Optional<CurrentBoundedContext> findCurrentByCode(ProjectId projectId,
-                BoundedContextCode code) {
-            Optional<CurrentBoundedContext> result = delegate.findCurrentByCode(projectId, code);
+                BoundedContextCode code, String defaultLanguage) {
+            Optional<CurrentBoundedContext> result = delegate.findCurrentByCode(projectId, code, defaultLanguage);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -276,8 +312,14 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
-        public List<BoundedContext> findAll(ProjectId projectId) {
-            return delegate.findAll(projectId);
+        public List<BoundedContext> findAll(ProjectId projectId, String displayLocale) {
+            return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public Map<BoundedContextCode, BoundedContextDisplayFallback> findAllDisplayFallback(
+                ProjectId projectId, String displayLocale) {
+            return delegate.findAllDisplayFallback(projectId, displayLocale);
         }
 
         @Override
@@ -302,32 +344,40 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
-        public void create(ProjectId projectId, BoundedContext boundedContext) {
-            delegate.create(projectId, boundedContext);
+        public void create(ProjectId projectId, BoundedContext boundedContext, String language) {
+            delegate.create(projectId, boundedContext, language);
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated,
+                String nameLanguage, String domainVisionLanguage, String defaultLanguage) {
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
-            delegate.findByCode(projectId, updated.code())
+            delegate.findByCode(projectId, updated.code(), null)
                     .orElseThrow(() -> new BoundedContextNotFoundException(projectId, updated.code()));
             throw new BoundedContextConcurrentlyModifiedException(projectId, updated.code());
         }
 
         @Override
-        public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code) {
-            return delegate.findByCode(projectId, code);
+        public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code,
+                String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override
         public Optional<CurrentBoundedContext> findCurrentByCode(ProjectId projectId,
-                BoundedContextCode code) {
-            return delegate.findCurrentByCode(projectId, code);
+                BoundedContextCode code, String defaultLanguage) {
+            return delegate.findCurrentByCode(projectId, code, defaultLanguage);
         }
 
         @Override
-        public List<BoundedContext> findAll(ProjectId projectId) {
-            return delegate.findAll(projectId);
+        public List<BoundedContext> findAll(ProjectId projectId, String displayLocale) {
+            return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public Map<BoundedContextCode, BoundedContextDisplayFallback> findAllDisplayFallback(
+                ProjectId projectId, String displayLocale) {
+            return delegate.findAllDisplayFallback(projectId, displayLocale);
         }
 
         @Override

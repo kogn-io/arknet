@@ -28,14 +28,15 @@ import de.hauschel.arknet.bc.domain.ContextRelationship;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
+import de.hauschel.arknet.kernel.MissingDefaultLanguageException;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Policy tests for {@link BoundedContextService}: identity minting, code assignment, listing,
- * lookup and term-linking rules, exercised against an in-memory fake repository and a
- * deterministic fake {@link ResourceIdFactory}.
+ * lookup, term-linking and multilingual name/domainVision rules (kogn-io/arknet#520), exercised
+ * against an in-memory fake repository and a deterministic fake {@link ResourceIdFactory}.
  */
 class BoundedContextServiceTest {
 
@@ -66,7 +67,7 @@ class BoundedContextServiceTest {
     void addAssignsFirstBusinessCode() {
         BoundedContext added = service.add(WS, new NewBoundedContext("OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
-                Subdomain.CORE_DOMAIN, "orders-team"));
+                Subdomain.CORE_DOMAIN, "orders-team", "en"), null);
 
         assertEquals(new BoundedContextCode("BC-1"), added.code());
         assertEquals("OrderManagement", added.name());
@@ -75,13 +76,13 @@ class BoundedContextServiceTest {
         assertEquals(Subdomain.CORE_DOMAIN, added.subdomain());
         assertEquals("orders-team", added.ownedBy());
         assertEquals(List.of(), added.usesTerms());
-        assertEquals(added, repository.findByCode(WS, added.code()).orElseThrow());
+        assertEquals(added, repository.findByCode(WS, added.code(), null).orElseThrow());
     }
 
     @Test
     void addAcceptsOptionalSubdomainAndOwnedByAsNull() {
         BoundedContext added = service.add(WS, new NewBoundedContext("Shipping",
-                "Coordinates the physical delivery of fulfilled orders to customers.", null, null));
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null, "en"), null);
 
         assertEquals(new BoundedContextCode("BC-1"), added.code());
         assertEquals(null, added.subdomain());
@@ -89,9 +90,25 @@ class BoundedContextServiceTest {
     }
 
     @Test
+    void addFallsBackToTheProjectDefaultLanguageWhenNoneGiven() {
+        BoundedContext added = service.add(WS, new NewBoundedContext("OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.",
+                null, null, null), "de");
+
+        assertEquals("de", repository.findCurrentByCode(WS, added.code(), null).orElseThrow().nameLanguage());
+    }
+
+    @Test
+    void addRejectsWhenNeitherLanguageNorDefaultLanguageIsGiven() {
+        assertThrows(MissingDefaultLanguageException.class, () -> service.add(WS, new NewBoundedContext(
+                "OrderManagement", "Owns the lifecycle of a customer order from placement to fulfilment.",
+                null, null, null), null));
+    }
+
+    @Test
     void addMintsAFreshOpaqueIdentityViaTheFactory() {
-        BoundedContext first = service.add(WS, newBoundedContext());
-        BoundedContext second = service.add(WS, newBoundedContext());
+        BoundedContext first = service.add(WS, newBoundedContext(), null);
+        BoundedContext second = service.add(WS, newBoundedContext(), null);
 
         assertNotEquals(first.id(), second.id());
         assertEquals(2, resourceIdFactory.mintedCount());
@@ -99,9 +116,9 @@ class BoundedContextServiceTest {
 
     @Test
     void addNumbersRunSequentially() {
-        BoundedContextCode bc1 = service.add(WS, newBoundedContext()).code();
-        BoundedContextCode bc2 = service.add(WS, newBoundedContext()).code();
-        BoundedContextCode bc3 = service.add(WS, newBoundedContext()).code();
+        BoundedContextCode bc1 = service.add(WS, newBoundedContext(), null).code();
+        BoundedContextCode bc2 = service.add(WS, newBoundedContext(), null).code();
+        BoundedContextCode bc3 = service.add(WS, newBoundedContext(), null).code();
 
         assertEquals(new BoundedContextCode("BC-1"), bc1);
         assertEquals(new BoundedContextCode("BC-2"), bc2);
@@ -118,9 +135,9 @@ class BoundedContextServiceTest {
         BoundedContext storeFirst = new BoundedContext(new BoundedContextId(resourceIdFactory.newId()),
                 new BoundedContextCode("LEGACY-CTX"), "Legacy",
                 "Imported store-first with a non-numeric business code.", null, null, List.of());
-        repository.create(WS, storeFirst);
+        repository.create(WS, storeFirst, "en");
 
-        BoundedContextCode next = service.add(WS, newBoundedContext()).code();
+        BoundedContextCode next = service.add(WS, newBoundedContext(), null).code();
 
         assertEquals(new BoundedContextCode("BC-1"), next);
     }
@@ -137,10 +154,10 @@ class BoundedContextServiceTest {
      */
     @Test
     void addSkipsOverACodeThatIsAssignedButNotCurrentlyMaterialisable() {
-        service.add(WS, newBoundedContext());
+        service.add(WS, newBoundedContext(), null);
         repository.seedUnmaterialisableCode(WS, new BoundedContextCode("BC-2"));
 
-        BoundedContextCode next = service.add(WS, newBoundedContext()).code();
+        BoundedContextCode next = service.add(WS, newBoundedContext(), null).code();
 
         assertEquals(new BoundedContextCode("BC-3"), next);
     }
@@ -148,23 +165,23 @@ class BoundedContextServiceTest {
     @Test
     void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
-        service.add(WS, newBoundedContext());
+        service.add(WS, newBoundedContext(), null);
 
-        BoundedContext inOther = service.add(other, newBoundedContext());
+        BoundedContext inOther = service.add(other, newBoundedContext(), null);
 
         assertEquals(new BoundedContextCode("BC-1"), inOther.code());
-        assertEquals(1, service.list(WS).size());
-        assertEquals(1, service.list(other).size());
+        assertEquals(1, service.list(WS, null).size());
+        assertEquals(1, service.list(other, null).size());
     }
 
     @Test
     void listReturnsAllInInsertionOrder() {
         service.add(WS, new NewBoundedContext("A", "The first context does something useful here.",
-                null, null));
+                null, null, "en"), null);
         service.add(WS, new NewBoundedContext("B", "The second context does something else useful.",
-                null, null));
+                null, null, "en"), null);
 
-        List<BoundedContext> all = service.list(WS);
+        List<BoundedContext> all = service.list(WS, null);
 
         assertEquals(2, all.size());
         assertEquals("A", all.get(0).name());
@@ -173,30 +190,78 @@ class BoundedContextServiceTest {
 
     @Test
     void getReturnsPersistedBoundedContext() {
-        BoundedContextCode code = service.add(WS, newBoundedContext()).code();
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
 
-        assertTrue(service.get(WS, code).isPresent());
-        assertEquals("OrderManagement", service.get(WS, code).orElseThrow().name());
+        assertTrue(service.get(WS, code, null).isPresent());
+        assertEquals("OrderManagement", service.get(WS, code, null).orElseThrow().name());
     }
 
     @Test
     void getIsEmptyForUnknownCode() {
-        assertFalse(service.get(WS, new BoundedContextCode("BC-99")).isPresent());
+        assertFalse(service.get(WS, new BoundedContextCode("BC-99"), null).isPresent());
+    }
+
+    @Test
+    void updateCorrectsNameWithoutTouchingDomainVision() {
+        BoundedContext added = service.add(WS, newBoundedContext(), null);
+
+        BoundedContext updated = service.update(WS, added.code(), "OrderMgmt", null, "en", null);
+
+        assertEquals("OrderMgmt", updated.name());
+        assertEquals(added.domainVision(), updated.domainVision());
+    }
+
+    @Test
+    void updateWritingOnlyTheLanguageTagOnIdenticalTextIsStillAWrite() {
+        BoundedContext added = service.add(WS, newBoundedContext(), null);
+        String originalName = added.name();
+
+        service.update(WS, added.code(), originalName, null, "de", null);
+
+        assertEquals("de", repository.findCurrentByCode(WS, added.code(), null).orElseThrow().nameLanguage());
+    }
+
+    @Test
+    void updateWithNoActualChangeIsANoOp() {
+        BoundedContext added = service.add(WS, newBoundedContext(), null);
+        BoundedContextRepository.CurrentBoundedContext before =
+                repository.findCurrentByCode(WS, added.code(), null).orElseThrow();
+
+        BoundedContext returned = service.update(WS, added.code(), null, null, null, null);
+
+        assertEquals(added, returned);
+        assertEquals(before.head(), repository.findCurrentByCode(WS, added.code(), null).orElseThrow().head());
+    }
+
+    @Test
+    void updateLeavesSubdomainAndOwnedByUntouched() {
+        BoundedContext added = service.add(WS, newBoundedContext(), null);
+
+        BoundedContext updated = service.update(WS, added.code(), "OrderMgmt", null, "en", null);
+
+        assertEquals(Subdomain.CORE_DOMAIN, updated.subdomain());
+        assertEquals("orders-team", updated.ownedBy());
+    }
+
+    @Test
+    void updateThrowsWhenBoundedContextUnknown() {
+        assertThrows(BoundedContextNotFoundException.class,
+                () -> service.update(WS, new BoundedContextCode("BC-99"), "X", null, "en", null));
     }
 
     @Test
     void linkTermAddsTheTermToTheBoundedContext() {
-        BoundedContextCode code = service.add(WS, newBoundedContext()).code();
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
 
         BoundedContext linked = service.linkTerm(WS, code, "TERM-1");
 
         assertEquals(List.of(new TermRef(TERM_1)), linked.usesTerms());
-        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code).orElseThrow().usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().usesTerms());
     }
 
     @Test
     void linkTermAppendsToAlreadyLinkedTerms() {
-        BoundedContextCode code = service.add(WS, newBoundedContext()).code();
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
         service.linkTerm(WS, code, "TERM-1");
 
         BoundedContext linked = service.linkTerm(WS, code, "TERM-2");
@@ -206,7 +271,7 @@ class BoundedContextServiceTest {
 
     @Test
     void linkingTheSameTermTwiceIsANoOp() {
-        BoundedContextCode code = service.add(WS, newBoundedContext()).code();
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
         service.linkTerm(WS, code, "TERM-1");
 
         BoundedContext linked = service.linkTerm(WS, code, "TERM-1");
@@ -230,24 +295,24 @@ class BoundedContextServiceTest {
      */
     @Test
     void linkTermPropagatesTheLookupFailureForAnUnknownTermCodeAndLinksNothing() {
-        BoundedContextCode code = service.add(WS, newBoundedContext()).code();
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
 
         assertThrows(NoSuchElementException.class, () -> service.linkTerm(WS, code, "TERM-99"));
 
-        assertEquals(List.of(), service.get(WS, code).orElseThrow().usesTerms());
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
     }
 
     /**
      * Regression guard for the replace-by-identity write path: the out-adapter persists a bounded
      * context by wiping and re-writing its triples, so a later term link must carry the earlier
      * links along rather than silently dropping them. Also covers that the non-edge fields
-     * (name/domainVision/subdomain/ownedBy) survive an {@code update()}.
+     * (name/domainVision/subdomain/ownedBy) survive an update.
      */
     @Test
     void linkTermPreservesEarlierLinksAndFieldsAcrossUpdate() {
         BoundedContext added = service.add(WS, new NewBoundedContext("OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
-                Subdomain.SUPPORTING_DOMAIN, "orders-team"));
+                Subdomain.SUPPORTING_DOMAIN, "orders-team", "en"), null);
         service.linkTerm(WS, added.code(), "TERM-1");
 
         BoundedContext linked = service.linkTerm(WS, added.code(), "TERM-2");
@@ -256,8 +321,25 @@ class BoundedContextServiceTest {
         assertEquals("OrderManagement", linked.name());
         assertEquals(Subdomain.SUPPORTING_DOMAIN, linked.subdomain());
         assertEquals("orders-team", linked.ownedBy());
-        BoundedContext reread = service.get(WS, added.code()).orElseThrow();
+        BoundedContext reread = service.get(WS, added.code(), null).orElseThrow();
         assertEquals(List.of(new TermRef(TERM_1), new TermRef(TERM_2)), reread.usesTerms());
+    }
+
+    /**
+     * {@code linkTerm} never touches name/domainVision, so their language tags must survive
+     * unchanged across it - the pass-through the class-level javadoc of
+     * {@link BoundedContextService} documents.
+     */
+    @Test
+    void linkTermLeavesNameAndDomainVisionLanguagesUnchanged() {
+        BoundedContext added = service.add(WS, newBoundedContext(), null);
+        service.update(WS, added.code(), null, "Updated vision statement here.", "de", null);
+
+        service.linkTerm(WS, added.code(), "TERM-1");
+
+        BoundedContextRepository.CurrentBoundedContext current =
+                repository.findCurrentByCode(WS, added.code(), null).orElseThrow();
+        assertEquals("de", current.domainVisionLanguage());
     }
 
     /**
@@ -267,8 +349,8 @@ class BoundedContextServiceTest {
      */
     @Test
     void resolveExistingReturnsTheCodesOfTheIdentitiesItKnows() {
-        BoundedContext first = service.add(WS, newBoundedContext());
-        BoundedContext second = service.add(WS, newBoundedContext());
+        BoundedContext first = service.add(WS, newBoundedContext(), null);
+        BoundedContext second = service.add(WS, newBoundedContext(), null);
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/nowhere");
 
         List<ResolveBoundedContexts.ResolvedBoundedContext> resolved = service.resolveExisting(
@@ -287,9 +369,9 @@ class BoundedContextServiceTest {
 
     @Test
     void linkContextCreatesARelationshipBetweenTwoExistingBoundedContexts() {
-        BoundedContext upstream = service.add(WS, newBoundedContext());
+        BoundedContext upstream = service.add(WS, newBoundedContext(), null);
         BoundedContext downstream = service.add(WS, new NewBoundedContext("Shipping",
-                "Coordinates the physical delivery of fulfilled orders to customers.", null, null));
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null, "en"), null);
 
         ContextRelationship created = service.linkContext(
                 WS, upstream.code(), downstream.code(), RelationshipType.CUSTOMER_SUPPLIER);
@@ -302,7 +384,7 @@ class BoundedContextServiceTest {
 
     @Test
     void linkContextThrowsWhenUpstreamCodeUnknown() {
-        BoundedContext downstream = service.add(WS, newBoundedContext());
+        BoundedContext downstream = service.add(WS, newBoundedContext(), null);
 
         BoundedContextNotFoundException ex = assertThrows(BoundedContextNotFoundException.class,
                 () -> service.linkContext(WS, new BoundedContextCode("BC-99"), downstream.code(),
@@ -314,7 +396,7 @@ class BoundedContextServiceTest {
 
     @Test
     void linkContextThrowsWhenDownstreamCodeUnknown() {
-        BoundedContext upstream = service.add(WS, newBoundedContext());
+        BoundedContext upstream = service.add(WS, newBoundedContext(), null);
 
         BoundedContextNotFoundException ex = assertThrows(BoundedContextNotFoundException.class,
                 () -> service.linkContext(WS, upstream.code(), new BoundedContextCode("BC-99"),
@@ -330,7 +412,7 @@ class BoundedContextServiceTest {
      */
     @Test
     void linkContextRejectsASelfRelationship() {
-        BoundedContext boundedContext = service.add(WS, newBoundedContext());
+        BoundedContext boundedContext = service.add(WS, newBoundedContext(), null);
 
         assertThrows(IllegalArgumentException.class, () -> service.linkContext(
                 WS, boundedContext.code(), boundedContext.code(), RelationshipType.PARTNERSHIP));
@@ -339,7 +421,7 @@ class BoundedContextServiceTest {
     private static NewBoundedContext newBoundedContext() {
         return new NewBoundedContext("OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
-                Subdomain.CORE_DOMAIN, "orders-team");
+                Subdomain.CORE_DOMAIN, "orders-team", "en");
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */

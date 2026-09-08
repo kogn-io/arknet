@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.bc.adapter.mcp;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -17,26 +18,33 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
+import de.hauschel.arknet.bc.application.port.in.DescribeBoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.LinkContext;
 import de.hauschel.arknet.bc.application.port.in.LinkTerm;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
+import de.hauschel.arknet.bc.application.port.in.UpdateBoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.domain.ContextRelationship;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
 /**
  * Driving (in) adapter of the bounded-context component: exposes the bounded-context use-cases as
- * MCP tools ({@code bc_add}, {@code bc_list}, {@code bc_get}, {@code bc_link_term},
- * {@code bc_link_context}) and delegates each tool call to the corresponding in-port.
+ * MCP tools ({@code bc_add}, {@code bc_list}, {@code bc_get}, {@code bc_update},
+ * {@code bc_link_term}, {@code bc_link_context}) and delegates each tool call to the corresponding
+ * in-port.
  *
  * <p>This adapter belongs to the bounded-context hexagon (symmetric to the out-adapter
  * {@code arknet-bounded-context-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -51,6 +59,16 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * {@link de.hauschel.arknet.bc.domain.BoundedContextId}. The identity itself is a store-internal
  * detail that never needs to cross the MCP boundary; responses render the code back to the
  * caller, not the underlying resource identity.</p>
+ *
+ * <p><strong>Language (kogn-io/arknet#520), mirroring {@code ConstraintMcpTools} exactly.</strong>
+ * {@code bc_add}/{@code bc_update} take an optional {@code language}; {@code bc_get}/
+ * {@code bc_list} take an optional {@code displayLocale}, with the same project-default fallback
+ * and inline {@code [fallback: ...]} marking {@code bc_list} appends. No FR-10 label-equality
+ * guard applies to {@code name}: a bounded context is nowhere referenced by its name (every edge
+ * to it runs over {@link BoundedContextCode}), so a name free to differ per language breaks no
+ * reference. {@code bc_update} corrects only {@code name}/{@code domainVision} - not
+ * {@code subdomain}/{@code ownedBy}/linked terms/context relationships, which stay exactly as
+ * fixed since {@code bc_add} (or, for terms, since the last {@code bc_link_term}).</p>
  *
  * <p><strong>Term display resolution (Borrowed In-Port).</strong> {@link TermRef} carries a linked term's
  * opaque subject identity, not its business code - but a human who typed {@code TERM-1} into
@@ -92,42 +110,81 @@ public final class BoundedContextMcpTools {
             + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
             + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
 
+    /**
+     * The stale-translation signal, announced on every update tool that writes a multilingual
+     * field (kogn-io/arknet#474). It belongs in the tool description for the same reason
+     * {@link #PROSE_MARKUP} does: the writing agent reads the tool schema and nothing else, and a
+     * signal it does not expect is a signal it does not act on.
+     */
+    private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
+            + " the answer names the fields that still carry a maintained language this call did not"
+            + " write; repeat the call under each of those languages to keep the translations in step."
+            + " A field that did not carry the written language yet is being translated, not corrected,"
+            + " and is not reported.";
+
+    private static final String NAME_FIELD = "name";
+    private static final String DOMAIN_VISION_FIELD = "domainVision";
+
+    /**
+     * The multilingual fields {@code bc_update} can write, as {@code FieldLanguageLookup} keys -
+     * the local names of the predicates behind them. {@code arknet-architecture-tests} reads this
+     * list reflectively and holds it against the {@code sh:uniqueLang} properties the shipped
+     * shapes declare for this resource, so a typo or a renamed predicate fails a build instead of
+     * silently muting the signal for that field.
+     */
+    private static final List<String> MULTILINGUAL_FIELDS = List.of(NAME_FIELD, DOMAIN_VISION_FIELD);
+
     private final AddBoundedContext addBoundedContext;
     private final ListBoundedContexts listBoundedContexts;
+    private final DescribeBoundedContextDisplayFallback describeBoundedContextDisplayFallback;
     private final GetBoundedContext getBoundedContext;
+    private final UpdateBoundedContext updateBoundedContext;
     private final LinkTerm linkTerm;
     private final LinkContext linkContext;
     private final ResolveTerms resolveTerms;
     private final ProjectResolver projects;
+    private final StaleTranslationHint staleTranslations;
 
     /**
-     * Creates the adapter with its five driving in-ports, the borrowed ubiquitous-language display
+     * Creates the adapter with its driving in-ports, the borrowed ubiquitous-language display
      * port and the resolver that maps each call's origin directory to a project.
      *
      * @param addBoundedContext   in-port backing {@code bc_add}
      * @param listBoundedContexts in-port backing {@code bc_list}
+     * @param describeBoundedContextDisplayFallback in-port backing {@code bc_list}'s
+     *                            fallback-visibility line (kogn-io/arknet#520)
      * @param getBoundedContext   in-port backing {@code bc_get}
+     * @param updateBoundedContext in-port backing {@code bc_update} (kogn-io/arknet#520)
      * @param linkTerm            in-port backing {@code bc_link_term}
      * @param linkContext         in-port backing {@code bc_link_context}
      * @param resolveTerms        ubiquitous-language driving port used only to render a linked
      *                            term's business code instead of its bare IRI
      * @param projects          resolves each call's target project from its origin directory
+     * @param staleTranslations   renders {@code bc_update}'s stale-translation signal
+     *                            (kogn-io/arknet#474)
      */
     public BoundedContextMcpTools(
             final AddBoundedContext addBoundedContext,
             final ListBoundedContexts listBoundedContexts,
+            final DescribeBoundedContextDisplayFallback describeBoundedContextDisplayFallback,
             final GetBoundedContext getBoundedContext,
+            final UpdateBoundedContext updateBoundedContext,
             final LinkTerm linkTerm,
             final LinkContext linkContext,
             final ResolveTerms resolveTerms,
-            final ProjectResolver projects) {
+            final ProjectResolver projects,
+            final StaleTranslationHint staleTranslations) {
         this.addBoundedContext = Objects.requireNonNull(addBoundedContext, "addBoundedContext");
         this.listBoundedContexts = Objects.requireNonNull(listBoundedContexts, "listBoundedContexts");
+        this.describeBoundedContextDisplayFallback = Objects.requireNonNull(
+                describeBoundedContextDisplayFallback, "describeBoundedContextDisplayFallback");
         this.getBoundedContext = Objects.requireNonNull(getBoundedContext, "getBoundedContext");
+        this.updateBoundedContext = Objects.requireNonNull(updateBoundedContext, "updateBoundedContext");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
         this.linkContext = Objects.requireNonNull(linkContext, "linkContext");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.projects = Objects.requireNonNull(projects, "projects");
+        this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
     }
 
     /**
@@ -151,9 +208,9 @@ public final class BoundedContextMcpTools {
      * to every MCP client. Neither present is a caller error; there is no default project and no
      * fallback to a server-side working directory.
      */
-    private ProjectId resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
+    private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
-        return projects.resolve(explicit != null ? explicit : contextAnchor(context)).id();
+        return projects.resolve(explicit != null ? explicit : contextAnchor(context));
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
@@ -172,6 +229,12 @@ public final class BoundedContextMcpTools {
             final String subdomain,
             @McpToolParam(description = "Owning team name (optional)", required = false)
             final String ownedBy,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the name and domain "
+                    + "vision are written in. Falls back to the project's configured default language "
+                    + "(project_update) if omitted; if the project has no default either, the call is "
+                    + "rejected rather than writing an untagged literal. To state the context in a second "
+                    + "language, call bc_update afterwards with that language.", required = false)
+            final String language,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -179,19 +242,32 @@ public final class BoundedContextMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final Subdomain subdomainValue = blankToNull(subdomain) == null
                 ? null
                 : Subdomain.valueOf(subdomain.trim());
-        final BoundedContext created = addBoundedContext.add(projectId,
-                new NewBoundedContext(name, domainVision, subdomainValue, blankToNull(ownedBy)));
-        return format(projectId, created);
+        final BoundedContext created = addBoundedContext.add(project.id(),
+                new NewBoundedContext(name, domainVision, subdomainValue, blankToNull(ownedBy),
+                        blankToNull(language)),
+                project.defaultLanguage());
+        return format(project.id(), created);
     }
 
-    @McpTool(name = "bc_list", description = "List all managed bounded contexts.",
+    @McpTool(name = "bc_list", description = "List all managed bounded contexts. A context shown under a "
+            + "fallen-back language (its name/domainVision is missing in the requested/project-default "
+            + "language) carries an inline [fallback: ...] tag naming the language actually shown - see "
+            + "displayLocale.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display every "
+                    + "context's name and domain vision in, overriding the project's own configured default "
+                    + "language for this one call. Falls back to the project default, then to the server's "
+                    + "own default, then to an untagged literal, then deterministically to any literal a "
+                    + "context carries - a context whose shown variant is not this call's requested/"
+                    + "project-default language is marked with an inline [fallback: ...] tag.",
+                    required = false)
+            final String displayLocale,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -199,14 +275,19 @@ public final class BoundedContextMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
-        final List<BoundedContext> all = listBoundedContexts.list(projectId);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        final List<BoundedContext> all = listBoundedContexts.list(projectId, effective);
         if (all.isEmpty()) {
             return "(no bounded contexts)";
         }
         // One batch resolution across every context's linked terms, not one per context.
         final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(projectId, all);
-        return all.stream().map(bc -> format(bc, termsById))
+        final Map<BoundedContextCode, BoundedContextDisplayFallback> fallbacks =
+                describeBoundedContextDisplayFallback.describe(projectId, effective);
+        return all.stream()
+                .map(bc -> format(bc, termsById) + fallbackSuffix(fallbacks.get(bc.code())))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no bounded contexts)");
     }
 
@@ -215,6 +296,12 @@ public final class BoundedContextMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Bounded-context identity, e.g. BC-1") final String id,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display the name and "
+                    + "domain vision in, overriding the project's own configured default language for this "
+                    + "one call. Falls back to the project default, then to the server's own default, then "
+                    + "to an untagged literal, then deterministically to any literal the context carries.",
+                    required = false)
+            final String displayLocale,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -222,11 +309,53 @@ public final class BoundedContextMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final BoundedContextCode code = new BoundedContextCode(id);
-        return getBoundedContext.get(projectId, code)
-                .map(bc -> format(projectId, bc))
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        return getBoundedContext.get(project.id(), code, effective)
+                .map(bc -> format(project.id(), bc))
                 .orElse("Bounded context not found: " + code.value());
+    }
+
+    @McpTool(name = "bc_update",
+            description = "Correct an already-created bounded context's name and/or domain vision, or state "
+                    + "either of them in a further language. Both arguments are optional - an omitted one "
+                    + "leaves that field unchanged. Does NOT touch subdomain, ownedBy, linked terms "
+                    + "(bc_link_term) or context relationships (bc_link_context) - those stay fixed since "
+                    + "creation (or the last bc_link_term). Cannot change the context's code (BC-N): it is "
+                    + "fixed at creation, and everything already referring to the context refers to that "
+                    + "code." + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
+    public String update(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Bounded-context identity, e.g. BC-1") final String id,
+            @McpToolParam(description = "New name (optional, unchanged if omitted)", required = false)
+            final String name,
+            @McpToolParam(description = "New domain vision (optional, unchanged if omitted)", required = false)
+            final String domainVision,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'en') a non-omitted name/"
+                    + "domainVision is written in. Falls back to the project's configured default language "
+                    + "(see bc_add's same parameter) if omitted; if the project has no default either, the "
+                    + "call is rejected rather than writing an untagged literal. Only the existing literal "
+                    + "carrying the tag actually written is replaced - every other language variant of a "
+                    + "field being corrected survives untouched, except a stale untagged one left over from "
+                    + "before a language was ever supplied, which is swept away when the resolved tag equals "
+                    + "the project's default. This is the way to make an existing, single-language context "
+                    + "bilingual: restate its text under the second tag.", required = false)
+            final String language,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final BoundedContextCode code = new BoundedContextCode(id);
+        final String staleHint = staleTranslationHint(project, code, blankToNull(language), blankToNull(name),
+                blankToNull(domainVision));
+        final BoundedContext updated = updateBoundedContext.update(project.id(), code, blankToNull(name),
+                blankToNull(domainVision), blankToNull(language), project.defaultLanguage());
+        return format(project.id(), updated) + staleHint;
     }
 
     @McpTool(name = "bc_link_term",
@@ -246,10 +375,10 @@ public final class BoundedContextMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final BoundedContext updated =
-                linkTerm.linkTerm(projectId, new BoundedContextCode(bcId), termId);
-        return format(projectId, updated);
+                linkTerm.linkTerm(project.id(), new BoundedContextCode(bcId), termId);
+        return format(project.id(), updated);
     }
 
     @McpTool(name = "bc_link_context",
@@ -279,10 +408,10 @@ public final class BoundedContextMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final RelationshipType type = parseRelationshipType(relationshipType);
         final ContextRelationship created = linkContext.linkContext(
-                projectId, new BoundedContextCode(upstreamBcId), new BoundedContextCode(downstreamBcId), type);
+                project.id(), new BoundedContextCode(upstreamBcId), new BoundedContextCode(downstreamBcId), type);
         return "%s -[%s]-> %s".formatted(upstreamBcId, created.relationshipType(), downstreamBcId);
     }
 
@@ -357,6 +486,61 @@ public final class BoundedContextMcpTools {
         }
         return resolveTerms.resolve(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
+    }
+
+    /**
+     * The {@code [fallback: ...]} suffix {@code bc_list} appends to a line whenever
+     * {@code fallback} names at least one field that had to degrade past the requested/
+     * project-default language (kogn-io/arknet#520) - empty string (no visible change) when
+     * {@code fallback} is {@code null} or carries no fallen-back field.
+     */
+    private static String fallbackSuffix(final BoundedContextDisplayFallback fallback) {
+        if (fallback == null || fallback.isEmpty()) {
+            return "";
+        }
+        final List<String> parts = new ArrayList<>();
+        if (fallback.nameTag() != null) {
+            parts.add("name=" + displayTag(fallback.nameTag()));
+        }
+        if (fallback.domainVisionTag() != null) {
+            parts.add("domainVision=" + displayTag(fallback.domainVisionTag()));
+        }
+        return " [fallback: " + String.join(", ", parts) + "]";
+    }
+
+    private static String displayTag(final String tag) {
+        return tag.isEmpty() ? "untagged" : tag;
+    }
+
+    /** Mirrors {@code ToolArguments#effectiveDisplayLocale} exactly. */
+    private static String effectiveDisplayLocale(final ResolvedProject project, final String explicit) {
+        if (explicit != null && !explicit.isBlank()) {
+            return explicit;
+        }
+        return project.defaultLanguage();
+    }
+
+    /**
+     * The stale-translation signal for a {@code bc_update} (kogn-io/arknet#474): the multilingual
+     * fields this call is about to write, named as {@code store_check} names them. Asked before
+     * the write and appended after it, because only the state before tells a correction from a
+     * translation (see {@link StaleTranslationHint}).
+     */
+    private String staleTranslationHint(final ResolvedProject project, final BoundedContextCode code,
+            final String language, final String name, final String domainVision) {
+        final List<String> fieldsWritten = new ArrayList<>();
+        if (name != null) {
+            fieldsWritten.add(NAME_FIELD);
+        }
+        if (domainVision != null) {
+            fieldsWritten.add(DOMAIN_VISION_FIELD);
+        }
+        if (fieldsWritten.isEmpty()) {
+            return "";
+        }
+        return staleTranslations.forResource(project.id(), code.value(),
+                LanguageTag.writtenLanguage(language, project.defaultLanguage()),
+                project.maintainedLanguages(), fieldsWritten);
     }
 
     private static String blankToNull(final String value) {

@@ -77,7 +77,7 @@ class KognioRdfBoundedContextLookupBoundedContextSchemaTest {
                 "OrderManagement", "Owns the lifecycle of a customer order from placement to fulfilment.",
                 null, null, List.of());
 
-        boundedContextRepository.create(PROJECT, boundedContext);
+        boundedContextRepository.create(PROJECT, boundedContext, "en");
 
         assertEquals(id.value(), adrBoundedContextLookup.resolveByCode(PROJECT, "BC-1"));
     }

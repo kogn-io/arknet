@@ -166,9 +166,9 @@ class StoreReportToolsTest {
                 new RequirementCards(
                         (projectId, displayLocale) -> PROJECT.equals(projectId) ? List.of(fr1) : List.of()),
                 new ConstraintCards((projectId, displayLocale) -> List.of()),
-                new BoundedContextCards(projectId -> List.of()),
+                new BoundedContextCards((projectId, displayLocale) -> List.of()),
                 new AdrCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
-                new ActorCards(projectId -> List.of()),
+                new ActorCards((projectId, displayLocale) -> List.of()),
                 new RoleCards((projectId, displayLocale) -> List.of()));
     }
 
@@ -578,9 +578,9 @@ class StoreReportToolsTest {
                         (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
                 new ConstraintCards((projectId, displayLocale) -> List.of()),
-                new BoundedContextCards(projectId -> List.of()),
+                new BoundedContextCards((projectId, displayLocale) -> List.of()),
                 new AdrCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
-                new ActorCards(projectId -> List.of()),
+                new ActorCards((projectId, displayLocale) -> List.of()),
                 new RoleCards((projectId, displayLocale) -> List.of()));
         final StoreReportTools toolsWithGermanDefault = new StoreReportTools(
                 reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),

@@ -4,11 +4,13 @@
 package de.hauschel.arknet.actor.application;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
 import de.hauschel.arknet.actor.application.port.in.AddActor;
 import de.hauschel.arknet.actor.application.port.in.DeleteActor;
+import de.hauschel.arknet.actor.application.port.in.DescribeActorDisplayFallback;
 import de.hauschel.arknet.actor.application.port.in.GetActor;
 import de.hauschel.arknet.actor.application.port.in.ListActors;
 import de.hauschel.arknet.actor.application.port.in.UpdateActor;
@@ -16,11 +18,13 @@ import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorConcurrentlyModifiedException;
+import de.hauschel.arknet.actor.domain.ActorDisplayFallback;
 import de.hauschel.arknet.actor.domain.ActorId;
 import de.hauschel.arknet.actor.domain.ActorNotFoundException;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.CodeCounter;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 
@@ -40,6 +44,11 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * type is ever reassigned afterwards: {@link #update} changes text only (see {@link UpdateActor}).
  * </p>
  *
+ * <p><strong>Multilingual, mirroring {@code RoleService}'s policy (kogn-io/arknet#520).</strong>
+ * {@code name}/{@code description} are language-tagged; this service resolves and passes through
+ * the BCP-47 tags exactly the way {@code RoleService} does, including the "changing a field's
+ * language alone is a real write" rule - see {@link #resolveTouchedLanguage}.</p>
+ *
  * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code against a fresh read
  * whenever a concurrent {@code actor_add} claims the same {@code ACTOR-N} first, via
  * {@link CodeAssignment#createRetryingOnCodeCollision}, and {@link #update} runs the
@@ -49,7 +58,8 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * very same actor surfaces as {@link ActorConcurrentlyModifiedException}. Parallel sessions of one
  * user against one local store are the normal case, not a remote/multi-writer concern.</p>
  */
-public class ActorService implements AddActor, ListActors, GetActor, UpdateActor, DeleteActor {
+public class ActorService
+        implements AddActor, ListActors, DescribeActorDisplayFallback, GetActor, UpdateActor, DeleteActor {
 
     private static final String CODE_PREFIX = "ACTOR";
 
@@ -78,7 +88,7 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
     }
 
     @Override
-    public Actor add(ProjectId projectId, NewActor command) {
+    public Actor add(ProjectId projectId, NewActor command, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Identity is opaque and stable, so it is minted once, outside the retry: only the business
@@ -86,33 +96,41 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
         // CodeAssignment for why that race exists and why it must retry rather than surface the
         // out-adapter's uniqueness guard as a caller-visible failure.
         ActorId id = new ActorId(resourceIdFactory.newId());
+        String language = LanguageTag.resolveWriteLanguage(command.language(), defaultLanguage);
         return CodeAssignment.createRetryingOnCodeCollision(MAX_RETRY_ATTEMPTS,
                 DuplicateActorCodeException.class, () -> {
                     ActorCode code = nextCode(projectId);
                     Actor actor = new Actor(id, code, command.type(), command.name(), command.description());
-                    repository.create(projectId, actor);
+                    repository.create(projectId, actor, language);
                     return actor;
                 });
     }
 
     @Override
-    public List<Actor> list(ProjectId projectId) {
+    public List<Actor> list(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
-        return repository.findAll(projectId);
+        return repository.findAll(projectId, displayLocale);
     }
 
     @Override
-    public Optional<Actor> get(ProjectId projectId, ActorCode code) {
+    public Map<ActorCode, ActorDisplayFallback> describe(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(code, "code");
-        return repository.findByCode(projectId, code);
+        return repository.findAllDisplayFallback(projectId, displayLocale);
     }
 
     @Override
-    public Actor update(ProjectId projectId, ActorCode code, String name, String description) {
+    public Optional<Actor> get(ProjectId projectId, ActorCode code, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return updateWithOptimisticRetry(projectId, code, name, description);
+        return repository.findByCode(projectId, code, displayLocale);
+    }
+
+    @Override
+    public Actor update(ProjectId projectId, ActorCode code, String name, String description,
+            String language, String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        return updateWithOptimisticRetry(projectId, code, name, description, language, defaultLanguage);
     }
 
     @Override
@@ -126,32 +144,52 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
     }
 
     /**
-     * Read-modify-write helper behind {@link #update}: reads the current actor and its concurrency
-     * token together via {@link ActorRepository#findCurrentByCode}, derives the next state, and
-     * writes it back via {@link ActorRepository#compareAndUpdate} - retrying with a fresh read
-     * whenever a concurrent writer commits a change in between, so two parallel round trips on the
-     * same actor cannot silently lose whichever committed last.
+     * Read-modify-write helper behind {@link #update}, mirroring
+     * {@code RoleService#updateWithOptimisticRetry} exactly for the language handling: reads the
+     * current actor and its concurrency token together via
+     * {@link ActorRepository#findCurrentByCode}, derives the next state, and writes it back via
+     * {@link ActorRepository#compareAndUpdate} - retrying with a fresh read whenever a concurrent
+     * writer commits a change in between, so two parallel round trips on the same actor cannot
+     * silently lose whichever committed last.
      *
-     * <p>A call that changes nothing is a no-op: it returns the actor as read without writing. With
-     * no language tags in play (see {@link Actor}), value equality is the whole test - there is no
-     * {@code ConstraintService}-style "same text, different tag is still a write" case here.</p>
+     * <p>A call that changes neither text nor either field's language tag is a no-op: it returns
+     * the actor as read without writing - the same "naming a field with its already-current text
+     * but an explicit, different language is still a write" rule {@code RoleService} states, which
+     * is why {@link Actor#equals}-equality alone is not the whole test here (kogn-io/arknet#520;
+     * before it, value equality was the whole test, since there were no language tags in play).
+     * </p>
      *
      * @throws ActorNotFoundException             if no actor with {@code code} exists
      * @throws ActorConcurrentlyModifiedException if the write keeps losing the race across every
      *                                            retry attempt
      */
-    private Actor updateWithOptimisticRetry(
-            ProjectId projectId, ActorCode code, String name, String description) {
+    private Actor updateWithOptimisticRetry(ProjectId projectId, ActorCode code, String name, String description,
+            String language, String defaultLanguage) {
+        ActorRepository.CurrentActor current = repository.findCurrentByCode(projectId, code, defaultLanguage)
+                .orElseThrow(() -> new ActorNotFoundException(projectId, code));
         ActorConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-            ActorRepository.CurrentActor current = repository.findCurrentByCode(projectId, code)
-                    .orElseThrow(() -> new ActorNotFoundException(projectId, code));
+            if (attempt > 1) {
+                current = repository.findCurrentByCode(projectId, code, defaultLanguage)
+                        .orElseThrow(() -> new ActorNotFoundException(projectId, code));
+            }
             Actor updated = current.value().withUpdates(name, description);
-            if (updated.equals(current.value())) {
+            // name/description each get their own language: a field this call did not name
+            // round-trips under the exact tag it was read under (a scoped no-op), never under
+            // `language`/`defaultLanguage`. Resolved lazily, per field, mirroring
+            // RoleService#resolveTouchedLanguage exactly.
+            String nameLanguage = resolveTouchedLanguage(name != null, current.value().name(), updated.name(),
+                    current.nameLanguage(), language, defaultLanguage);
+            String descriptionLanguage = resolveTouchedLanguage(description != null, current.value().description(),
+                    updated.description(), current.descriptionLanguage(), language, defaultLanguage);
+            if (updated.equals(current.value())
+                    && Objects.equals(nameLanguage, current.nameLanguage())
+                    && Objects.equals(descriptionLanguage, current.descriptionLanguage())) {
                 return current.value();
             }
             try {
-                repository.compareAndUpdate(projectId, current.head(), updated);
+                repository.compareAndUpdate(projectId, current.head(), updated, nameLanguage, descriptionLanguage,
+                        defaultLanguage);
                 return updated;
             } catch (ActorConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the actor between our read and our write - retry
@@ -160,6 +198,18 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
             }
         }
         throw lastConflict;
+    }
+
+    /**
+     * The BCP-47 language tag a single field ({@code name}/{@code description}) is written under -
+     * mirrors {@code RoleService#resolveTouchedLanguage} exactly.
+     */
+    private static String resolveTouchedLanguage(boolean touched, String currentText, String updatedText,
+            String currentLanguage, String language, String defaultLanguage) {
+        boolean languageTouched = touched && (language != null || !Objects.equals(updatedText, currentText));
+        return languageTouched
+                ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
+                : currentLanguage;
     }
 
     /**

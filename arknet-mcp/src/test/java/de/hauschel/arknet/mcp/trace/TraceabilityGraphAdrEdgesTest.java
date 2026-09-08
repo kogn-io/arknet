@@ -112,7 +112,7 @@ class TraceabilityGraphAdrEdgesTest {
                 List.of(), List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of()), null);
         boundedContexts.create(PROJECT, new BoundedContext(
                 new BoundedContextId(ResourceId.of(BC_1_IRI)), new BoundedContextCode("BC-1"), "Ordering",
-                "Wir verarbeiten Bestellungen.", null, null, List.of()));
+                "Wir verarbeiten Bestellungen.", null, null, List.of()), "en");
 
         // ADR-2 (the successor) must exist before ADR-1 is written: ashapes:ADR-supersededBy
         // carries sh:class arkarch:ArchitectureDecisionRecord, and the write gate's asserted

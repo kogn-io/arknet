@@ -32,6 +32,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.actor.application.RoleService;
 import de.hauschel.arknet.actor.application.port.in.AddRole.NewRole;
+import de.hauschel.arknet.actor.application.port.in.RoleDetail;
 import de.hauschel.arknet.actor.application.port.in.RoleDetail.FilledByActor;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
@@ -349,11 +350,11 @@ class KognioRdfRoleRepositoryTest {
      */
     @Test
     void filledByReadsBackAsCodeAndNameThroughTheServiceReadPath() {
-        ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, funnel);
+        ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, funnel);
         actors.create(PROJECT_A, new Actor(actorId("actor-b"), new ActorCode("ACTOR-1"), ActorType.HUMAN,
-                "Sachbearbeiter", null));
+                "Sachbearbeiter", null), "en");
         actors.create(PROJECT_A, new Actor(actorId("actor-a"), new ActorCode("ACTOR-2"), ActorType.SYSTEM,
-                "Fachanwendung", null));
+                "Fachanwendung", null), "en");
         RoleService service = new RoleService(repository, actors, new UuidResourceIdFactory());
 
         RoleCode code = service.add(PROJECT_A, new NewRole("Requirements Engineer",
@@ -365,6 +366,42 @@ class KognioRdfRoleRepositoryTest {
                 new FilledByActor(new ActorCode("ACTOR-1"), "Sachbearbeiter")), occupants, occupants.toString());
         assertEquals(occupants, service.list(PROJECT_A, "en").get(0).filledByActors(),
                 "role_list must resolve the occupants the same way role_get does");
+    }
+
+    /**
+     * Role and occupant are shown under one and the same language: an occupant's name is
+     * language-tagged too since kogn-io/arknet#520, and the {@code displayLocale} a
+     * {@code role_get}/{@code role_list} call selects the role's name under must select the
+     * occupant's as well - not the repository's own configured preference, which is the reading
+     * daemon's, not the caller's (the process-preference-over-project-language defect class of
+     * kogn-io/arknet#456).
+     */
+    @Test
+    void filledByOccupantsAreShownUnderTheSameDisplayLocaleAsTheRole() {
+        ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, funnel);
+        ActorId occupant = actorId("actor-a");
+        actors.create(PROJECT_A, new Actor(occupant, new ActorCode("ACTOR-1"), ActorType.HUMAN,
+                "Sachbearbeiter", null), "de");
+        actors.compareAndUpdate(PROJECT_A,
+                actors.findCurrentByCode(PROJECT_A, new ActorCode("ACTOR-1"), null).orElseThrow().head(),
+                new Actor(occupant, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Case Worker", null),
+                "en", "en", null);
+        RoleService service = new RoleService(repository, actors, new UuidResourceIdFactory());
+        RoleCode code = service.add(PROJECT_A,
+                new NewRole("Anforderungsmanager", null, List.of("ACTOR-1"), "de"), "de").role().code();
+        service.update(PROJECT_A, code, "Requirements Engineer", null, null, "en", "de");
+
+        RoleDetail asGerman = service.get(PROJECT_A, code, "de").orElseThrow();
+        RoleDetail asEnglish = service.get(PROJECT_A, code, "en").orElseThrow();
+
+        assertEquals("Anforderungsmanager", asGerman.role().name());
+        assertEquals(List.of(new FilledByActor(new ActorCode("ACTOR-1"), "Sachbearbeiter")),
+                asGerman.filledByActors());
+        assertEquals("Requirements Engineer", asEnglish.role().name());
+        assertEquals(List.of(new FilledByActor(new ActorCode("ACTOR-1"), "Case Worker")),
+                asEnglish.filledByActors());
+        assertEquals(asGerman.filledByActors(), service.list(PROJECT_A, "de").get(0).filledByActors(),
+                "role_list must select the occupants under its own displayLocale too");
     }
 
     // ---- the SHACL gate: name -----------------------------------------------------------

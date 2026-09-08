@@ -42,13 +42,17 @@ public final class BoundedContextCards {
     }
 
     /**
-     * @param projectId the project to read
+     * @param projectId     the project to read
+     * @param displayLocale the resolved project's own configured default display language (BCP-47
+     *                      tag), or {@code null} if it has none - passed straight through to
+     *                      {@code bc_list}'s own port (kogn-io/arknet#520), mirroring
+     *                      {@link RoleCards}
      * @param glossary    the project's glossary, for labelling and marking up references
      * @return the bounded-context section, ordered by business code
      */
-    public ModelSection section(final ProjectId projectId, final Glossary glossary) {
+    public ModelSection section(final ProjectId projectId, final String displayLocale, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
-        final List<ModelCard> cards = contexts.list(projectId).stream()
+        final List<ModelCard> cards = contexts.list(projectId, displayLocale).stream()
                 .sorted(Comparator.comparing(context -> context.code().value(), BusinessCodes.ORDER))
                 .map(context -> card(context, glossary))
                 .toList();

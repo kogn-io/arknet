@@ -84,7 +84,7 @@ public final class KognioRdfActorRepositoryFactory {
     public static ActorRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        return over(lifecycle, buildFunnel(lifecycle, displayLocale));
+        return over(lifecycle, displayLocale, buildFunnel(lifecycle, displayLocale));
     }
 
     /**
@@ -92,14 +92,18 @@ public final class KognioRdfActorRepositoryFactory {
      * {@code KognioRdfRoleRepositoryFactory#over} uses to share this hexagon's funnel rather than
      * building its own, functionally identical one (see {@link #buildFunnel}).
      *
-     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from
-     * @param funnel    the already-built write funnel to run every write through
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param displayLocale the display-language preference selecting which {@code arknet:name}/
+     *                      {@code arknet:description} the read paths surface for a multilingual
+     *                      actor (kogn-io/arknet#520)
+     * @param funnel        the already-built write funnel to run every write through
      * @return a ready-to-use {@link ActorRepository}
      */
-    public static ActorRepository over(DatasetLifecycle lifecycle, WriteFunnel funnel) {
+    public static ActorRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {
         Objects.requireNonNull(lifecycle, "lifecycle");
+        Objects.requireNonNull(displayLocale, "displayLocale");
         Objects.requireNonNull(funnel, "funnel");
-        return new KognioRdfActorRepository(lifecycle, funnel);
+        return new KognioRdfActorRepository(lifecycle, displayLocale, funnel);
     }
 
     /**

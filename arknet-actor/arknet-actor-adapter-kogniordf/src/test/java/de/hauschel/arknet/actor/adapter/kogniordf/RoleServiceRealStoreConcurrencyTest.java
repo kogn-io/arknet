@@ -176,7 +176,7 @@ class RoleServiceRealStoreConcurrencyTest {
     private static RoleService serviceOver(DatasetLifecycle lifecycle) {
         WriteFunnel funnel = KognioRdfActorRepositoryFactory.buildFunnel(lifecycle, DisplayLocale.DEFAULT);
         RoleRepository repository = KognioRdfRoleRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, funnel);
-        ActorRepository actorRepository = KognioRdfActorRepositoryFactory.over(lifecycle, funnel);
+        ActorRepository actorRepository = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, funnel);
         return new RoleService(repository, actorRepository, new UuidResourceIdFactory());
     }
 

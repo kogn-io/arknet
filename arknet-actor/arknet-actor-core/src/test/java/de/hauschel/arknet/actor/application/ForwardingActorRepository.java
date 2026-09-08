@@ -4,12 +4,14 @@
 package de.hauschel.arknet.actor.application;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorCode;
+import de.hauschel.arknet.actor.domain.ActorDisplayFallback;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 
@@ -29,28 +31,35 @@ abstract class ForwardingActorRepository implements ActorRepository {
     }
 
     @Override
-    public void create(ProjectId projectId, Actor actor) {
-        delegate.create(projectId, actor);
+    public void create(ProjectId projectId, Actor actor, String language) {
+        delegate.create(projectId, actor, language);
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated) {
-        delegate.compareAndUpdate(projectId, expectedHead, updated);
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated,
+            String nameLanguage, String descriptionLanguage, String defaultLanguage) {
+        delegate.compareAndUpdate(projectId, expectedHead, updated, nameLanguage, descriptionLanguage,
+                defaultLanguage);
     }
 
     @Override
-    public Optional<Actor> findByCode(ProjectId projectId, ActorCode code) {
-        return delegate.findByCode(projectId, code);
+    public Optional<Actor> findByCode(ProjectId projectId, ActorCode code, String displayLocale) {
+        return delegate.findByCode(projectId, code, displayLocale);
     }
 
     @Override
-    public Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code) {
-        return delegate.findCurrentByCode(projectId, code);
+    public Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code, String defaultLanguage) {
+        return delegate.findCurrentByCode(projectId, code, defaultLanguage);
     }
 
     @Override
-    public List<Actor> findAll(ProjectId projectId) {
-        return delegate.findAll(projectId);
+    public List<Actor> findAll(ProjectId projectId, String displayLocale) {
+        return delegate.findAll(projectId, displayLocale);
+    }
+
+    @Override
+    public Map<ActorCode, ActorDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+        return delegate.findAllDisplayFallback(projectId, displayLocale);
     }
 
     @Override
@@ -69,7 +78,7 @@ abstract class ForwardingActorRepository implements ActorRepository {
     }
 
     @Override
-    public List<Actor> findAllByIds(ProjectId projectId, List<ResourceId> ids) {
-        return delegate.findAllByIds(projectId, ids);
+    public List<Actor> findAllByIds(ProjectId projectId, String displayLocale, List<ResourceId> ids) {
+        return delegate.findAllByIds(projectId, displayLocale, ids);
     }
 }

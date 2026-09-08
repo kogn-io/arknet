@@ -22,6 +22,15 @@
 #  as targets instead would silently stop covering a fifth subclass added
 #  later, and would leave a bare "a arkproc:Actor" resource unvalidated.
 #
+#  arknet:name/arknet:description are MULTILINGUAL here since kogn-io/
+#  arknet#520 (sh:uniqueLang), the same mechanism RoleShape below already
+#  uses. An actor still carries no FR-10 label-equality guard the way
+#  skos:prefLabel does: an actor's name is a proper noun (unlike a role's
+#  function description or a glossary term's canonical label), so it is
+#  free to be worded differently per language - a person's or a system's
+#  name simply is what it is called in each language, with no single
+#  canonical spelling to enforce.
+#
 #  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
 ##############################################################################
 
@@ -46,18 +55,16 @@ actshapes:Actor-name
     a sh:PropertyShape ;
     sh:path     arknet:name ;
     sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
     sh:minLength 2 ;
-    sh:message  "An Actor must have exactly one 'arknet:name' (min. 2 characters) - what this actor is called, e.g. 'Sachbearbeiter' or 'PaymentService'."@en , "Ein Actor muss genau einen 'arknet:name' haben (min. 2 Zeichen) - wie dieser Akteur heisst, z.B. 'Sachbearbeiter' oder 'PaymentService'."@de ;
+    sh:uniqueLang true ;
+    sh:message  "An Actor needs at least one 'arknet:name' (min. 2 characters) - what this actor is called, e.g. 'Sachbearbeiter' or 'PaymentService'. sh:uniqueLang allows at most one arknet:name per non-empty language tag - two names sharing the same tag are not allowed, but DIFFERENT language tags are (an actor may be named in several languages)."@en , "Ein Actor braucht mindestens einen 'arknet:name' (min. 2 Zeichen) - wie dieser Akteur heisst, z.B. 'Sachbearbeiter' oder 'PaymentService'. sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag - zwei Namen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (ein Actor darf mehrsprachig benannt sein)."@de ;
     sh:severity sh:Violation .
 
 actshapes:Actor-description
     a sh:PropertyShape ;
     sh:path     arknet:description ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
-    sh:message  "An Actor's 'arknet:description' is optional, but there is at most one - an actor carries a single description, not a set of them."@en , "Die 'arknet:description' eines Actors ist optional, es gibt aber hoechstens eine - ein Akteur traegt genau eine Beschreibung, keine Menge davon."@de ;
+    sh:uniqueLang true ;
+    sh:message  "An Actor's 'arknet:description' is optional. sh:uniqueLang allows at most one arknet:description per non-empty language tag - two descriptions sharing the same tag are not allowed, but DIFFERENT language tags are (an actor may be described in several languages)."@en , "Die 'arknet:description' eines Actors ist optional. sh:uniqueLang erlaubt hoechstens eine arknet:description je nicht-leerem Sprach-Tag - zwei Beschreibungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (ein Actor darf mehrsprachig beschrieben sein)."@de ;
     sh:severity sh:Violation .
 
 ##############################################################################

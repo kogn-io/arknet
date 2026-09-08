@@ -56,10 +56,10 @@ arknet:name
 
 arknet:description
     a owl:DatatypeProperty ;
-    rdfs:range   xsd:string ;
+    rdfs:range   rdfs:Literal ;
     rdfs:label   "description"@en ;
-    rdfs:comment "A free-text description of a concept."@en ,
-                 "Eine Freitext-Beschreibung eines Konzepts."@de .
+    rdfs:comment "A free-text description of a concept. rdfs:Literal instead of xsd:string, mirroring arknet:name above: since kogn-io/arknet#520 a consumer (e.g. arkproc:Actor) may write several language-tagged rdf:langString literals for it; a single untagged xsd:string remains a legal rdfs:Literal, so the widening is backwards-compatible."@en ,
+                 "Eine Freitext-Beschreibung eines Konzepts. rdfs:Literal statt xsd:string, analog zu arknet:name oben: seit kogn-io/arknet#520 kann ein Konsument (z.B. arkproc:Actor) dafuer mehrere sprachgetaggte rdf:langString-Literale schreiben; ein einzelnes ungetaggtes xsd:string bleibt ein legales rdfs:Literal, die Weitung ist rueckwaertskompatibel."@de .
 
 arknet:since
     a owl:DatatypeProperty ;

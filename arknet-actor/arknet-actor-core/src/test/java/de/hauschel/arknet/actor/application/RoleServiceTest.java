@@ -91,7 +91,7 @@ class RoleServiceTest {
     /** {@code ROLE-N} is a counter of its own, unrelated to {@code ACTOR-N}. */
     @Test
     void addNumbersRunSequentiallyIndependentOfActorCodes() {
-        actorRepository.create(WS, actor("ACTOR-1", "Someone"));
+        actorRepository.create(WS, actor("ACTOR-1", "Someone"), "de");
 
         RoleCode first = service.add(WS, newRole(), DEFAULT_LANGUAGE).role().code();
         RoleCode second = service.add(WS, newRole(), DEFAULT_LANGUAGE).role().code();
@@ -134,7 +134,7 @@ class RoleServiceTest {
     @Test
     void addResolvesFilledByActorCodesToOpaqueIdentitiesAndBackToNames() {
         Actor added = actor("ACTOR-1", "Sachbearbeiter");
-        actorRepository.create(WS, added);
+        actorRepository.create(WS, added, "de");
 
         RoleDetail role = service.add(WS, new NewRole("Case Handler", null, List.of("ACTOR-1"), "en"),
                 DEFAULT_LANGUAGE);
@@ -223,7 +223,7 @@ class RoleServiceTest {
     /** {@code null} for {@code filledByActorCodes} leaves the occupancy untouched. */
     @Test
     void updateWithNullFilledByLeavesOccupancyUntouched() {
-        actorRepository.create(WS, actor("ACTOR-1", "Sachbearbeiter"));
+        actorRepository.create(WS, actor("ACTOR-1", "Sachbearbeiter"), "de");
         RoleCode code = service.add(WS, new NewRole("Case Handler", null, List.of("ACTOR-1"), "en"),
                 DEFAULT_LANGUAGE).role().code();
 
@@ -239,7 +239,7 @@ class RoleServiceTest {
      */
     @Test
     void updateWithEmptyFilledByClearsEveryOccupant() {
-        actorRepository.create(WS, actor("ACTOR-1", "Sachbearbeiter"));
+        actorRepository.create(WS, actor("ACTOR-1", "Sachbearbeiter"), "de");
         RoleCode code = service.add(WS, new NewRole("Case Handler", null, List.of("ACTOR-1"), "en"),
                 DEFAULT_LANGUAGE).role().code();
 
@@ -253,8 +253,8 @@ class RoleServiceTest {
     void updateWithANonEmptyListReplacesOccupancyWholesale() {
         Actor first = actor("ACTOR-1", "Erstbesetzung");
         Actor second = actor("ACTOR-2", "Zweitbesetzung");
-        actorRepository.create(WS, first);
-        actorRepository.create(WS, second);
+        actorRepository.create(WS, first, "de");
+        actorRepository.create(WS, second, "de");
         RoleCode code = service.add(WS, new NewRole("Case Handler", null, List.of("ACTOR-1"), "en"),
                 DEFAULT_LANGUAGE).role().code();
 

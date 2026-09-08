@@ -173,7 +173,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         Thread winnerThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                BoundedContext result = winnerService.add(WS, newBoundedContext("Winner"));
+                BoundedContext result = winnerService.add(WS, newBoundedContext("Winner"), null);
                 winnerResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } finally {
@@ -184,7 +184,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         Thread loserThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                BoundedContext result = loserService.add(WS, newBoundedContext("Loser"));
+                BoundedContext result = loserService.add(WS, newBoundedContext("Loser"), null);
                 loserResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } catch (RuntimeException e) {
@@ -211,7 +211,8 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         assertNotEquals(winnerResult.get().code(), loserResult.get().code(), diagnostics);
 
         List<BoundedContext> stored =
-                KognioRdfBoundedContextRepositoryFactory.over(realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT).findAll(WS);
+                KognioRdfBoundedContextRepositoryFactory.over(realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT)
+                        .findAll(WS, null);
         assertEquals(2, stored.size(), diagnostics);
         assertTrue(stored.stream().map(BoundedContext::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())), diagnostics);
@@ -343,7 +344,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
     @Test
     void linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead() {
         BoundedContextService straightThrough = serviceOver(realLifecycle);
-        BoundedContextCode code = straightThrough.add(WS, newBoundedContext("orders-team")).code();
+        BoundedContextCode code = straightThrough.add(WS, newBoundedContext("orders-team"), null).code();
 
         AtomicBoolean pending = new AtomicBoolean(true);
         BoundedContextService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
@@ -358,14 +359,74 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         assertEquals(2, result.usesTerms().size(),
                 "the retry must return the state it re-read, not its stale first read");
         assertTrue(result.usesTerms().containsAll(List.of(new TermRef(TERM_1), new TermRef(TERM_2))));
-        BoundedContext stored = straightThrough.get(WS, code).orElseThrow();
+        BoundedContext stored = straightThrough.get(WS, code, null).orElseThrow();
         assertEquals(2, stored.usesTerms().size(), "both writers' edges must survive - neither is silently lost");
+    }
+
+    /**
+     * Lost-update guard against the real store for kogn-io/arknet#520's {@code bc_update}: two
+     * concurrent single-field, single-language writers on the same bounded context must not lose
+     * either party's change - one thread corrects only {@code domainVision} under its
+     * already-observed English tag, the other concurrently adds only a new German {@code name}
+     * variant. {@code update} and {@code linkTerm} run through the one
+     * {@code updateWithOptimisticRetry} loop, so this mirrors
+     * {@link #linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead} exactly: the
+     * {@code beforeTransaction} hook - not real racer threads - pins the interleaving
+     * deterministically (the compare-and-set race itself is proven store-level by that test
+     * already; this one is only about a second field/language dimension racing through the same
+     * mechanism).
+     *
+     * <p><strong>Both fields already carry both languages before the race</strong> (PR #553 review
+     * comment): a writer that only ever adds a language nobody held before cannot prove the
+     * reattach path at all - overwriting the sole existing variant of a field is not distinguishable
+     * from a plain replace-by-identity that dropped everything. {@code domainVision} is therefore
+     * seeded with a German variant first (its English one already exists from {@link #add}, as does
+     * {@code name}'s), then each racer touches only <em>one</em> language of <em>one</em> field, and
+     * the assertions below check all four values afterwards - not just the two each racer itself
+     * wrote, but also the pre-existing <em>other</em>-language variant of the very field each racer
+     * touched, which survives only if {@code replaceExistingTriples}'s capture-before-delete/
+     * reattach for {@code name}/{@code domainVision} actually ran. A version of this test missing
+     * those two extra assertions stayed green even with that reattach commented out (see
+     * {@code KognioRdfBoundedContextRepository#replaceExistingTriples}'s own call site) - confirmed
+     * manually before this class was finalised, see PR #553's review thread for the counter-check.
+     * </p>
+     */
+    @Test
+    void updateOfNameAndUpdateOfDomainVisionByTwoConcurrentWritersDoesNotLoseEitherChange() {
+        BoundedContextService straightThrough = serviceOver(realLifecycle);
+        BoundedContextCode code = straightThrough.add(WS, newBoundedContext("orders-team"), null).code();
+        straightThrough.update(WS, code, null,
+                "Verwaltet den Lebenszyklus einer Kundenbestellung.", "de", null);
+
+        AtomicBoolean pending = new AtomicBoolean(true);
+        BoundedContextService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
+            if (pending.compareAndSet(true, false)) {
+                straightThrough.update(WS, code, null,
+                        "Owns the lifecycle of a customer order, corrected.", "en", null);
+            }
+        }));
+
+        racing.update(WS, code, "Auftragsverwaltung", null, "de", null);
+
+        assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
+        BoundedContext asEnglish = straightThrough.get(WS, code, "en").orElseThrow();
+        assertEquals("Owns the lifecycle of a customer order, corrected.", asEnglish.domainVision(),
+                "the concurrent domainVision correction must not have been lost by the retry");
+        assertEquals("OrderManagement", asEnglish.name(),
+                "the pre-existing English name must survive the racer's own German-only correction - only "
+                        + "capture-before-delete/reattach keeps it, a plain replace would drop it");
+        BoundedContext asGerman = straightThrough.get(WS, code, "de").orElseThrow();
+        assertEquals("Auftragsverwaltung", asGerman.name(),
+                "the racer's own name addition must not have been lost by its own retry");
+        assertEquals("Verwaltet den Lebenszyklus einer Kundenbestellung.", asGerman.domainVision(),
+                "the pre-existing German domainVision must survive the concurrent writer's English-only "
+                        + "correction - only capture-before-delete/reattach keeps it, a plain replace would drop it");
     }
 
     private static NewBoundedContext newBoundedContext(String owner) {
         return new NewBoundedContext("OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
-                Subdomain.CORE_DOMAIN, owner);
+                Subdomain.CORE_DOMAIN, owner, "en");
     }
 
     /**

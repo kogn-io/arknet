@@ -138,7 +138,7 @@ class ActorServiceRealStoreConcurrencyTest {
         Thread winnerThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                Actor result = winnerService.add(WS, newActor("Winner"));
+                Actor result = winnerService.add(WS, newActor("Winner"), "de");
                 winnerResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } finally {
@@ -149,7 +149,7 @@ class ActorServiceRealStoreConcurrencyTest {
         Thread loserThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                Actor result = loserService.add(WS, newActor("Loser"));
+                Actor result = loserService.add(WS, newActor("Loser"), "de");
                 loserResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } catch (RuntimeException e) {
@@ -176,7 +176,7 @@ class ActorServiceRealStoreConcurrencyTest {
         assertNotEquals(winnerResult.get().code(), loserResult.get().code(), diagnostics);
 
         List<Actor> stored =
-                KognioRdfActorRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT).findAll(WS);
+                KognioRdfActorRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT).findAll(WS, null);
         assertEquals(2, stored.size(), diagnostics);
         assertTrue(stored.stream().map(Actor::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())), diagnostics);
@@ -196,29 +196,86 @@ class ActorServiceRealStoreConcurrencyTest {
     @Test
     void updateRetriesAndKeepsBothCorrectionsWhenAConcurrentWriterAdvancedTheHead() {
         ActorService straightThrough = serviceOver(realLifecycle);
-        ActorCode code = straightThrough.add(WS, newActor("Sachbearbeiter")).code();
+        ActorCode code = straightThrough.add(WS, newActor("Sachbearbeiter"), "de").code();
 
         AtomicBoolean pending = new AtomicBoolean(true);
         ActorService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
             if (pending.compareAndSet(true, false)) {
-                straightThrough.update(WS, code, null, "Beschreibung des anderen Aufrufers.");
+                straightThrough.update(WS, code, null, "Beschreibung des anderen Aufrufers.", "de", null);
             }
         }));
 
-        Actor result = racing.update(WS, code, "Antragsbearbeiter", null);
+        Actor result = racing.update(WS, code, "Antragsbearbeiter", null, "de", null);
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
         assertEquals("Antragsbearbeiter", result.name());
         assertEquals("Beschreibung des anderen Aufrufers.", result.description(),
                 "the retry must build on the state it re-read, not on its stale first read");
-        Actor stored = straightThrough.get(WS, code).orElseThrow();
+        Actor stored = straightThrough.get(WS, code, null).orElseThrow();
         assertEquals("Antragsbearbeiter", stored.name());
         assertEquals("Beschreibung des anderen Aufrufers.", stored.description(),
                 "both writers' corrections must survive - neither is silently lost");
     }
 
+    /**
+     * Lost-update guard against the real store for kogn-io/arknet#520's multilingual
+     * {@code actor_update}: two concurrent single-field, single-language writers on the same actor
+     * must not lose either party's language variant - one thread adds only a new German
+     * {@code name} variant, the other concurrently corrects only the already-stored English
+     * {@code description}. Mirrors {@code BoundedContextServiceRealStoreConcurrencyTest
+     * #updateOfNameAndUpdateOfDomainVisionByTwoConcurrentWritersDoesNotLoseEitherChange} exactly,
+     * one resource type over - the scenario {@link
+     * #updateRetriesAndKeepsBothCorrectionsWhenAConcurrentWriterAdvancedTheHead} above does not
+     * cover, since both its writers there share one language and never exercise the out-adapter's
+     * capture-before-delete/reattach of the <em>other</em> language variant.
+     *
+     * <p><strong>Both fields already carry both languages before the race</strong> (PR #553 review
+     * comment): a writer that only ever adds a language nobody held before cannot prove the
+     * reattach path at all - overwriting the sole existing variant of a field is not distinguishable
+     * from a plain replace-by-identity that dropped everything. So each field is seeded with both
+     * a German and an English variant first, then each racer touches only <em>one</em> language of
+     * <em>one</em> field, and the assertions below check all four values afterwards - not just the
+     * two each racer itself wrote, but also the pre-existing <em>other</em>-language variant of the
+     * very field each racer touched, which survives only if {@code replaceTriplesForUpdate}'s
+     * capture-before-delete/reattach actually ran. A version of this test missing those two extra
+     * assertions stayed green even with the reattach call commented out (see
+     * {@code KognioRdfActorRepository#replaceTriplesForUpdate}'s own call site) - confirmed manually
+     * before this class was finalised, see PR #553's review thread for the counter-check.</p>
+     */
+    @Test
+    void updateOfNameInGermanAndUpdateOfDescriptionInEnglishByTwoConcurrentWritersDoesNotLoseEitherLanguage() {
+        ActorService straightThrough = serviceOver(realLifecycle);
+        ActorCode code = straightThrough.add(WS, newActor("Sachbearbeiter"), "de").code();
+        straightThrough.update(WS, code, "Case worker", null, "en", null);
+        straightThrough.update(WS, code, null, "Handles incoming applications in the back office.", "en", null);
+
+        AtomicBoolean pending = new AtomicBoolean(true);
+        ActorService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
+            if (pending.compareAndSet(true, false)) {
+                straightThrough.update(WS, code, null,
+                        "Handles incoming applications in the back office, corrected.", "en", null);
+            }
+        }));
+
+        racing.update(WS, code, "Antragsbearbeiter", null, "de", null);
+
+        assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
+        Actor asGerman = straightThrough.get(WS, code, "de").orElseThrow();
+        assertEquals("Antragsbearbeiter", asGerman.name(),
+                "the racer's own German name correction must not have been lost by its own retry");
+        assertEquals("Bearbeitet eingehende Antraege im Backoffice.", asGerman.description(),
+                "the pre-existing German description must survive the concurrent writer's English-only "
+                        + "correction - only capture-before-delete/reattach keeps it, a plain replace would drop it");
+        Actor asEnglish = straightThrough.get(WS, code, "en").orElseThrow();
+        assertEquals("Handles incoming applications in the back office, corrected.", asEnglish.description(),
+                "the concurrent English description correction must not have been lost by the retry");
+        assertEquals("Case worker", asEnglish.name(),
+                "the pre-existing English name must survive the racer's own German-only correction - only "
+                        + "capture-before-delete/reattach keeps it, a plain replace would drop it");
+    }
+
     private static NewActor newActor(String name) {
-        return new NewActor(ActorType.HUMAN, name, "Bearbeitet eingehende Antraege im Backoffice.");
+        return new NewActor(ActorType.HUMAN, name, "Bearbeitet eingehende Antraege im Backoffice.", "de");
     }
 
     private static ActorService serviceOver(DatasetLifecycle lifecycle) {

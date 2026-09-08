@@ -17,6 +17,7 @@ import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorConcurrentlyModifiedException;
+import de.hauschel.arknet.actor.domain.ActorDisplayFallback;
 import de.hauschel.arknet.actor.domain.ActorId;
 import de.hauschel.arknet.actor.domain.ActorNotFoundException;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
@@ -29,24 +30,32 @@ import de.hauschel.arknet.kernel.ResourceId;
  *
  * <p>A hand-rolled fake (not a mock): it actually stores actors, keyed by project then opaque
  * identity, so the service's policy can be exercised end-to-end. Insertion order is preserved to
- * make {@link #findAll(ProjectId)} assertions deterministic. {@link #create} mirrors the real
- * out-adapter's in-transaction guards: an identity collision rejects with
- * {@link ResourceAlreadyExistsException}, a business-code collision with
- * {@link DuplicateActorCodeException}. {@link #compareAndUpdate} mirrors the same business-code
- * guard: a code change that collides with a <em>different</em> identity's code rejects the same
- * way, while updating to the identity's own already-held code (the only case any caller today,
- * {@code actor_update}, exercises) does not.</p>
+ * make {@link #findAll} assertions deterministic. {@link #create} mirrors the real out-adapter's
+ * in-transaction guards: an identity collision rejects with {@link ResourceAlreadyExistsException},
+ * a business-code collision with {@link DuplicateActorCodeException}. {@link #compareAndUpdate}
+ * mirrors the same business-code guard: a code change that collides with a <em>different</em>
+ * identity's code rejects the same way, while updating to the identity's own already-held code (the
+ * only case any caller today, {@code actor_update}, exercises) does not.</p>
  *
  * <p><strong>Concurrency token.</strong> Mirrors the real {@code WriteFunnel}'s head, minimally: a
  * fresh opaque marker minted on every {@link #create}/{@link #compareAndUpdate}, tracked per
  * identity - {@link #findCurrentByCode} hands it out alongside the actor,
  * {@link #compareAndUpdate} rejects a stale one, exactly the CAS contract the real adapter enforces
  * via {@code arkprov:head}.</p>
+ *
+ * <p><strong>One value per field, not a per-language set (kogn-io/arknet#520).</strong> Mirrors
+ * {@code InMemoryConstraintRepository}: this fake stores a single name/description value per
+ * identity, plus the tag each was last written under - enough to exercise {@code ActorService}'s
+ * per-field language resolution, but not the real adapter's capture-preserve-reattach of
+ * <em>other</em> language variants. That mechanism is exercised against a real store by
+ * {@code KognioRdfActorRepositoryTest} instead.</p>
  */
 final class InMemoryActorRepository implements ActorRepository {
 
     private final Map<ProjectId, Map<ActorId, Actor>> byProject = new LinkedHashMap<>();
     private final Map<ActorId, RevisionToken> headByIdentity = new LinkedHashMap<>();
+    private final Map<ActorId, String> nameLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<ActorId, String> descriptionLanguageByIdentity = new LinkedHashMap<>();
     private final Map<ProjectId, List<ActorCode>> retainedByProject = new LinkedHashMap<>();
     /**
      * Codes seeded by {@link #seedUnmaterialisableCode} - deliberately absent from
@@ -55,7 +64,7 @@ final class InMemoryActorRepository implements ActorRepository {
     private final Map<ProjectId, List<ActorCode>> unmaterialisableByProject = new LinkedHashMap<>();
 
     @Override
-    public void create(ProjectId projectId, Actor actor) {
+    public void create(ProjectId projectId, Actor actor, String language) {
         Map<ActorId, Actor> actors = byProject.computeIfAbsent(projectId, k -> new LinkedHashMap<>());
         if (actors.containsKey(actor.id())) {
             throw new ResourceAlreadyExistsException(projectId, actor.id().value());
@@ -66,10 +75,15 @@ final class InMemoryActorRepository implements ActorRepository {
         }
         actors.put(actor.id(), actor);
         headByIdentity.put(actor.id(), new RevisionToken(UUID.randomUUID().toString()));
+        nameLanguageByIdentity.put(actor.id(), language);
+        descriptionLanguageByIdentity.put(actor.id(), language);
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated) {
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated,
+            String nameLanguage, String descriptionLanguage, String defaultLanguage) {
+        // Nothing multi-valued to sweep in this fake - defaultLanguage only matters to the real
+        // out-adapter's language-variant preservation (see the class javadoc).
         Map<ActorId, Actor> actors = byProject.getOrDefault(projectId, Map.of());
         if (!actors.containsKey(updated.id())) {
             throw new ActorNotFoundException(projectId, updated.code());
@@ -84,24 +98,38 @@ final class InMemoryActorRepository implements ActorRepository {
         }
         actors.put(updated.id(), updated);
         headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));
+        nameLanguageByIdentity.put(updated.id(), nameLanguage);
+        descriptionLanguageByIdentity.put(updated.id(), descriptionLanguage);
     }
 
     @Override
-    public Optional<Actor> findByCode(ProjectId projectId, ActorCode code) {
+    public Optional<Actor> findByCode(ProjectId projectId, ActorCode code, String displayLocale) {
+        // Nothing multi-valued to select a language variant from in this plain in-memory fake -
+        // displayLocale is accepted and ignored.
         return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(a -> a.code().equals(code))
                 .findFirst();
     }
 
     @Override
-    public Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code) {
-        return findByCode(projectId, code)
-                .map(actor -> new CurrentActor(actor, headByIdentity.get(actor.id())));
+    public Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code, String defaultLanguage) {
+        return findByCode(projectId, code, null)
+                .map(actor -> new CurrentActor(actor, headByIdentity.get(actor.id()),
+                        nameLanguageByIdentity.get(actor.id()), descriptionLanguageByIdentity.get(actor.id())));
     }
 
     @Override
-    public List<Actor> findAll(ProjectId projectId) {
+    public List<Actor> findAll(ProjectId projectId, String displayLocale) {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Nothing multi-valued to fall back among in this plain in-memory fake - always empty,
+     * mirroring how {@link #findAll} ignores {@code displayLocale} altogether.
+     */
+    @Override
+    public Map<ActorCode, ActorDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+        return Map.of();
     }
 
     /**
@@ -140,6 +168,8 @@ final class InMemoryActorRepository implements ActorRepository {
                 .orElseThrow(() -> new ActorNotFoundException(projectId, code));
         actors.remove(id);
         headByIdentity.remove(id);
+        nameLanguageByIdentity.remove(id);
+        descriptionLanguageByIdentity.remove(id);
         retainedByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
     }
 
@@ -152,8 +182,9 @@ final class InMemoryActorRepository implements ActorRepository {
         return List.copyOf(retainedByProject.getOrDefault(projectId, List.of()));
     }
 
+    /** {@code displayLocale} is accepted and ignored, exactly like {@link #findAll}. */
     @Override
-    public List<Actor> findAllByIds(ProjectId projectId, List<ResourceId> ids) {
+    public List<Actor> findAllByIds(ProjectId projectId, String displayLocale, List<ResourceId> ids) {
         Set<ResourceId> wanted = Set.copyOf(ids);
         return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(actor -> wanted.contains(actor.id().value()))

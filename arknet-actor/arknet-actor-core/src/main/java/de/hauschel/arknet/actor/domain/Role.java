@@ -19,17 +19,18 @@ import java.util.Objects;
  * why {@link Role} does not subclass {@link Actor} in the ontology and does not reuse
  * {@link ActorType}: a role has no type of its own to fix at creation, only a name.</p>
  *
- * <p><strong>Multilingual, unlike {@link Actor}.</strong> {@link #name()}/{@link #description()}
- * carry language-tagged literals (SHACL {@code sh:uniqueLang}) - the same mechanism
- * {@code Constraint}'s {@code title}/{@code statement} use, not {@link Actor}'s untagged ones. This
- * record itself stays a plain, already-selected projection (the value one {@link
- * de.hauschel.arknet.kernel.DisplayLocale} resolved a candidate set down to), exactly like
- * {@code Constraint}'s own {@code title}/{@code statement} fields - the multilingual storage and
- * selection live in the out-adapter, not here. See {@code arknet-actor/CLAUDE.md} for why this
- * hexagon's two resource types deliberately disagree on this: an actor's name is a proper noun, a
- * role's name is a function description that translates, and the roles due to migrate in from the
- * glossary (today {@code TERM-6}..{@code TERM-9}) are already maintained bilingually - an untagged
- * literal would destroy one language on that migration.</p>
+ * <p><strong>Multilingual.</strong> {@link #name()}/{@link #description()} carry language-tagged
+ * literals (SHACL {@code sh:uniqueLang}) - the same mechanism {@code Constraint}'s
+ * {@code title}/{@code statement} use, and since kogn-io/arknet#520 {@link Actor}'s own
+ * {@code name}/{@code description} as well. This record itself stays a plain, already-selected
+ * projection (the value one {@link de.hauschel.arknet.kernel.DisplayLocale} resolved a candidate
+ * set down to), exactly like {@code Constraint}'s own {@code title}/{@code statement} fields - the
+ * multilingual storage and selection live in the out-adapter, not here. A role's name is a
+ * function description that translates, which is why it was language-tagged from the start
+ * (ADR-37 Part B): the roles due to migrate in from the glossary (today {@code TERM-6}..
+ * {@code TERM-9}) are already maintained bilingually, and an untagged literal would destroy one
+ * language on that migration. Where the two resource types of this hexagon still differ is the
+ * FR-10 label-equality rule, not the tagging - see {@link Actor}'s own javadoc.</p>
  *
  * <p><strong>{@link #filledBy()} carries opaque identity, not a business code.</strong> The
  * occupancy edge ({@code arkproc:filledBy}) survives an occupant being relabelled, and reading it

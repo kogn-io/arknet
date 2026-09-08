@@ -62,7 +62,7 @@ class ModelViewsTest {
                 }, (projectId, ids) -> List.of(), (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
                 emptyConstraintCards(),
-                new BoundedContextCards(projectId -> List.of()),
+                new BoundedContextCards((projectId, displayLocale) -> List.of()),
                 emptyAdrCards(),
                 emptyActorCards(),
                 emptyRoleCards());
@@ -93,7 +93,7 @@ class ModelViewsTest {
                         (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
                 emptyConstraintCards(),
-                new BoundedContextCards(projectId -> List.of(boundedContext())),
+                new BoundedContextCards((projectId, displayLocale) -> List.of(boundedContext())),
                 emptyAdrCards(),
                 emptyActorCards(),
                 emptyRoleCards());
@@ -117,7 +117,7 @@ class ModelViewsTest {
                         (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
                 emptyConstraintCards(),
-                new BoundedContextCards(projectId -> List.of()),
+                new BoundedContextCards((projectId, displayLocale) -> List.of()),
                 emptyAdrCards(),
                 emptyActorCards(),
                 emptyRoleCards());
@@ -142,10 +142,10 @@ class ModelViewsTest {
                         (projectId, displayLocale, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
                 new ConstraintCards((projectId, displayLocale) -> List.of(constraint())),
-                new BoundedContextCards(projectId -> List.of(boundedContext())),
+                new BoundedContextCards((projectId, displayLocale) -> List.of(boundedContext())),
                 new AdrCards((projectId, displayLocale) -> List.of(adrDetail()),
                         (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
-                new ActorCards(projectId -> List.of(actor())),
+                new ActorCards((projectId, displayLocale) -> List.of(actor())),
                 emptyRoleCards());
 
         assertThat(views.of(PROJECT, null).sections()).extracting(ModelSection::title)
@@ -215,7 +215,7 @@ class ModelViewsTest {
     }
 
     private static ActorCards emptyActorCards() {
-        return new ActorCards(projectId -> List.of());
+        return new ActorCards((projectId, displayLocale) -> List.of());
     }
 
     private static RoleCards emptyRoleCards() {

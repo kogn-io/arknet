@@ -43,11 +43,13 @@ import de.hauschel.arknet.uc.application.port.out.RoleLookup;
  * {@link ResourceId} it is handed.</p>
  *
  * <p><strong>Resolved by code, not by name - the reason Part C repoints this lookup rather than
- * merely renaming it.</strong> A role's {@code name} is language-tagged (ADR-37 Part B), unlike an
- * actor's untagged {@code arknet:name}: matching against a language-tagged literal would be
- * ambiguous the moment a role carries more than one language variant. Resolution therefore goes
- * via the role's stable, single-valued {@code dcterms:identifier} instead - the same key
- * {@code filledBy} already resolves an occupant actor by (its {@code ACTOR-N} code).</p>
+ * merely renaming it.</strong> A role's {@code name} is language-tagged (ADR-37 Part B), which
+ * an actor's {@code arknet:name} was not before kogn-io/arknet#520: matching against a
+ * language-tagged literal would be ambiguous the moment a role carries more than one language
+ * variant. Resolution therefore goes via the role's stable, single-valued
+ * {@code dcterms:identifier} instead - the same key {@code filledBy} already resolves an occupant
+ * actor by (its {@code ACTOR-N} code). Since #520 that reasoning applies to the actor's name as
+ * well, so a name-based lookup is off the table for both resource types.</p>
  *
  * <p><strong>No ambiguity branch, unlike its predecessor - a genuine behavioural difference.</strong>
  * {@code KognioRdfActorLookup#resolveByName} could see more than one match, since nothing in the

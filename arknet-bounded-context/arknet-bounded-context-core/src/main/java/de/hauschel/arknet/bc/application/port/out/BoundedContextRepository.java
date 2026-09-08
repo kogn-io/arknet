@@ -4,11 +4,13 @@
 package de.hauschel.arknet.bc.application.port.out;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
+import de.hauschel.arknet.bc.domain.BoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
@@ -55,8 +57,12 @@ public interface BoundedContextRepository {
      *                          real implementation's {@code WriteConstraintViolationException}
      *                          lives in {@code arknet-persistence-support}, a module
      *                          {@code arknet-bounded-context-core} must not depend on.
+     * @param language the BCP-47 language tag {@code boundedContext.name()} and
+     *                 {@code boundedContext.domainVision()} are written in, or {@code null} for
+     *                 plain, untagged literals - the same tag applies to both, since a freshly
+     *                 created bounded context is written whole in one call (kogn-io/arknet#520)
      */
-    void create(ProjectId projectId, BoundedContext boundedContext);
+    void create(ProjectId projectId, BoundedContext boundedContext, String language);
 
     /**
      * Replaces an existing bounded context by identity, but only if its current concurrency token
@@ -102,17 +108,40 @@ public interface BoundedContextRepository {
      *                          real implementation's {@code WriteConstraintViolationException}
      *                          lives in {@code arknet-persistence-support}, a module
      *                          {@code arknet-bounded-context-core} must not depend on.
+     * @param nameLanguage        the BCP-47 language tag {@code updated.name()} is written in for
+     *                            this call, or {@code null} for a plain, untagged literal. A call
+     *                            that leaves the name's content unchanged must pass through the tag
+     *                            the value it read was itself resolved under (see
+     *                            {@link CurrentBoundedContext#nameLanguage()}), so the write is a
+     *                            scoped no-op on that one language variant; every other
+     *                            language-tagged variant of {@code name} survives untouched
+     *                            (kogn-io/arknet#520)
+     * @param domainVisionLanguage the same as {@code nameLanguage}, for
+     *                            {@code updated.domainVision()} (see
+     *                            {@link CurrentBoundedContext#domainVisionLanguage()} for the
+     *                            pass-through case) - independent of {@code nameLanguage}
+     * @param defaultLanguage    the target project's configured default language, or {@code null}
+     *                           if it has none - used only to decide whether an existing
+     *                           <em>untagged</em> literal on {@code name}/{@code domainVision}
+     *                           should be swept away rather than preserved (issue #258's lazy
+     *                           sweep, mirroring {@code ConstraintRepository#compareAndUpdate}
+     *                           exactly)
      */
-    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated);
+    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated,
+            String nameLanguage, String domainVisionLanguage, String defaultLanguage);
 
     /**
      * Finds a bounded context by its human-readable business code within a project.
      *
-     * @param projectId the project (architecture model) to look up the bounded context in
-     * @param code        the bounded-context code (e.g. {@code BC-1})
+     * @param projectId     the project (architecture model) to look up the bounded context in
+     * @param code          the bounded-context code (e.g. {@code BC-1})
+     * @param displayLocale the BCP-47 language tag the caller wants {@code name}/
+     *                      {@code domainVision} shown in, overriding this repository's own
+     *                      configured display-language preference for this one call, or
+     *                      {@code null} to use that preference unchanged
      * @return the bounded context if present, otherwise {@link Optional#empty()}
      */
-    Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code);
+    Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code, String displayLocale);
 
     /**
      * Reads a bounded context's current state together with its concurrency token (recorded by
@@ -128,28 +157,61 @@ public interface BoundedContextRepository {
      * bounded context comes from a single read. Backs the read side of the read-modify-write round
      * trip {@link #compareAndUpdate} guards the write side of.
      *
-     * @param projectId the project (architecture model) to look up the bounded context in
-     * @param code        the bounded-context code (e.g. {@code BC-1})
+     * @param projectId       the project (architecture model) to look up the bounded context in
+     * @param code            the bounded-context code (e.g. {@code BC-1})
+     * @param defaultLanguage the project's configured default language, or {@code null} if it has
+     *                        none - the BCP-47 tag {@code name}/{@code domainVision} are selected
+     *                        under, degrading along the usual fallback chain (kogn-io/arknet#520)
      * @return the bounded context and its current head, or {@link Optional#empty()} if no bounded
      *         context with this code exists
      */
-    Optional<CurrentBoundedContext> findCurrentByCode(ProjectId projectId, BoundedContextCode code);
+    Optional<CurrentBoundedContext> findCurrentByCode(ProjectId projectId, BoundedContextCode code,
+            String defaultLanguage);
 
     /**
      * A bounded context's state paired with its current concurrency token (the
      * {@link RevisionToken}, or {@code null} if no write has ever been recorded for this bounded
      * context), as read together by {@link #findCurrentByCode}.
+     *
+     * @param value                the bounded context as currently read
+     * @param head                 the concurrency token, or {@code null}
+     * @param nameLanguage         the BCP-47 language tag of the specific {@code name} literal
+     *                             {@code value.name()} was selected from (or {@code null} if that
+     *                             literal is untagged) - a read-modify-write round trip that does
+     *                             not itself intend to change {@code name} must pass this straight
+     *                             through to {@link #compareAndUpdate}'s {@code nameLanguage}
+     * @param domainVisionLanguage the same as {@code nameLanguage}, for
+     *                             {@code value.domainVision()}
      */
-    record CurrentBoundedContext(BoundedContext value, RevisionToken head) {
+    record CurrentBoundedContext(BoundedContext value, RevisionToken head, String nameLanguage,
+            String domainVisionLanguage) {
     }
 
     /**
      * Returns all bounded contexts stored in a project.
      *
-     * @param projectId the project (architecture model) to list bounded contexts from
+     * @param projectId     the project (architecture model) to list bounded contexts from
+     * @param displayLocale the BCP-47 language tag the caller wants each context's {@code name}/
+     *                      {@code domainVision} shown in, overriding this repository's own
+     *                      configured display-language preference for this one call, or
+     *                      {@code null} to use that preference unchanged
      * @return all bounded contexts, never {@code null}
      */
-    List<BoundedContext> findAll(ProjectId projectId);
+    List<BoundedContext> findAll(ProjectId projectId, String displayLocale);
+
+    /**
+     * Companion to {@link #findAll}: not the displayed value, but whether displaying it required
+     * falling back past the requested/project-default language tier (kogn-io/arknet#520) - mirrors
+     * {@code ConstraintRepository#findAllDisplayFallback}/{@code RoleRepository
+     * #findAllDisplayFallback} exactly.
+     *
+     * @param projectId     the project (architecture model) to list bounded contexts from
+     * @param displayLocale the same override {@link #findAll} accepts
+     * @return see
+     *         {@link de.hauschel.arknet.bc.application.port.in.DescribeBoundedContextDisplayFallback#describe}
+     */
+    Map<BoundedContextCode, BoundedContextDisplayFallback> findAllDisplayFallback(
+            ProjectId projectId, String displayLocale);
 
     /**
      * Returns the business code of every bounded context recorded in a project, read independently

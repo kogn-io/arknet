@@ -6,16 +6,20 @@ package de.hauschel.arknet.actor.adapter.kogniordf;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetTx;
+import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
@@ -32,12 +36,17 @@ import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorConcurrentlyModifiedException;
+import de.hauschel.arknet.actor.domain.ActorDisplayFallback;
 import de.hauschel.arknet.actor.domain.ActorId;
 import de.hauschel.arknet.actor.domain.ActorNotFoundException;
 import de.hauschel.arknet.actor.domain.ActorReferencedException;
 import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.actor.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.InvalidLanguageTagException;
+import de.hauschel.arknet.kernel.LanguageTag;
+import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
@@ -55,11 +64,11 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the business code),
  * stored in one named graph shared by all actors: the concrete type triple (one of
  * {@code arkproc:HumanActor}/{@code SystemActor}/{@code LegalActor}/{@code GroupActor}), the
- * mandatory {@code dcterms:identifier} (the business code {@code ACTOR-1}), the generic
- * {@code arknet:name} literal and an optional {@code arknet:description} literal. This class
- * depends only on the neutral kognio-rdf ports ({@code terms} + {@code dataset}) and
- * {@link SimpleRdf} - it never imports RDF4J. The backend ({@link DatasetLifecycle} implementation)
- * is supplied by the composition root.</p>
+ * mandatory {@code dcterms:identifier} (the business code {@code ACTOR-1}), one or more
+ * language-tagged {@code arknet:name} literals and zero or more language-tagged
+ * {@code arknet:description} literals. This class depends only on the neutral kognio-rdf ports
+ * ({@code terms} + {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J. The backend
+ * ({@link DatasetLifecycle} implementation) is supplied by the composition root.</p>
  *
  * <p><strong>Only the concrete type is written.</strong> {@link #typeIriFor} maps the
  * {@link ActorType} to exactly one {@code rdf:type}; the abstract {@code arkproc:Actor} superclass
@@ -67,11 +76,18 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * {@code arkreq:Constraint}. That is precisely why the gate this adapter writes through reasons
  * over the ontology axioms - see {@link KognioRdfActorRepositoryFactory#buildGate}.</p>
  *
- * <p><strong>Untagged literals.</strong> {@code name}/{@code description} are written as plain
- * literals with no language tag, so there is none of
- * {@code KognioRdfConstraintRepository}'s capture-before-delete/re-attach machinery for other
- * language variants, and no {@link de.hauschel.arknet.kernel.DisplayLocale} on any read path. See
- * {@link Actor} for why an actor is a structural identity resource rather than a prose carrier.</p>
+ * <p><strong>Multilingual {@code name}/{@code description}, mirroring
+ * {@code KognioRdfRoleRepository} (kogn-io/arknet#520).</strong> Both carry one language-tagged
+ * literal per language (SHACL {@code sh:uniqueLang}), read as their own follow-up queries
+ * ({@link #readNames}/{@link #readDescriptions}) and selected through {@link DisplayLocale}, never
+ * joined into the single-row scalar clause {@link #actorByCodeWhereClause} builds - a join would
+ * multiply one subject into a row per name/description candidate combination.
+ * {@link #compareAndUpdate} writes exactly one variant of each per call and preserves every other
+ * one across its replace-by-identity write (see {@link #replaceTriplesForUpdate}), including the
+ * issue #258 sweep of a stale untagged sibling of a default-language write. Before kogn-io/
+ * arknet#520 both fields were plain untagged literals - see {@link Actor}'s own javadoc for why an
+ * actor's name is nonetheless free to differ per language, unlike a glossary term's
+ * {@code prefLabel}.</p>
  *
  * <p><strong>Create vs. compare-and-set update (opaque identity).</strong> The transactional
  * mechanics - the in-transaction {@code contains} existence guards, the SHACL gate, the
@@ -86,10 +102,11 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * wholesale. There is no unconditional update: every correction to an already-created actor goes
  * through the compare-and-set guard.</p>
  *
- * <p><strong>Nothing to preserve across a replace.</strong> Unlike the bounded-context adapter,
- * which has to carry {@code arkddd:hasAggregate} and blank-node term edges over its
- * replace-by-identity write, an {@link Actor} has no side edges at all in this scope: the aggregate
- * carries every field this graph holds. A resource that is also a glossary term keeps its
+ * <p><strong>Nothing to preserve across a replace besides languages.</strong> Unlike the
+ * bounded-context adapter, which has to carry {@code arkddd:hasAggregate} and blank-node term
+ * edges over its replace-by-identity write, an {@link Actor} has no side edges at all in this
+ * scope: the aggregate carries every field this graph holds besides the language variants
+ * {@link #replaceTriplesForUpdate} preserves. A resource that is also a glossary term keeps its
  * {@code skos:*} triples regardless - those live in the ubiquitous-language context's own named
  * graph, which this adapter's whole-subject delete is scoped away from.</p>
  *
@@ -100,15 +117,13 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * writes, so the plain {@link ShaclWriteGate#enforce(io.kogn.rdf.terms.ReadableGraph)} suffices -
  * no validation-only asserted context is needed.</p>
  *
- * <p><strong>Row multiplication.</strong> SHACL gates writes, not the store: a store-first
- * actor can legally carry two {@code arknet:name}, two {@code arknet:description} or two
- * of the four actor types despite {@code actor-shapes.ttl} demanding at most one of each. Every
- * read path therefore groups its rows per subject and reduces each field with
- * {@link #firstDistinctValue} - the same guard the bounded-context adapter needed (issue #158) -
- * logging a single {@code WARN} when more than one distinct value was collapsed. A plain
- * {@code findFirst()} would otherwise pick one arbitrary, unlogged combination, and
- * {@link #compareAndUpdate}'s replace-by-identity write would then silently drop every other value
- * on the very next update.</p>
+ * <p><strong>Row multiplication (type only).</strong> SHACL gates writes, not the store: a
+ * store-first actor can legally carry two of the four actor types despite {@code actor-shapes.ttl}
+ * demanding at most one. Every read path therefore groups its rows per subject and reduces the
+ * type with {@link #firstDistinctValue} - the same guard the bounded-context adapter needed (issue
+ * #158) - logging a single {@code WARN} when more than one distinct value was collapsed. {@code
+ * name}/{@code description} no longer share this treatment since kogn-io/arknet#520: they are read
+ * through their own multilingual queries, not the row-multiplying scalar join.</p>
  */
 public class KognioRdfActorRepository implements ActorRepository {
 
@@ -137,34 +152,41 @@ public class KognioRdfActorRepository implements ActorRepository {
     private static final String CODE_PREFIX = "ACTOR-";
 
     private final DatasetLifecycle lifecycle;
+    private final DisplayLocale displayLocale;
     private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the adapter.
      *
-     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from - read paths only,
-     *                  the write path goes through {@code funnel} (must not be {@code null})
-     * @param funnel    the shared write funnel running the SHACL gate, dataset
-     *                  acquisition and existence/head checks for every
-     *                  {@link #create}/{@link #compareAndUpdate} (must not be {@code null})
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from - read paths
+     *                      only, the write path goes through {@code funnel} (must not be
+     *                      {@code null})
+     * @param displayLocale the display-language preference selecting which {@code arknet:name}/
+     *                      {@code arknet:description} the read paths surface for a multilingual
+     *                      actor (must not be {@code null})
+     * @param funnel        the shared write funnel running the SHACL gate, dataset
+     *                      acquisition and existence/head checks for every
+     *                      {@link #create}/{@link #compareAndUpdate} (must not be {@code null})
      */
-    KognioRdfActorRepository(DatasetLifecycle lifecycle, WriteFunnel funnel) {
+    KognioRdfActorRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
+        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
 
     @Override
-    public void create(ProjectId projectId, Actor actor) {
+    public void create(ProjectId projectId, Actor actor, String language) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(actor, "actor");
+        String tag = LanguageTag.canonicalize(language);
 
         // ResourceId#of validates IRIREF-safety at construction, so the wrapped IRI is already
         // guaranteed safe to embed here - no separate check needed.
         String subjectIriString = actor.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
         IRI graphIri = rdf.createIRI(ACTOR_GRAPH);
-        Graph graph = buildCandidateGraph(subjectIri, actor);
+        Graph graph = buildCandidateGraph(subjectIri, actor, tag, tag);
 
         funnel.create(new DatasetId(projectId.value()), ACTOR_GRAPH, subjectIriString,
                 actor.code().value(), graph, null,
@@ -174,31 +196,24 @@ public class KognioRdfActorRepository implements ActorRepository {
     }
 
     /**
-     * Compare-and-set update: replaces the actor's triples only if its
-     * {@code arkprov:head} still equals {@code expectedHead} at the moment the shared
-     * {@link WriteFunnel} checks it inside the write transaction - closing the lost-update window a
-     * plain read (via {@link #findCurrentByCode}) followed by an unconditional replace would
-     * otherwise leave open between the read and the write.
-     *
-     * <p><strong>Business-code uniqueness.</strong> Unlike {@link #create},
-     * {@link WriteFunnel#compareAndUpdate} runs no {@code dcterms:identifier} collision check of its
-     * own - a create's subject is brand-new, but a compare-and-set update's subject already exists
-     * and, ordinarily, already carries this very code. So the check this method runs itself, via
-     * {@link #rejectCodeCollision}, must exclude the subject being updated rather than simply asking
-     * whether {@code updated.code()} exists anywhere. Rejects before any triple is touched, so a
-     * rejected code change writes nothing and records no revision - the same atomicity a stale
-     * {@code expectedHead} already gets.</p>
+     * Compare-and-set update, mirroring {@code KognioRdfRoleRepository#compareAndUpdate} exactly
+     * for the multilingual mechanics, and its own prior self for the
+     * {@link #rejectCodeCollision} check.
      */
     @Override
-    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated) {
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Actor updated,
+            String nameLanguage, String descriptionLanguage, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(updated, "updated");
+        String nameTag = canonicalizeLenient(nameLanguage);
+        String descriptionTag = canonicalizeLenient(descriptionLanguage);
+        String defaultTag = canonicalizeLenient(defaultLanguage);
 
         String subjectIriString = updated.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
         IRI graphIri = rdf.createIRI(ACTOR_GRAPH);
-        Graph graph = buildCandidateGraph(subjectIri, updated);
+        Graph graph = buildCandidateGraph(subjectIri, updated, nameTag, descriptionTag);
 
         funnel.compareAndUpdate(new DatasetId(projectId.value()), ACTOR_GRAPH, subjectIriString,
                 expectedHead == null ? null : expectedHead.value(), graph, null,
@@ -206,7 +221,8 @@ public class KognioRdfActorRepository implements ActorRepository {
                 () -> new ActorConcurrentlyModifiedException(projectId, updated.code()),
                 tx -> {
                     rejectCodeCollision(tx, graphIri, subjectIri, updated.code(), projectId);
-                    replaceExistingTriples(tx, graphIri, subject, graph);
+                    replaceTriplesForUpdate(tx, graphIri, subjectIri, subject, graph, nameTag, descriptionTag,
+                            defaultTag);
                 });
     }
 
@@ -238,37 +254,85 @@ public class KognioRdfActorRepository implements ActorRepository {
 
     /**
      * Builds the candidate graph for one actor's triples: the concrete actor type, the identifier,
-     * the name and - when present - the description. Shared by {@link #create} and
-     * {@link #compareAndUpdate} so both write paths serialise an {@link Actor} identically.
+     * the name (tagged {@code nameTag}) and the optional description (tagged
+     * {@code descriptionTag}). Shared by {@link #create} and {@link #compareAndUpdate} - never more
+     * than one {@code name}/{@code description} each, since preserving every other language variant
+     * is {@link #replaceTriplesForUpdate}'s job.
      */
-    private Graph buildCandidateGraph(IRI subjectIri, Actor actor) {
+    private Graph buildCandidateGraph(IRI subjectIri, Actor actor, String nameTag, String descriptionTag) {
         Graph graph = rdf.createGraph();
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(typeIriFor(actor.type())));
         graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(actor.code().value()));
-        graph.add(subjectIri, rdf.createIRI(NAME_PROPERTY), rdf.createLiteral(actor.name()));
+        graph.add(subjectIri, rdf.createIRI(NAME_PROPERTY), literalOf(actor.name(), nameTag));
         if (actor.description() != null) {
-            graph.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), rdf.createLiteral(actor.description()));
+            graph.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), literalOf(actor.description(), descriptionTag));
         }
         return graph;
     }
 
     /**
-     * Replaces {@code subject}'s triples with {@code graph} inside an already-open write transaction
-     * - the tail of {@link #compareAndUpdate}, reached once the funnel's own head comparison has
-     * decided the write should proceed. ({@link #create} has no such tail: a freshly minted identity
-     * has nothing to delete.)
-     *
-     * <p>A plain whole-subject delete, deliberately: within this graph an {@link Actor} carries no
-     * field the record does not represent and no edge to follow, so there is nothing to capture and
-     * re-attach (see the class-level "Nothing to preserve" note). The delete is scoped to
-     * {@code ACTOR_GRAPH}, so triples the same subject may carry as a glossary term in another named
-     * graph are out of reach by construction.</p>
+     * Replaces {@code subject}'s triples with {@code graph} inside an already-open write
+     * transaction - mirrors {@code KognioRdfRoleRepository#replaceTriplesForUpdate} exactly: every
+     * <em>other</em> language variant of {@code name}/{@code description} is captured before the
+     * unconditional whole-subject delete and re-attached afterwards, including the issue #258 sweep
+     * of a stale untagged sibling of a default-language write.
      */
-    private void replaceExistingTriples(DatasetTx tx, IRI graphIri, String subject, Graph graph) {
+    private void replaceTriplesForUpdate(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
+            String nameTag, String descriptionTag, String defaultTag) {
         String deleteExisting = "DELETE { GRAPH <" + ACTOR_GRAPH + "> { " + subject + " ?p ?o } } WHERE { "
                 + "GRAPH <" + ACTOR_GRAPH + "> { " + subject + " ?p ?o } }";
+
+        // Captured inside this same transaction, never by a separate read beforehand - that would
+        // leave a TOCTOU window the caller's own head comparison deliberately avoids.
+        List<Literal> preservedNames = otherLanguageLiterals(tx, subject, NAME_PROPERTY, nameTag, defaultTag);
+        List<Literal> preservedDescriptions =
+                otherLanguageLiterals(tx, subject, DESCRIPTION_PROPERTY, descriptionTag, defaultTag);
         tx.update(deleteExisting);
         tx.add(graphIri, graph);
+        if (!preservedNames.isEmpty() || !preservedDescriptions.isEmpty()) {
+            Graph preservedLanguageVariants = rdf.createGraph();
+            for (Literal name : preservedNames) {
+                preservedLanguageVariants.add(subjectIri, rdf.createIRI(NAME_PROPERTY), name);
+            }
+            for (Literal description : preservedDescriptions) {
+                preservedLanguageVariants.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), description);
+            }
+            tx.add(graphIri, preservedLanguageVariants);
+        }
+    }
+
+    /**
+     * Reads every existing literal of {@code subject} on {@code predicateIri} whose language tag
+     * differs from {@code writtenTag}, inside the live write transaction - mirrors
+     * {@code KognioRdfRoleRepository#otherLanguageLiterals} exactly, sweep included.
+     */
+    private List<Literal> otherLanguageLiterals(
+            DatasetTx tx, String subject, String predicateIri, String writtenTag, String defaultTag) {
+        String query = "SELECT ?o WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+                + subject + " <" + predicateIri + "> ?o } }";
+        boolean sweepUntagged = defaultTag != null && defaultTag.equals(writtenTag);
+        return tx.select(query)
+                .map(row -> literalOf(row, "o"))
+                .filter(literal -> {
+                    String existingTag = canonicalizeLenient(literal.getLanguageTag().orElse(null));
+                    if (sweepUntagged && existingTag == null) {
+                        return false;
+                    }
+                    return !Objects.equals(existingTag, writtenTag);
+                })
+                .toList();
+    }
+
+    /**
+     * {@link LanguageTag#canonicalize(String)}, but falls back to {@code null} (untagged) instead
+     * of throwing - mirrors {@code KognioRdfRoleRepository#canonicalizeLenient} exactly.
+     */
+    private static String canonicalizeLenient(String tag) {
+        try {
+            return LanguageTag.canonicalize(tag);
+        } catch (InvalidLanguageTagException e) {
+            return null;
+        }
     }
 
     /**
@@ -277,10 +341,7 @@ public class KognioRdfActorRepository implements ActorRepository {
      * transaction (mirroring {@link #findByCode}'s own read), then hands the whole
      * check-and-delete to {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first,
      * inside the funnel's own write transaction, and only once it finds nothing pointing at the
-     * actor does the body remove the subject's triples wholesale - the same "nothing to preserve"
-     * whole-subject delete {@link #replaceExistingTriples} already runs, scoped to
-     * {@link #ACTOR_GRAPH} so a subject that is also a glossary term keeps its {@code skos:*}
-     * triples in the ul context's own named graph untouched.
+     * actor does the body remove the subject's triples wholesale.
      */
     @Override
     public void delete(ProjectId projectId, ActorCode code) {
@@ -322,17 +383,7 @@ public class KognioRdfActorRepository implements ActorRepository {
 
     /**
      * The predicates that, if found pointing at an actor, block its deletion (issue #335):
-     * a role's {@code arkproc:filledBy}. {@code arkproc:filledBy} is listed here even before
-     * {@code role_add}/{@code role_update} exist as the only tools that write it - {@code
-     * rdfs:range arkproc:Actor} already makes it a reference the ontology declares, and {@code
-     * ReferenceGuardsCoverEveryOntologyEdgeTest} in {@code arknet-architecture-tests} holds this
-     * map against every such range, not against which write paths currently exist.
-     *
-     * <p>Used to carry two more entries, the pre-ADR-37 use-case edges {@code
-     * arkreq:primaryActor}/{@code supportingActor} - removed in kogn-io/arknet#530 once
-     * {@code KognioRdfUseCaseRepository}'s transitional read of those predicates was itself
-     * retired and every store had been migrated to {@code arkreq:primaryRole}/{@code
-     * supportingRole}.</p>
+     * a role's {@code arkproc:filledBy}.
      */
     private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
             ArkprocVocabulary.FILLED_BY, "filledBy");
@@ -359,82 +410,17 @@ public class KognioRdfActorRepository implements ActorRepository {
         }
     }
 
-    @Override
-    public Optional<Actor> findByCode(ProjectId projectId, ActorCode code) {
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(code, "code");
-
-        String query = "SELECT ?s ?type ?name ?description WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
-                + actorByCodeWhereClause(code)
-                + "} }";
-
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            List<BindingSet> rows = handle.sparqlQuery().select(query).toList();
-            if (rows.isEmpty()) {
-                return Optional.empty();
-            }
-            return Optional.of(actorOf(rows, code));
-        }
-    }
-
     /**
-     * Reads an actor's current state together with its concurrency token. The rows built from
-     * {@link #actorByCodeWhereClause} (possibly row-multiplied - see the class-level "Row
-     * multiplication" note) plus the head itself come from this method's one query call - one
-     * snapshot, which is the load-bearing guarantee, not an ordering of clauses within that query.
-     * {@code head} is single-valued (the queryable-head invariant), so every row carries the
-     * same value; only the first row is consulted for it. Builds the {@link Actor} the same way
-     * {@link #findByCode} does - both call {@link #actorOf} on their rows, so the two read paths
-     * cannot drift apart field-by-field.
-     */
-    @Override
-    public Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code) {
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(code, "code");
-
-        String query = "SELECT ?s ?type ?name ?description ?head WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
-                + actorByCodeWhereClause(code)
-                + "} "
-                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
-
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            List<BindingSet> rows = handle.sparqlQuery().select(query).toList();
-            if (rows.isEmpty()) {
-                return Optional.empty();
-            }
-            Actor actor = actorOf(rows, code);
-            RevisionToken head = rows.get(0).getValue("head")
-                    .filter(IRI.class::isInstance)
-                    .map(value -> new RevisionToken(((IRI) value).getIRIString()))
-                    .orElse(null);
-            return Optional.of(new CurrentActor(actor, head));
-        }
-    }
-
-    /**
-     * The WHERE body shared by {@link #findByCode} and {@link #findCurrentByCode}: the mandatory
-     * joins (type - filtered to the four known actor types, mirroring
-     * {@code KognioRdfConstraintRepository}'s own type filter - identifier and name) plus the
-     * optional description join. Extracted because both callers build an {@link Actor} from the same
-     * row shape via {@link #actorOf}; drift between two near-identical read paths is what row
-     * multiplication cost the requirements adapter, so this text lives in one place. The caller
-     * supplies the surrounding {@code SELECT}/{@code GRAPH}/{@code WHERE} wrapping and, in
-     * {@link #findCurrentByCode}'s case, the additional provenance-graph join.
-     *
-     * <p>{@code FILTER(isIRI(?s))} because every caller casts {@code ?s} to an {@link IRI} to name the
-     * actor's identity (kogn-io/arknet#401), and {@code actor-shapes.ttl} constrains no node kind
-     * on the subject: a store-first blank-node actor used to make the whole call throw a
-     * {@link ClassCastException} rather than read as absent. {@link #findAllCodes} joins
-     * {@link #actorTypeFilter} alone and stays deliberately unguarded - see its own javadoc.</p>
+     * The WHERE body shared by {@link #findByCode}/{@link #findCurrentByCode}/{@link #delete} -
+     * the mandatory type and identifier joins. {@code name}/{@code description} are read
+     * separately, not joined here, since both may carry several language-tagged literals each - see
+     * the class-level multilingual note.
      */
     private static String actorByCodeWhereClause(ActorCode code) {
         return "?s a ?type . "
                 + actorTypeFilter()
                 + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
-                + "?s <" + NAME_PROPERTY + "> ?name . "
-                + "FILTER(isIRI(?s)) "
-                + "OPTIONAL { ?s <" + DESCRIPTION_PROPERTY + "> ?description } ";
+                + "FILTER(isIRI(?s)) ";
     }
 
     /** Restricts {@code ?type} to the four concrete actor classes this adapter writes. */
@@ -443,73 +429,172 @@ public class KognioRdfActorRepository implements ActorRepository {
                 + "> || ?type = <" + LEGAL_ACTOR_TYPE + "> || ?type = <" + GROUP_ACTOR_TYPE + ">) ";
     }
 
-    /**
-     * Builds one {@link Actor} from every row of {@link #actorByCodeWhereClause}'s projection for
-     * one subject. {@code type}, {@code name} and {@code description} are collected across
-     * <strong>all</strong> rows and reduced with {@link #firstDistinctValue}, because {@code rows}
-     * can legally hold a cross product of candidates for this one subject (see the class-level "Row
-     * multiplication" note). Shared by {@link #findByCode} and {@link #findCurrentByCode} so both
-     * single-actor read paths build the aggregate the same way.
-     */
-    private Actor actorOf(List<BindingSet> rows, ActorCode code) {
-        String subjectIriString = iriOf(rows.get(0), "s").getIRIString();
-        ActorAssembly assembly = new ActorAssembly(new ActorId(ResourceId.of(subjectIriString)), code);
-        rows.forEach(assembly::addRow);
-        return assembly.toActor();
+    @Override
+    public Optional<Actor> findByCode(ProjectId projectId, ActorCode code, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        DisplayLocale effective = this.displayLocale.withRequestedOverride(displayLocale);
+
+        String query = "SELECT ?s ?type WHERE { GRAPH <" + ACTOR_GRAPH + "> { " + actorByCodeWhereClause(code)
+                + "} }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            SparqlQuery sparql = handle.sparqlQuery();
+            List<BindingSet> rows = sparql.select(query).toList();
+            if (rows.isEmpty()) {
+                return Optional.empty();
+            }
+            return actorOf(rows, code, sparql::select, effective);
+        }
     }
 
     /**
-     * Lists every actor this adapter can materialise. {@code arknet:name} is joined as a mandatory
-     * pattern, so a store-first actor written without one binds no row at all and is
-     * silently skipped here - {@code actshapes:Actor-name} carries {@code sh:minCount 1} at
-     * {@code sh:Violation} severity, so nothing written through this port can end up that way, but
-     * an edit that bypassed it can. Skipping keeps the listing readable; what must not follow from
-     * the skip is the actor's code falling free, which is why the code counter reads
-     * {@link #findAllCodes} rather than this method (kogn-io/arknet#360).
+     * Reads an actor's current state together with its concurrency token. Mirrors
+     * {@code KognioRdfRoleRepository#findCurrentByCode} exactly, including which language variant
+     * this read projects through (the target project's own configured default, not the reading
+     * process's own preference - issue #456).
      */
     @Override
-    public List<Actor> findAll(ProjectId projectId) {
+    public Optional<CurrentActor> findCurrentByCode(ProjectId projectId, ActorCode code, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        DisplayLocale effective = this.displayLocale.withRequestedOverride(canonicalizeLenient(defaultLanguage));
 
-        String query = "SELECT ?s ?identifier ?type ?name ?description WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+        String query = "SELECT ?s ?type ?head WHERE { GRAPH <" + ACTOR_GRAPH + "> { " + actorByCodeWhereClause(code)
+                + "} "
+                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            SparqlQuery sparql = handle.sparqlQuery();
+            List<BindingSet> rows = sparql.select(query).toList();
+            if (rows.isEmpty()) {
+                return Optional.empty();
+            }
+            String subjectIriString = iriOf(rows.get(0), "s").getIRIString();
+            String subject = SparqlTerms.iriRef(subjectIriString);
+            Optional<NameDescriptionSelection> selection = selectNameDescription(sparql::select, subject, effective);
+            if (selection.isEmpty()) {
+                return Optional.empty();
+            }
+            NameDescriptionSelection selected = selection.get();
+            ActorType type = firstDistinctType(rows, subjectIriString);
+            Actor actor = new Actor(new ActorId(ResourceId.of(subjectIriString)), code, type,
+                    selected.name().value(),
+                    selected.description() == null ? null : selected.description().value());
+            RevisionToken head = rows.get(0).getValue("head")
+                    .filter(IRI.class::isInstance)
+                    .map(value -> new RevisionToken(((IRI) value).getIRIString()))
+                    .orElse(null);
+            return Optional.of(new CurrentActor(actor, head, selected.name().languageTag(),
+                    selected.description() == null ? null : selected.description().languageTag()));
+        }
+    }
+
+    @Override
+    public List<Actor> findAll(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        DisplayLocale effective = this.displayLocale.withRequestedOverride(displayLocale);
+
+        String query = "SELECT ?s ?identifier ?type WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
                 + "?s a ?type . "
                 + actorTypeFilter()
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
-                + "?s <" + NAME_PROPERTY + "> ?name . "
-                + "FILTER(isIRI(?s)) "
-                + "OPTIONAL { ?s <" + DESCRIPTION_PROPERTY + "> ?description } } }";
+                + "FILTER(isIRI(?s)) } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            // Grouped by subject: SHACL gates writes only, so a store-first actor with two type,
-            // name or description triples binds a cross product of rows for the same subject.
-            // Mapping each row straight to an Actor would surface that subject more than once.
+            SparqlQuery sparql = handle.sparqlQuery();
+            Map<String, List<LocalizedLiteral>> namesBySubject = literalsBySubject(sparql, NAME_PROPERTY);
+            Map<String, List<LocalizedLiteral>> descriptionsBySubject = literalsBySubject(sparql, DESCRIPTION_PROPERTY);
             Map<String, ActorAssembly> bySubject = new LinkedHashMap<>();
-            handle.sparqlQuery().select(query).forEach(row -> {
+            sparql.select(query).forEach(row -> {
                 String subjectIri = iriOf(row, "s").getIRIString();
-                bySubject.computeIfAbsent(subjectIri, iri -> new ActorAssembly(
+                ActorAssembly assembly = bySubject.computeIfAbsent(subjectIri, iri -> new ActorAssembly(
                         new ActorId(ResourceId.of(iri)),
-                        new ActorCode(literalOf(row, "identifier").getLexicalForm()))).addRow(row);
+                        new ActorCode(literalOf(row, "identifier").getLexicalForm())));
+                assembly.addType(typeFromIri(iriOf(row, "type").getIRIString()));
             });
-            return bySubject.values().stream().map(ActorAssembly::toActor).toList();
+            List<Actor> actors = new ArrayList<>();
+            bySubject.forEach((subjectIri, assembly) -> {
+                Optional<LocalizedLiteral> name =
+                        effective.select(namesBySubject.getOrDefault(subjectIri, List.of()));
+                if (name.isEmpty()) {
+                    // actshapes:Actor-name carries sh:minCount 1 at sh:Violation severity, so this
+                    // is unreachable via the MCP tools - skip this one store-first actor rather
+                    // than crash the whole listing, mirroring KognioRdfRoleRepository#findAll.
+                    return;
+                }
+                Optional<LocalizedLiteral> description =
+                        effective.select(descriptionsBySubject.getOrDefault(subjectIri, List.of()));
+                actors.add(assembly.toActor(name.get().value(), description.map(LocalizedLiteral::value).orElse(null)));
+            });
+            return List.copyOf(actors);
         }
+    }
+
+    /**
+     * Companion to {@link #findAll}: not the displayed value, but whether displaying it required
+     * falling back past the requested/project-default language tier (kogn-io/arknet#520) - mirrors
+     * {@code KognioRdfRoleRepository#findAllDisplayFallback} exactly.
+     */
+    @Override
+    public Map<ActorCode, ActorDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        DisplayLocale effective = this.displayLocale.withRequestedOverride(displayLocale);
+
+        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+                + "?s a ?type . "
+                + actorTypeFilter()
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
+                + "FILTER(isIRI(?s)) } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            SparqlQuery sparql = handle.sparqlQuery();
+            Map<String, List<LocalizedLiteral>> namesBySubject = literalsBySubject(sparql, NAME_PROPERTY);
+            Map<String, List<LocalizedLiteral>> descriptionsBySubject = literalsBySubject(sparql, DESCRIPTION_PROPERTY);
+            Map<ActorCode, ActorDisplayFallback> result = new LinkedHashMap<>();
+            sparql.select(query).forEach(row -> {
+                String subject = iriOf(row, "s").getIRIString();
+                ActorCode code = new ActorCode(literalOf(row, "identifier").getLexicalForm());
+                ActorDisplayFallback fallback = new ActorDisplayFallback(
+                        fallbackTag(namesBySubject.getOrDefault(subject, List.of()), effective),
+                        fallbackTag(descriptionsBySubject.getOrDefault(subject, List.of()), effective));
+                if (!fallback.isEmpty()) {
+                    result.put(code, fallback);
+                }
+            });
+            return result;
+        }
+    }
+
+    /**
+     * {@code null} if the candidate matching {@code displayLocale}'s requested language was shown;
+     * otherwise the tag of whatever was shown instead - mirrors
+     * {@code KognioRdfRoleRepository#fallbackTag} exactly. A subject carrying no candidate at all
+     * (an optional {@code description} an actor never had) is never a fallback - there is nothing
+     * to have shown in a different language.
+     */
+    private static String fallbackTag(List<LocalizedLiteral> candidates, DisplayLocale displayLocale) {
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        LocalizedLiteral selected = displayLocale.select(candidates)
+                .orElseThrow(() -> new IllegalStateException("candidates checked non-empty above"));
+        String tag = selected.languageTag();
+        String requestedLanguage = displayLocale.requested().getLanguage();
+        boolean matchesRequested = tag != null
+                && Locale.forLanguageTag(tag).getLanguage().equalsIgnoreCase(requestedLanguage);
+        return matchesRequested ? null : (tag == null ? "" : tag);
     }
 
     /**
      * Reads every registered actor's business code straight off {@code dcterms:identifier}, joining
      * nothing but the type triple {@link #actorTypeFilter} needs - in particular not
-     * {@code arknet:name}, whose mandatory join in {@link #findAll} is exactly what hides a
-     * store-first actor from that read while its {@code ACTOR-N} stays taken
-     * (kogn-io/arknet#360, see {@link ActorRepository#findAllCodes}'s own javadoc). The same type
-     * filter as every other read path, because one {@code ACTOR-N} counter spans all four actor
-     * types: a code missed here is a code handed out twice.
-     *
-     * <p>Deduplicated, because rows multiply here just as they do on every other read path: a
-     * store-first subject may carry two of the four types, and {@code dcterms:identifier} is not
-     * even shape-bounded ({@code actshapes:ActorShape} constrains {@code name}/{@code description}
-     * only), so two identifier triples are possible too. The counter only ever wants the highest
-     * running number, so collapsing identical duplicates costs nothing - and unlike the
-     * single-actor read paths there is no field to reduce here and therefore nothing to
-     * {@code WARN} about.</p>
+     * {@code arknet:name}, whose mandatory join is exactly what hides a store-first actor from
+     * {@link #findAll} while its {@code ACTOR-N} stays taken (kogn-io/arknet#360, see
+     * {@link ActorRepository#findAllCodes}'s own javadoc). The same type filter as every other read
+     * path, because one {@code ACTOR-N} counter spans all four actor types: a code missed here is a
+     * code handed out twice.
      */
     @Override
     public List<ActorCode> findAllCodes(ProjectId projectId) {
@@ -531,52 +616,62 @@ public class KognioRdfActorRepository implements ActorRepository {
 
     /**
      * Finds every actor in a project whose identity is among {@code ids}, in one store
-     * round-trip, returning the full {@link Actor} aggregate - added for {@code RoleService}
-     * (ADR-37/kogn-io/arknet#405), see {@link ActorRepository#findAllByIds}'s own javadoc for
-     * why this hexagon carries only this one batch-by-identity lookup rather than a
-     * narrower, code-only sibling. Joins {@code type}/{@code name}/
-     * {@code description} the same way {@link #findAll} does, grouped and reduced per subject via
-     * {@link #firstDistinctValue} through the shared {@link ActorAssembly} accumulator - the same
-     * row-multiplication guard every other multi-actor read path here already needs.
+     * round-trip, returning the full {@link Actor} aggregate - used by {@code RoleService}
+     * (ADR-37/kogn-io/arknet#405) to resolve a role's {@code arkproc:filledBy} occupants for
+     * display, under the caller's {@code displayLocale} override exactly as {@link #findAll} applies
+     * it - the same selection {@code KognioRdfRoleRepository#findByIds} makes for a role's name.
      */
     @Override
-    public List<Actor> findAllByIds(ProjectId projectId, List<ResourceId> ids) {
+    public List<Actor> findAllByIds(ProjectId projectId, String displayLocale, List<ResourceId> ids) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(ids, "ids");
         if (ids.isEmpty()) {
             return List.of();
         }
+        DisplayLocale effective = this.displayLocale.withRequestedOverride(displayLocale);
 
         String values = ids.stream()
                 .map(id -> SparqlTerms.iriRef(id.value()))
                 .collect(Collectors.joining(" "));
 
-        String query = "SELECT ?s ?identifier ?type ?name ?description WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+        String query = "SELECT ?s ?identifier ?type WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
                 + "VALUES ?s { " + values + " } "
                 + "?s a ?type . "
                 + actorTypeFilter()
-                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
-                + "?s <" + NAME_PROPERTY + "> ?name . "
-                + "OPTIONAL { ?s <" + DESCRIPTION_PROPERTY + "> ?description } } }";
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            SparqlQuery sparql = handle.sparqlQuery();
+            Map<String, List<LocalizedLiteral>> namesBySubject = literalsBySubject(sparql, NAME_PROPERTY);
+            Map<String, List<LocalizedLiteral>> descriptionsBySubject = literalsBySubject(sparql, DESCRIPTION_PROPERTY);
             Map<String, ActorAssembly> bySubject = new LinkedHashMap<>();
-            handle.sparqlQuery().select(query).forEach(row -> {
+            sparql.select(query).forEach(row -> {
                 String subjectIri = iriOf(row, "s").getIRIString();
-                bySubject.computeIfAbsent(subjectIri, iri -> new ActorAssembly(
+                ActorAssembly assembly = bySubject.computeIfAbsent(subjectIri, iri -> new ActorAssembly(
                         new ActorId(ResourceId.of(iri)),
-                        new ActorCode(literalOf(row, "identifier").getLexicalForm()))).addRow(row);
+                        new ActorCode(literalOf(row, "identifier").getLexicalForm())));
+                assembly.addType(typeFromIri(iriOf(row, "type").getIRIString()));
             });
-            return bySubject.values().stream().map(ActorAssembly::toActor).toList();
+            List<Actor> actors = new ArrayList<>();
+            bySubject.forEach((subjectIri, assembly) -> {
+                Optional<LocalizedLiteral> name = effective.select(namesBySubject.getOrDefault(subjectIri, List.of()));
+                if (name.isEmpty()) {
+                    return;
+                }
+                Optional<LocalizedLiteral> description =
+                        effective.select(descriptionsBySubject.getOrDefault(subjectIri, List.of()));
+                actors.add(assembly.toActor(name.get().value(), description.map(LocalizedLiteral::value).orElse(null)));
+            });
+            return List.copyOf(actors);
         }
     }
 
     /**
      * Picks one value of {@code candidates} deterministically (first-seen), logging a single
      * {@code WARN} naming {@code subjectIri}/{@code fieldName} when more than one distinct value was
-     * collapsed. The shared row-multiplication guard behind both read paths - {@code actor-shapes.ttl}
-     * bounds every field to one value, but SHACL gates writes rather than the store, so a
-     * store-first actor can legally bind more than one row per field.
+     * collapsed. The shared row-multiplication guard behind the {@code type} field - {@code
+     * actor-shapes.ttl} bounds it to one value, but SHACL gates writes rather than the store, so a
+     * store-first actor can legally bind more than one row for it.
      */
     private static <T> T firstDistinctValue(List<T> candidates, String subjectIri, String fieldName) {
         if (candidates.isEmpty()) {
@@ -590,40 +685,104 @@ public class KognioRdfActorRepository implements ActorRepository {
         return candidates.get(0);
     }
 
+    private static ActorType firstDistinctType(List<BindingSet> rows, String subjectIri) {
+        List<ActorType> types = rows.stream().map(row -> typeFromIri(iriOf(row, "type").getIRIString())).toList();
+        return firstDistinctValue(types, subjectIri, "type");
+    }
+
     /**
-     * Mutable per-subject accumulator collecting an actor's {@code type}, {@code name} and
-     * {@code description} candidates across rows, then choosing one of each deterministically
-     * (first-seen) when the actor is finally materialised.
+     * Mutable per-subject accumulator collecting an actor's {@code type} candidates across rows,
+     * choosing one deterministically (first-seen) when the actor is finally materialised with its
+     * already-selected {@code name}/{@code description}.
      */
     private static final class ActorAssembly {
 
         private final ActorId id;
         private final ActorCode code;
         private final List<ActorType> types = new ArrayList<>();
-        private final List<String> names = new ArrayList<>();
-        private final List<String> descriptions = new ArrayList<>();
 
         private ActorAssembly(ActorId id, ActorCode code) {
             this.id = id;
             this.code = code;
         }
 
-        private void addRow(BindingSet row) {
-            types.add(typeFromIri(iriOf(row, "type").getIRIString()));
-            names.add(literalOf(row, "name").getLexicalForm());
-            row.getValue("description")
-                    .filter(Literal.class::isInstance)
-                    .map(value -> ((Literal) value).getLexicalForm())
-                    .ifPresent(descriptions::add);
+        private void addType(ActorType type) {
+            types.add(type);
         }
 
-        private Actor toActor() {
+        private Actor toActor(String name, String description) {
             String subjectIri = id.value().value();
-            return new Actor(id, code,
-                    firstDistinctValue(types, subjectIri, "type"),
-                    firstDistinctValue(names, subjectIri, "name"),
-                    firstDistinctValue(descriptions, subjectIri, "description"));
+            return new Actor(id, code, firstDistinctValue(types, subjectIri, "type"), name, description);
         }
+    }
+
+    /**
+     * One actor's selected {@code name}/optional {@code description} literal, each carrying the
+     * {@link LocalizedLiteral#languageTag()} it was chosen under - mirrors
+     * {@code KognioRdfRoleRepository}'s {@code NameDescriptionSelection} exactly.
+     */
+    private record NameDescriptionSelection(LocalizedLiteral name, LocalizedLiteral description) {
+    }
+
+    /**
+     * Selects the {@code name} candidate via {@code locale}, plus a {@code description} candidate
+     * if the actor carries one - {@link Optional#empty()} only if this subject carries no
+     * {@code name} literal at all (unreachable via the MCP tools; {@code actshapes:Actor-name}
+     * carries {@code sh:minCount 1} at {@code sh:Violation}), a store-first gap only.
+     */
+    private Optional<NameDescriptionSelection> selectNameDescription(
+            Function<String, Stream<BindingSet>> selectFn, String subject, DisplayLocale locale) {
+        Optional<LocalizedLiteral> name = locale.select(readNames(selectFn, subject));
+        if (name.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<LocalizedLiteral> description = locale.select(readDescriptions(selectFn, subject));
+        return Optional.of(new NameDescriptionSelection(name.get(), description.orElse(null)));
+    }
+
+    private Optional<Actor> actorOf(List<BindingSet> rows, ActorCode code,
+            Function<String, Stream<BindingSet>> selectFn, DisplayLocale locale) {
+        String subjectIriString = iriOf(rows.get(0), "s").getIRIString();
+        String subject = SparqlTerms.iriRef(subjectIriString);
+        ActorType type = firstDistinctType(rows, subjectIriString);
+        return selectNameDescription(selectFn, subject, locale).map(selection -> new Actor(
+                new ActorId(ResourceId.of(subjectIriString)),
+                code,
+                type,
+                selection.name().value(),
+                selection.description() == null ? null : selection.description().value()));
+    }
+
+    /** Reads the {@code arknet:name} candidates of one actor, tagged for {@link DisplayLocale}. */
+    private List<LocalizedLiteral> readNames(Function<String, Stream<BindingSet>> selectFn, String subject) {
+        return readLocalizedLiterals(selectFn, subject, NAME_PROPERTY);
+    }
+
+    /** {@link #readNames} for {@code arknet:description}. */
+    private List<LocalizedLiteral> readDescriptions(Function<String, Stream<BindingSet>> selectFn, String subject) {
+        return readLocalizedLiterals(selectFn, subject, DESCRIPTION_PROPERTY);
+    }
+
+    private List<LocalizedLiteral> readLocalizedLiterals(
+            Function<String, Stream<BindingSet>> selectFn, String subject, String predicateIri) {
+        String query = "SELECT ?o WHERE { GRAPH <" + ACTOR_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } }";
+        return selectFn.apply(query).map(row -> localizedLiteralOf(row, "o")).toList();
+    }
+
+    /** Bulk variant of {@link #readLocalizedLiterals}: every actor's candidates in one query. */
+    private Map<String, List<LocalizedLiteral>> literalsBySubject(SparqlQuery query, String predicateIri) {
+        String sparql = "SELECT ?s ?o WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+                + "?s <" + predicateIri + "> ?o . FILTER(isIRI(?s)) } }";
+        Map<String, List<LocalizedLiteral>> bySubject = new LinkedHashMap<>();
+        query.select(sparql).forEach(row -> bySubject
+                .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
+                .add(localizedLiteralOf(row, "o")));
+        return bySubject;
+    }
+
+    /** Builds a language-tagged literal, or a plain untagged one when {@code tag} is {@code null}. */
+    private Literal literalOf(String value, String tag) {
+        return tag == null ? rdf.createLiteral(value) : rdf.createLiteral(value, tag);
     }
 
     // ---- helpers -----------------------------------------------------------------------
@@ -661,5 +820,11 @@ public class KognioRdfActorRepository implements ActorRepository {
     private static Literal literalOf(BindingSet row, String name) {
         return (Literal) row.getValue(name)
                 .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
+    }
+
+    /** Converts a bound literal into the technology-neutral {@link LocalizedLiteral} projection. */
+    private static LocalizedLiteral localizedLiteralOf(BindingSet row, String name) {
+        Literal literal = literalOf(row, name);
+        return new LocalizedLiteral(literal.getLexicalForm(), literal.getLanguageTag().orElse(null));
     }
 }
