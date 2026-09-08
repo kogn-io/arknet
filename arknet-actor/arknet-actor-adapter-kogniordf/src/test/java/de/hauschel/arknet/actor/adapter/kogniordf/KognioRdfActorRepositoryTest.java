@@ -529,8 +529,8 @@ class KognioRdfActorRepositoryTest {
         repository.create(PROJECT_A, second, "de");
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID());
 
-        List<Actor> found = repository.findAllByIds(
-                PROJECT_A, List.of(first.id().value(), second.id().value(), unknown));
+        List<Actor> found = repository.findAllByIds(PROJECT_A, null,
+                List.of(first.id().value(), second.id().value(), unknown));
 
         assertEquals(2, found.size(), found.toString());
         assertTrue(found.contains(first), "the full aggregate must come back, description included");
@@ -542,12 +542,12 @@ class KognioRdfActorRepositoryTest {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
         repository.create(PROJECT_A, stored, "de");
 
-        assertEquals(List.of(), repository.findAllByIds(PROJECT_B, List.of(stored.id().value())));
+        assertEquals(List.of(), repository.findAllByIds(PROJECT_B, null, List.of(stored.id().value())));
     }
 
     @Test
     void findAllByIdsOfAnEmptyListQueriesNothing() {
-        assertEquals(List.of(), repository.findAllByIds(PROJECT_A, List.of()));
+        assertEquals(List.of(), repository.findAllByIds(PROJECT_A, null, List.of()));
     }
 
     /**
@@ -566,7 +566,7 @@ class KognioRdfActorRepositoryTest {
         insertTriple(bare.value().value(), VocabRdf.TYPE.getIRIString(), "<" + HUMAN_ACTOR_TYPE + ">");
         insertTriple(bare.value().value(), IDENTIFIER_PROPERTY, "\"ACTOR-1\"");
 
-        assertEquals(List.of(), repository.findAllByIds(PROJECT_A, List.of(bare.value())));
+        assertEquals(List.of(), repository.findAllByIds(PROJECT_A, null, List.of(bare.value())));
     }
 
     // ---- revision trail: one revision per write, head queryable ------------------

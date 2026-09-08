@@ -110,13 +110,15 @@ public class RoleService
                     repository.create(projectId, candidate, language);
                     return candidate;
                 });
-        return toDetail(projectId, role);
+        // The answer shows the role under the language it was just written in, so its occupants
+        // are resolved under that same language.
+        return toDetail(projectId, language, role);
     }
 
     @Override
     public List<RoleDetail> list(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
-        return toDetails(projectId, repository.findAll(projectId, displayLocale));
+        return toDetails(projectId, displayLocale, repository.findAll(projectId, displayLocale));
     }
 
     @Override
@@ -129,7 +131,8 @@ public class RoleService
     public Optional<RoleDetail> get(ProjectId projectId, RoleCode code, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.findByCode(projectId, code, displayLocale).map(role -> toDetail(projectId, role));
+        return repository.findByCode(projectId, code, displayLocale)
+                .map(role -> toDetail(projectId, displayLocale, role));
     }
 
     @Override
@@ -139,7 +142,9 @@ public class RoleService
         Objects.requireNonNull(code, "code");
         Role role = updateWithOptimisticRetry(projectId, code, name, description, filledByActorCodes, language,
                 defaultLanguage);
-        return toDetail(projectId, role);
+        // The answer shows a touched field under `language` and an untouched one under the
+        // project default it was read under, so the occupants follow the same precedence.
+        return toDetail(projectId, language != null ? language : defaultLanguage, role);
     }
 
     @Override
@@ -255,17 +260,20 @@ public class RoleService
         return resolved;
     }
 
-    private RoleDetail toDetail(ProjectId projectId, Role role) {
-        return toDetails(projectId, List.of(role)).get(0);
+    private RoleDetail toDetail(ProjectId projectId, String displayLocale, Role role) {
+        return toDetails(projectId, displayLocale, List.of(role)).get(0);
     }
 
     /**
      * Resolves every {@code filledBy} occupant across {@code roles} in one batch round-trip via
      * {@link ActorRepository#findAllByIds} - a role can be filled by several actors and a listing
      * can hold several roles, so this collects the union of every occupant identity across all of
-     * them rather than issuing one lookup per role.
+     * them rather than issuing one lookup per role. {@code displayLocale} is the language the
+     * roles themselves were selected under, handed on unchanged: an occupant's name is
+     * language-tagged too (kogn-io/arknet#520), and one {@link RoleDetail} must not show its role
+     * in one language and its occupants in another.
      */
-    private List<RoleDetail> toDetails(ProjectId projectId, List<Role> roles) {
+    private List<RoleDetail> toDetails(ProjectId projectId, String displayLocale, List<Role> roles) {
         if (roles.isEmpty()) {
             return List.of();
         }
@@ -275,7 +283,7 @@ public class RoleService
                 .distinct()
                 .toList();
         Map<ResourceId, Actor> actorsById = new LinkedHashMap<>();
-        for (Actor actor : actorRepository.findAllByIds(projectId, allActorIds)) {
+        for (Actor actor : actorRepository.findAllByIds(projectId, displayLocale, allActorIds)) {
             actorsById.put(actor.id().value(), actor);
         }
         return roles.stream()

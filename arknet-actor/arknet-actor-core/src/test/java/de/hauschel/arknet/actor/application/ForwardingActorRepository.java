@@ -78,7 +78,7 @@ abstract class ForwardingActorRepository implements ActorRepository {
     }
 
     @Override
-    public List<Actor> findAllByIds(ProjectId projectId, List<ResourceId> ids) {
-        return delegate.findAllByIds(projectId, ids);
+    public List<Actor> findAllByIds(ProjectId projectId, String displayLocale, List<ResourceId> ids) {
+        return delegate.findAllByIds(projectId, displayLocale, ids);
     }
 }

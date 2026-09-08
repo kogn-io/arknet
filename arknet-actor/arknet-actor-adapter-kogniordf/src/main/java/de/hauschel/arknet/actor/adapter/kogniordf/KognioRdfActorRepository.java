@@ -618,16 +618,17 @@ public class KognioRdfActorRepository implements ActorRepository {
      * Finds every actor in a project whose identity is among {@code ids}, in one store
      * round-trip, returning the full {@link Actor} aggregate - used by {@code RoleService}
      * (ADR-37/kogn-io/arknet#405) to resolve a role's {@code arkproc:filledBy} occupants for
-     * display, under this repository's own configured display-language preference.
+     * display, under the caller's {@code displayLocale} override exactly as {@link #findAll} applies
+     * it - the same selection {@code KognioRdfRoleRepository#findByIds} makes for a role's name.
      */
     @Override
-    public List<Actor> findAllByIds(ProjectId projectId, List<ResourceId> ids) {
+    public List<Actor> findAllByIds(ProjectId projectId, String displayLocale, List<ResourceId> ids) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(ids, "ids");
         if (ids.isEmpty()) {
             return List.of();
         }
-        DisplayLocale effective = this.displayLocale;
+        DisplayLocale effective = this.displayLocale.withRequestedOverride(displayLocale);
 
         String values = ids.stream()
                 .map(id -> SparqlTerms.iriRef(id.value()))

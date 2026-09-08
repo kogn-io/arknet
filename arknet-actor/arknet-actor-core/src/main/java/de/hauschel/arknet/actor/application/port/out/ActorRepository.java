@@ -264,14 +264,17 @@ public interface ActorRepository {
      * and left it with no consumer at all, inside this hexagon or outside it.
      *
      * <p>Not a per-id existence check: an id absent from the project (or not an actor at all) is
-     * simply absent from the result, never an error. Uses this repository's own configured
-     * display-language preference (no {@code displayLocale} override) - {@code RoleService} resolves
-     * an occupant's name only for display in the reading process's own language, mirroring how
-     * {@code findAllByIds} behaved before kogn-io/arknet#520.</p>
+     * simply absent from the result, never an error. Takes the same {@code displayLocale} override
+     * {@link #findByCode}/{@link #findAll} do, for the same reason {@link RoleRepository#findByIds}
+     * does: an occupant's name is language-tagged since kogn-io/arknet#520, and {@code RoleService}
+     * renders it inside the very same {@code role_get}/{@code role_list} answer as the role's own
+     * name - both must be selected under one and the same language, or one tool answer mixes two
+     * languages without any {@code [fallback: ...]} marker saying so.</p>
      *
-     * @param projectId the project (architecture model) to look up actors in
-     * @param ids       the opaque identities to resolve; an empty list yields an empty result
+     * @param projectId     the project (architecture model) to look up actors in
+     * @param displayLocale the same override {@link #findAll} accepts
+     * @param ids           the opaque identities to resolve; an empty list yields an empty result
      * @return the actors found, in no particular order, never {@code null}
      */
-    List<Actor> findAllByIds(ProjectId projectId, List<ResourceId> ids);
+    List<Actor> findAllByIds(ProjectId projectId, String displayLocale, List<ResourceId> ids);
 }

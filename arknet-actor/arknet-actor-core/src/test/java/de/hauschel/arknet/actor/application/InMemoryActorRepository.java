@@ -182,8 +182,9 @@ final class InMemoryActorRepository implements ActorRepository {
         return List.copyOf(retainedByProject.getOrDefault(projectId, List.of()));
     }
 
+    /** {@code displayLocale} is accepted and ignored, exactly like {@link #findAll}. */
     @Override
-    public List<Actor> findAllByIds(ProjectId projectId, List<ResourceId> ids) {
+    public List<Actor> findAllByIds(ProjectId projectId, String displayLocale, List<ResourceId> ids) {
         Set<ResourceId> wanted = Set.copyOf(ids);
         return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(actor -> wanted.contains(actor.id().value()))

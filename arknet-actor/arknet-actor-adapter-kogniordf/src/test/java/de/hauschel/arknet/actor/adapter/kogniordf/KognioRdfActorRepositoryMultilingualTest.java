@@ -248,6 +248,31 @@ class KognioRdfActorRepositoryMultilingualTest {
         assertEquals("Bearbeitet Antraege.", all.get(0).description());
     }
 
+    /**
+     * The batch identity lookup behind {@code role_get}/{@code role_list}'s occupants honours the
+     * caller's {@code displayLocale} exactly as {@code findAll} does - before this, it read under
+     * the repository's own configured preference only, so one role answer could show the role in
+     * the requested language and its occupants in the daemon's.
+     */
+    @Test
+    void findAllByIdsSelectsTheVariantTheCallerAsksFor() {
+        ActorCode code = new ActorCode("ACTOR-1");
+        ActorId id = freshId();
+        repository.create(PROJECT_A, actor(id, code, "Sachbearbeiter", "Bearbeitet Antraege."), "de");
+        repository.compareAndUpdate(PROJECT_A, currentHead(code),
+                actor(id, code, "Case Worker", "Processes applications."), "en", "en", null);
+
+        List<Actor> asGerman = repository.findAllByIds(PROJECT_A, "de", List.of(id.value()));
+        List<Actor> asEnglish = repository.findAllByIds(PROJECT_A, "en", List.of(id.value()));
+
+        assertEquals(1, asGerman.size());
+        assertEquals("Sachbearbeiter", asGerman.get(0).name());
+        assertEquals("Bearbeitet Antraege.", asGerman.get(0).description());
+        assertEquals(1, asEnglish.size());
+        assertEquals("Case Worker", asEnglish.get(0).name());
+        assertEquals("Processes applications.", asEnglish.get(0).description());
+    }
+
     /** {@code findAllDisplayFallback} marks a field that fell back and leaves an on-target one alone. */
     @Test
     void findAllDisplayFallbackMarksOnlyTheFallenBackField() {
