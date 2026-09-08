@@ -903,7 +903,7 @@ class TraceabilityGraphTest {
                     "Wir stellen Rechnungen.", null, null, List.of()), "en");
             ContextRelationshipRepository contextRelationships =
                     KognioRdfContextRelationshipRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-            contextRelationships.create(PROJECT, new ContextRelationship(
+            contextRelationships.createIfAbsent(PROJECT, new ContextRelationship(
                     new ContextRelationshipId(ResourceId.of(relationshipIri)),
                     new BoundedContextId(ResourceId.of(BC_1_IRI)), new BoundedContextId(ResourceId.of(bc2Iri)),
                     RelationshipType.CUSTOMER_SUPPLIER));
@@ -913,6 +913,39 @@ class TraceabilityGraphTest {
 
             assertThat(freshGraph.dependents(BC_1_IRI)).contains(relationshipIri);
             assertThat(freshGraph.dependents(bc2Iri)).contains(relationshipIri);
+        }
+
+        /**
+         * Regression guard for issue #565: {@code bc_unlink_context} removes every triple of the
+         * relationship, so a fresh {@link TraceabilityGraph} snapshot taken after the removal must
+         * no longer report it as a dependent of either bounded context - {@code impact_analysis}
+         * reads the same snapshot, so this is what keeps it from naming a relationship that no
+         * longer exists.
+         */
+        @Test
+        void dependentsNoLongerReachesAContextRelationshipRemovedByUnlink() {
+            String bc2Iri = "https://w3id.org/arknet/id/trace-test-bc-2-unlinked";
+            String relationshipIri = "https://w3id.org/arknet/id/trace-test-context-relationship-unlinked";
+            BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
+                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+            boundedContexts.create(PROJECT, new BoundedContext(
+                    new BoundedContextId(ResourceId.of(bc2Iri)), new BoundedContextCode("BC-3"), "Payments",
+                    "Wir verarbeiten Zahlungen.", null, null, List.of()), "en");
+            ContextRelationshipRepository contextRelationships =
+                    KognioRdfContextRelationshipRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+            BoundedContextId upstream = new BoundedContextId(ResourceId.of(BC_1_IRI));
+            BoundedContextId downstream = new BoundedContextId(ResourceId.of(bc2Iri));
+            contextRelationships.createIfAbsent(PROJECT, new ContextRelationship(
+                    new ContextRelationshipId(ResourceId.of(relationshipIri)), upstream, downstream,
+                    RelationshipType.CUSTOMER_SUPPLIER));
+
+            contextRelationships.deleteByEdge(PROJECT, upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
+
+            StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+            TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+            assertThat(freshGraph.dependents(BC_1_IRI)).doesNotContain(relationshipIri);
+            assertThat(freshGraph.dependents(bc2Iri)).doesNotContain(relationshipIri);
         }
 
         /**

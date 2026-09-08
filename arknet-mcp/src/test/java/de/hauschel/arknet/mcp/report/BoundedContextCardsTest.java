@@ -9,6 +9,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
@@ -84,7 +85,8 @@ class BoundedContextCardsTest {
     @Test
     void ordersCardsByBusinessCodeNumericallyNotLexicographically() {
         final BoundedContextCards cards = new BoundedContextCards((projectId, displayLocale) -> List.of(
-                context("BC-2", ID + "bc-2"), context("BC-10", ID + "bc-10"), context("BC-1", ID + "bc-1")));
+                detail(context("BC-2", ID + "bc-2")), detail(context("BC-10", ID + "bc-10")),
+                detail(context("BC-1", ID + "bc-1"))));
 
         assertThat(cards.section(PROJECT, null, GLOSSARY).cards())
                 .extracting(ModelCard::code).containsExactly("BC-1", "BC-2", "BC-10");
@@ -101,7 +103,11 @@ class BoundedContextCardsTest {
     }
 
     private static BoundedContextCards cardsFor(final BoundedContext context) {
-        return new BoundedContextCards((projectId, displayLocale) -> List.of(context));
+        return new BoundedContextCards((projectId, displayLocale) -> List.of(detail(context)));
+    }
+
+    private static BoundedContextDetail detail(final BoundedContext context) {
+        return new BoundedContextDetail(context, List.of());
     }
 
     private static BoundedContext context(final String vision, final List<ResourceId> linked) {

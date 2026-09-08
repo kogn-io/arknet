@@ -100,7 +100,7 @@ public final class KognioRdfContextRelationshipRepositoryFactory {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
         WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(displayLocale), WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        return new KognioRdfContextRelationshipRepository(funnel);
+        return new KognioRdfContextRelationshipRepository(lifecycle, funnel);
     }
 
     /**

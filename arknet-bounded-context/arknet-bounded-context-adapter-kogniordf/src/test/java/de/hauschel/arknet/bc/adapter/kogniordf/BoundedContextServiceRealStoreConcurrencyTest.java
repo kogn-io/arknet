@@ -42,6 +42,9 @@ import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.bc.application.port.out.TermLookup;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextId;
+import de.hauschel.arknet.bc.domain.ContextRelationship;
+import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -359,7 +362,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         assertEquals(2, result.usesTerms().size(),
                 "the retry must return the state it re-read, not its stale first read");
         assertTrue(result.usesTerms().containsAll(List.of(new TermRef(TERM_1), new TermRef(TERM_2))));
-        BoundedContext stored = straightThrough.get(WS, code, null).orElseThrow();
+        BoundedContext stored = straightThrough.get(WS, code, null).orElseThrow().context();
         assertEquals(2, stored.usesTerms().size(), "both writers' edges must survive - neither is silently lost");
     }
 
@@ -409,18 +412,127 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         racing.update(WS, code, "Auftragsverwaltung", null, "de", null);
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
-        BoundedContext asEnglish = straightThrough.get(WS, code, "en").orElseThrow();
+        BoundedContext asEnglish = straightThrough.get(WS, code, "en").orElseThrow().context();
         assertEquals("Owns the lifecycle of a customer order, corrected.", asEnglish.domainVision(),
                 "the concurrent domainVision correction must not have been lost by the retry");
         assertEquals("OrderManagement", asEnglish.name(),
                 "the pre-existing English name must survive the racer's own German-only correction - only "
                         + "capture-before-delete/reattach keeps it, a plain replace would drop it");
-        BoundedContext asGerman = straightThrough.get(WS, code, "de").orElseThrow();
+        BoundedContext asGerman = straightThrough.get(WS, code, "de").orElseThrow().context();
         assertEquals("Auftragsverwaltung", asGerman.name(),
                 "the racer's own name addition must not have been lost by its own retry");
         assertEquals("Verwaltet den Lebenszyklus einer Kundenbestellung.", asGerman.domainVision(),
                 "the pre-existing German domainVision must survive the concurrent writer's English-only "
                         + "correction - only capture-before-delete/reattach keeps it, a plain replace would drop it");
+    }
+
+    /**
+     * The second interleaving (issue #575 review, PR #575) for {@code bc_link_context}: two
+     * concurrent calls recording the exact same (upstream, downstream, relationshipType) triple
+     * both pass {@code createIfAbsent}'s in-transaction {@code findExisting} check before either
+     * commits (neither sees the other's uncommitted write under {@code SERIALIZABLE} isolation),
+     * and only the loser's commit is rejected - by the store, not by the guard. Before the fix,
+     * that rejection reached the loser as the raw {@code ConcurrencyConflictException}; the whole
+     * point of {@code createIfAbsent} over a plain {@code create} is that the loser gets back the
+     * winner's already-recorded relationship instead, exactly as a caller that lost only because
+     * it asked a beat too late would expect.
+     *
+     * <p>Pinned deterministically via {@link GuardSyncTx} (fires after the one {@code contains}
+     * guard {@code createIfAbsent} issues here - the identity check; a relationship carries no
+     * business code, so the code guard is skipped entirely, see {@link #contextRelationshipRacerService})
+     * plus a {@link CyclicBarrier}/{@link CountDownLatch} pair, mirroring
+     * {@link #concurrentAddCallsUnderGenuinelyOverlappingTransactions_bothGetDistinctCodes} exactly,
+     * against the real, on-disk {@code NativeStore} and the real, gated
+     * {@link KognioRdfContextRelationshipRepository} - not the stub every other test in this class
+     * uses for the context-relationship port.</p>
+     */
+    @Test
+    void concurrentLinkContextCallsWithTheSameTripleUnderGenuinelyOverlappingTransactions_loserGetsWinnersRelationship()
+            throws InterruptedException {
+        BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
+                realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+        TermLookup unusedTermLookup = (projectId, termCode) -> {
+            throw new UnsupportedOperationException("not exercised by this test");
+        };
+        BoundedContextService straightThrough = new BoundedContextService(boundedContexts,
+                new UuidResourceIdFactory(), unusedTermLookup, unusedContextRelationshipRepository());
+        BoundedContextCode upstreamCode = straightThrough.add(WS, newBoundedContext("upstream-team"), null).code();
+        BoundedContextCode downstreamCode = straightThrough.add(WS, new NewBoundedContext("Shipping",
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null, "en"), null)
+                .code();
+
+        CyclicBarrier bothGuardsChecked = new CyclicBarrier(2);
+        CountDownLatch winnerCommitted = new CountDownLatch(1);
+        BoundedContextService winnerService = contextRelationshipRacerService(boundedContexts,
+                () -> awaitBarrier(bothGuardsChecked));
+        BoundedContextService loserService = contextRelationshipRacerService(boundedContexts, () -> {
+            awaitBarrier(bothGuardsChecked);
+            awaitLatch(winnerCommitted);
+        });
+
+        AtomicReference<ContextRelationship> winnerResult = new AtomicReference<>();
+        AtomicReference<ContextRelationship> loserResult = new AtomicReference<>();
+        AtomicReference<Throwable> loserFailure = new AtomicReference<>();
+
+        Thread winnerThread = new Thread(() -> {
+            try {
+                winnerResult.set(winnerService.linkContext(
+                        WS, upstreamCode, downstreamCode, RelationshipType.CUSTOMER_SUPPLIER));
+            } finally {
+                winnerCommitted.countDown();
+            }
+        }, "racer-A");
+        Thread loserThread = new Thread(() -> {
+            try {
+                loserResult.set(loserService.linkContext(
+                        WS, upstreamCode, downstreamCode, RelationshipType.CUSTOMER_SUPPLIER));
+            } catch (RuntimeException e) {
+                loserFailure.set(e);
+            }
+        }, "racer-B");
+
+        winnerThread.start();
+        loserThread.start();
+        winnerThread.join();
+        loserThread.join();
+
+        assertNull(loserFailure.get(), () -> "loser must not see a raw store conflict: " + loserFailure.get());
+        assertNotNull(winnerResult.get());
+        assertNotNull(loserResult.get());
+        assertEquals(winnerResult.get(), loserResult.get(),
+                "the loser must get back the winner's already-recorded relationship, not a second one");
+
+        ContextRelationshipRepository straightThroughContextRelationships =
+                KognioRdfContextRelationshipRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT);
+        List<ContextRelationship> stored = straightThroughContextRelationships.findByContext(
+                WS, winnerResult.get().upstream());
+        assertEquals(1, stored.size(), "exactly one relationship must have been persisted, not two");
+    }
+
+    /**
+     * A service wired over the shared, real {@code boundedContexts} port but a guarded
+     * {@link ContextRelationshipRepository}: {@code afterFirstGuard} fires once, right after
+     * {@code createIfAbsent}'s sole guard - the identity check, since a {@link ContextRelationship}
+     * carries no business code and so skips the code guard entirely (issue #575 review) - passes,
+     * exactly where {@link #guardedService} pins the analogous race for {@code bc_add}'s
+     * identity-then-code pair.
+     */
+    private BoundedContextService contextRelationshipRacerService(
+            BoundedContextRepository boundedContexts, Runnable afterFirstGuard) {
+        AtomicBoolean armed = new AtomicBoolean(true);
+        DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
+            if (armed.compareAndSet(true, false)) {
+                return new GuardSyncTx(tx, 1, afterFirstGuard);
+            }
+            return tx;
+        });
+        ContextRelationshipRepository contextRelationships =
+                KognioRdfContextRelationshipRepositoryFactory.over(guarded, DisplayLocale.DEFAULT);
+        TermLookup unusedTermLookup = (projectId, termCode) -> {
+            throw new UnsupportedOperationException("not exercised by this test");
+        };
+        return new BoundedContextService(
+                boundedContexts, new UuidResourceIdFactory(), unusedTermLookup, contextRelationships);
     }
 
     private static NewBoundedContext newBoundedContext(String owner) {
@@ -444,10 +556,34 @@ class BoundedContextServiceRealStoreConcurrencyTest {
                 new UuidResourceIdFactory(), termLookup, unusedContextRelationshipRepository());
     }
 
-    /** Neither concurrency race this class exercises reaches {@code bc_link_context}. */
+    /**
+     * Neither concurrency race this class exercises reaches {@code bc_link_context}/
+     * {@code bc_unlink_context} - but {@code bc_get} (via {@link BoundedContextService#get}) always
+     * reads {@link ContextRelationshipRepository#findByContext} since issue #565, so the read paths
+     * answer "no relationships" rather than throwing.
+     */
     private static ContextRelationshipRepository unusedContextRelationshipRepository() {
-        return (projectId, relationship) -> {
-            throw new UnsupportedOperationException("not exercised by this test");
+        return new ContextRelationshipRepository() {
+            @Override
+            public ContextRelationship createIfAbsent(ProjectId projectId, ContextRelationship relationship) {
+                throw new UnsupportedOperationException("not exercised by this test");
+            }
+
+            @Override
+            public void deleteByEdge(ProjectId projectId, BoundedContextId upstream, BoundedContextId downstream,
+                    RelationshipType relationshipType) {
+                throw new UnsupportedOperationException("not exercised by this test");
+            }
+
+            @Override
+            public List<ContextRelationship> findByContext(ProjectId projectId, BoundedContextId context) {
+                return List.of();
+            }
+
+            @Override
+            public List<ContextRelationship> findAll(ProjectId projectId) {
+                return List.of();
+            }
         };
     }
 

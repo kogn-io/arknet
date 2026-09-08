@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -31,6 +32,7 @@ import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.ContextRelationship;
 import de.hauschel.arknet.bc.domain.ContextRelationshipId;
+import de.hauschel.arknet.bc.domain.ContextRelationshipNotFoundException;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -89,7 +91,7 @@ class KognioRdfContextRelationshipRepositoryTest {
         ContextRelationship relationship = new ContextRelationship(
                 freshId(), upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
 
-        ContextRelationship created = repository.create(WORKSPACE_A, relationship);
+        ContextRelationship created = repository.createIfAbsent(WORKSPACE_A, relationship);
 
         assertSame(relationship, created);
         String subject = relationship.id().value().value();
@@ -111,7 +113,7 @@ class KognioRdfContextRelationshipRepositoryTest {
             BoundedContextId downstream = freshBoundedContextId();
             ContextRelationship relationship = new ContextRelationship(freshId(), upstream, downstream, type);
 
-            repository.create(WORKSPACE_A, relationship);
+            repository.createIfAbsent(WORKSPACE_A, relationship);
 
             String subject = relationship.id().value().value();
             String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + subject
@@ -128,12 +130,12 @@ class KognioRdfContextRelationshipRepositoryTest {
         ContextRelationshipId id = freshId();
         ContextRelationship first = new ContextRelationship(
                 id, freshBoundedContextId(), freshBoundedContextId(), RelationshipType.PARTNERSHIP);
-        repository.create(WORKSPACE_A, first);
+        repository.createIfAbsent(WORKSPACE_A, first);
 
         ContextRelationship sameIdentity = new ContextRelationship(
                 id, freshBoundedContextId(), freshBoundedContextId(), RelationshipType.SHARED_KERNEL);
 
-        assertThrows(ResourceAlreadyExistsException.class, () -> repository.create(WORKSPACE_A, sameIdentity));
+        assertThrows(ResourceAlreadyExistsException.class, () -> repository.createIfAbsent(WORKSPACE_A, sameIdentity));
     }
 
     @Test
@@ -181,12 +183,206 @@ class KognioRdfContextRelationshipRepositoryTest {
         ProjectId workspaceB = new ProjectId("b");
         ContextRelationship relationship = new ContextRelationship(
                 freshId(), freshBoundedContextId(), freshBoundedContextId(), RelationshipType.OPEN_HOST_SERVICE);
-        repository.create(WORKSPACE_A, relationship);
+        repository.createIfAbsent(WORKSPACE_A, relationship);
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + relationship.id().value().value()
                 + "> a <" + CONTEXT_RELATIONSHIP_TYPE + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceB.value()))) {
             assertEquals(false, handle.sparqlQuery().ask(ask));
         }
+    }
+
+    /**
+     * Idempotency over the (upstream, downstream, relationshipType) triple (issue #565): a second
+     * {@code createIfAbsent} call with the exact same triple must not write a second relationship -
+     * it returns the one already recorded, under that one's own identity, not the caller's freshly
+     * minted candidate identity.
+     */
+    @Test
+    void createIfAbsentReturnsTheAlreadyRecordedRelationshipForTheSameTriple() {
+        BoundedContextId upstream = freshBoundedContextId();
+        BoundedContextId downstream = freshBoundedContextId();
+        ContextRelationship first = new ContextRelationship(
+                freshId(), upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
+        ContextRelationship created = repository.createIfAbsent(WORKSPACE_A, first);
+
+        ContextRelationship duplicateCandidate = new ContextRelationship(
+                freshId(), upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
+        ContextRelationship result = repository.createIfAbsent(WORKSPACE_A, duplicateCandidate);
+
+        assertEquals(created, result);
+        assertEquals(1, repository.findByContext(WORKSPACE_A, upstream).size());
+    }
+
+    /** A different relationship type between the same pair is not the same triple. */
+    @Test
+    void createIfAbsentTreatsADifferentRelationshipTypeAsANewTriple() {
+        BoundedContextId upstream = freshBoundedContextId();
+        BoundedContextId downstream = freshBoundedContextId();
+        repository.createIfAbsent(WORKSPACE_A,
+                new ContextRelationship(freshId(), upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER));
+
+        repository.createIfAbsent(WORKSPACE_A,
+                new ContextRelationship(freshId(), upstream, downstream, RelationshipType.CONFORMIST));
+
+        assertEquals(2, repository.findByContext(WORKSPACE_A, upstream).size());
+    }
+
+    @Test
+    void findByContextReturnsRelationshipsInEitherDirection() {
+        BoundedContextId a = freshBoundedContextId();
+        BoundedContextId b = freshBoundedContextId();
+        BoundedContextId c = freshBoundedContextId();
+        ContextRelationship aUpstreamOfB = repository.createIfAbsent(WORKSPACE_A,
+                new ContextRelationship(freshId(), a, b, RelationshipType.PUBLISHED_LANGUAGE));
+        ContextRelationship cUpstreamOfA = repository.createIfAbsent(WORKSPACE_A,
+                new ContextRelationship(freshId(), c, a, RelationshipType.CONFORMIST));
+        repository.createIfAbsent(WORKSPACE_A,
+                new ContextRelationship(freshId(), b, c, RelationshipType.SEPARATE_WAYS));
+
+        List<ContextRelationship> forA = repository.findByContext(WORKSPACE_A, a);
+
+        assertEquals(2, forA.size());
+        assertTrue(forA.contains(aUpstreamOfB));
+        assertTrue(forA.contains(cUpstreamOfA));
+    }
+
+    @Test
+    void findAllReturnsEveryRelationshipInTheProject() {
+        BoundedContextId a = freshBoundedContextId();
+        BoundedContextId b = freshBoundedContextId();
+        BoundedContextId c = freshBoundedContextId();
+        repository.createIfAbsent(WORKSPACE_A,
+                new ContextRelationship(freshId(), a, b, RelationshipType.PUBLISHED_LANGUAGE));
+        repository.createIfAbsent(WORKSPACE_A,
+                new ContextRelationship(freshId(), b, c, RelationshipType.SEPARATE_WAYS));
+
+        assertEquals(2, repository.findAll(WORKSPACE_A).size());
+    }
+
+    @Test
+    void deleteByEdgeRemovesTheMatchingRelationship() {
+        BoundedContextId upstream = freshBoundedContextId();
+        BoundedContextId downstream = freshBoundedContextId();
+        repository.createIfAbsent(WORKSPACE_A,
+                new ContextRelationship(freshId(), upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER));
+
+        repository.deleteByEdge(WORKSPACE_A, upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
+
+        assertEquals(List.of(), repository.findByContext(WORKSPACE_A, upstream));
+        assertEquals(List.of(), repository.findAll(WORKSPACE_A));
+    }
+
+    /** A different type on the same pair must survive an unrelated type's removal. */
+    @Test
+    void deleteByEdgeLeavesADifferentRelationshipTypeOnTheSamePairUntouched() {
+        BoundedContextId upstream = freshBoundedContextId();
+        BoundedContextId downstream = freshBoundedContextId();
+        repository.createIfAbsent(WORKSPACE_A,
+                new ContextRelationship(freshId(), upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER));
+        ContextRelationship survivor = repository.createIfAbsent(WORKSPACE_A,
+                new ContextRelationship(freshId(), upstream, downstream, RelationshipType.CONFORMIST));
+
+        repository.deleteByEdge(WORKSPACE_A, upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
+
+        assertEquals(List.of(survivor), repository.findByContext(WORKSPACE_A, upstream));
+    }
+
+    @Test
+    void deleteByEdgeThrowsWhenNoMatchingTripleIsRecorded() {
+        BoundedContextId upstream = freshBoundedContextId();
+        BoundedContextId downstream = freshBoundedContextId();
+
+        assertThrows(ContextRelationshipNotFoundException.class, () -> repository.deleteByEdge(
+                WORKSPACE_A, upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER));
+    }
+
+    /**
+     * Regression guard for issue #575's review: the pre-#565 pure {@code create} could - and, per
+     * issue #573, still does in the live store - leave more than one resource carrying the exact
+     * same (upstream, downstream, relationshipType) triple. {@code deleteByEdge} must remove every
+     * one of them, not just the first found, or {@code bc_unlink_context} would report success
+     * while {@code bc_get}/{@code impact_analysis} keep showing the edge. The two duplicates are
+     * written directly to the store (bypassing {@code createIfAbsent}'s own dedup, which this test
+     * would otherwise defeat) to reproduce exactly the pre-#565 shape.
+     */
+    @Test
+    void deleteByEdgeRemovesEveryDuplicateResourceForTheSameTriple() {
+        BoundedContextId upstream = freshBoundedContextId();
+        BoundedContextId downstream = freshBoundedContextId();
+        ContextRelationshipId first = freshId();
+        ContextRelationshipId second = freshId();
+        writeRelationshipDirectly(first, upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
+        writeRelationshipDirectly(second, upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
+        assertEquals(2, repository.findByContext(WORKSPACE_A, upstream).size(),
+                "fixture must actually reproduce two duplicate resources before the deletion is exercised");
+
+        repository.deleteByEdge(WORKSPACE_A, upstream, downstream, RelationshipType.CUSTOMER_SUPPLIER);
+
+        assertEquals(List.of(), repository.findByContext(WORKSPACE_A, upstream));
+        assertEquals(List.of(), repository.findAll(WORKSPACE_A));
+    }
+
+    /**
+     * {@code findAll}/{@code findByContext} promise a reproducible order (issue #575 review) - two
+     * calls against the same, unchanged data must return the identical order, which matters once
+     * {@code bc_list}'s rendering feeds a committed report (kogn-io/arknet#570's
+     * {@code docs/adr-export/}).
+     */
+    @Test
+    void findAllOrdersReproducibly() {
+        BoundedContextId a = freshBoundedContextId();
+        BoundedContextId b = freshBoundedContextId();
+        BoundedContextId c = freshBoundedContextId();
+        for (int i = 0; i < 5; i++) {
+            repository.createIfAbsent(WORKSPACE_A,
+                    new ContextRelationship(freshId(), a, b, RelationshipType.PUBLISHED_LANGUAGE));
+            repository.createIfAbsent(WORKSPACE_A,
+                    new ContextRelationship(freshId(), b, c, RelationshipType.SEPARATE_WAYS));
+        }
+
+        List<ContextRelationship> firstRead = repository.findAll(WORKSPACE_A);
+        List<ContextRelationship> secondRead = repository.findAll(WORKSPACE_A);
+
+        assertEquals(firstRead, secondRead);
+    }
+
+    /**
+     * Writes a {@link ContextRelationship}'s four triples straight into the store, bypassing
+     * {@link ContextRelationshipRepository#createIfAbsent} entirely - the only way to reproduce a
+     * pre-#565 duplicate triple, since {@code createIfAbsent} itself now refuses to create one.
+     */
+    private void writeRelationshipDirectly(ContextRelationshipId id, BoundedContextId upstream,
+            BoundedContextId downstream, RelationshipType type) {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI(id.value().value());
+        Graph graph = rdf.createGraph();
+        graph.add(subject, VocabRdf.TYPE, rdf.createIRI(CONTEXT_RELATIONSHIP_TYPE));
+        graph.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#upstream"),
+                rdf.createIRI(upstream.value().value()));
+        graph.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#downstream"),
+                rdf.createIRI(downstream.value().value()));
+        graph.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#relationshipType"),
+                rdf.createIRI("https://w3id.org/arknet/ddd#" + relationshipTypeIndividual(type)));
+        IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(graphIri, graph);
+                return null;
+            });
+        }
+    }
+
+    private static String relationshipTypeIndividual(RelationshipType type) {
+        return switch (type) {
+            case PARTNERSHIP -> "Partnership";
+            case SHARED_KERNEL -> "SharedKernel";
+            case CUSTOMER_SUPPLIER -> "CustomerSupplier";
+            case CONFORMIST -> "Conformist";
+            case ANTICORRUPTION_LAYER -> "AnticorruptionLayer";
+            case OPEN_HOST_SERVICE -> "OpenHostService";
+            case PUBLISHED_LANGUAGE -> "PublishedLanguage";
+            case SEPARATE_WAYS -> "SeparateWays";
+        };
     }
 }

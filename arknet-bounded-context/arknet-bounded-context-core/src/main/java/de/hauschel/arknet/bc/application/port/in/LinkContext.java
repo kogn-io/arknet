@@ -24,21 +24,28 @@ import de.hauschel.arknet.kernel.ProjectId;
  * Resolving them to the bounded contexts' opaque identities - and rejecting an unknown code -
  * happens in the application service via the existing {@code BoundedContextRepository}, not here
  * and not in the driving (MCP) adapter.</p>
+ *
+ * <p><strong>Idempotent over the triple (issue #565).</strong> Calling this twice with the exact
+ * same {@code upstreamCode}/{@code downstreamCode}/{@code relationshipType} does not mint a second
+ * relationship - it returns the one already recorded, the same silent idempotency
+ * {@link LinkTerm#linkTerm} already gives an already-linked term. Two <em>different</em> types
+ * between the same pair stay allowed: which relationship type applies is a judgement call this
+ * port never makes, so it cannot tell a correction from a second, deliberately different
+ * classification of the same pair.</p>
  */
 public interface LinkContext {
 
     /**
-     * Records a new {@link ContextRelationship} from {@code upstreamCode} to
-     * {@code downstreamCode}, classified by {@code relationshipType}. Both bounded contexts must
-     * already exist. Unlike {@link LinkTerm#linkTerm}, this is not idempotent: every call mints
-     * and persists a brand-new relationship, even one identical to an already-recorded one.
+     * Records a {@link ContextRelationship} from {@code upstreamCode} to {@code downstreamCode},
+     * classified by {@code relationshipType} - or returns the one already recorded for this exact
+     * triple, if any. Both bounded contexts must already exist.
      *
      * @param projectId       the project (architecture model) both bounded contexts live in
      * @param upstreamCode    the upstream bounded context's code, e.g. {@code BC-1}
      * @param downstreamCode  the downstream bounded context's code, e.g. {@code BC-2}; must differ
      *                        from {@code upstreamCode}
      * @param relationshipType the DDD context-mapping pattern classifying this relationship
-     * @return the newly created relationship
+     * @return the relationship - newly created, or the one already recorded for this triple
      */
     ContextRelationship linkContext(ProjectId projectId, BoundedContextCode upstreamCode,
             BoundedContextCode downstreamCode, RelationshipType relationshipType);

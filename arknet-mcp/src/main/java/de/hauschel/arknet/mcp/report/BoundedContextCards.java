@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.TermRef;
@@ -53,6 +54,7 @@ public final class BoundedContextCards {
     public ModelSection section(final ProjectId projectId, final String displayLocale, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
         final List<ModelCard> cards = contexts.list(projectId, displayLocale).stream()
+                .map(BoundedContextDetail::context)
                 .sorted(Comparator.comparing(context -> context.code().value(), BusinessCodes.ORDER))
                 .map(context -> card(context, glossary))
                 .toList();

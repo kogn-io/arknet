@@ -18,6 +18,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
+import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
+import de.hauschel.arknet.bc.application.port.in.RelatedContext;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.domain.BoundedContext;
@@ -25,6 +27,8 @@ import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.ContextRelationship;
+import de.hauschel.arknet.bc.domain.ContextRelationshipId;
+import de.hauschel.arknet.bc.domain.ContextRelationshipNotFoundException;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
@@ -181,11 +185,11 @@ class BoundedContextServiceTest {
         service.add(WS, new NewBoundedContext("B", "The second context does something else useful.",
                 null, null, "en"), null);
 
-        List<BoundedContext> all = service.list(WS, null);
+        List<BoundedContextDetail> all = service.list(WS, null);
 
         assertEquals(2, all.size());
-        assertEquals("A", all.get(0).name());
-        assertEquals("B", all.get(1).name());
+        assertEquals("A", all.get(0).context().name());
+        assertEquals("B", all.get(1).context().name());
     }
 
     @Test
@@ -193,7 +197,7 @@ class BoundedContextServiceTest {
         BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
 
         assertTrue(service.get(WS, code, null).isPresent());
-        assertEquals("OrderManagement", service.get(WS, code, null).orElseThrow().name());
+        assertEquals("OrderManagement", service.get(WS, code, null).orElseThrow().context().name());
     }
 
     @Test
@@ -256,7 +260,7 @@ class BoundedContextServiceTest {
         BoundedContext linked = service.linkTerm(WS, code, "TERM-1");
 
         assertEquals(List.of(new TermRef(TERM_1)), linked.usesTerms());
-        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().context().usesTerms());
     }
 
     @Test
@@ -299,7 +303,7 @@ class BoundedContextServiceTest {
 
         assertThrows(NoSuchElementException.class, () -> service.linkTerm(WS, code, "TERM-99"));
 
-        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().context().usesTerms());
     }
 
     /**
@@ -321,7 +325,7 @@ class BoundedContextServiceTest {
         assertEquals("OrderManagement", linked.name());
         assertEquals(Subdomain.SUPPORTING_DOMAIN, linked.subdomain());
         assertEquals("orders-team", linked.ownedBy());
-        BoundedContext reread = service.get(WS, added.code(), null).orElseThrow();
+        BoundedContext reread = service.get(WS, added.code(), null).orElseThrow().context();
         assertEquals(List.of(new TermRef(TERM_1), new TermRef(TERM_2)), reread.usesTerms());
     }
 
@@ -416,6 +420,165 @@ class BoundedContextServiceTest {
 
         assertThrows(IllegalArgumentException.class, () -> service.linkContext(
                 WS, boundedContext.code(), boundedContext.code(), RelationshipType.PARTNERSHIP));
+    }
+
+    /**
+     * Idempotency over the (upstream, downstream, relationshipType) triple (issue #565): a repeated
+     * {@code bc_link_context} call with the exact same triple must not mint a second relationship,
+     * mirroring {@link #linkingTheSameTermTwiceIsANoOp}'s silent idempotency for
+     * {@link BoundedContextService#linkTerm}.
+     */
+    @Test
+    void linkContextWithTheSameTripleTwiceReturnsTheAlreadyRecordedRelationship() {
+        BoundedContext upstream = service.add(WS, newBoundedContext(), null);
+        BoundedContext downstream = service.add(WS, new NewBoundedContext("Shipping",
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null, "en"), null);
+
+        ContextRelationship first = service.linkContext(
+                WS, upstream.code(), downstream.code(), RelationshipType.CUSTOMER_SUPPLIER);
+        ContextRelationship second = service.linkContext(
+                WS, upstream.code(), downstream.code(), RelationshipType.CUSTOMER_SUPPLIER);
+
+        assertEquals(first, second);
+        assertEquals(1, contextRelationshipRepository.all(WS).size());
+    }
+
+    /**
+     * Two different relationship types between the same pair remain two distinct resources - which
+     * type applies is a judgement call this port never makes.
+     */
+    @Test
+    void linkContextAllowsTwoDifferentTypesBetweenTheSamePair() {
+        BoundedContext upstream = service.add(WS, newBoundedContext(), null);
+        BoundedContext downstream = service.add(WS, new NewBoundedContext("Shipping",
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null, "en"), null);
+
+        ContextRelationship first = service.linkContext(
+                WS, upstream.code(), downstream.code(), RelationshipType.CUSTOMER_SUPPLIER);
+        ContextRelationship second = service.linkContext(
+                WS, upstream.code(), downstream.code(), RelationshipType.CONFORMIST);
+
+        assertNotEquals(first, second);
+        assertEquals(2, contextRelationshipRepository.all(WS).size());
+    }
+
+    @Test
+    void unlinkContextRemovesARecordedRelationship() {
+        BoundedContext upstream = service.add(WS, newBoundedContext(), null);
+        BoundedContext downstream = service.add(WS, new NewBoundedContext("Shipping",
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null, "en"), null);
+        service.linkContext(WS, upstream.code(), downstream.code(), RelationshipType.CUSTOMER_SUPPLIER);
+
+        service.unlinkContext(WS, upstream.code(), downstream.code(), RelationshipType.CUSTOMER_SUPPLIER);
+
+        assertEquals(List.of(), contextRelationshipRepository.all(WS));
+    }
+
+    @Test
+    void unlinkContextThrowsWithCodesWhenTheTripleIsNotRecorded() {
+        BoundedContext upstream = service.add(WS, newBoundedContext(), null);
+        BoundedContext downstream = service.add(WS, new NewBoundedContext("Shipping",
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null, "en"), null);
+
+        ContextRelationshipNotFoundException ex = assertThrows(ContextRelationshipNotFoundException.class,
+                () -> service.unlinkContext(WS, upstream.code(), downstream.code(), RelationshipType.CUSTOMER_SUPPLIER));
+
+        assertEquals(upstream.code(), ex.upstreamCode());
+        assertEquals(downstream.code(), ex.downstreamCode());
+        assertEquals(RelationshipType.CUSTOMER_SUPPLIER, ex.relationshipType());
+    }
+
+    @Test
+    void unlinkContextThrowsWhenUpstreamCodeUnknown() {
+        BoundedContext downstream = service.add(WS, newBoundedContext(), null);
+
+        assertThrows(BoundedContextNotFoundException.class, () -> service.unlinkContext(
+                WS, new BoundedContextCode("BC-99"), downstream.code(), RelationshipType.CUSTOMER_SUPPLIER));
+    }
+
+    /**
+     * {@code get} shows a relationship in both directions with the peer's code, mirroring the
+     * dogfooding example from #565: {@code bc_get BC-5} shows an outgoing and an incoming edge.
+     */
+    @Test
+    void getShowsRelationshipsInBothDirectionsWithThePeerCode() {
+        BoundedContext bc1 = service.add(WS, newBoundedContext(), null);
+        BoundedContext bc2 = service.add(WS, new NewBoundedContext("Shipping",
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null, "en"), null);
+        service.linkContext(WS, bc1.code(), bc2.code(), RelationshipType.PUBLISHED_LANGUAGE);
+
+        BoundedContextDetail upstreamSide = service.get(WS, bc1.code(), null).orElseThrow();
+        BoundedContextDetail downstreamSide = service.get(WS, bc2.code(), null).orElseThrow();
+
+        assertEquals(1, upstreamSide.relationships().size());
+        RelatedContext fromUpstream = upstreamSide.relationships().get(0);
+        assertEquals(RelatedContext.Direction.UPSTREAM_OF, fromUpstream.direction());
+        assertEquals(bc2.code(), fromUpstream.peerCode());
+        assertEquals(RelationshipType.PUBLISHED_LANGUAGE, fromUpstream.relationshipType());
+
+        assertEquals(1, downstreamSide.relationships().size());
+        RelatedContext fromDownstream = downstreamSide.relationships().get(0);
+        assertEquals(RelatedContext.Direction.DOWNSTREAM_OF, fromDownstream.direction());
+        assertEquals(bc1.code(), fromDownstream.peerCode());
+    }
+
+    @Test
+    void getShowsNoRelationshipsAfterUnlink() {
+        BoundedContext bc1 = service.add(WS, newBoundedContext(), null);
+        BoundedContext bc2 = service.add(WS, new NewBoundedContext("Shipping",
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null, "en"), null);
+        service.linkContext(WS, bc1.code(), bc2.code(), RelationshipType.PUBLISHED_LANGUAGE);
+
+        service.unlinkContext(WS, bc1.code(), bc2.code(), RelationshipType.PUBLISHED_LANGUAGE);
+
+        assertEquals(List.of(), service.get(WS, bc1.code(), null).orElseThrow().relationships());
+        assertEquals(List.of(), service.get(WS, bc2.code(), null).orElseThrow().relationships());
+    }
+
+    /** {@code list} shows the same relationships {@code get} does, per context in the result. */
+    @Test
+    void listShowsRelationshipsForEveryContext() {
+        BoundedContext bc1 = service.add(WS, newBoundedContext(), null);
+        BoundedContext bc2 = service.add(WS, new NewBoundedContext("Shipping",
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null, "en"), null);
+        service.linkContext(WS, bc1.code(), bc2.code(), RelationshipType.PUBLISHED_LANGUAGE);
+
+        List<BoundedContextDetail> all = service.list(WS, null);
+
+        BoundedContextDetail firstDetail = all.stream()
+                .filter(detail -> detail.context().code().equals(bc1.code())).findFirst().orElseThrow();
+        BoundedContextDetail secondDetail = all.stream()
+                .filter(detail -> detail.context().code().equals(bc2.code())).findFirst().orElseThrow();
+        assertEquals(1, firstDetail.relationships().size());
+        assertEquals(RelatedContext.Direction.UPSTREAM_OF, firstDetail.relationships().get(0).direction());
+        assertEquals(1, secondDetail.relationships().size());
+        assertEquals(RelatedContext.Direction.DOWNSTREAM_OF, secondDetail.relationships().get(0).direction());
+    }
+
+    /**
+     * A dangling relationship (its peer identity does not resolve to any known bounded context -
+     * deleted store-first, or an import/merge accident) must still be rendered, under a fixed
+     * placeholder code, rather than silently dropped - dropping it would hide exactly the class of
+     * defect issue #565 set out to make visible (issue #575 review). Reproduced by adding a
+     * relationship straight through the out-port, bypassing {@code linkContext}'s own code
+     * resolution, which would otherwise reject the unknown peer.
+     */
+    @Test
+    void getRendersAnUnresolvablePeerUnderAPlaceholderRatherThanDroppingTheRelationship() {
+        BoundedContext bc1 = service.add(WS, newBoundedContext(), null);
+        BoundedContextId danglingPeer =
+                new BoundedContextId(ResourceId.of("https://w3id.org/arknet/id/deleted-peer"));
+        contextRelationshipRepository.createIfAbsent(WS, new ContextRelationship(
+                new ContextRelationshipId(resourceIdFactory.newId()), bc1.id(), danglingPeer,
+                RelationshipType.CONFORMIST));
+
+        BoundedContextDetail detail = service.get(WS, bc1.code(), null).orElseThrow();
+
+        assertEquals(1, detail.relationships().size());
+        RelatedContext dangling = detail.relationships().get(0);
+        assertEquals(RelatedContext.Direction.UPSTREAM_OF, dangling.direction());
+        assertEquals(danglingPeer, dangling.peerId());
+        assertEquals(new BoundedContextCode("<unresolved>"), dangling.peerCode());
     }
 
     private static NewBoundedContext newBoundedContext() {
