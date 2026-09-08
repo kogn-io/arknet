@@ -14,8 +14,10 @@ points at them, and it repeats nothing the store already holds (glossary, record
 - **Ubiquitous Language** (TERM-25): the one language of a Bounded Context.
 - **Component** (TERM-26): one or more form a Bounded Context and speak its
   Ubiquitous Language; each has a responsibility of its own behind an interface.
-  Construction rule (to be recorded in the successor of ADR-48): a Component is a
-  hexagon, built as the modules `api | core | adapter-<tech>`.
+  Construction rule (decided on #444, 2026-09-08; record pending): a Component is a
+  hexagon, built as the modules `core | adapter-<tech>`. An `api` module is an extension
+  stage, built only once a module outside the Component calls an in-port at compile
+  time; arknet has no such caller.
 - **Application**: the only deployable unit, outside every Bounded Context, holding the
   composition root.
 - **Vocabulary** `<bc>-shared`: identities and ownerless value objects of one Bounded
@@ -48,6 +50,8 @@ Context map (as built today, read off the code, not yet in the store -- #438):
 - Actor and the project registry read nobody.
 - Model Analysis (target, #554) reads every model context through its Published
   Language; nobody reads Model Analysis.
+- `arknet-shared-kernel` is the Shared Kernel of every context (decided on #444):
+  project identity, resource identity, business-code assignment, language.
 - Relationship kind: on the write side the out-adapter reads the neighbour's named
   graph (= Published Language, the ontology as schema); on the read side the in-adapter
   borrows the neighbour's read in-port (Borrowed In-Port, TERM-22 -- whether that
@@ -57,6 +61,14 @@ Context map (as built today, read off the code, not yet in the store -- #438):
 
 Seven Components, three modules each (`core`, `adapter-kogniordf`, `adapter-mcp`),
 no `api` module, no `<bc>-shared`. Target context per section 2.
+
+Target (decided on #444, 2026-09-08, five sub-decisions; records pending): the
+Components stay as they are and the Bounded Contexts become Maven parents above them
+(`arknet-product-requirements`, `arknet-domain-modelling`); no core is merged. The two
+merged contexts get a `<bc>-shared` (typed codes, the context's one `TermRef`); Actor,
+Architecture & Decisions and Model Analysis hold one Component each and need none.
+No `api` module. Model Analysis becomes an eighth Component (#560). Implementation:
+#439, #441, #560, #561.
 
 | Target Bounded Context       | Component (today = Maven parent) | Modules                                   |
 |------------------------------|----------------------------------|-------------------------------------------|
@@ -73,7 +85,7 @@ Outside every Bounded Context:
 | Role in the schema                 | Module                          | Note |
 |------------------------------------|---------------------------------|------|
 | Application (composition root)     | arknet-mcp                      | Spring Boot daemon; additionally carries the generic store read path (ADR-51, tolerated exception); the five cross-context evaluations, `store_check` and the HTML report still live here and move to Model Analysis (#554) |
-| Shared Kernel candidate            | arknet-shared-kernel            | ProjectId, ProjectResolver, ResourceId, DisplayLocale -- to be tested against the Shared Kernel definition (small, delimited, decided?) or a technical library without model terms |
+| Shared Kernel                      | arknet-shared-kernel            | decided on #444: keeps ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale (model terms every core carries); LocalizedLiteral moves to persistence-support, the anchor/translation mechanics (ProjectResolver, StaleTranslationHint, FieldLanguageLookup) into a support module of the tool adapters (#561) |
 | Technical library                  | arknet-persistence-support      | SHACL gate, WriteFunnel, vocabulary constants -- no model term, hence neither Shared Kernel nor vocabulary |
 | Technical library (test scope)     | arknet-persistence-test-support | Guarded* decorators |
 | Published Language (schema)        | arknet-ontology                 | .ttl ontologies and shapes |
@@ -93,19 +105,21 @@ Outside every Bounded Context:
   - adr-mcp -> requirements-core, ubiquitous-language-core, bounded-context-core
   - actor-mcp, project-mcp, ubiquitous-language-mcp: none
 
-The schema's dependency rules forbid an adapter depending on a foreign core. The
-Borrowed In-Port therefore survives the target schema only through the neighbour's
-`api` module, never its core.
+The schema's dependency rules forbid an adapter depending on a foreign core. Decided
+on #444 (2026-09-08): the Borrowed In-Port is abolished. The `*Lookup` out-ports get the
+reverse direction (identity to code), served by `adapter-kogniordf` through the Published
+Language, and in-port results carry foreign codes themselves; every `-adapter-mcp` then
+depends on its own core only. TERM-22 goes with it (#439, #441).
 
 ## 5. Check against the schema's mandatory parts
 
 | Mandatory per schema                          | arknet as built                                     |
 |-----------------------------------------------|-----------------------------------------------------|
-| Bounded Context as Maven parent               | missing; today the parent is the Component           |
-| `api` per Component                           | missing everywhere                                   |
+| Bounded Context as Maven parent               | missing; today the parent is the Component (#439, #441, #560) |
+| `api` per Component                           | not required: extension stage, no foreign in-port caller in arknet (decided on #444) |
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
-| `<bc>-shared` once ownerless identities exist | missing; shared-kernel carries parts of it for all contexts |
+| `<bc>-shared` once ownerless identities exist | missing; decided: one each for Product & Requirements and Domain Modelling (#439, #441) |
 | Application outside every Bounded Context     | present (arknet-mcp)                                 |
 | dependency rules as a checker                 | partial (the ArchUnit rules do not carry "no core depends on a neighbouring core", per ADR-48's context) |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |
@@ -126,13 +140,14 @@ Borrowed In-Port therefore survives the target schema only through the neighbour
 1. #554 -- decided: the cross-context evaluations, `store_check` and the report become
    the Component `arknet-model-analysis` of a read-only Bounded Context Model Analysis,
    reading the Published Language (no Borrowed In-Ports). The move itself is Part B.
-2. ADR-48 and ADR-49 (PROPOSED) to be withdrawn and rewritten: Components per Bounded
-   Context, neighbour access (own out-port plus adapter, or Published Language; fate of
-   the Borrowed In-Port), `api` modules, `<bc>-shared`, shared-kernel. Closes #352. The
-   table in section 3 then becomes the target table.
-3. ADR-10 and ADR-13 through successor records (the undefined "model context" goes).
+2. Decided (#444, 2026-09-08): Components stay, contexts become parents; Borrowed
+   In-Port abolished; no `api`; two `<bc>-shared`; shared-kernel confirmed and slimmed.
+   ADR-48 and ADR-49 are replaced by records of this shape in the consolidation pass
+   after Part A. Closes #352.
+3. ADR-10 and ADR-13 through successor records (the undefined "model context" goes;
+   whether the project registry is a context of its own).
 4. #438 -- Bounded Contexts and context map into the store; section 2 moves there.
-5. Part B (#439/#441): Maven, ArchUnit, module map in `CLAUDE.md`.
+5. Part B (#439, #441, #560, #561): Maven, ArchUnit, module map in `CLAUDE.md`.
 6. #77 -- building-block view into the store; this file goes away. Before that, a
    successor of ADR-46 (components move from "outside" to "not yet built"), see the
    comment on #77.
