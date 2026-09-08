@@ -28,13 +28,13 @@ import de.hauschel.arknet.kernel.ResourceId;
  * repointed those edges at {@code arkproc:Role} instead of {@code arkproc:Actor}.</p>
  *
  * <p><strong>Carries a resolved name, unlike {@code ResolveActors} did.</strong> A role's
- * {@code name} is language-tagged (see {@link de.hauschel.arknet.actor.domain.Role}'s own javadoc
- * for why this hexagon's two resource types disagree on that), so a caller needs it resolved under
- * a {@code displayLocale} the same way {@link de.hauschel.arknet.actor.application.port.out.
- * RoleRepository#findByCode} already accepts one - a bare {@code ROLE-1} would otherwise force
- * every renderer to look the name up a second time. {@code ResolveActors.ResolvedActor} never
- * carried a name because an actor's own name is untagged, and its one caller
- * ({@code UseCasePresenter}) rendered only the code.</p>
+ * {@code name} is language-tagged (see {@link de.hauschel.arknet.actor.domain.Role}'s own javadoc),
+ * so a caller needs it resolved under a {@code displayLocale} the same way
+ * {@link de.hauschel.arknet.actor.application.port.out.RoleRepository#findByCode} already accepts
+ * one - a bare {@code ROLE-1} would otherwise force every renderer to look the name up a second
+ * time. {@code ResolveActors.ResolvedActor} never carried a name because its one caller
+ * ({@code UseCasePresenter}) rendered only the code - and, before kogn-io/arknet#520, an actor's
+ * name was an untagged literal that needed no language to be selected under.</p>
  *
  * <p><strong>Never rejects.</strong> Unlike {@code GetRole} (single lookup by code, empty if
  * absent) this is a batch lookup by identity with no error case: an id that resolves to nothing

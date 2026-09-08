@@ -341,9 +341,10 @@ public final class RoleMcpTools {
      * translation (see {@link StaleTranslationHint}).
      *
      * <p>{@code filledBy} is deliberately absent: an occupancy edge carries no text under any
-     * language and so leaves nothing behind to go stale. This is also the line between the two
-     * resource types of this hexagon - an {@code actor_update} gets no signal at all, because an
-     * actor's name is an untagged proper noun by design, not a translated one.</p>
+     * language and so leaves nothing behind to go stale. {@code actor_update} carries the very
+     * same signal for its own {@code name}/{@code description} since kogn-io/arknet#520 (see
+     * {@code ActorMcpTools#staleTranslationHint}); what stays specific to a role is only the
+     * occupancy edge this signal leaves out.</p>
      */
     private String staleTranslationHint(final ResolvedProject project, final RoleCode code,
             final String language, final String name, final String description) {

@@ -23,8 +23,8 @@ import de.hauschel.arknet.kernel.ResourceId;
  * Driven port: persistence capability the role resource type needs from the outside - mirrors
  * {@code ConstraintRepository}'s multilingual write/read shape (own {@link #create}/
  * {@link #compareAndUpdate} language arguments, {@link #findByCode}/{@link #findAll}
- * {@code displayLocale}, {@link #findAllDisplayFallback}), not {@link ActorRepository}'s untagged
- * one - see {@link Role}'s own javadoc for why.
+ * {@code displayLocale}, {@link #findAllDisplayFallback}), the same shape {@link ActorRepository}
+ * carries since kogn-io/arknet#520 - see {@link Role}'s own javadoc.
  */
 public interface RoleRepository {
 

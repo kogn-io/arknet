@@ -18,8 +18,10 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <p><strong>Resolved by code, not by name - unlike this port's predecessor,
  * {@code ActorLookup}.</strong> A role's {@code name} is language-tagged (issue #405 Part B),
- * unlike an actor's untagged {@code arknet:name}: a lexical-form match against a language-tagged
- * literal would be ambiguous the moment a role carries more than one language variant, so the
+ * which an actor's {@code arknet:name} was not before kogn-io/arknet#520: a lexical-form match
+ * against a language-tagged literal would be ambiguous the moment a role carries more than one
+ * language variant (since #520 the same holds for an actor's name, so a lookup by name is out for
+ * both resource types), so the
  * reference must instead go via the role's stable, single-valued {@code dcterms:identifier}
  * (e.g. {@code ROLE-4}), the same key {@code filledBy} already resolves an occupant actor by
  * (its {@code ACTOR-N} code) and {@code TermLookup}/{@code RequirementLookup} already use for
