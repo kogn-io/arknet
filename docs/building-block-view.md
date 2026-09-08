@@ -25,7 +25,8 @@ points at them, and it repeats nothing the store already holds (glossary, record
 
 ## 2. Context view
 
-Target Bounded Contexts per ADR-10, ADR-36 and ADR-46 (all ACCEPTED):
+Target Bounded Contexts per ADR-10, ADR-36 and ADR-46 (all ACCEPTED) plus the two
+decided on #554 and #444 (records pending):
 
 | Bounded Context (target)     | holds                                                         | Record |
 |------------------------------|---------------------------------------------------------------|--------|
@@ -33,13 +34,17 @@ Target Bounded Contexts per ADR-10, ADR-36 and ADR-46 (all ACCEPTED):
 | Domain Modelling             | Term (SKOS), BoundedContext, ContextRelationship              | ADR-10 |
 | Architecture & Decisions     | ArchitectureDecisionRecord, Consequence, ConsideredOption     | ADR-10 |
 | Actor                        | Actor, Role                                                   | ADR-36, ADR-37 |
-| (Project registry)           | Project, Anchor -- "outside the model contexts"               | ADR-13 |
+| Project registry             | Project, Anchor, language commitment -- supporting context outside the eight lifecycle contexts, like Actor | ADR-13 (successor pending; decided on #444, 2026-09-08) |
 | Model Analysis               | read-only: impact analysis, trace matrix, orphans, role/use-case matrix, term co-occurrence, `store_check`, the HTML report -- reads the Published Language of every model context | #554 (decided 2026-09-08, record pending) |
 
-Open: ADR-13 calls the registry "a hexagon outside the model contexts". In the current
-vocabulary every Component belongs to a Bounded Context; whether the registry is a
-tooling context of its own, and whether it appears in the context map held by the
-store, is for the successor of ADR-13 (#438).
+Decided on #444 (2026-09-08): the project registry is a Bounded Context of its own --
+a supporting context outside the eight lifecycle contexts, the same position Actor
+holds, upstream of every model context and visible on the context map. Grounds: the
+schema knows no Component without a context; `ProjectId` sits in the Shared Kernel as
+a model term and needs an owning context; Project, Anchor and the language commitment
+are a language no model context holds. Tenant and user identity are not part of it
+(a different language, a decision of its own once multi-tenancy becomes concrete;
+ADR-6). The undefined "model context" goes with the successor of ADR-13.
 
 Context map (as built today, read off the code, not yet in the store -- #438):
 
@@ -47,7 +52,9 @@ Context map (as built today, read off the code, not yet in the store -- #438):
 - Architecture & Decisions reads Product & Requirements and Domain Modelling.
 - Domain Modelling (bounded-context) reads Domain Modelling (ubiquitous-language) --
   context-internal per ADR-10.
-- Actor and the project registry read nobody.
+- Actor reads nobody.
+- The project registry reads nobody; the tool adapter of every context resolves its
+  project there (upstream of every context).
 - Model Analysis (target, #554) reads every model context through its Published
   Language; nobody reads Model Analysis.
 - `arknet-shared-kernel` is the Shared Kernel of every context (decided on #444):
@@ -78,7 +85,7 @@ No `api` module. Model Analysis becomes an eighth Component (#560). Implementati
 | Domain Modelling             | arknet-bounded-context           | -core, -adapter-kogniordf, -adapter-mcp   |
 | Architecture & Decisions     | arknet-adr                       | -core, -adapter-kogniordf, -adapter-mcp   |
 | Actor                        | arknet-actor                     | -core, -adapter-kogniordf, -adapter-mcp   |
-| (Project registry)           | arknet-project                   | -core, -adapter-kogniordf, -adapter-mcp   |
+| Project registry             | arknet-project                   | -core, -adapter-kogniordf, -adapter-mcp   |
 
 Outside every Bounded Context:
 
@@ -144,8 +151,11 @@ depends on its own core only. TERM-22 goes with it (#439, #441).
    In-Port abolished; no `api`; two `<bc>-shared`; shared-kernel confirmed and slimmed.
    ADR-48 and ADR-49 are replaced by records of this shape in the consolidation pass
    after Part A. Closes #352.
-3. ADR-10 and ADR-13 through successor records (the undefined "model context" goes;
-   whether the project registry is a context of its own).
+3. ADR-10 and ADR-13 through successor records in the consolidation pass. Decided
+   (#444, 2026-09-08): the project registry is a Bounded Context of its own; the
+   undefined "model context" goes. Left for the ADR-10 successor: the full context
+   list placed against ADR-46, the gateway wording and TERM-22 dropped, context =
+   Maven parent and Component = hexagon.
 4. #438 -- Bounded Contexts and context map into the store; section 2 moves there.
 5. Part B (#439, #441, #560, #561): Maven, ArchUnit, module map in `CLAUDE.md`.
 6. #77 -- building-block view into the store; this file goes away. Before that, a
