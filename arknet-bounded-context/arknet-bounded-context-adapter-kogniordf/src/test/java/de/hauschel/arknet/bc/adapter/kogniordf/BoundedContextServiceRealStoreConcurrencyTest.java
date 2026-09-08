@@ -368,8 +368,8 @@ class BoundedContextServiceRealStoreConcurrencyTest {
      * concurrent single-field, single-language writers on the same bounded context must not lose
      * either party's change - one thread corrects only {@code domainVision} under its
      * already-observed English tag, the other concurrently adds only a new German {@code name}
-     * variant. {@code updateWithOptimisticRetry} shares its read-modify-write shape with
-     * {@code linkTermWithOptimisticRetry}, so this mirrors
+     * variant. {@code update} and {@code linkTerm} run through the one
+     * {@code updateWithOptimisticRetry} loop, so this mirrors
      * {@link #linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead} exactly: the
      * {@code beforeTransaction} hook - not real racer threads - pins the interleaving
      * deterministically (the compare-and-set race itself is proven store-level by that test

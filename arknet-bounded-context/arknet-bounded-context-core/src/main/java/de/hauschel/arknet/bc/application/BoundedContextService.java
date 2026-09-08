@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.DescribeBoundedContextDisplayFallback;
@@ -89,12 +90,11 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     private static final String CODE_PREFIX = "BC";
 
     /**
-     * Bound on {@link #updateWithOptimisticRetry}'s/{@link #linkTermWithOptimisticRetry}'s
-     * compare-and-set retry loops. Two callers read-modify-writing the same bounded context are
-     * resolved by a single retry in the overwhelming majority of cases, since each retry re-reads
-     * the now-current state before trying again; this bound only exists so a pathological,
-     * sustained storm of concurrent writers against the very same bounded context fails loudly
-     * instead of looping forever.
+     * Bound on {@link #updateWithOptimisticRetry}'s compare-and-set retry loop. Two callers
+     * read-modify-writing the same bounded context are resolved by a single retry in the
+     * overwhelming majority of cases, since each retry re-reads the now-current state before
+     * trying again; this bound only exists so a pathological, sustained storm of concurrent
+     * writers against the very same bounded context fails loudly instead of looping forever.
      */
     private static final int MAX_RETRY_ATTEMPTS = 20;
 
@@ -184,7 +184,22 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
         // outside the retry loop below - an unknown/ambiguous term code must propagate as a
         // didactic rejection immediately and leave the bounded context untouched.
         TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
-        return linkTermWithOptimisticRetry(projectId, code, term);
+        // Touches no language-tagged field: name/domainVision and their tags pass straight
+        // through from `current`, so compareAndUpdate's write is a scoped no-op on both language
+        // variants, and the null write-side default keeps issue #258's sweep off - exactly as
+        // before kogn-io/arknet#520.
+        return updateWithOptimisticRetry(projectId, code, null, current -> {
+            if (current.value().usesTerms().contains(term)) {
+                return Optional.empty();
+            }
+            List<TermRef> linked = new ArrayList<>(current.value().usesTerms());
+            linked.add(term);
+            BoundedContext updated = new BoundedContext(current.value().id(), current.value().code(),
+                    current.value().name(), current.value().domainVision(), current.value().subdomain(),
+                    current.value().ownedBy(), linked);
+            return Optional.of(new PendingWrite(updated, current.nameLanguage(), current.domainVisionLanguage(),
+                    null));
+        });
     }
 
     @Override
@@ -192,7 +207,31 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
             String language, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return updateWithOptimisticRetry(projectId, code, name, domainVision, language, defaultLanguage);
+        // Mirrors ConstraintService#updateWithOptimisticRetry exactly for the language handling.
+        return updateWithOptimisticRetry(projectId, code, defaultLanguage, current -> {
+            BoundedContext updated = new BoundedContext(current.value().id(), current.value().code(),
+                    name != null ? name : current.value().name(),
+                    domainVision != null ? domainVision : current.value().domainVision(),
+                    current.value().subdomain(), current.value().ownedBy(), current.value().usesTerms());
+            // name/domainVision each get their own language: a field this call did not name
+            // round-trips under the exact tag it was read under (a scoped no-op), never under
+            // `language`/`defaultLanguage`. Resolved lazily, per field, mirroring
+            // ConstraintService#resolveTouchedLanguage exactly.
+            String nameLanguage = resolveTouchedLanguage(name != null, current.value().name(), updated.name(),
+                    current.nameLanguage(), language, defaultLanguage);
+            String domainVisionLanguage = resolveTouchedLanguage(domainVision != null,
+                    current.value().domainVision(), updated.domainVision(), current.domainVisionLanguage(),
+                    language, defaultLanguage);
+            // A call that changes neither text nor either field's language tag is a no-op - the
+            // same "naming a field with its already-current text but an explicit, different
+            // language is still a write" rule ConstraintService states.
+            if (updated.equals(current.value())
+                    && Objects.equals(nameLanguage, current.nameLanguage())
+                    && Objects.equals(domainVisionLanguage, current.domainVisionLanguage())) {
+                return Optional.empty();
+            }
+            return Optional.of(new PendingWrite(updated, nameLanguage, domainVisionLanguage, defaultLanguage));
+        });
     }
 
     @Override
@@ -214,102 +253,56 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     }
 
     /**
-     * Read-modify-write helper behind {@link #linkTerm}: reads the current bounded context and its
-     * concurrency token together via {@link BoundedContextRepository#findCurrentByCode} (under the
-     * repository's own configured display language - {@code linkTerm} touches no language-tagged
-     * field, see the class-level note), derives the next state (appending {@code term} unless
-     * already linked), and writes it back via {@link BoundedContextRepository#compareAndUpdate} -
-     * retrying with a fresh read whenever a concurrent writer commits a change in between (two
-     * parallel {@code bc_link_term} round trips on the same bounded context used to silently lose
-     * whichever one committed last, because the read happened outside any transaction and the write
-     * carried no guard at all).
-     *
-     * <p>{@code name}/{@code domainVision} and their language tags are passed straight through
-     * unchanged from {@code current} - this method never touches either field, so
-     * {@code compareAndUpdate}'s write is a scoped no-op on both language variants, exactly as
-     * {@code current.value()} carries them.</p>
-     *
-     * <p>A no-op ({@code term} already linked) is treated as such and skips the write entirely,
-     * exactly as before kogn-io/arknet#520.</p>
-     *
-     * @throws BoundedContextNotFoundException             if no bounded context with {@code code}
-     *                                                     exists
-     * @throws BoundedContextConcurrentlyModifiedException if the write keeps losing the race
-     *                                                     across every retry attempt
+     * What one round of {@link #updateWithOptimisticRetry}'s mutation decided to write: the next
+     * state plus the BCP-47 tags {@code name}/{@code domainVision} are written under and the
+     * write-side project default the issue #258 sweep keys on ({@code null} switches the sweep
+     * off, as {@link #linkTerm} needs).
      */
-    private BoundedContext linkTermWithOptimisticRetry(ProjectId projectId, BoundedContextCode code, TermRef term) {
-        BoundedContextConcurrentlyModifiedException lastConflict = null;
-        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-            BoundedContextRepository.CurrentBoundedContext current =
-                    repository.findCurrentByCode(projectId, code, null)
-                            .orElseThrow(() -> new BoundedContextNotFoundException(projectId, code));
-            if (current.value().usesTerms().contains(term)) {
-                return current.value();
-            }
-            List<TermRef> linked = new ArrayList<>(current.value().usesTerms());
-            linked.add(term);
-            BoundedContext updated = new BoundedContext(current.value().id(), current.value().code(),
-                    current.value().name(), current.value().domainVision(), current.value().subdomain(),
-                    current.value().ownedBy(), linked);
-            try {
-                repository.compareAndUpdate(projectId, current.head(), updated,
-                        current.nameLanguage(), current.domainVisionLanguage(), null);
-                return updated;
-            } catch (BoundedContextConcurrentlyModifiedException e) {
-                // A concurrent writer replaced the bounded context between our read and our write -
-                // retry against the now-current state instead of silently discarding that change.
-                lastConflict = e;
-            }
-        }
-        throw lastConflict;
+    private record PendingWrite(BoundedContext updated, String nameLanguage, String domainVisionLanguage,
+            String defaultLanguage) {
     }
 
     /**
-     * Read-modify-write helper behind {@link #update}, mirroring
-     * {@code ConstraintService#updateWithOptimisticRetry} exactly for the language handling:
-     * reads the current bounded context and its concurrency token together via
-     * {@link BoundedContextRepository#findCurrentByCode}, derives the next state, and writes it
-     * back via {@link BoundedContextRepository#compareAndUpdate} - retrying with a fresh read
-     * whenever a concurrent writer commits a change in between.
+     * The one read-modify-write loop behind {@link #linkTerm} and {@link #update}, the same shape
+     * {@code RequirementService#updateWithOptimisticRetry} serves both of its callers with: reads
+     * the current bounded context and its concurrency token together via
+     * {@link BoundedContextRepository#findCurrentByCode} (under {@code readDefaultLanguage} -
+     * the project's own default for {@link #update}, {@code null} for {@link #linkTerm}, see the
+     * class-level note), asks {@code mutation} for the next state, and writes it back via
+     * {@link BoundedContextRepository#compareAndUpdate} - retrying with a fresh read whenever a
+     * concurrent writer commits a change in between (two parallel {@code bc_link_term} round trips
+     * on the same bounded context used to silently lose whichever one committed last, because the
+     * read happened outside any transaction and the write carried no guard at all).
      *
-     * <p>A call that changes neither text nor either field's language tag is a no-op: it returns
-     * the bounded context as read without writing - the same "naming a field with its
-     * already-current text but an explicit, different language is still a write" rule
-     * {@code ConstraintService} states.</p>
+     * <p>{@code mutation} answers {@link Optional#empty()} for a no-op - a term already linked, or
+     * an update that changes neither text nor either field's language tag - and the loop then
+     * returns the bounded context as read without writing. Everything language-specific lives in
+     * the mutation, not here: {@link #linkTerm} hands the tags it observed straight through (a
+     * scoped no-op on both language variants), {@link #update} resolves them per touched field via
+     * {@link #resolveTouchedLanguage}.</p>
      *
      * @throws BoundedContextNotFoundException             if no bounded context with {@code code}
      *                                                     exists
      * @throws BoundedContextConcurrentlyModifiedException if the write keeps losing the race
      *                                                     across every retry attempt
      */
-    private BoundedContext updateWithOptimisticRetry(ProjectId projectId, BoundedContextCode code, String name,
-            String domainVision, String language, String defaultLanguage) {
+    private BoundedContext updateWithOptimisticRetry(ProjectId projectId, BoundedContextCode code,
+            String readDefaultLanguage,
+            Function<BoundedContextRepository.CurrentBoundedContext, Optional<PendingWrite>> mutation) {
         BoundedContextConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             BoundedContextRepository.CurrentBoundedContext current =
-                    repository.findCurrentByCode(projectId, code, defaultLanguage)
+                    repository.findCurrentByCode(projectId, code, readDefaultLanguage)
                             .orElseThrow(() -> new BoundedContextNotFoundException(projectId, code));
-            BoundedContext updated = new BoundedContext(current.value().id(), current.value().code(),
-                    name != null ? name : current.value().name(),
-                    domainVision != null ? domainVision : current.value().domainVision(),
-                    current.value().subdomain(), current.value().ownedBy(), current.value().usesTerms());
-            // name/domainVision each get their own language: a field this call did not name
-            // round-trips under the exact tag it was read under (a scoped no-op), never under
-            // `language`/`defaultLanguage`. Resolved lazily, per field, mirroring
-            // ConstraintService#resolveTouchedLanguage exactly.
-            String nameLanguage = resolveTouchedLanguage(name != null, current.value().name(), updated.name(),
-                    current.nameLanguage(), language, defaultLanguage);
-            String domainVisionLanguage = resolveTouchedLanguage(domainVision != null, current.value().domainVision(),
-                    updated.domainVision(), current.domainVisionLanguage(), language, defaultLanguage);
-            if (updated.equals(current.value())
-                    && Objects.equals(nameLanguage, current.nameLanguage())
-                    && Objects.equals(domainVisionLanguage, current.domainVisionLanguage())) {
+            Optional<PendingWrite> pending = mutation.apply(current);
+            if (pending.isEmpty()) {
                 return current.value();
             }
+            PendingWrite write = pending.get();
             try {
-                repository.compareAndUpdate(projectId, current.head(), updated, nameLanguage, domainVisionLanguage,
-                        defaultLanguage);
-                return updated;
+                repository.compareAndUpdate(projectId, current.head(), write.updated(), write.nameLanguage(),
+                        write.domainVisionLanguage(), write.defaultLanguage());
+                return write.updated();
             } catch (BoundedContextConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the bounded context between our read and our write -
                 // retry against the now-current state instead of silently discarding that change.
