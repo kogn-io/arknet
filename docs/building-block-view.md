@@ -7,18 +7,19 @@ Once it does, this file goes away.
 
 Decisions do **not** live here; they are records in the arknet store (`adr_get ADR-n`,
 rendered in `docs/adr-export/`), and so is their status. This file states the shape
-as built and the target shape, and points at the record each part rests on. It repeats
+as built and the target shape, and points at the record each part rests on -- where a
+part rests on no record but on the module schema alone, it says so. It repeats
 nothing the store already holds (glossary, records, context map).
 
 ## 1. Terms (glossary in the store)
 
 - **Bounded Context** (TERM-19): a boundary within which a domain model and its terms
-  hold uniformly. In the build a Maven parent and nothing else: no hexagon, no core
-  (ADR-48).
+  hold uniformly. In the build a Maven parent and nothing else: no hexagon, no core --
+  module schema, no record behind it.
 - **Ubiquitous Language** (TERM-25): the one language of a Bounded Context.
 - **Component** (TERM-26): one or more form a Bounded Context and speak its
   Ubiquitous Language; each has a responsibility of its own behind an interface. A
-  Component is a hexagon, built as the modules `core | adapter-<tech>` (ADR-48). An
+  Component is a hexagon, built as the modules `core | adapter-<tech>`. An
   `api` module is an extension stage, built only once a module outside the Component
   calls an in-port at compile time; arknet has no such caller (ADR-58).
 - **Application**: the only deployable unit, outside every Bounded Context, holding the
@@ -78,11 +79,11 @@ As built: seven Components, three modules each (`core`, `adapter-kogniordf`,
 the Component is the Maven parent.
 
 Target: the Components stay as they are and the Bounded Contexts become Maven parents
-above them; no core is merged (ADR-48). The two contexts with two Components get a
-`<bc>-shared` (typed codes, the context's one `TermRef`); Actor, Architecture &
-Decisions and Model Analysis hold one Component each and need none (ADR-57). No `api`
-module (ADR-58). Model Analysis becomes an eighth Component (ADR-54). Implementation:
-#439, #441, #560, #561.
+above them; no core is merged -- module schema, no record behind it. The two contexts
+with two Components get a `<bc>-shared` (typed codes, the context's one `TermRef`);
+Actor, Architecture & Decisions and Model Analysis hold one Component each and need
+none (ADR-57). No `api` module (ADR-58). Model Analysis becomes an eighth Component
+(ADR-54). Implementation: #439, #441, #560, #561.
 
 | Target Bounded Context       | Component (today = Maven parent) | Modules                                   |
 |------------------------------|----------------------------------|-------------------------------------------|

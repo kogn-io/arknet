@@ -279,23 +279,40 @@ Dass `adr_check` unveraendert meldet, ist ebenfalls erwartet: keine der
 Aenderungen betraf eine Kante oder einen Status, und die 20 kantenlosen Records
 sind nach #572 Punkt 7 bewusst kantenlos.
 
-## 3. Annahmereihenfolge der neun PROPOSED-Records
+## 3. Annahmereihenfolge der acht PROPOSED-Records
 
 Hergeleitet aus dem, was der Text eines Records als geklaert **voraussetzt** --
 nicht aus `relatedTo`, das symmetrisch ist und nichts ordnet. Nach dem Fix an
 ADR-52 ist die Ordnung zyklenfrei.
 
+**Nachgefuehrt am 2026-09-09:** ADR-48 ist geloescht und aus der Reihenfolge
+gefallen (siehe unten). Was drei Records ueber ihn voraussetzten -- dass ein
+Kontext mehrere Komponenten haelt --, ruht auf ADR-52; ihre Voraussetzung ist
+entsprechend umgehaengt, die Ordnung bleibt zyklenfrei.
+
 | # | Record | Setzt voraus | Warum |
 |---|---|---|---|
 | 1 | ADR-49 | nichts unter PROPOSED | Der Verweis auf ein API-Modul steht in einer verworfenen Option und begruendet sich selbst; ADR-58 haengt an ADR-49, nicht umgekehrt |
 | 2 | ADR-52 | nichts unter PROPOSED | nach dem Fix; die sechs Kontexte sind ueber Sprachgrenzen begruendet |
-| 3 | ADR-48 | 52, 49 | seine `decision` benennt die Kontexte; der Umweg entfaellt durch das Lesen ueber die Published Language |
-| 4 | ADR-56 | 52 | "trifft alle sechs Kontexte" |
-| 5 | ADR-53 | 56, 48 | Projektidentitaet im Shared Kernel; Modulschema kennt keine Komponente ohne Kontext |
-| 6 | ADR-54 | 48, 49 (+ ADR-51, ACCEPTED) | eine Komponente, die die Published Language jedes Kontexts liest |
-| 7 | ADR-55 | 54 | "Seit die Modellanalyse ein eigener Kontext ist" |
-| 8 | ADR-57 | 48, 56 | zwei Kontexte mit je zwei Komponenten; Abgrenzung gegen den Shared Kernel |
-| 9 | ADR-58 | 49 | "Seit ein Nachbar ausschliesslich ueber die Published Language gelesen wird" |
+| 3 | ADR-56 | 52 | "trifft alle sechs Kontexte" |
+| 4 | ADR-53 | 52, 56 | Projektidentitaet im Shared Kernel; Modulschema kennt keine Komponente ohne Kontext |
+| 5 | ADR-54 | 49, 52 (+ ADR-51, ACCEPTED) | eine Komponente, die die Published Language jedes Kontexts liest |
+| 6 | ADR-55 | 54 | "Seit die Modellanalyse ein eigener Kontext ist" |
+| 7 | ADR-57 | 52, 56 | zwei Kontexte mit je zwei Komponenten; Abgrenzung gegen den Shared Kernel |
+| 8 | ADR-58 | 49 | "Seit ein Nachbar ausschliesslich ueber die Published Language gelesen wird" |
+
+**ADR-48 ist am 2026-09-09 geloescht** (PR #592). Ein Review durch einen
+Nicht-Autor gegen R0-R8 fand vier unabhaengige Aussagen (R1), von denen keine
+allein Q1/Q2 traegt (R0): "Komponenten bleiben, wie sie sind" ist das
+Status-quo-Muster, die Parent-Zuordnung je Kontext eine Instanzliste,
+"Komponente = Kern + Adaptermodul je Technologie" eine Beschreibung des
+Modulschemas, und die Namensraum-Haelfte folgt aus ADR-12. Die einzige Aussage,
+die einen Record traegt -- eine Kontextgrenze ist keine Hexagon-Grenze --, steht
+bereits als verworfene Option 3 in ADR-52. Derselbe Befund stand in Abschnitt 10
+des Berichts vom 2026-09-08 (R0-Spalte: "konkrete Parent-Zuordnung ist
+Bausteinsicht") und wurde damals nicht gezogen; das ist die eigentliche Lehre
+dieses Falls -- die Regel hat den Fund geliefert, gefehlt hat der Schritt von
+der Tabelle zur Konsequenz.
 
 Danach, und erst danach, die drei Abloesungen, die `adr_supersede` beide Seiten
 ACCEPTED verlangt: ADR-52 loest ADR-10 ab, ADR-53 loest ADR-13 ab, ADR-55 loest
