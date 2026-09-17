@@ -2,7 +2,7 @@
 
 This document describes arknet's own structure in the vocabulary of its module
 schema: Bounded Context > Component > Maven module. It is transitional: arknet's
-metamodel does not yet hold this view itself (kogn-io/arknet#77, milestone 0.11.0).
+metamodel does not yet hold this view itself (kogn-io/arknet#77, milestone 0.12.0).
 Once it does, this file goes away.
 
 Decisions do **not** live here; they are records in the arknet store (`adr_get ADR-n`,
