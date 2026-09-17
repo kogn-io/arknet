@@ -577,8 +577,9 @@ public class ArknetMcpConfiguration {
             final UseCaseService service, final ResolveRoles resolveRoles, final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements, final ConstraintService constraintService,
             final ProjectResolver projectResolver, final StaleTranslationHint staleTranslationHint) {
-        return new UseCaseMcpTools(service, service, service, service, service, service, service, resolveRoles,
-                resolveTerms, resolveRequirements, constraintService, projectResolver, staleTranslationHint);
+        return new UseCaseMcpTools(service, service, service, service, service, service, service, service,
+                service, resolveRoles, resolveTerms, resolveRequirements, constraintService, projectResolver,
+                staleTranslationHint);
     }
 
     // --- Bounded-context hexagon -----------------------------------------------

@@ -27,6 +27,8 @@ import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
 import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
+import de.hauschel.arknet.uc.application.port.in.UnlinkConstraint;
+import de.hauschel.arknet.uc.application.port.in.UnlinkTerm;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.application.port.out.RoleLookup;
@@ -35,12 +37,14 @@ import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
 import de.hauschel.arknet.uc.application.port.out.TermLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.RoleRef;
+import de.hauschel.arknet.uc.domain.ConstraintNotLinkedException;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
 import de.hauschel.arknet.uc.domain.RemovedPositions;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
+import de.hauschel.arknet.uc.domain.TermNotLinkedException;
 import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -102,7 +106,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * live in this bounded context.</p>
  */
 public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, DescribeUseCaseDisplayFallback,
-        UpdateUseCase, LinkTerm, LinkConstraint {
+        UpdateUseCase, LinkTerm, UnlinkTerm, LinkConstraint, UnlinkConstraint {
 
     private static final String CODE_PREFIX = "UC";
 
@@ -362,6 +366,55 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
             }
             List<ConstraintRef> linked = new ArrayList<>(current.constrainedBy());
             linked.add(ref);
+            return new UseCase(current.id(), current.code(), current.title(), current.goal(), current.scope(),
+                    current.trigger(), current.primaryRole(), current.supportingRoles(),
+                    current.precondition(), current.postcondition(), current.steps(), current.extensions(),
+                    current.usesTerms(), linked);
+        });
+    }
+
+    @Override
+    public UseCase unlinkTerm(ProjectId projectId, UseCaseCode code, String termCode, String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(termCode, "termCode");
+        // Resolved once, outside the retry loop below, for the same reason linkTerm() does: an
+        // unknown term code must reject the call immediately and is not a retryable race.
+        TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false, false,
+                false, false, Set.of(), false, RemovedPositions.NONE, current -> {
+            if (!current.usesTerms().contains(term)) {
+                // Thrown from inside the mutation rather than checked before it: the state that
+                // decides is the one this very attempt read, and a check outside the loop would
+                // judge a snapshot the retry may already have replaced (mirrors bc's own
+                // UnlinkTerm).
+                throw new TermNotLinkedException(projectId, code, termCode);
+            }
+            List<TermRef> linked = new ArrayList<>(current.usesTerms());
+            linked.remove(term);
+            return new UseCase(current.id(), current.code(), current.title(), current.goal(), current.scope(),
+                    current.trigger(), current.primaryRole(), current.supportingRoles(),
+                    current.precondition(), current.postcondition(), current.steps(), current.extensions(),
+                    linked, current.constrainedBy());
+        });
+    }
+
+    @Override
+    public UseCase unlinkConstraint(
+            ProjectId projectId, UseCaseCode code, String constraintCode, String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(constraintCode, "constraintCode");
+        // Resolved once, outside the retry loop below - mirrors unlinkTerm() exactly, except the
+        // lookup crosses into the neighbouring requirements bounded context via ConstraintLookup.
+        ConstraintRef ref = new ConstraintRef(constraintLookup.resolveByCode(projectId, constraintCode));
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false, false,
+                false, false, Set.of(), false, RemovedPositions.NONE, current -> {
+            if (!current.constrainedBy().contains(ref)) {
+                throw new ConstraintNotLinkedException(projectId, code, constraintCode);
+            }
+            List<ConstraintRef> linked = new ArrayList<>(current.constrainedBy());
+            linked.remove(ref);
             return new UseCase(current.id(), current.code(), current.title(), current.goal(), current.scope(),
                     current.trigger(), current.primaryRole(), current.supportingRoles(),
                     current.precondition(), current.postcondition(), current.steps(), current.extensions(),
