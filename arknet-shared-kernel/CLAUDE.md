@@ -165,3 +165,25 @@ geschrieben, wenn derselbe Aufruf unter ihr nichts entfernt (Review zu kogn-io/a
 Der zweite Port-Methodenname `ofProjectRegistration(String projectLabel)` ist kein Sonderfall aus
 Bequemlichkeit: der Registry-Record eines Projekts liegt im reservierten System-Dataset, dessen Id
 `ProjectId` per Konstruktion nicht halten darf.
+
+`ResolvedProject` traegt seit kogn-io/arknet#597 als vierten Wert das registrierte `label` des
+Projekts, gelesen ueber `displayName()` (Rueckfall auf den Id-Wert, wenn keins mitkam). Grund
+derselbe wie bei `defaultLanguage`/`maintainedLanguages`: die Registry-Aufloesung, die jeder
+Tool-Aufruf ohnehin fuer das Routing macht, haelt den Namen bereits -- ein eigener Lookup-Port
+haette je Schreib-Aufruf einen zweiten Store-Read gekostet, fuer eine Antwort, die dieser eine
+schon hatte. Der nicht-kanonische Drei-Argument-Konstruktor setzt `label` auf `null`, damit
+Aufrufstellen ohne Interesse daran unveraendert bleiben.
+
+`WriteResponse` ist der gemeinsame Renderer der drei Bestandteile jeder schreibenden
+Tool-Antwort: `withProject(body, project)` haengt die abschliessende Zeile `project: <name>` an
+(kogn-io/arknet#597 -- ein vergessener `projectAnchor` schreibt sonst unsichtbar ins Anker-Projekt
+der Sitzung), `linked(...)`/`unlinked(...)` rendern die Kurzbestaetigung einer Kantenoperation
+(`linked FR-3 -> TERM-7 (usesTerm)`, kogn-io/arknet#600 -- der Aufrufer haelt beide Enden schon),
+und `listFieldDiff(field, before, after)` die Diff-Zeile eines Wholesale-Listenfeldes
+(`usesTerm: removed TERM-22, added TERM-9`, kogn-io/arknet#598). Der Diff wird aus dem Zustand
+des Feldes vor und nach dem Write berechnet, nie aus dem Request: ein wholesale ersetztes Feld
+verliert, was der Aufrufer zu wiederholen vergass, und gerade das steht im Request nicht. Ein
+unveraendertes Feld liefert die leere Zeichenkette und kostet keine Zeile. Liegt im Kernel und
+nicht je Adapter, aus demselben Grund wie `StaleTranslationHint`: dreizehn In-Adapter bauen ihre
+Antwort selbst zusammen, und eine Form, die in jedem anders aussaehe, koennte ein Agent nicht
+einmal lernen. Reines JDK, keine neue Modulkante.

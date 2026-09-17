@@ -23,6 +23,7 @@ import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
 import de.hauschel.arknet.bc.application.port.in.RelatedContext;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.in.UnlinkContext;
+import de.hauschel.arknet.bc.application.port.in.UnlinkTerm;
 import de.hauschel.arknet.bc.application.port.in.UpdateBoundedContext;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
@@ -38,6 +39,7 @@ import de.hauschel.arknet.bc.domain.ContextRelationshipId;
 import de.hauschel.arknet.bc.domain.ContextRelationshipNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.RelationshipType;
+import de.hauschel.arknet.bc.domain.TermNotLinkedException;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.CodeCounter;
@@ -67,16 +69,18 @@ import de.hauschel.arknet.kernel.ProjectId;
  * recorded, in which case that pre-existing relationship is returned instead (issue #565,
  * mirroring {@link #linkTerm}'s own idempotency). {@link #unlinkContext} is its counterpart: it
  * removes exactly that triple, and - unlike an already-linked term - naming a triple that is not
- * currently recorded is never a silent no-op.</p>
+ * currently recorded is never a silent no-op. {@link #unlinkTerm} carries that same asymmetry to
+ * the term edge: adding what is already linked is idempotent, removing what is not linked raises
+ * {@link TermNotLinkedException}.</p>
  *
  * <p><strong>Multilingual, mirroring {@code ConstraintService}'s policy (kogn-io/arknet#520).
  * </strong> {@code name}/{@code domainVision} are language-tagged; {@link #add} and {@link #update}
  * resolve and pass through the BCP-47 tags exactly the way {@code ConstraintService} does for
  * {@code title}/{@code statement}, including the "changing a field's language alone is a real
- * write" rule - see {@link #resolveTouchedLanguage}. {@link #linkTerm}, which touches neither text
- * field, reads under the repository's own configured display language (passes {@code null} as
- * {@code defaultLanguage} to {@link BoundedContextRepository#findCurrentByCode}) and passes the
- * observed {@code nameLanguage}/{@code domainVisionLanguage} straight through unchanged to
+ * write" rule - see {@link #resolveTouchedLanguage}. {@link #linkTerm}/{@link #unlinkTerm}, which
+ * touch neither text field, read under the repository's own configured display language (passing
+ * {@code null} as {@code defaultLanguage} to {@link BoundedContextRepository#findCurrentByCode})
+ * and pass the observed {@code nameLanguage}/{@code domainVisionLanguage} straight through to
  * {@link BoundedContextRepository#compareAndUpdate} - a deliberately narrower choice than
  * {@code RequirementService#linkTerm}'s project-default-aware read (issue #456): extending
  * {@link LinkTerm}'s own in-port signature with a {@code defaultLanguage} parameter was left out of
@@ -95,7 +99,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * remote/multi-writer concern.</p>
  */
 public class BoundedContextService implements AddBoundedContext, ListBoundedContexts,
-        GetBoundedContext, LinkTerm, ResolveBoundedContexts, LinkContext, UnlinkContext,
+        GetBoundedContext, LinkTerm, UnlinkTerm, ResolveBoundedContexts, LinkContext, UnlinkContext,
         DescribeBoundedContextDisplayFallback, UpdateBoundedContext {
 
     private static final String CODE_PREFIX = "BC";
@@ -303,6 +307,33 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
             }
             List<TermRef> linked = new ArrayList<>(current.value().usesTerms());
             linked.add(term);
+            BoundedContext updated = new BoundedContext(current.value().id(), current.value().code(),
+                    current.value().name(), current.value().domainVision(), current.value().subdomain(),
+                    current.value().ownedBy(), linked);
+            return Optional.of(new PendingWrite(updated, current.nameLanguage(), current.domainVisionLanguage(),
+                    null));
+        });
+    }
+
+    @Override
+    public BoundedContext unlinkTerm(ProjectId projectId, BoundedContextCode code, String termCode) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(termCode, "termCode");
+        // Resolved once, outside the retry loop, exactly as linkTerm does: an unknown or ambiguous
+        // term code is a didactic rejection of the whole call, not a race worth retrying.
+        TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
+        // Touches no language-tagged field, so the tags read from `current` pass straight through
+        // and the null write-side default keeps issue #258's sweep off - same as linkTerm.
+        return updateWithOptimisticRetry(projectId, code, null, current -> {
+            if (!current.value().usesTerms().contains(term)) {
+                // Thrown from inside the mutation rather than checked before it: the state that
+                // decides is the one this very attempt read, and a check outside the loop would
+                // judge a snapshot the retry may already have replaced.
+                throw new TermNotLinkedException(projectId, code, termCode);
+            }
+            List<TermRef> linked = new ArrayList<>(current.value().usesTerms());
+            linked.remove(term);
             BoundedContext updated = new BoundedContext(current.value().id(), current.value().code(),
                     current.value().name(), current.value().domainVision(), current.value().subdomain(),
                     current.value().ownedBy(), linked);

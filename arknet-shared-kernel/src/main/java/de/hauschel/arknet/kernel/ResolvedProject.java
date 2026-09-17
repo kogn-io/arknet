@@ -31,12 +31,44 @@ import java.util.Objects;
  *                            languages but not others can be called incomplete at all - which is
  *                            why {@code store_check} reads it from here rather than asking the
  *                            project component a second time
+ * @param label               the registered project's human-readable name, or {@code null} if this
+ *                            result was built by a call site that has none to give. The third
+ *                            answer the very same registry read already holds, carried along for
+ *                            the same reason the two language fields are: a writing tool has to
+ *                            name the project it hit (kogn-io/arknet#597), and asking the project
+ *                            component a second time would be one more store read per write.
+ *                            Read through {@link #displayName()}, never raw
  */
-public record ResolvedProject(ProjectId id, String defaultLanguage, List<String> maintainedLanguages) {
+public record ResolvedProject(ProjectId id, String defaultLanguage, List<String> maintainedLanguages,
+        String label) {
 
     public ResolvedProject {
         Objects.requireNonNull(id, "id");
         maintainedLanguages = maintainedLanguages == null ? List.of() : List.copyOf(maintainedLanguages);
+    }
+
+    /**
+     * Creates a resolution result without the registered name - the shape every call site had
+     * before kogn-io/arknet#597 added one, kept as a secondary constructor for the same reason the
+     * one below is: a caller that never cared about the name does not have to start passing
+     * {@code null}.
+     */
+    public ResolvedProject(ProjectId id, String defaultLanguage, List<String> maintainedLanguages) {
+        this(id, defaultLanguage, maintainedLanguages, null);
+    }
+
+    /**
+     * How this project is named back to a caller: its registered label, or its opaque id when no
+     * label came along. The fallback is deliberate and lives here rather than at each of the
+     * thirteen writing adapters: a response naming no project at all would be exactly the blind
+     * spot kogn-io/arknet#597 closes, so an unnamed project is still named - by the only thing
+     * that is always there.
+     *
+     * @return the project's registered label, or its id's value if it carries none; never
+     *         {@code null}
+     */
+    public String displayName() {
+        return label == null || label.isBlank() ? id.value() : label;
     }
 
     /**
@@ -46,6 +78,6 @@ public record ResolvedProject(ProjectId id, String defaultLanguage, List<String>
      * start passing an empty list.
      */
     public ResolvedProject(ProjectId id, String defaultLanguage) {
-        this(id, defaultLanguage, List.of());
+        this(id, defaultLanguage, List.of(), null);
     }
 }
