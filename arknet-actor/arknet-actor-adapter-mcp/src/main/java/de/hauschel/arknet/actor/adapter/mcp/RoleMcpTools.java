@@ -286,7 +286,8 @@ public final class RoleMcpTools {
     @McpTool(name = "role_delete",
             description = "Delete an already-created role and every triple it carries - not just a "
                     + "correction, the whole resource goes away. The code (ROLE-N) stays taken so it never "
-                    + "names two different roles.")
+                    + "names two different roles. Rejected if a use case still lists it as primaryRole or "
+                    + "supportingRole (uc_add/uc_update) - remove those edges first.")
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Role identity, e.g. ROLE-1") final String id,
