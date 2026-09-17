@@ -31,6 +31,7 @@ import de.hauschel.arknet.bc.domain.ContextRelationshipId;
 import de.hauschel.arknet.bc.domain.ContextRelationshipNotFoundException;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
+import de.hauschel.arknet.bc.domain.TermNotLinkedException;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.MissingDefaultLanguageException;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -355,6 +356,53 @@ class BoundedContextServiceTest {
         BoundedContext linked = service.linkTerm(WS, code, "TERM-1");
 
         assertEquals(List.of(new TermRef(TERM_1)), linked.usesTerms());
+    }
+
+    @Test
+    void unlinkTermRemovesOnlyTheNamedTerm() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-1");
+        service.linkTerm(WS, code, "TERM-2");
+
+        BoundedContext unlinked = service.unlinkTerm(WS, code, "TERM-1");
+
+        assertEquals(List.of(new TermRef(TERM_2)), unlinked.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_2)), service.get(WS, code, null).orElseThrow().context().usesTerms());
+    }
+
+    /**
+     * The asymmetry {@code bc_unlink_context} already carries: adding what is already linked is
+     * idempotent, removing what is not linked is a caller mistake and must not read as success.
+     */
+    @Test
+    void unlinkTermRejectsATermThatIsNotLinked() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-1");
+
+        TermNotLinkedException ex = assertThrows(TermNotLinkedException.class,
+                () -> service.unlinkTerm(WS, code, "TERM-2"));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.code());
+        assertEquals("TERM-2", ex.termCode());
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().context().usesTerms());
+    }
+
+    @Test
+    void unlinkTermThrowsWhenBoundedContextUnknown() {
+        assertThrows(BoundedContextNotFoundException.class,
+                () -> service.unlinkTerm(WS, new BoundedContextCode("BC-42"), "TERM-1"));
+    }
+
+    /** An unknown term code is a didactic rejection, and the bounded context stays untouched. */
+    @Test
+    void unlinkTermPropagatesTheLookupFailureForAnUnknownTermCodeAndUnlinksNothing() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-1");
+
+        assertThrows(NoSuchElementException.class, () -> service.unlinkTerm(WS, code, "TERM-99"));
+
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().context().usesTerms());
     }
 
     @Test

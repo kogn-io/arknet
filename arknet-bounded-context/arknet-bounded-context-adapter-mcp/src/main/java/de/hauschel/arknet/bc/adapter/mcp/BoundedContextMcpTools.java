@@ -26,6 +26,7 @@ import de.hauschel.arknet.bc.application.port.in.LinkTerm;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
 import de.hauschel.arknet.bc.application.port.in.RelatedContext;
 import de.hauschel.arknet.bc.application.port.in.UnlinkContext;
+import de.hauschel.arknet.bc.application.port.in.UnlinkTerm;
 import de.hauschel.arknet.bc.application.port.in.UpdateBoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
@@ -40,14 +41,15 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
 /**
  * Driving (in) adapter of the bounded-context component: exposes the bounded-context use-cases as
  * MCP tools ({@code bc_add}, {@code bc_list}, {@code bc_get}, {@code bc_update},
- * {@code bc_link_term}, {@code bc_link_context}, {@code bc_unlink_context}) and delegates each
- * tool call to the corresponding in-port.
+ * {@code bc_link_term}, {@code bc_unlink_term}, {@code bc_link_context}, {@code bc_unlink_context})
+ * and delegates each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the bounded-context hexagon (symmetric to the out-adapter
  * {@code arknet-bounded-context-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -85,6 +87,18 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * {@link ResolveTerms#resolve} exactly once per rendering, batched across every {@link TermRef}
  * involved; an id {@link ResolveTerms} could not resolve simply falls back to the bare IRI -
  * {@link #format} never throws and never drops a term.</p>
+ *
+ * <p><strong>What a writing answer says (kogn-io/arknet#597/#598/#600).</strong> Every writing
+ * tool closes its answer with {@code project: <name>}, so a call whose {@code projectAnchor} was
+ * forgotten shows which project it actually hit instead of landing silently in the session's one.
+ * {@code bc_link_term}/{@code bc_unlink_term}/{@code bc_link_context}/{@code bc_unlink_context}
+ * answer with a one-line confirmation of the edge rather than the whole resource - their caller
+ * already holds both ends. {@code bc_update} keeps the full resource and its stale-translation
+ * signal, preceded by a diff line for every list field that came out holding something else than
+ * it held before; the diff is computed from the field's state before and after the write, never
+ * from the request, because a wholesale {@code terms} list drops whatever it forgets to restate
+ * and that loss is exactly what the request cannot show. All three shapes are rendered by
+ * {@link WriteResponse}, so every bounded context's tools read the same.</p>
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a
  * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
@@ -126,6 +140,15 @@ public final class BoundedContextMcpTools {
             + " A field that did not carry the written language yet is being translated, not corrected,"
             + " and is not reported.";
 
+    /**
+     * The model name of the edge {@code bc_link_term}/{@code bc_unlink_term} draw and
+     * {@code bc_update}'s {@code terms} replaces - the local name of {@code arkddd:ubiquitousLanguageTerm},
+     * the same vocabulary {@code store_check} and {@code StaleTranslationHint} name fields in. It
+     * names the edge in both the short link confirmation and the diff line, so the two never drift
+     * apart on what they are talking about.
+     */
+    private static final String TERM_EDGE = "ubiquitousLanguageTerm";
+
     private static final String NAME_FIELD = "name";
     private static final String DOMAIN_VISION_FIELD = "domainVision";
 
@@ -144,6 +167,7 @@ public final class BoundedContextMcpTools {
     private final GetBoundedContext getBoundedContext;
     private final UpdateBoundedContext updateBoundedContext;
     private final LinkTerm linkTerm;
+    private final UnlinkTerm unlinkTerm;
     private final LinkContext linkContext;
     private final UnlinkContext unlinkContext;
     private final ResolveTerms resolveTerms;
@@ -161,6 +185,7 @@ public final class BoundedContextMcpTools {
      * @param getBoundedContext   in-port backing {@code bc_get}
      * @param updateBoundedContext in-port backing {@code bc_update} (kogn-io/arknet#520)
      * @param linkTerm            in-port backing {@code bc_link_term}
+     * @param unlinkTerm          in-port backing {@code bc_unlink_term} (kogn-io/arknet#598)
      * @param linkContext         in-port backing {@code bc_link_context}
      * @param unlinkContext       in-port backing {@code bc_unlink_context} (kogn-io/arknet#565)
      * @param resolveTerms        ubiquitous-language driving port used only to render a linked
@@ -176,6 +201,7 @@ public final class BoundedContextMcpTools {
             final GetBoundedContext getBoundedContext,
             final UpdateBoundedContext updateBoundedContext,
             final LinkTerm linkTerm,
+            final UnlinkTerm unlinkTerm,
             final LinkContext linkContext,
             final UnlinkContext unlinkContext,
             final ResolveTerms resolveTerms,
@@ -188,6 +214,7 @@ public final class BoundedContextMcpTools {
         this.getBoundedContext = Objects.requireNonNull(getBoundedContext, "getBoundedContext");
         this.updateBoundedContext = Objects.requireNonNull(updateBoundedContext, "updateBoundedContext");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
+        this.unlinkTerm = Objects.requireNonNull(unlinkTerm, "unlinkTerm");
         this.linkContext = Objects.requireNonNull(linkContext, "linkContext");
         this.unlinkContext = Objects.requireNonNull(unlinkContext, "unlinkContext");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
@@ -258,7 +285,7 @@ public final class BoundedContextMcpTools {
                 new NewBoundedContext(name, domainVision, subdomainValue, blankToNull(ownedBy),
                         blankToNull(language)),
                 project.defaultLanguage());
-        return format(project.id(), created);
+        return WriteResponse.withProject(format(project.id(), created), project);
     }
 
     @McpTool(name = "bc_list", description = "List all managed bounded contexts. Every context relationship "
@@ -379,10 +406,18 @@ public final class BoundedContextMcpTools {
         final BoundedContextCode code = new BoundedContextCode(id);
         final String staleHint = staleTranslationHint(project, code, blankToNull(language), blankToNull(name),
                 blankToNull(domainVision));
+        // Read before the write for the same reason the stale-translation hint is: the diff is
+        // what left and joined the field, and only the state before this call can say that. A
+        // caller that restates its `terms` set from memory silently unlinks what it forgot, and
+        // the request it sent is precisely where that loss cannot be seen (kogn-io/arknet#598).
+        final List<String> termsBefore = linkedTermCodes(project.id(), code);
         final BoundedContext updated = updateBoundedContext.update(project.id(), code, blankToNull(name),
                 blankToNull(domainVision), terms == null ? null : List.copyOf(terms), blankToNull(language),
                 project.defaultLanguage());
-        return format(project.id(), updated) + staleHint;
+        final String diff = WriteResponse.listFieldDiff(TERM_EDGE,
+                termsBefore, termCodesOf(project.id(), updated));
+        final String body = (diff.isEmpty() ? "" : diff + "\n") + format(project.id(), updated) + staleHint;
+        return WriteResponse.withProject(body, project);
     }
 
     @McpTool(name = "bc_link_term",
@@ -403,9 +438,28 @@ public final class BoundedContextMcpTools {
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        final BoundedContext updated =
-                linkTerm.linkTerm(project.id(), new BoundedContextCode(bcId), termId);
-        return format(project.id(), updated);
+        linkTerm.linkTerm(project.id(), new BoundedContextCode(bcId), termId);
+        return WriteResponse.withProject(WriteResponse.linked(bcId, termId, TERM_EDGE), project);
+    }
+
+    @McpTool(name = "bc_unlink_term",
+            description = "Remove one bounded context's link to one glossary term, without restating "
+                    + "the rest (bc_update's terms replaces the whole set). Never a silent no-op: a term "
+                    + "that is not currently linked is rejected.")
+    public String unlinkTerm(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Bounded-context identity, e.g. BC-1") final String bcId,
+            @McpToolParam(description = "Term code, e.g. TERM-1") final String termId,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        unlinkTerm.unlinkTerm(project.id(), new BoundedContextCode(bcId), termId);
+        return WriteResponse.withProject(WriteResponse.unlinked(bcId, termId, TERM_EDGE), project);
     }
 
     @McpTool(name = "bc_link_context",
@@ -443,7 +497,8 @@ public final class BoundedContextMcpTools {
         final RelationshipType type = parseRelationshipType(relationshipType);
         final ContextRelationship created = linkContext.linkContext(
                 project.id(), new BoundedContextCode(upstreamBcId), new BoundedContextCode(downstreamBcId), type);
-        return "%s -[%s]-> %s".formatted(upstreamBcId, created.relationshipType(), downstreamBcId);
+        return WriteResponse.withProject(
+                WriteResponse.linked(upstreamBcId, downstreamBcId, created.relationshipType().name()), project);
     }
 
     @McpTool(name = "bc_unlink_context",
@@ -474,7 +529,8 @@ public final class BoundedContextMcpTools {
         final RelationshipType type = parseRelationshipType(relationshipType);
         unlinkContext.unlinkContext(
                 project.id(), new BoundedContextCode(upstreamBcId), new BoundedContextCode(downstreamBcId), type);
-        return "removed %s -[%s]-> %s".formatted(upstreamBcId, type, downstreamBcId);
+        return WriteResponse.withProject(
+                WriteResponse.unlinked(upstreamBcId, downstreamBcId, type.name()), project);
     }
 
     /**
@@ -627,6 +683,29 @@ public final class BoundedContextMcpTools {
         return staleTranslations.forResource(project.id(), code.value(),
                 LanguageTag.writtenLanguage(language, project.defaultLanguage()),
                 project.maintainedLanguages(), fieldsWritten);
+    }
+
+    /**
+     * The business codes of the terms bounded context {@code code} links right now - the "before"
+     * side of {@code bc_update}'s diff line. An unknown code yields an empty list rather than an
+     * error: the update itself is about to reject it with its own message, and a diff has no
+     * business deciding that first.
+     */
+    private List<String> linkedTermCodes(final ProjectId projectId, final BoundedContextCode code) {
+        return getBoundedContext.get(projectId, code, null)
+                .map(detail -> termCodesOf(projectId, detail.context()))
+                .orElseGet(List::of);
+    }
+
+    /**
+     * Renders {@code bc}'s linked terms as the codes a caller types, resolving them in one batch
+     * call. An id {@link ResolveTerms} cannot resolve contributes its bare IRI, exactly as
+     * {@link #renderTerm} does - a term missing from the glossary must still show up on both sides
+     * of the diff, or removing it would read as if nothing had changed.
+     */
+    private List<String> termCodesOf(final ProjectId projectId, final BoundedContext bc) {
+        final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(projectId, List.of(bc));
+        return bc.usesTerms().stream().map(ref -> renderTerm(ref, termsById)).toList();
     }
 
     private static String blankToNull(final String value) {

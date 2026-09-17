@@ -72,8 +72,12 @@ final class RegisteredAnchorProjectResolver implements ProjectResolver {
         }
         try {
             final Project project = projects.resolve(new Anchor(anchor, AnchorType.PATH));
+            // The label rides along on this very read (kogn-io/arknet#597): every writing tool
+            // closes its answer with the name of the project it hit, and resolving that name
+            // through a second lookup would cost one more store read per write for an answer this
+            // one already held.
             return new ResolvedProject(project.id(), project.defaultLanguage(),
-                    project.maintainedLanguages());
+                    project.maintainedLanguages(), project.label());
         } catch (final UnknownAnchorException e) {
             // Translated at the port boundary rather than propagated: the four model bounded
             // contexts see only the kernel's port, and an exception from arknet-project's domain
