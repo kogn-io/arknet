@@ -37,6 +37,11 @@ public interface AddUseCase {
      *                                        attempt
      * @throws ResourceAlreadyExistsException if a use case with the newly minted identity already
      *                                         exists
+     * @throws RuntimeException if any entry of {@code command.usesTermCodes()} names a glossary
+     *                                        term unknown within {@code projectId}
+     *                                        (kogn-io/arknet#598) - the same didactic rejection
+     *                                        {@link UpdateUseCase} raises, thrown before anything
+     *                                        is written
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code
      *                                        command.language()} and {@code defaultLanguage} are
      *                                        both {@code null}
@@ -81,6 +86,12 @@ public interface AddUseCase {
      *                         configured default language - one shared tag, since a use case is
      *                         normally authored in one language at a time (mirroring
      *                         {@code AddTerm.NewTerm#language()})
+     * @param usesTermCodes    business codes of the glossary terms this use case uses from the
+     *                         start, e.g. {@code TERM-1} (resolved against the glossary the same
+     *                         way {@link UpdateUseCase}'s field of the same name is, an unknown
+     *                         code rejected before anything is written - kogn-io/arknet#598), or
+     *                         {@code null}/empty for none; {@code uc_link_term} remains the way to
+     *                         add one afterwards without restating the rest
      */
     record NewUseCase(
             String title,
@@ -93,7 +104,19 @@ public interface AddUseCase {
             String postcondition,
             List<NewStep> steps,
             List<String> extensions,
-            String language) {
+            String language,
+            List<String> usesTermCodes) {
+
+        /**
+         * Convenience constructor for a use case started without any glossary term yet - the
+         * shape every caller used before {@code usesTermCodes} existed (kogn-io/arknet#598).
+         */
+        public NewUseCase(String title, String goal, String scope, String trigger, String primaryRole,
+                List<String> supportingRoles, String precondition, String postcondition, List<NewStep> steps,
+                List<String> extensions, String language) {
+            this(title, goal, scope, trigger, primaryRole, supportingRoles, precondition, postcondition, steps,
+                    extensions, language, null);
+        }
     }
 
     /**

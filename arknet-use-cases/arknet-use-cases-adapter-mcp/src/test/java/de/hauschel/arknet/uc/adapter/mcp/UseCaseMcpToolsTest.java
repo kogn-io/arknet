@@ -176,7 +176,7 @@ class UseCaseMcpToolsTest {
                 "ROLE-1", List.of("ROLE-2"), "Customer is logged in", "Order is recorded",
                 List.of(new StepInput(1, "Customer selects items", List.of("FR-1")),
                         new StepInput(2, "Customer confirms and pays", List.of())),
-                List.of("2a. Payment declined -> use case ends in failure"), null, null);
+                List.of("2a. Payment declined -> use case ends in failure"), null, null, null);
 
         AddUseCase.NewUseCase command = stub.lastCommand;
         assertEquals("Place order", command.title());
@@ -196,7 +196,7 @@ class UseCaseMcpToolsTest {
     @Test
     void addNormalizesOmittedOptionalsToNullAndEmpty() {
         adapter.add(null, "Reset password", "User resets password", null, null, "ROLE-1", null, null, null,
-                List.of(new StepInput(1, "User requests a reset link", null)), null, null, null);
+                List.of(new StepInput(1, "User requests a reset link", null)), null, null, null, null);
 
         AddUseCase.NewUseCase command = stub.lastCommand;
         assertNull(command.scope());
@@ -212,7 +212,7 @@ class UseCaseMcpToolsTest {
     @Test
     void addPassesTheLanguageThrough() {
         adapter.add(null, "Place order", "Customer places an order", null, null, "ROLE-1", null, null, null,
-                List.of(new StepInput(1, "Customer selects items", List.of())), null, "de", null);
+                List.of(new StepInput(1, "Customer selects items", List.of())), null, "de", null, null);
 
         assertEquals("de", stub.lastCommand.language());
     }
@@ -221,9 +221,22 @@ class UseCaseMcpToolsTest {
     @Test
     void addTreatsABlankLanguageAsOmitted() {
         adapter.add(null, "Place order", "Customer places an order", null, null, "ROLE-1", null, null, null,
-                List.of(new StepInput(1, "Customer selects items", List.of())), null, "  ", null);
+                List.of(new StepInput(1, "Customer selects items", List.of())), null, "  ", null, null);
 
         assertEquals(null, stub.lastCommand.language());
+    }
+
+    /**
+     * {@code uc_add}'s {@code usesTermCodes} argument reaches {@link AddUseCase.NewUseCase}
+     * unchanged (kogn-io/arknet#598).
+     */
+    @Test
+    void addPassesUsesTermCodesThrough() {
+        adapter.add(null, "Place order", "Customer places an order", null, null, "ROLE-1", null, null, null,
+                List.of(new StepInput(1, "Customer selects items", List.of())), null, null,
+                List.of("TERM-1", "TERM-2"), null);
+
+        assertEquals(List.of("TERM-1", "TERM-2"), stub.lastCommand.usesTermCodes());
     }
 
     /** An explicit {@code uc_get} {@code displayLocale} wins over the project's own default. */
@@ -518,7 +531,7 @@ class UseCaseMcpToolsTest {
 
         RuntimeException thrown = assertThrows(RuntimeException.class,
                 () -> adapter.add(null, "Place order", "goal", null, null, "ROLE-1", null, null, null,
-                        List.of(new StepInput(1, "select items", List.of("FR-1"))), null, null, null));
+                        List.of(new StepInput(1, "select items", List.of("FR-1"))), null, null, null, null));
 
         assertTrue(thrown.getMessage().contains("FR-1"));
         assertTrue(thrown.getMessage().contains("req_add"));

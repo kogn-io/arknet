@@ -916,6 +916,41 @@ class UseCaseServiceTest {
         assertEquals(List.of(), added.constrainedBy());
     }
 
+    /**
+     * {@code uc_add}'s {@code usesTermCodes} resolves the same way {@code uc_update}'s field of
+     * the same name does - a known code links the term straight away, sparing the caller the
+     * separate {@code uc_link_term} round trip {@link #newUseCase(String)} above still needs
+     * (kogn-io/arknet#598).
+     */
+    @Test
+    void addWithUsesTermCodesLinksTheGivenTermsFromTheStart() {
+        NewUseCase command = new NewUseCase("Place order", "goal of Place order", null, null, "ROLE-1",
+                List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of(), null,
+                List.of("TERM-1", "TERM-2"));
+
+        UseCase added = service.add(WS, command, DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new TermRef(TERM_1_ID), new TermRef(TERM_2_ID)), added.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1_ID), new TermRef(TERM_2_ID)),
+                service.get(WS, added.code(), null).orElseThrow().usesTerms());
+    }
+
+    /**
+     * An unknown term code in {@code usesTermCodes} is rejected before anything is written - the
+     * same didactic rejection {@code uc_update}'s field of the same name raises
+     * (kogn-io/arknet#598).
+     */
+    @Test
+    void addWithAnUnknownUsesTermCodeIsRejectedAndCreatesNothing() {
+        NewUseCase command = new NewUseCase("Place order", "goal of Place order", null, null, "ROLE-1",
+                List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of(), null,
+                List.of("TERM-99"));
+
+        assertThrows(NoSuchElementException.class, () -> service.add(WS, command, DEFAULT_LANGUAGE));
+
+        assertTrue(repository.findAll(WS, null).isEmpty());
+    }
+
     @Test
     void linkTermAddsTheTermToTheUseCase() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();

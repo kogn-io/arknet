@@ -175,12 +175,21 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
                 : command.steps().stream()
                         .map(step -> toStep(projectId, step))
                         .toList();
+        // Resolved once, outside the retry, mirroring RequirementService#add's own usesTermCodes
+        // resolution: an unknown TERM-9 must reject the whole call before any code is even
+        // computed, not surface as a race worth retrying (kogn-io/arknet#598).
+        List<TermRef> usesTerms = command.usesTermCodes() == null
+                ? List.of()
+                : command.usesTermCodes().stream()
+                        .map(termCode -> new TermRef(termLookup.resolveByCode(projectId, termCode)))
+                        .distinct()
+                        .toList();
         return CodeAssignment.createRetryingOnCodeCollision(DuplicateUseCaseCodeException.class, () -> {
             UseCaseCode code = nextCode(projectId);
             UseCase useCase = new UseCase(id, code, command.title(), command.goal(), command.scope(),
                     command.trigger(), primaryRole, supportingRoles,
                     command.precondition(), command.postcondition(), steps,
-                    command.extensions(), List.of(), List.of());
+                    command.extensions(), usesTerms, List.of());
             repository.create(projectId, useCase, language);
             return useCase;
         });
