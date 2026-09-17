@@ -118,6 +118,14 @@ public final class TraceabilityGraph {
     private static final String RELATED = ArkreqVocabulary.RELATED;
 
     /**
+     * {@link UnlinkedMention#edgeLocalName()} value for {@link #unlinkedMentions()}'s term-to-term
+     * sweep (kogn-io/arknet#595): any of {@code broader}, the reverse (narrower) direction of the
+     * same edge, or {@code related} would resolve the finding, so the message names all three
+     * instead of prescribing one as the fix.
+     */
+    private static final String GLOSSARY_EDGE_LOCAL_NAME = "broader/narrower/related";
+
+    /**
      * {@code skos:definition} - a term's meaning, scanned by {@link #unlinkedMentions()}'s third
      * sweep for a mention of another term the source links neither via {@code broader} nor via
      * {@code related} (issue #252, kogn-io/arknet#420).
@@ -592,6 +600,22 @@ public final class TraceabilityGraph {
     }
 
     /**
+     * @return the IRIs of every term that names this one as its own {@link #broaderTerm(String)}
+     *         (the reverse {@code skos:broader} direction, kogn-io/arknet#595) - {@link
+     *         #broaderTerm(String)} itself only ever looks outward from a term to its superordinate,
+     *         so a term's own subordinates need this separate, incoming-only lookup
+     */
+    public Set<String> narrowerTerms(String termIri) {
+        Objects.requireNonNull(termIri, "termIri");
+        Set<String> subordinates = new HashSet<>();
+        incomingByObject.getOrDefault(termIri, List.of()).stream()
+                .filter(t -> BROADER.equals(t.predicate()))
+                .map(Triple::subject)
+                .forEach(subordinates::add);
+        return subordinates;
+    }
+
+    /**
      * @return {@code true} if a constraint is bound to at least one requirement or use case via
      *         {@code oslc_rm:constrainedBy} - mirrors {@link #isReferencedTerm(String)}
      *         (issue #223/#329).
@@ -772,13 +796,14 @@ public final class TraceabilityGraph {
      *
      * <p>A third sweep (issue #252) scans every term's own {@code skos:definition} for a mention
      * of some <em>other</em> glossary term: a taxonomy term's prose commonly names its
-     * superordinate ("A Human Actor is an Actor who ...") without that being an accident the way
-     * an unrelated mention in a requirement/bounded-context prose is - so a mentioned term counts
-     * as unlinked here only when this term links it neither as its own broader term
-     * ({@link #broaderTerm(String)}) nor as an associatively related peer
-     * ({@link #relatedTerms(String)}, kogn-io/arknet#420; read in both directions, since only one
-     * is ever asserted). A term's mention of its own label within its own
-     * definition is never reported (a term cannot be its own broader term anyway, see
+     * superordinate ("A Human Actor is an Actor who ...") or one of its own subordinates without
+     * that being an accident the way an unrelated mention in a requirement/bounded-context prose
+     * is - so a mentioned term counts as unlinked here only when this term links it neither as its
+     * own broader term ({@link #broaderTerm(String)}) nor as one of its own narrower terms (the
+     * reverse {@code skos:broader} direction, kogn-io/arknet#595) nor as an associatively related
+     * peer ({@link #relatedTerms(String)}, kogn-io/arknet#420; read in both directions, since only
+     * one is ever asserted). A term's mention of its own label within its own definition is never
+     * reported (a term cannot be its own broader term anyway, see
      * {@link de.hauschel.arknet.ul.domain.TermCycleException}).</p>
      *
      * <p>A fourth sweep (issue #406) checks an architecture decision's {@link
@@ -831,13 +856,14 @@ public final class TraceabilityGraph {
         for (String termIri : termIris) {
             Set<String> linked = new HashSet<>(relatedTerms(termIri));
             broaderTerm(termIri).ifPresent(linked::add);
+            linked.addAll(narrowerTerms(termIri));
             for (String mentionedTermIri : matcher.mentionedIn(termProseTexts(termIri))) {
                 if (mentionedTermIri.equals(termIri)) {
                     continue;
                 }
                 if (!linked.contains(mentionedTermIri)) {
                     found.add(new UnlinkedMention(
-                            termIri, mentionedTermIri, termLabels.get(mentionedTermIri), "broader"));
+                            termIri, mentionedTermIri, termLabels.get(mentionedTermIri), GLOSSARY_EDGE_LOCAL_NAME));
                 }
             }
         }
@@ -857,8 +883,10 @@ public final class TraceabilityGraph {
      * @param termIri       the mentioned term
      * @param termLabel     the term's {@code skos:prefLabel}, as named in the prose
      * @param edgeLocalName the missing edge's local name ({@code usesTerm},
-     *                      {@code ubiquitousLanguageTerm} or {@code broader}), for the
-     *                      "no ... edge" message
+     *                      {@code ubiquitousLanguageTerm} or, for the term-to-term sweep,
+     *                      {@code broader/narrower/related}), for the "no ... edge" message; the
+     *                      term-to-term value names every glossary edge kind that would resolve the
+     *                      finding rather than prescribing one (kogn-io/arknet#595)
      */
     public record UnlinkedMention(String sourceIri, String termIri, String termLabel, String edgeLocalName) {
     }
