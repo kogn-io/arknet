@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -28,15 +29,19 @@ import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
 import de.hauschel.arknet.ul.application.port.in.DescribeTermDisplayFallback;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
+import de.hauschel.arknet.ul.application.port.in.LinkRelatedTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
+import de.hauschel.arknet.ul.application.port.in.UnlinkRelatedTerm;
 import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermDisplayFallback;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermNotFoundException;
+import de.hauschel.arknet.ul.domain.TermNotRelatedException;
 
 /**
- * Scaffold-level check that the adapter declares exactly the five term tools and
+ * Scaffold-level check that the adapter declares exactly the seven term tools and
  * guards its in-port dependencies. Behaviour of the handlers is not asserted here.
  */
 class UbiquitousLanguageMcpToolsTest {
@@ -66,6 +71,10 @@ class UbiquitousLanguageMcpToolsTest {
     private static final ProjectResolver PROJECTS_BILINGUAL =
             anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en"));
 
+    /** Same fixed resolution as {@link #PROJECTS}, but with a registered display name. */
+    private static final ProjectResolver PROJECTS_NAMED =
+            anchor -> new ResolvedProject(PROJECT, "en", List.of(), "arknet");
+
     /** A lookup answering the same field/tag inventory for every resource. */
     private static StaleTranslationHint hints(Map<String, Set<String>> byField) {
         return new StaleTranslationHint(new FieldLanguageLookup() {
@@ -82,38 +91,43 @@ class UbiquitousLanguageMcpToolsTest {
     }
 
     private final Stub stub = new Stub();
-    private final UbiquitousLanguageMcpTools adapter =
-            new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS);
+    private final UbiquitousLanguageMcpTools adapter = new UbiquitousLanguageMcpTools(
+            stub, stub, stub, stub, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS);
 
     @Test
-    void declaresTheFiveTermTools() {
+    void declaresTheSevenTermTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(5, names.size());
+        assertEquals(7, names.size());
         assertTrue(names.containsAll(
-                List.of("term_add", "term_list", "term_get", "term_update", "term_delete")));
+                List.of("term_add", "term_list", "term_get", "term_update", "term_delete",
+                        "term_link_related", "term_unlink_related")));
     }
 
     @Test
     void rejectsNullInPort() {
-        assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(null, stub, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
-        assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, null, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
-        assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, null, stub, PROJECTS, NO_TRANSLATIONS));
-        assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, null, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new UbiquitousLanguageMcpTools(
+                null, stub, stub, stub, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new UbiquitousLanguageMcpTools(
+                stub, stub, null, stub, stub, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new UbiquitousLanguageMcpTools(
+                stub, stub, stub, stub, null, stub, stub, stub, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new UbiquitousLanguageMcpTools(
+                stub, stub, stub, stub, stub, null, stub, stub, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new UbiquitousLanguageMcpTools(
+                stub, stub, stub, stub, stub, stub, null, stub, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new UbiquitousLanguageMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, null, PROJECTS, NO_TRANSLATIONS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
-        assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, null, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new UbiquitousLanguageMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, null, NO_TRANSLATIONS));
     }
 
     /** {@code term_delete} passes the parsed code straight through to the in-port. */
@@ -122,7 +136,7 @@ class UbiquitousLanguageMcpToolsTest {
         String rendered = adapter.delete(null, "TERM-1", null);
 
         assertEquals(new TermCode("TERM-1"), stub.lastDeletedTerm);
-        assertEquals("Deleted: TERM-1", rendered);
+        assertEquals("Deleted: TERM-1\n\nproject: test-project", rendered);
     }
 
     /**
@@ -331,7 +345,8 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void listPassesTheProjectsDefaultLanguageThrough() {
         UbiquitousLanguageMcpTools adapterWithGermanDefault =
-                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT, NO_TRANSLATIONS);
+                new UbiquitousLanguageMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT, NO_TRANSLATIONS);
 
         adapterWithGermanDefault.list(null, null, null);
 
@@ -347,7 +362,8 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void listPassesAnExplicitDisplayLocaleArgumentThrough() {
         UbiquitousLanguageMcpTools adapterWithGermanDefault =
-                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT, NO_TRANSLATIONS);
+                new UbiquitousLanguageMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT, NO_TRANSLATIONS);
 
         adapterWithGermanDefault.list(null, "fr", null);
 
@@ -396,7 +412,7 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void updateReportsTheOtherMaintainedLanguageTheCorrectedDefinitionStillCarries() {
         UbiquitousLanguageMcpTools bilingual = new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub,
-                PROJECTS_BILINGUAL, hints(Map.of("definition", Set.of("de", "en"))));
+                stub, stub, PROJECTS_BILINGUAL, hints(Map.of("definition", Set.of("de", "en"))));
 
         String rendered = bilingual.update(null, "TERM-1", null, "neue Definition", null, null, "de", null);
 
@@ -412,7 +428,7 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void updateStaysSilentWhenTheCallAddsATranslation() {
         UbiquitousLanguageMcpTools bilingual = new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub,
-                PROJECTS_BILINGUAL, new StaleTranslationHint(lookupBeforeTheWrite(Map.of("definition", Set.of("de")))));
+                stub, stub, PROJECTS_BILINGUAL, new StaleTranslationHint(lookupBeforeTheWrite(Map.of("definition", Set.of("de")))));
 
         String rendered = bilingual.update(null, "TERM-1", null, "new definition", null, null, "en", null);
 
@@ -423,7 +439,7 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void updateStaysSilentForASingleLanguageProject() {
         UbiquitousLanguageMcpTools monolingual = new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub,
-                PROJECTS_WITH_GERMAN_DEFAULT, hints(Map.of("definition", Set.of("de", "en"))));
+                stub, stub, PROJECTS_WITH_GERMAN_DEFAULT, hints(Map.of("definition", Set.of("de", "en"))));
 
         String rendered = monolingual.update(null, "TERM-1", null, "neue Definition", null, null, "de", null);
 
@@ -437,11 +453,141 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void updateStaysSilentWhenOnlyTheLabelWasCorrected() {
         UbiquitousLanguageMcpTools bilingual = new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, stub,
-                PROJECTS_BILINGUAL, hints(Map.of("definition", Set.of("de", "en"), "prefLabel", Set.of("de", "en"))));
+                stub, stub, PROJECTS_BILINGUAL, hints(Map.of("definition", Set.of("de", "en"), "prefLabel", Set.of("de", "en"))));
 
         String rendered = bilingual.update(null, "TERM-1", "Kunde", null, null, null, "de", null);
 
         assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    // --- Answer shapes: project line, short link confirmation, diff line (kogn-io/arknet#598) --
+
+    /**
+     * kogn-io/arknet#597: a call whose {@code projectAnchor} was forgotten writes into the
+     * session's project, silently. Every writing answer therefore ends by naming the project it
+     * hit - here for each of the five writing tools, so none of them can lose the line on its own.
+     */
+    @Test
+    void everyWritingToolClosesItsAnswerWithTheProject() {
+        UbiquitousLanguageMcpTools named = new UbiquitousLanguageMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, PROJECTS_NAMED, NO_TRANSLATIONS);
+        String trailer = "\n\nproject: arknet";
+        stub.termForGet = Optional.of(new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-1"), "Kunde", "def a"));
+
+        assertTrue(named.add(null, "Kunde", "def a", null, null, null, null).endsWith(trailer));
+        assertTrue(named.update(null, "TERM-1", "Erstattung", null, null, null, null, null).endsWith(trailer));
+        assertTrue(named.delete(null, "TERM-1", null).endsWith(trailer));
+        assertTrue(named.linkRelated(null, "TERM-1", List.of("TERM-2"), null).endsWith(trailer));
+        assertTrue(named.unlinkRelated(null, "TERM-1", List.of("TERM-2"), null).endsWith(trailer));
+    }
+
+    /** A read tool carries no project line - the signal is about writes (kogn-io/arknet#597). */
+    @Test
+    void readingToolsCarryNoProjectLine() {
+        assertFalse(adapter.list(null, null, null).contains("project:"), "term_list");
+        assertFalse(adapter.get(null, "TERM-1", null, null).contains("project:"), "term_get");
+    }
+
+    /**
+     * kogn-io/arknet#598: a link/unlink tool answers with the edge, not with the whole resource -
+     * its caller already holds both ends.
+     */
+    @Test
+    void linkAndUnlinkAnswerWithTheEdgeRatherThanTheWholeResource() {
+        stub.termForGet = Optional.of(new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-1"), "Kunde", "def a"));
+
+        String linked = adapter.linkRelated(null, "TERM-1", List.of("TERM-2"), null);
+        String unlinked = adapter.unlinkRelated(null, "TERM-1", List.of("TERM-2"), null);
+
+        assertTrue(linked.startsWith("linked TERM-1 -> TERM-2 (related)"), linked);
+        assertTrue(unlinked.startsWith("unlinked TERM-1 -> TERM-2 (related)"), unlinked);
+        assertFalse(linked.contains(" - "), linked);
+    }
+
+    /**
+     * kogn-io/arknet#598: {@code related}/{@code broader} replace wholesale, so a caller restating
+     * either from memory unlinks whatever it forgot. The diff is computed from the field before
+     * and after the write - the request cannot show what fell out of it.
+     */
+    @Test
+    void updateNamesWhatLeftAndWhatJoinedRelatedAndBroader() {
+        stub.termForGet = Optional.of(new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-1"), "Kunde", "def a", new TermCode("TERM-5"), List.of(new TermCode("TERM-22"))));
+
+        String rendered = adapter.update(null, "TERM-1", null, null, "", List.of("TERM-9"), null, null);
+
+        assertTrue(rendered.contains("broader: removed TERM-5"), rendered);
+        assertTrue(rendered.contains("related: removed TERM-22, added TERM-9"), rendered);
+    }
+
+    /** A {@code term_update} that leaves broader/related alone costs no diff line. */
+    @Test
+    void updateStaysSilentWhenNeitherBroaderNorRelatedChanged() {
+        stub.termForGet = Optional.of(new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-1"), "Kunde", "def a"));
+
+        String rendered = adapter.update(null, "TERM-1", "Erstattung", null, null, null, null, null);
+
+        assertFalse(rendered.contains("broader:"), rendered);
+        assertFalse(rendered.contains("related:"), rendered);
+    }
+
+    // --- term_link_related/term_unlink_related (kogn-io/arknet#598) ----------------------------
+
+    @Test
+    void linkRelatedPassesEachRawCodeThroughToTheInPort() {
+        stub.termForGet = Optional.of(new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-1"), "Kunde", "def a"));
+
+        String rendered = adapter.linkRelated(null, "TERM-1", List.of("TERM-2", " TERM-3 "), null);
+
+        assertEquals(List.of("TERM-1->TERM-2", "TERM-1->TERM-3"), stub.linkRelatedCalls);
+        assertTrue(rendered.contains("linked TERM-1 -> TERM-2 (related)"), rendered);
+        assertTrue(rendered.contains("linked TERM-1 -> TERM-3 (related)"), rendered);
+    }
+
+    /**
+     * kogn-io/arknet#598 (a), the richtungsblind defect: the peer already asserts the edge from
+     * its own side - reported as already linked, and never rejected as a duplicate.
+     */
+    @Test
+    void linkRelatedReportsAPeerAlreadyRelatedFromTheOtherSide() {
+        stub.termForGet = Optional.of(new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-1"), "Kunde", "def a", null, List.of(new TermCode("TERM-2"))));
+
+        String rendered = adapter.linkRelated(null, "TERM-1", List.of("TERM-2"), null);
+
+        assertEquals("already linked TERM-1 <-> TERM-2 (related)\n\nproject: test-project", rendered);
+    }
+
+    @Test
+    void linkRelatedThrowsWhenTheCodeIsUnknown() {
+        stub.termForGet = Optional.empty();
+
+        assertThrows(TermNotFoundException.class,
+                () -> adapter.linkRelated(null, "TERM-99", List.of("TERM-1"), null));
+    }
+
+    @Test
+    void unlinkRelatedPassesEachRawCodeThroughToTheInPort() {
+        String rendered = adapter.unlinkRelated(null, "TERM-1", List.of("TERM-2", "TERM-3"), null);
+
+        assertEquals(List.of("TERM-1->TERM-2", "TERM-1->TERM-3"), stub.unlinkRelatedCalls);
+        assertTrue(rendered.contains("unlinked TERM-1 -> TERM-2 (related)"), rendered);
+        assertTrue(rendered.contains("unlinked TERM-1 -> TERM-3 (related)"), rendered);
+    }
+
+    /** Never a silent no-op: the in-port's rejection reaches the caller unchanged. */
+    @Test
+    void unlinkRelatedPropagatesTheRejectionOfAPairThatIsNotRelated() {
+        stub.unlinkRelatedRejects = true;
+
+        TermNotRelatedException ex = assertThrows(TermNotRelatedException.class,
+                () -> adapter.unlinkRelated(null, "TERM-1", List.of("TERM-2"), null));
+
+        assertEquals(new TermCode("TERM-2"), ex.peerCode());
     }
 
     /**
@@ -465,9 +611,9 @@ class UbiquitousLanguageMcpToolsTest {
         };
     }
 
-    /** Structural stub implementing the six driving in-ports. */
+    /** Structural stub implementing the eight driving in-ports. */
     private static final class Stub implements AddTerm, ListTerms, DescribeTermDisplayFallback, GetTerm,
-            UpdateTerm, DeleteTerm {
+            UpdateTerm, DeleteTerm, LinkRelatedTerm, UnlinkRelatedTerm {
 
         private NewTerm lastCommand;
         private TermCode lastUpdatedTerm;
@@ -482,6 +628,9 @@ class UbiquitousLanguageMcpToolsTest {
         private List<Term> termsForList = List.of();
         private Map<TermCode, TermDisplayFallback> fallbacksForList = Map.of();
         private Optional<Term> termForGet = Optional.empty();
+        private final List<String> linkRelatedCalls = new ArrayList<>();
+        private final List<String> unlinkRelatedCalls = new ArrayList<>();
+        private boolean unlinkRelatedRejects;
 
         @Override
         public Term add(ProjectId projectId, NewTerm command, String defaultLanguage) {
@@ -529,6 +678,22 @@ class UbiquitousLanguageMcpToolsTest {
         @Override
         public void delete(ProjectId projectId, TermCode code) {
             lastDeletedTerm = code;
+        }
+
+        @Override
+        public Term linkRelated(ProjectId projectId, TermCode code, TermCode peerCode) {
+            linkRelatedCalls.add(code.value() + "->" + peerCode.value());
+            return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")), code, "p", "d", null,
+                    List.of(peerCode));
+        }
+
+        @Override
+        public Term unlinkRelated(ProjectId projectId, TermCode code, TermCode peerCode) {
+            if (unlinkRelatedRejects) {
+                throw new TermNotRelatedException(projectId, code, peerCode);
+            }
+            unlinkRelatedCalls.add(code.value() + "->" + peerCode.value());
+            return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")), code, "p", "d");
         }
     }
 }

@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -20,16 +22,20 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
 import de.hauschel.arknet.ul.application.port.in.DescribeTermDisplayFallback;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
+import de.hauschel.arknet.ul.application.port.in.LinkRelatedTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
+import de.hauschel.arknet.ul.application.port.in.UnlinkRelatedTerm;
 import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermDisplayFallback;
+import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
 /**
  * Driving (in) adapter of the ubiquitous-language component: exposes the glossary
@@ -50,6 +56,17 @@ import de.hauschel.arknet.ul.domain.TermDisplayFallback;
  * {@link TermCode}, never to the opaque {@link de.hauschel.arknet.ul.domain.TermId}. The
  * identity itself is a store-internal detail that never needs to cross the MCP boundary;
  * responses render the code back to the caller, not the underlying resource identity.</p>
+ *
+ * <p><strong>What a writing answer says (kogn-io/arknet#597/#598).</strong> Every writing tool
+ * closes its answer with {@code project: <name>}, so a call whose {@code projectAnchor} was
+ * forgotten shows which project it actually hit instead of landing silently in the session's one.
+ * {@code term_link_related}/{@code term_unlink_related} answer with a one-line confirmation per
+ * edge rather than the whole resource - their caller already holds both ends. {@code term_update}
+ * keeps the full resource and its stale-translation signal, preceded by a diff line for {@code
+ * broader}/{@code related} whenever either came out holding something else than it held before;
+ * the diff is computed from the field's state before and after the write, never from the request,
+ * because a wholesale {@code related} list drops whatever it forgets to restate and that loss is
+ * exactly what the request cannot show. All three shapes are rendered by {@link WriteResponse}.</p>
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a
  * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
@@ -104,8 +121,23 @@ public final class UbiquitousLanguageMcpTools {
     private final GetTerm getTerm;
     private final UpdateTerm updateTerm;
     private final DeleteTerm deleteTerm;
+    private final LinkRelatedTerm linkRelatedTerm;
+    private final UnlinkRelatedTerm unlinkRelatedTerm;
     private final ProjectResolver projects;
     private static final String DEFINITION_FIELD = "definition";
+
+    /**
+     * The local name of {@code skos:broader} - {@code term_update}'s diff-line field name
+     * (kogn-io/arknet#598).
+     */
+    private static final String BROADER_FIELD = "broader";
+
+    /**
+     * The local name of {@code skos:related} - names both {@code term_update}'s diff line and the
+     * edge {@code term_link_related}/{@code term_unlink_related} draw (kogn-io/arknet#598), so the
+     * two never drift apart on what they are talking about.
+     */
+    private static final String RELATED_FIELD = "related";
 
     /**
      * The multilingual fields {@code term_update} reports, as {@code FieldLanguageLookup} keys -
@@ -120,16 +152,19 @@ public final class UbiquitousLanguageMcpTools {
     private final StaleTranslationHint staleTranslations;
 
     /**
-     * Creates the adapter with its six driving in-ports and the resolver that maps each
+     * Creates the adapter with its eight driving in-ports and the resolver that maps each
      * call's origin directory to a project.
      *
      * @param addTerm     in-port backing {@code term_add}
      * @param listTerms   in-port backing {@code term_list}
      * @param describeTermDisplayFallback in-port backing {@code term_list}'s fallback-visibility
      *                    line (kogn-io/arknet#475)
-     * @param getTerm     in-port backing {@code term_get}
+     * @param getTerm     in-port backing {@code term_get}, also read before {@code term_update} to
+     *                    compute its {@code broader}/{@code related} diff lines (kogn-io/arknet#598)
      * @param updateTerm  in-port backing {@code term_update}
      * @param deleteTerm  in-port backing {@code term_delete}
+     * @param linkRelatedTerm   in-port backing {@code term_link_related} (kogn-io/arknet#598)
+     * @param unlinkRelatedTerm in-port backing {@code term_unlink_related} (kogn-io/arknet#598)
      * @param projects  resolves each call's target project from its origin directory
      * @param staleTranslations renders {@code term_update}'s stale-translation signal
      *                    (kogn-io/arknet#474)
@@ -141,6 +176,8 @@ public final class UbiquitousLanguageMcpTools {
             final GetTerm getTerm,
             final UpdateTerm updateTerm,
             final DeleteTerm deleteTerm,
+            final LinkRelatedTerm linkRelatedTerm,
+            final UnlinkRelatedTerm unlinkRelatedTerm,
             final ProjectResolver projects,
             final StaleTranslationHint staleTranslations) {
         this.addTerm = Objects.requireNonNull(addTerm, "addTerm");
@@ -150,6 +187,8 @@ public final class UbiquitousLanguageMcpTools {
         this.getTerm = Objects.requireNonNull(getTerm, "getTerm");
         this.updateTerm = Objects.requireNonNull(updateTerm, "updateTerm");
         this.deleteTerm = Objects.requireNonNull(deleteTerm, "deleteTerm");
+        this.linkRelatedTerm = Objects.requireNonNull(linkRelatedTerm, "linkRelatedTerm");
+        this.unlinkRelatedTerm = Objects.requireNonNull(unlinkRelatedTerm, "unlinkRelatedTerm");
         this.projects = Objects.requireNonNull(projects, "projects");
         this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
     }
@@ -250,7 +289,7 @@ public final class UbiquitousLanguageMcpTools {
         final Term created = addTerm.add(project.id(),
                 new NewTerm(label, definition, blankToNull(language), broaderCode, toTermCodes(related)),
                 project.defaultLanguage());
-        return format(created);
+        return WriteResponse.withProject(format(created), project);
     }
 
     @McpTool(name = "term_list", description = "List all glossary terms. A term shown under a fallen-back "
@@ -354,9 +393,21 @@ public final class UbiquitousLanguageMcpTools {
         final TermCode code = new TermCode(id);
         final Optional<TermCode> broaderPatch = parseBroaderPatch(broader);
         final String staleHint = staleTranslationHint(project, code, blankToNull(definition), blankToNull(language));
+        // Read before the write for the same reason the stale-translation hint is: the diff is
+        // what left and joined broader/related, and only the state before this call can say that -
+        // a caller that restates its `related` set from memory silently unlinks what it forgot, and
+        // the request it sent is precisely where that loss cannot be seen (kogn-io/arknet#598).
+        final Optional<Term> before = getTerm.get(project.id(), code, null);
         final Term updated = updateTerm.update(project.id(), code, blankToNull(label), blankToNull(definition),
                 blankToNull(language), project.defaultLanguage(), broaderPatch, toTermCodes(related));
-        return format(updated) + staleHint;
+        final String broaderDiff = WriteResponse.listFieldDiff(BROADER_FIELD,
+                before.map(UbiquitousLanguageMcpTools::broaderCodes).orElse(List.of()), broaderCodes(updated));
+        final String relatedDiff = WriteResponse.listFieldDiff(RELATED_FIELD,
+                before.map(UbiquitousLanguageMcpTools::relatedCodes).orElse(List.of()), relatedCodes(updated));
+        final String diffLines = Stream.of(broaderDiff, relatedDiff).filter(line -> !line.isEmpty())
+                .collect(Collectors.joining("\n"));
+        final String body = (diffLines.isEmpty() ? "" : diffLines + "\n") + format(updated) + staleHint;
+        return WriteResponse.withProject(body, project);
     }
 
     @McpTool(name = "term_delete",
@@ -365,8 +416,8 @@ public final class UbiquitousLanguageMcpTools {
                     + "away. Rejected if anything else still references it: a requirement's or use case's "
                     + "arkreq:usesTerm, an architecture decision's arkarch:usesTerm, a bounded context's "
                     + "ubiquitousLanguageTerm, or another term's broader or related. Remove those edges first "
-                    + "(req_update/uc_update, adr_update, bc_link_term, or term_update on the other term to "
-                    + "clear its broader/related).")
+                    + "(req_update/uc_update, adr_update, bc_link_term, or term_unlink_related/term_update on "
+                    + "the other term to clear its broader/related).")
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
@@ -375,7 +426,62 @@ public final class UbiquitousLanguageMcpTools {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
         deleteTerm.delete(project.id(), code);
-        return "Deleted: " + code.value();
+        return WriteResponse.withProject("Deleted: " + code.value(), project);
+    }
+
+    @McpTool(name = "term_link_related",
+            description = "Add one or more skos:related edges from this term to already-existing peer terms, "
+                    + "without restating the rest (term_update's related replaces the whole set). The relation "
+                    + "is symmetric and only one direction is ever asserted as a triple: a peer that already "
+                    + "asserts related towards this term from its own side is reported as already linked "
+                    + "rather than getting a second, redundant edge. Rejected if a code does not resolve to an "
+                    + "existing term, or names this term itself.")
+    public String linkRelated(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
+            @McpToolParam(description = "Identities (e.g. TERM-1) of the already-existing terms to relate this "
+                    + "one to")
+            final List<String> relatedCodes,
+            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final TermCode code = new TermCode(id);
+        final List<String> lines = new ArrayList<>();
+        for (final String raw : relatedCodes) {
+            final TermCode peerCode = new TermCode(raw.trim());
+            final Term before = getTerm.get(project.id(), code, null)
+                    .orElseThrow(() -> new TermNotFoundException(project.id(), code));
+            final boolean alreadyRelated = before.related().contains(peerCode);
+            linkRelatedTerm.linkRelated(project.id(), code, peerCode);
+            lines.add(alreadyRelated
+                    ? "already linked %s <-> %s (%s)".formatted(code.value(), peerCode.value(), RELATED_FIELD)
+                    : WriteResponse.linked(code.value(), peerCode.value(), RELATED_FIELD));
+        }
+        return WriteResponse.withProject(String.join("\n", lines), project);
+    }
+
+    @McpTool(name = "term_unlink_related",
+            description = "Remove one or more skos:related edges between this term and already-existing peer "
+                    + "terms, without restating the rest (term_update's related replaces the whole set). "
+                    + "Removes the edge regardless of which side stores it (the relation is symmetric, but "
+                    + "only one direction is ever asserted as a triple). Never a silent no-op: a peer that is "
+                    + "not currently related is rejected.")
+    public String unlinkRelated(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
+            @McpToolParam(description = "Identities (e.g. TERM-1) of the peer terms to unlink from this one")
+            final List<String> relatedCodes,
+            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final TermCode code = new TermCode(id);
+        final List<String> lines = new ArrayList<>();
+        for (final String raw : relatedCodes) {
+            final TermCode peerCode = new TermCode(raw.trim());
+            unlinkRelatedTerm.unlinkRelated(project.id(), code, peerCode);
+            lines.add(WriteResponse.unlinked(code.value(), peerCode.value(), RELATED_FIELD));
+        }
+        return WriteResponse.withProject(String.join("\n", lines), project);
     }
 
     /**
@@ -416,6 +522,16 @@ public final class UbiquitousLanguageMcpTools {
         final String related = t.related().isEmpty() ? "" : " [related:%s]".formatted(
                 t.related().stream().map(TermCode::value).reduce((a, b) -> a + "," + b).orElseThrow());
         return "%s %s - %s%s%s".formatted(t.code().value(), t.prefLabel(), t.definition(), broader, related);
+    }
+
+    /** {@code term_update}'s {@code broader} diff side, as a 0-or-1-element list of codes. */
+    private static List<String> broaderCodes(final Term t) {
+        return t.broader() == null ? List.of() : List.of(t.broader().value());
+    }
+
+    /** {@code term_update}'s {@code related} diff side, as business codes. */
+    private static List<String> relatedCodes(final Term t) {
+        return t.related().stream().map(TermCode::value).toList();
     }
 
     /**

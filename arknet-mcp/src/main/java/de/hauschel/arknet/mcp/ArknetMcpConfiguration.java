@@ -138,9 +138,10 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       second, functionally identical one; {@code req_link_constraint} stays on
  *       {@link RequirementMcpTools} since it mutates the requirement.</li>
  *   <li><strong>ubiquitous-language</strong> ({@link UbiquitousLanguageMcpTools} over
- *       {@link TermService} over an RDF/SKOS-persisted term repository) - the four
+ *       {@link TermService} over an RDF/SKOS-persisted term repository) - the seven
  *       term tools ({@code term_add}, {@code term_list}, {@code term_get},
- *       {@code term_update}), assembled through {@link KognioRdfTermRepositoryFactory}
+ *       {@code term_update}, {@code term_delete}, {@code term_link_related},
+ *       {@code term_unlink_related}), assembled through {@link KognioRdfTermRepositoryFactory}
  *       (same RDF4J-free wiring as requirements).</li>
  *   <li><strong>use-cases</strong> ({@link UseCaseMcpTools} over {@link UseCaseService} over
  *       an RDF-persisted use-case repository) - the six use-case tools, assembled through
@@ -476,8 +477,8 @@ public class ArknetMcpConfiguration {
     UbiquitousLanguageMcpTools ubiquitousLanguageMcpTools(
             final TermService service, final ProjectResolver projectResolver,
             final StaleTranslationHint staleTranslationHint) {
-        return new UbiquitousLanguageMcpTools(service, service, service, service, service, service, projectResolver,
-                staleTranslationHint);
+        return new UbiquitousLanguageMcpTools(service, service, service, service, service, service, service, service,
+                projectResolver, staleTranslationHint);
     }
 
     // --- Use-cases hexagon -----------------------------------------------------
