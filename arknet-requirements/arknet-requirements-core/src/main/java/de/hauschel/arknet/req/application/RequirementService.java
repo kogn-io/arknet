@@ -31,6 +31,8 @@ import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.ProposeRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
+import de.hauschel.arknet.req.application.port.in.UnlinkConstraint;
+import de.hauschel.arknet.req.application.port.in.UnlinkTerm;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
@@ -41,6 +43,7 @@ import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
+import de.hauschel.arknet.req.domain.ConstraintNotLinkedException;
 import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.MissingAcceptanceCriteriaException;
@@ -55,6 +58,7 @@ import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.req.domain.TermNotLinkedException;
 import de.hauschel.arknet.req.domain.TermRef;
 
 /**
@@ -78,7 +82,9 @@ import de.hauschel.arknet.req.domain.TermRef;
  * requirement in any status. {@link #linkConstraint} mirrors {@link #linkTerm} exactly for
  * {@code oslc_rm:constrainedBy}, resolving the human-typed {@link ConstraintCode} via the
  * constructor-injected {@link ConstraintRepository} instead of a cross-BC lookup port, since
- * {@link Constraint} lives inside this same bounded context.</p>
+ * {@link Constraint} lives inside this same bounded context. {@link #unlinkTerm}/
+ * {@link #unlinkConstraint} (kogn-io/arknet#598) are their counterparts: unlike linking, naming an
+ * edge that is not currently recorded is never a silent no-op there.</p>
  *
  * <p><strong>Concurrency.</strong> {@link #add} retries its next-code computation
  * against a fresh read whenever a concurrent caller claims the same code first, and {@link
@@ -148,8 +154,8 @@ import de.hauschel.arknet.req.domain.TermRef;
  * because {@code null} differs from the incoming text.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, DescribeRequirementDisplayFallback,
-        GetRequirement, AcceptRequirement, ProposeRequirement, LinkTerm, LinkConstraint, UpdateRequirement,
-        ResolveRequirements, GetRequirementSchema {
+        GetRequirement, AcceptRequirement, ProposeRequirement, LinkTerm, UnlinkTerm, LinkConstraint,
+        UnlinkConstraint, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
 
     /**
      * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops.
@@ -319,6 +325,33 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
     }
 
     @Override
+    public Requirement unlinkTerm(
+            ProjectId projectId, RequirementCode code, String termCode, String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(termCode, "termCode");
+        // Resolved once, outside the retry loop, exactly as linkTerm does: an unknown or ambiguous
+        // term code is a didactic rejection of the whole call, not a race worth retrying.
+        TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
+        // unlinkTerm() never touches any text field either - same reasoning as accept().
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false,
+                Set.of(), RemovedPositions.NONE, current -> {
+            if (!current.usesTerms().contains(term)) {
+                // Thrown from inside the mutation rather than checked before it: the state that
+                // decides is the one this very attempt read, and a check outside the loop would
+                // judge a snapshot the retry may already have replaced.
+                throw new TermNotLinkedException(projectId, code, termCode);
+            }
+            List<TermRef> linked = new ArrayList<>(current.usesTerms());
+            linked.remove(term);
+            return new Requirement(current.id(), current.code(), current.title(),
+                    current.description(), current.rationale(), current.type(), current.status(),
+                    current.priority(), current.qualityCategory(), linked,
+                    current.acceptanceCriteria(), current.constrainedBy());
+        });
+    }
+
+    @Override
     public Requirement linkConstraint(
             ProjectId projectId, RequirementCode code, String constraintCode, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
@@ -343,6 +376,33 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
             }
             List<ConstraintRef> linked = new ArrayList<>(current.constrainedBy());
             linked.add(ref);
+            return new Requirement(current.id(), current.code(), current.title(),
+                    current.description(), current.rationale(), current.type(), current.status(),
+                    current.priority(), current.qualityCategory(),
+                    current.usesTerms(), current.acceptanceCriteria(), linked);
+        });
+    }
+
+    @Override
+    public Requirement unlinkConstraint(
+            ProjectId projectId, RequirementCode code, String constraintCode, String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(constraintCode, "constraintCode");
+        // Resolution first, outside the retry loop - mirrors linkConstraint() exactly.
+        ConstraintCode parsedCode = new ConstraintCode(constraintCode);
+        Constraint constraint = constraintRepository.findByCode(projectId, parsedCode, null)
+                .orElseThrow(() -> new ConstraintNotFoundException(projectId, parsedCode));
+        ConstraintRef ref = new ConstraintRef(constraint.id().value());
+        // unlinkConstraint() never touches any text field either - same reasoning as accept().
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false,
+                Set.of(), RemovedPositions.NONE, current -> {
+            if (!current.constrainedBy().contains(ref)) {
+                // Thrown from inside the mutation rather than checked before it - see unlinkTerm().
+                throw new ConstraintNotLinkedException(projectId, code, constraintCode);
+            }
+            List<ConstraintRef> linked = new ArrayList<>(current.constrainedBy());
+            linked.remove(ref);
             return new Requirement(current.id(), current.code(), current.title(),
                     current.description(), current.rationale(), current.type(), current.status(),
                     current.priority(), current.qualityCategory(),

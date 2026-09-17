@@ -22,6 +22,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.req.application.port.in.AddConstraint;
 import de.hauschel.arknet.req.application.port.in.AddConstraint.NewConstraint;
 import de.hauschel.arknet.req.application.port.in.DeleteConstraint;
@@ -53,6 +54,13 @@ import de.hauschel.arknet.req.domain.ConstraintType;
  * {@link UpdateConstraint}). {@code constraint_delete} (kogn-io/arknet#481) is the closing
  * counterpart of {@code constraint_add} this resource type lacked until now, mirroring
  * {@code ActorMcpTools#delete} exactly.</p>
+ *
+ * <p><strong>What a writing answer says (kogn-io/arknet#597).</strong> Every writing tool
+ * ({@code constraint_add}, {@code constraint_update}, {@code constraint_delete}) closes its answer
+ * with {@code project: <name>} via {@link WriteResponse}, so a call whose {@code projectAnchor} was
+ * forgotten shows which project it actually hit instead of landing silently in the session's one.
+ * A constraint carries no wholesale list field, so unlike {@code req_update} it needs no diff
+ * line.</p>
  */
 public final class ConstraintMcpTools {
 
@@ -191,7 +199,7 @@ public final class ConstraintMcpTools {
         final Constraint created = addConstraint.add(project.id(),
                 new NewConstraint(title, statement, ConstraintType.valueOf(type), blankToNull(language)),
                 project.defaultLanguage());
-        return presenter.format(created);
+        return WriteResponse.withProject(presenter.format(created), project);
     }
 
     @McpTool(name = "constraint_list", description = "List all managed constraints. A constraint shown under "
@@ -299,7 +307,7 @@ public final class ConstraintMcpTools {
                 blankToNull(statement));
         final Constraint updated = updateConstraint.update(project.id(), code, blankToNull(title),
                 blankToNull(statement), blankToNull(language), project.defaultLanguage());
-        return presenter.format(updated) + staleHint;
+        return WriteResponse.withProject(presenter.format(updated) + staleHint, project);
     }
 
     @McpTool(name = "constraint_delete",
@@ -322,7 +330,7 @@ public final class ConstraintMcpTools {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ConstraintCode code = new ConstraintCode(id);
         deleteConstraint.delete(project.id(), code);
-        return "Deleted: " + code.value();
+        return WriteResponse.withProject("Deleted: " + code.value(), project);
     }
 
     /**

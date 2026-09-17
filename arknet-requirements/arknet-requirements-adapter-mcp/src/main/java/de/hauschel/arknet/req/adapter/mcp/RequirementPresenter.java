@@ -104,6 +104,30 @@ final class RequirementPresenter {
         return "%s: %s (values: %s)".formatted(t.term(), t.definition(), String.join(", ", t.values()));
     }
 
+    /**
+     * The business codes of {@code r}'s linked terms, in the order {@code r} carries them - the
+     * "before"/"after" side of {@code req_update}'s {@code usesTerm} diff line (kogn-io/arknet#598).
+     * {@code null} (no requirement read, e.g. an unknown code {@code req_update} is about to reject
+     * on its own) yields an empty list rather than throwing - the diff has no business deciding
+     * that first.
+     */
+    List<String> termCodesOf(final ProjectId projectId, final Requirement r) {
+        if (r == null) {
+            return List.of();
+        }
+        final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(projectId, List.of(r));
+        return r.usesTerms().stream().map(ref -> renderTerm(ref, termsById)).toList();
+    }
+
+    /** {@link #termCodesOf}, for {@code r}'s linked constraints. */
+    List<String> constraintCodesOf(final ProjectId projectId, final Requirement r) {
+        if (r == null) {
+            return List.of();
+        }
+        final Map<ResourceId, ResolvedConstraint> constraintsById = resolveConstraintsFor(projectId, List.of(r));
+        return r.constrainedBy().stream().map(ref -> renderConstraint(ref, constraintsById)).toList();
+    }
+
     /** Renders one term reference: its resolved business code, or its bare IRI as a fallback. */
     private static String renderTerm(final TermRef ref, final Map<ResourceId, ResolvedTerm> termsById) {
         final ResolvedTerm term = termsById.get(ref.value());

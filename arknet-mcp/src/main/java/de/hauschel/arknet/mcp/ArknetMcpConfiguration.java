@@ -422,7 +422,7 @@ public class ArknetMcpConfiguration {
             final StaleTranslationHint staleTranslationHint) {
         return new RequirementMcpTools(
                 service, service, service, service, service, service, service, service, service, service,
-                resolveTerms, constraintService, projectResolver, staleTranslationHint);
+                service, service, resolveTerms, constraintService, projectResolver, staleTranslationHint);
     }
 
     /**
