@@ -25,7 +25,9 @@ import de.hauschel.arknet.actor.application.port.in.DescribeRoleDisplayFallback;
 import de.hauschel.arknet.actor.application.port.in.GetRole;
 import de.hauschel.arknet.actor.application.port.in.ListRoles;
 import de.hauschel.arknet.actor.application.port.in.RoleDetail;
+import de.hauschel.arknet.actor.application.port.in.RoleDetail.FilledByActor;
 import de.hauschel.arknet.actor.application.port.in.UpdateRole;
+import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.Role;
 import de.hauschel.arknet.actor.domain.RoleCode;
 import de.hauschel.arknet.actor.domain.RoleDisplayFallback;
@@ -121,7 +123,7 @@ class RoleMcpToolsTest {
         String rendered = adapter.delete(null, "ROLE-1", null);
 
         assertEquals(new RoleCode("ROLE-1"), stub.lastDeleteCode);
-        assertEquals("Deleted: ROLE-1", rendered);
+        assertEquals("Deleted: ROLE-1\n\nproject: " + PROJECT.value(), rendered);
     }
 
     @Test
@@ -278,6 +280,69 @@ class RoleMcpToolsTest {
         return new RoleDetail(new Role(ID, new RoleCode(code), name, description, List.of()), List.of());
     }
 
+    private static RoleDetail roleDetailWithOccupants(String code, FilledByActor... occupants) {
+        return new RoleDetail(new Role(ID, new RoleCode(code), "Requirements Engineer", null, List.of()),
+                List.of(occupants));
+    }
+
+    // --- Answer shapes: project line, filledBy diff (kogn-io/arknet#597/#598) -----------------
+
+    /**
+     * kogn-io/arknet#597: a call whose {@code projectAnchor} was forgotten writes into the
+     * session's project, silently. Every writing answer therefore ends by naming the project it
+     * hit - here for each of the three writing tools, so none of them can lose the line on its own.
+     */
+    @Test
+    void everyWritingToolClosesItsAnswerWithTheProject() {
+        stub.nextUpdateResult = roleDetail("ROLE-1", "Renamed", null);
+        RoleMcpTools named = new RoleMcpTools(stub, stub, stub, stub, stub, stub,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of(), "arknet"), NO_TRANSLATIONS);
+        String trailer = "\n\nproject: arknet";
+
+        assertTrue(named.add(null, "Requirements Engineer", null, null, null, null).endsWith(trailer));
+        assertTrue(named.update(null, "ROLE-1", "Renamed", null, null, null, null).endsWith(trailer));
+        assertTrue(named.delete(null, "ROLE-1", null).endsWith(trailer));
+    }
+
+    /** A read tool carries no project line - the signal is about writes (kogn-io/arknet#597). */
+    @Test
+    void readingToolsCarryNoProjectLine() {
+        stub.allRoles = List.of(roleDetail("ROLE-1", "Requirements Engineer", null));
+        stub.nextGetResult = Optional.of(roleDetail("ROLE-1", "Requirements Engineer", null));
+
+        assertTrue(!adapter.list(null, null, null).contains("project:"), "role_list");
+        assertTrue(!adapter.get(null, "ROLE-1", null, null).contains("project:"), "role_get");
+    }
+
+    /**
+     * kogn-io/arknet#598: {@code filledBy} replaces the occupancy wholesale, so a caller restating
+     * it from memory unlinks whatever it forgot. The diff is computed from the occupancy before and
+     * after the write - the request cannot show what fell out of it.
+     */
+    @Test
+    void updateNamesWhatLeftAndWhatJoinedTheFilledByOccupancy() {
+        stub.nextGetResult = Optional.of(roleDetailWithOccupants("ROLE-1",
+                new FilledByActor(new ActorCode("ACTOR-2"), "Vertrieb")));
+        stub.nextUpdateResult = roleDetailWithOccupants("ROLE-1",
+                new FilledByActor(new ActorCode("ACTOR-5"), "Einkauf"));
+
+        String rendered = adapter.update(null, "ROLE-1", null, null, List.of("ACTOR-5"), null, null);
+
+        assertTrue(rendered.startsWith("filledBy: removed ACTOR-2, added ACTOR-5\n"), rendered);
+    }
+
+    /** A {@code role_update} that leaves the occupancy alone costs no diff line. */
+    @Test
+    void updateStaysSilentWhenTheFilledByOccupancyDidNotChange() {
+        FilledByActor occupant = new FilledByActor(new ActorCode("ACTOR-2"), "Vertrieb");
+        stub.nextGetResult = Optional.of(roleDetailWithOccupants("ROLE-1", occupant));
+        stub.nextUpdateResult = roleDetailWithOccupants("ROLE-1", occupant);
+
+        String rendered = adapter.update(null, "ROLE-1", "Renamed", null, null, null, null);
+
+        assertTrue(!rendered.contains("filledBy:"), rendered);
+        assertTrue(rendered.startsWith("ROLE-1"), rendered);
+    }
 
     // --- stale-translation signal (kogn-io/arknet#474) ------------------------
 

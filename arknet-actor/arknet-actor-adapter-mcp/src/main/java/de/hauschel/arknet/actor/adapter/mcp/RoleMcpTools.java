@@ -29,6 +29,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.WriteResponse;
 
 /**
  * Driving (in) adapter of the role resource type: exposes the role use-cases as MCP tools
@@ -49,6 +50,17 @@ import de.hauschel.arknet.kernel.StaleTranslationHint;
  * {@code role_get}/{@code role_list} take an optional {@code displayLocale}, with the same
  * project-default fallback and inline {@code [fallback: ...]} marking {@code role_list} appends -
  * see {@link Role}'s own javadoc for why this hexagon's two resource types disagree here.</p>
+ *
+ * <p><strong>What a writing answer says (kogn-io/arknet#597/#598).</strong> Every writing tool
+ * ({@code role_add}/{@code role_update}/{@code role_delete}) closes its answer with
+ * {@code project: <name>}, so a call whose {@code projectAnchor} was forgotten shows which project
+ * it actually hit instead of landing silently in the session's one. {@code role_update} is
+ * additionally preceded by a diff line for {@code filledBy} whenever the write leaves it holding a
+ * different occupancy than before - {@code filledBy: removed ACTOR-2, added ACTOR-5} - computed
+ * from the occupancy before and after the write, never from the request: a caller restating the
+ * set from memory silently drops whatever it forgot, and that loss is exactly what the request
+ * cannot show. Both shapes are rendered by {@link WriteResponse}, the same helper every bounded
+ * context's writing tools use.</p>
  */
 public final class RoleMcpTools {
 
@@ -72,6 +84,14 @@ public final class RoleMcpTools {
 
     private static final String NAME_FIELD = "name";
     private static final String DESCRIPTION_FIELD = "description";
+
+    /**
+     * The model name of the occupancy edge {@code role_update}'s {@code filledBy} replaces - the
+     * local name of {@code arkproc:filledBy}, the same vocabulary {@code store_check} names fields
+     * in. Names the field in the diff line {@code role_update} prepends when the write leaves the
+     * occupancy holding a different set than before (kogn-io/arknet#598).
+     */
+    private static final String FILLED_BY_FIELD = "filledBy";
 
     /**
      * The multilingual fields {@code role_update} can write, as {@code FieldLanguageLookup} keys - the
@@ -176,7 +196,7 @@ public final class RoleMcpTools {
         final RoleDetail created = addRole.add(project.id(),
                 new NewRole(name, blankToNull(description), filledBy, blankToNull(language)),
                 project.defaultLanguage());
-        return presenter.format(created);
+        return WriteResponse.withProject(presenter.format(created), project);
     }
 
     @McpTool(name = "role_list", description = "List all managed roles. A role shown under a fallen-back "
@@ -278,9 +298,16 @@ public final class RoleMcpTools {
         final RoleCode code = new RoleCode(id);
         final String staleHint = staleTranslationHint(project, code, blankToNull(language), blankToNull(name),
                 blankToNull(description));
+        // Read before the write for the same reason the stale-translation hint is: the diff is
+        // what left and joined the occupancy, and only the state before this call can say that. A
+        // caller that restates its filledBy set from memory silently drops whatever it forgot, and
+        // the request it sent is precisely where that loss cannot be seen (kogn-io/arknet#598).
+        final List<String> filledByBefore = filledByCodes(project.id(), code);
         final RoleDetail updated = updateRole.update(project.id(), code, blankToNull(name), blankToNull(description),
                 filledBy, blankToNull(language), project.defaultLanguage());
-        return presenter.format(updated) + staleHint;
+        final String diff = WriteResponse.listFieldDiff(FILLED_BY_FIELD, filledByBefore, filledByCodes(updated));
+        final String body = (diff.isEmpty() ? "" : diff + "\n") + presenter.format(updated) + staleHint;
+        return WriteResponse.withProject(body, project);
     }
 
     @McpTool(name = "role_delete",
@@ -301,7 +328,7 @@ public final class RoleMcpTools {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final RoleCode code = new RoleCode(id);
         deleteRole.delete(project.id(), code);
-        return "Deleted: " + code.value();
+        return WriteResponse.withProject("Deleted: " + code.value(), project);
     }
 
     /** Mirrors {@code ConstraintMcpTools#fallbackSuffix} exactly, for {@link RoleDisplayFallback}. */
@@ -333,6 +360,21 @@ public final class RoleMcpTools {
 
     private static String blankToNull(final String value) {
         return (value == null || value.isBlank()) ? null : value;
+    }
+
+    /**
+     * The business codes of the actors {@code code} is filled by right now - the "before" side of
+     * {@code role_update}'s {@code filledBy} diff line. An unknown code yields an empty list rather
+     * than an error: the update itself is about to reject it with its own message, and a diff has
+     * no business deciding that first.
+     */
+    private List<String> filledByCodes(final ProjectId projectId, final RoleCode code) {
+        return getRole.get(projectId, code, null).map(RoleMcpTools::filledByCodes).orElseGet(List::of);
+    }
+
+    /** Renders {@code detail}'s resolved occupants as the codes a caller types. */
+    private static List<String> filledByCodes(final RoleDetail detail) {
+        return detail.filledByActors().stream().map(occupant -> occupant.code().value()).toList();
     }
 
     /**
