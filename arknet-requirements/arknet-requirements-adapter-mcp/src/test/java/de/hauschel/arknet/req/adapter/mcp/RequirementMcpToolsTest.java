@@ -481,6 +481,16 @@ class RequirementMcpToolsTest {
         assertEquals("linked FR-1 -> TCON-1 (constrainedBy)\n\nproject: " + PROJECT.value(), rendered);
     }
 
+    /** {@code req_link_constraint} draws several edges in one call, one short confirmation line each. */
+    @Test
+    void linkConstraintLinksEveryCodeInTheListAndAnswersOneLineEach() {
+        String rendered = adapter.linkConstraint(null, "FR-1", List.of("TCON-1", "BCON-1"), null);
+
+        assertEquals("BCON-1", stub.lastLinkedConstraintCode);
+        assertTrue(rendered.contains("linked FR-1 -> TCON-1 (constrainedBy)"), rendered);
+        assertTrue(rendered.contains("linked FR-1 -> BCON-1 (constrainedBy)"), rendered);
+    }
+
     // --- req_unlink_term / req_unlink_constraint (kogn-io/arknet#598) -------------------------
 
     @Test
@@ -490,6 +500,16 @@ class RequirementMcpToolsTest {
         assertEquals(new RequirementCode("FR-1"), stub.lastUnlinkedTermRequirement);
         assertEquals("TERM-1", stub.lastUnlinkedTermCode);
         assertEquals("unlinked FR-1 -> TERM-1 (usesTerm)\n\nproject: " + PROJECT.value(), rendered);
+    }
+
+    /** {@code req_unlink_term} removes several edges in one call, one short confirmation line each. */
+    @Test
+    void unlinkTermUnlinksEveryCodeInTheListAndAnswersOneLineEach() {
+        String rendered = adapter.unlinkTerm(null, "FR-1", List.of("TERM-1", "TERM-2"), null);
+
+        assertEquals("TERM-2", stub.lastUnlinkedTermCode);
+        assertTrue(rendered.contains("unlinked FR-1 -> TERM-1 (usesTerm)"), rendered);
+        assertTrue(rendered.contains("unlinked FR-1 -> TERM-2 (usesTerm)"), rendered);
     }
 
     /** Never a silent no-op: the in-port's rejection reaches the caller unchanged. */
@@ -510,6 +530,16 @@ class RequirementMcpToolsTest {
         assertEquals(new RequirementCode("FR-1"), stub.lastUnlinkedConstraintRequirement);
         assertEquals("TCON-1", stub.lastUnlinkedConstraintCode);
         assertEquals("unlinked FR-1 -> TCON-1 (constrainedBy)\n\nproject: " + PROJECT.value(), rendered);
+    }
+
+    /** {@code req_unlink_constraint} removes several edges in one call, one short confirmation line each. */
+    @Test
+    void unlinkConstraintUnlinksEveryCodeInTheListAndAnswersOneLineEach() {
+        String rendered = adapter.unlinkConstraint(null, "FR-1", List.of("TCON-1", "BCON-1"), null);
+
+        assertEquals("BCON-1", stub.lastUnlinkedConstraintCode);
+        assertTrue(rendered.contains("unlinked FR-1 -> TCON-1 (constrainedBy)"), rendered);
+        assertTrue(rendered.contains("unlinked FR-1 -> BCON-1 (constrainedBy)"), rendered);
     }
 
     /** Never a silent no-op, mirroring {@link #unlinkTermPropagatesTheRejectionOfATermThatIsNotLinked}. */

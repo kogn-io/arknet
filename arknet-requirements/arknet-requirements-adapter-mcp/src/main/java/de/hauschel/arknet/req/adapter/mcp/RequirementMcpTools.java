@@ -458,9 +458,10 @@ public final class RequirementMcpTools {
             description = "Link a requirement to one or more glossary terms of the ubiquitous language it "
                     + "uses, in one call. Each term must already exist (create it with term_add first). "
                     + "Linking an already-linked term is a no-op for that one code; every other code in the "
-                    + "list still links. Answers with one short confirmation line per edge. To remove a "
-                    + "link, use req_unlink_term; req_update's usesTermCodes remains the way to replace the "
-                    + "whole set at once.")
+                    + "list still links. Answers with one short confirmation line per edge. Not atomic across "
+                    + "the list: a term that fails to resolve leaves every term named before it already "
+                    + "linked. To remove a link, use req_unlink_term; req_update's usesTermCodes remains the "
+                    + "way to replace the whole set at once.")
     public String linkTerm(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
@@ -491,7 +492,8 @@ public final class RequirementMcpTools {
     @McpTool(name = "req_unlink_term",
             description = "Remove a requirement's link to one or more glossary terms, in one call, without "
                     + "restating the rest (req_update's usesTermCodes replaces the whole set). Never a "
-                    + "silent no-op: a term that is not currently linked is rejected.")
+                    + "silent no-op: a term that is not currently linked is rejected. Not atomic across the "
+                    + "list: a term that fails leaves every term named before it already unlinked.")
     public String unlinkTerm(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
@@ -519,7 +521,9 @@ public final class RequirementMcpTools {
             description = "Link a requirement to one or more constraints it is bound by, in one call. Each "
                     + "constraint must already exist (create it first with constraint_add). Linking an "
                     + "already-linked constraint is a no-op for that one code; every other code in the list "
-                    + "still links. Answers with one short confirmation line per edge.")
+                    + "still links. Answers with one short confirmation line per edge. Not atomic across the "
+                    + "list: a constraint that fails to resolve leaves every constraint named before it "
+                    + "already linked.")
     public String linkConstraint(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
@@ -549,7 +553,9 @@ public final class RequirementMcpTools {
 
     @McpTool(name = "req_unlink_constraint",
             description = "Remove a requirement's link to one or more constraints, in one call. Never a "
-                    + "silent no-op: a constraint that is not currently linked is rejected.")
+                    + "silent no-op: a constraint that is not currently linked is rejected. Not atomic "
+                    + "across the list: a constraint that fails leaves every constraint named before it "
+                    + "already unlinked.")
     public String unlinkConstraint(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
