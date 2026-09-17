@@ -120,6 +120,34 @@ public final class WriteResponse {
         return field + ": " + String.join(", ", parts);
     }
 
+    /**
+     * The count-only counterpart of {@link #listFieldDiff} for a list field with no stable
+     * per-entry identity a caller types (a use case's main-flow step, an ADR's consequence, a
+     * requirement's acceptance criterion), e.g. {@code mainStep: removed 1, added 2}. Reports how
+     * many entries left and joined, never the entries themselves - empty when nothing changed,
+     * the same convention {@link #listFieldDiff} follows.
+     *
+     * @param field        the field's model name, in the same vocabulary {@link #listFieldDiff}
+     *                     uses for coded fields
+     * @param removedCount how many entries left the field, never negative
+     * @param addedCount   how many entries joined the field, never negative
+     * @return the diff line, or an empty string if nothing changed
+     */
+    public static String countDiff(final String field, final int removedCount, final int addedCount) {
+        Objects.requireNonNull(field, "field");
+        if (removedCount == 0 && addedCount == 0) {
+            return "";
+        }
+        final List<String> parts = new ArrayList<>();
+        if (removedCount > 0) {
+            parts.add("removed " + removedCount);
+        }
+        if (addedCount > 0) {
+            parts.add("added " + addedCount);
+        }
+        return field + ": " + String.join(", ", parts);
+    }
+
     private static String edgeLine(final String verb, final String source, final String target, final String edge) {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(target, "target");

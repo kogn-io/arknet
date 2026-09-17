@@ -701,9 +701,9 @@ public final class AdrMcpTools {
                 termCodesOrEmpty(before, termsById), termCodes(after, termsById)));
         addDiff(lines, WriteResponse.listFieldDiff("relatedTo",
                 codeValues(before == null ? List.of() : before.relatedTo()), codeValues(after.relatedTo())));
-        addDiff(lines, countFieldDiff(CONSEQUENCE_FIELD,
+        addDiff(lines, WriteResponse.countDiff(CONSEQUENCE_FIELD,
                 sizeOf(removeConsequencePositions), sizeOf(newConsequences)));
-        addDiff(lines, countFieldDiff(CONSIDERED_OPTION_FIELD,
+        addDiff(lines, WriteResponse.countDiff(CONSIDERED_OPTION_FIELD,
                 sizeOf(removeConsideredOptionPositions), sizeOf(newConsideredOptions)));
         return lines.isEmpty() ? "" : String.join("\n", lines) + "\n";
     }
@@ -716,24 +716,6 @@ public final class AdrMcpTools {
 
     private static int sizeOf(final List<?> values) {
         return values == null ? 0 : values.size();
-    }
-
-    /**
-     * The count-only counterpart of {@link WriteResponse#listFieldDiff} for a text list with no
-     * business code of its own, e.g. {@code consequence: removed 1, added 2}.
-     */
-    private static String countFieldDiff(final String field, final int removedCount, final int addedCount) {
-        if (removedCount == 0 && addedCount == 0) {
-            return "";
-        }
-        final List<String> parts = new ArrayList<>();
-        if (removedCount > 0) {
-            parts.add("removed " + removedCount);
-        }
-        if (addedCount > 0) {
-            parts.add("added " + addedCount);
-        }
-        return field + ": " + String.join(", ", parts);
     }
 
     private static List<String> requirementCodesOrEmpty(final AdrDetail detail,
