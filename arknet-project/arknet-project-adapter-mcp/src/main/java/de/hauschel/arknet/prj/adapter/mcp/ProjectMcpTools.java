@@ -16,7 +16,9 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.prj.application.port.in.AdoptProject;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
 import de.hauschel.arknet.prj.application.port.in.ListAdoptableDatasets;
@@ -93,8 +95,31 @@ import de.hauschel.arknet.prj.domain.Project;
  * primary anchor parameter those two tools already carry ({@code anchor} on
  * {@link #attachAnchor}). A client without transport-context control can therefore reach all three
  * writing tools by passing an explicit anchor every time, never just the first one.</p>
+ *
+ * <p><strong>What a writing answer says (kogn-io/arknet#597/#598).</strong> Every writing tool
+ * closes its answer with {@code project: <name>} - naming the project the call actually
+ * registered, adopted or changed, not necessarily the session's own anchor project, since a
+ * caller of {@link #attachAnchor}/{@link #rename}/{@link #update} may not yet know what it is
+ * called. Rendered from the very {@link Project} the in-port already returned - this hexagon has
+ * no {@link ProjectResolver} of its own to build a {@link ResolvedProject} from (see above), and
+ * none is needed: the returned {@link Project} already carries everything {@link ResolvedProject}
+ * does (id, label, default language, maintained-language set). {@link #update} additionally
+ * prefixes its answer with a diff line whenever the maintained-language set came out holding
+ * something else than it held before, e.g. {@code maintainedLanguage: removed de, added fr} - the
+ * one wholesale list field this hexagon has. All three tools that mint or reuse an identity
+ * ({@link #add}, {@link #adopt}, {@link #attachAnchor}) and {@link #rename}/{@link #update} render
+ * this the same way {@link WriteResponse} renders it for every other bounded context;
+ * {@link #list} is read-only and carries no project line.</p>
  */
 public final class ProjectMcpTools {
+
+    /**
+     * The model name of the list field {@code project_update}'s {@code languages} replaces - the
+     * local name of {@code arkprj:maintainedLanguage}, the same vocabulary {@code store_check}
+     * names fields in. Used only for the diff line's own label; the field's actual state is read
+     * straight off {@link Project#maintainedLanguages()} before and after the write.
+     */
+    private static final String MAINTAINED_LANGUAGE_FIELD = "maintainedLanguage";
 
     /**
      * Used by {@link #add} only: at this call site, no project has been registered yet, so the
@@ -325,7 +350,7 @@ public final class ProjectMcpTools {
                 : new Anchor(anchor, parseAnchorType(anchorType));
         final Project created = registerProject.register(label, resolvedAnchor, blankToNull(description),
                 blankToNull(language), blankToNull(defaultLanguage), languages);
-        return format(created);
+        return WriteResponse.withProject(format(created), toResolvedProject(created));
     }
 
     @McpTool(name = "project_attach_anchor", description = "Attach a further anchor to the project "
@@ -351,7 +376,7 @@ public final class ProjectMcpTools {
             final String callerAnchor) {
         final Project caller = resolveCaller(context, callerAnchor);
         final Project updated = attachAnchor.attach(caller.id(), new Anchor(anchor, parseAnchorType(anchorType)));
-        return format(updated);
+        return WriteResponse.withProject(format(updated), toResolvedProject(updated));
     }
 
     @McpTool(name = "project_rename", description = "Rename the project the call comes from. The "
@@ -370,7 +395,7 @@ public final class ProjectMcpTools {
             final String callerAnchor) {
         final Project caller = resolveCaller(context, callerAnchor);
         final Project updated = renameProject.rename(caller.id(), label);
-        return format(updated);
+        return WriteResponse.withProject(format(updated), toResolvedProject(updated));
     }
 
     @McpTool(name = "project_update", description = "Correct the project the call comes from: its "
@@ -411,7 +436,10 @@ public final class ProjectMcpTools {
                 languages);
         final Project updated = updateProject.update(caller.id(), blankToNull(description), blankToNull(language),
                 blankToNull(defaultLanguage), languages);
-        return format(updated) + staleHint;
+        final String diff = WriteResponse.listFieldDiff(MAINTAINED_LANGUAGE_FIELD, caller.maintainedLanguages(),
+                updated.maintainedLanguages());
+        final String body = (diff.isEmpty() ? "" : diff + "\n") + format(updated) + staleHint;
+        return WriteResponse.withProject(body, toResolvedProject(updated));
     }
 
     @McpTool(name = "project_adopt", description = "Claim an EXISTING dataset as the project this "
@@ -439,7 +467,7 @@ public final class ProjectMcpTools {
                 ? requireContextAnchor(context, NO_CONTEXT_ANCHOR_MESSAGE_ADOPT)
                 : new Anchor(anchor, parseAnchorType(anchorType));
         final Project adopted = adoptProject.adopt(new ProjectId(datasetId), label, resolvedAnchor);
-        return format(adopted);
+        return WriteResponse.withProject(format(adopted), toResolvedProject(adopted));
     }
 
     @McpTool(name = "project_list", description = "List all registered projects, and any datasets "
@@ -496,6 +524,18 @@ public final class ProjectMcpTools {
                     .append(']');
         }
         return rendered.toString();
+    }
+
+    /**
+     * Builds the {@link ResolvedProject} a writing tool's {@code project: <name>} trailer is
+     * rendered from, straight off the {@link Project} the in-port just returned - no store read of
+     * its own and no {@link ProjectResolver} involved (see the class Javadoc). {@code label} rides
+     * along unconditionally: unlike a resolution built from an anchor lookup elsewhere in the
+     * codebase, this one is always built from a {@link Project} that just proved it has one.
+     */
+    private static ResolvedProject toResolvedProject(final Project project) {
+        return new ResolvedProject(project.id(), project.defaultLanguage(), project.maintainedLanguages(),
+                project.label());
     }
 
     private static String formatAnchor(final Anchor anchor) {
