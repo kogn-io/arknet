@@ -123,7 +123,7 @@ class ActorMcpToolsTest {
         String rendered = adapter.delete(null, "ACTOR-1", null);
 
         assertEquals(new ActorCode("ACTOR-1"), stub.lastDeleteCode);
-        assertEquals("Deleted: ACTOR-1", rendered);
+        assertEquals("Deleted: ACTOR-1\n\nproject: " + PROJECT.value(), rendered);
     }
 
     @Test
@@ -278,6 +278,35 @@ class ActorMcpToolsTest {
 
     private static Actor actor(String code, ActorType type, String name, String description) {
         return new Actor(ID, new ActorCode(code), type, name, description);
+    }
+
+    // --- Answer shapes: project line (kogn-io/arknet#597) ---------------------------------------
+
+    /**
+     * kogn-io/arknet#597: a call whose {@code projectAnchor} was forgotten writes into the
+     * session's project, silently. Every writing answer therefore ends by naming the project it
+     * hit - here for each of the three writing tools, so none of them can lose the line on its own.
+     */
+    @Test
+    void everyWritingToolClosesItsAnswerWithTheProject() {
+        stub.nextUpdateResult = actor("ACTOR-1", ActorType.HUMAN, "Renamed", null);
+        ActorMcpTools named = new ActorMcpTools(stub, stub, stub, stub, stub, stub,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of(), "arknet"), NO_TRANSLATIONS);
+        String trailer = "\n\nproject: arknet";
+
+        assertTrue(named.add(null, "HUMAN", "Sachbearbeiter", null, null, null).endsWith(trailer));
+        assertTrue(named.update(null, "ACTOR-1", "Renamed", null, null, null).endsWith(trailer));
+        assertTrue(named.delete(null, "ACTOR-1", null).endsWith(trailer));
+    }
+
+    /** A read tool carries no project line - the signal is about writes (kogn-io/arknet#597). */
+    @Test
+    void readingToolsCarryNoProjectLine() {
+        stub.allActors = List.of(actor("ACTOR-1", ActorType.HUMAN, "Sachbearbeiter", null));
+        stub.nextGetResult = Optional.of(actor("ACTOR-1", ActorType.HUMAN, "Sachbearbeiter", null));
+
+        assertTrue(!adapter.list(null, null, null).contains("project:"), "actor_list");
+        assertTrue(!adapter.get(null, "ACTOR-1", null, null).contains("project:"), "actor_get");
     }
 
     // --- stale-translation signal (kogn-io/arknet#474/kogn-io/arknet#520) ------------------------

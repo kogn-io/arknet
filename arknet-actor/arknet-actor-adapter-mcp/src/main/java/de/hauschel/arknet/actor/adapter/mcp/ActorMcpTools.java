@@ -31,6 +31,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.WriteResponse;
 
 /**
  * Driving (in) adapter of the actor component: exposes the actor use-cases as MCP tools
@@ -61,6 +62,15 @@ import de.hauschel.arknet.kernel.StaleTranslationHint;
  * {@code AdrMcpTools}, this adapter borrows no other hexagon's in-port: an actor carries
  * no reference to a term, a requirement or a bounded context in this scope, so there is no opaque
  * identity to render as a business code.</p>
+ *
+ * <p><strong>What a writing answer says (kogn-io/arknet#597).</strong> Every writing tool
+ * ({@code actor_add}/{@code actor_update}/{@code actor_delete}) closes its answer with
+ * {@code project: <name>}, so a call whose {@code projectAnchor} was forgotten shows which project
+ * it actually hit instead of landing silently in the session's one. Rendered by
+ * {@link WriteResponse}, the same helper every bounded context's writing tools use, so every
+ * project's answer reads the same. This resource carries no wholesale list field, so
+ * {@code actor_update} never has a diff line to add - unlike {@link RoleMcpTools#update}'s
+ * {@code filledBy}.</p>
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a {@link ProjectId} routing
  * key. arknet-mcp runs as one shared server for every project on the machine, so there is no single
@@ -224,7 +234,7 @@ public final class ActorMcpTools {
         final Actor created = addActor.add(project.id(),
                 new NewActor(parseType(type), name, blankToNull(description), blankToNull(language)),
                 project.defaultLanguage());
-        return presenter.format(created);
+        return WriteResponse.withProject(presenter.format(created), project);
     }
 
     @McpTool(name = "actor_list", description = "List all managed actors. An actor shown under a "
@@ -325,7 +335,7 @@ public final class ActorMcpTools {
                 blankToNull(description));
         final Actor updated = updateActor.update(project.id(), code, blankToNull(name), blankToNull(description),
                 blankToNull(language), project.defaultLanguage());
-        return presenter.format(updated) + staleHint;
+        return WriteResponse.withProject(presenter.format(updated) + staleHint, project);
     }
 
     @McpTool(name = "actor_delete",
@@ -344,10 +354,10 @@ public final class ActorMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor).id();
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final ActorCode code = new ActorCode(id);
-        deleteActor.delete(projectId, code);
-        return "Deleted: " + code.value();
+        deleteActor.delete(project.id(), code);
+        return WriteResponse.withProject("Deleted: " + code.value(), project);
     }
 
     /** Mirrors {@code RoleMcpTools#fallbackSuffix} exactly, for {@link ActorDisplayFallback}. */
