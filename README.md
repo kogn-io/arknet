@@ -275,6 +275,8 @@ anchor, all projects share this one port without collision.
 
 ### MCP tools
 
+Every writing tool (`*_add`, `*_update`, `*_set_status`, `*_delete`, `*_link_*`, `*_unlink_*`) closes its answer with `project: <name>`, naming the project the call actually hit -- a `projectAnchor` left out falls back to the anchor your transport sent, and used to do so invisibly (kogn-io/arknet#597).
+
 Requirements BC (`arknet-requirements`) -- requirement lifecycle:
 
 | Tool | Description |
@@ -319,7 +321,7 @@ Use Cases BC (`arknet-use-cases`) -- flow-oriented Cockburn use cases (bind FRs 
 | `uc_link_term` | Link a use case to a glossary term of the ubiquitous language it uses (`arkreq:usesTerm`; the term must exist). Linking the same term twice is a no-op. To remove a link (or replace the whole set), use `uc_update`'s `usesTermCodes` instead |
 | `uc_link_constraint` | Link a use case to a constraint it is bound by (`oslc_rm:constrainedBy`; the constraint must already exist -- create it first with `constraint_add`). Linking the same constraint twice is a no-op |
 
-Bounded Context BC (`arknet-bounded-context`) -- BoundedContext lifecycle (assigns glossary terms to a domain cut). Every writing tool here closes its answer with `project: <name>`, naming the project the call actually hit -- a `projectAnchor` left out falls back to the anchor your transport sent, and used to do so invisibly (kogn-io/arknet#597). `bc_update` prefixes its answer with a diff line for every list field that came out holding something else than it held before, e.g. `ubiquitousLanguageTerm: removed TERM-22, added TERM-9` (kogn-io/arknet#598):
+Bounded Context BC (`arknet-bounded-context`) -- BoundedContext lifecycle (assigns glossary terms to a domain cut). `bc_update` prefixes its answer with a diff line for every list field that came out holding something else than it held before, e.g. `ubiquitousLanguageTerm: removed TERM-22, added TERM-9` (kogn-io/arknet#598):
 
 | Tool | Description |
 |------|-------------|

@@ -117,6 +117,33 @@ class ConstraintMcpToolsTest {
                 () -> new ConstraintMcpTools(stub, stub, stub, stub, stub, stub, null, NO_TRANSLATIONS));
     }
 
+    // --- Answer shapes: project line (kogn-io/arknet#597) -------------------------------------
+
+    /**
+     * Every writing answer ends by naming the project it hit, so a call whose {@code
+     * projectAnchor} was forgotten shows which project it actually hit instead of landing
+     * silently in the session's one.
+     */
+    @Test
+    void everyWritingToolClosesItsAnswerWithTheProject() {
+        ConstraintMcpTools named = new ConstraintMcpTools(stub, stub, stub, stub, stub, stub,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of(), "arknet"), NO_TRANSLATIONS);
+        String trailer = "\n\nproject: arknet";
+
+        assertTrue(named.add(null, "t", "s", "TECHNICAL", "en", null).endsWith(trailer));
+        assertTrue(named.update(null, "TCON-1", "Neu", null, null, null).endsWith(trailer));
+        assertTrue(named.delete(null, "TCON-1", null).endsWith(trailer));
+    }
+
+    /** A read tool carries no project line - the signal is about writes (kogn-io/arknet#597). */
+    @Test
+    void readingToolsCarryNoProjectLine() {
+        stub.allConstraints = List.of(constraint("TCON-1", ConstraintType.TECHNICAL, "a", "statement a"));
+
+        assertTrue(!adapter.list(null, null, null).contains("project:"), "constraint_list");
+        assertTrue(!adapter.get(null, "TCON-99", null, null).contains("project:"), "constraint_get");
+    }
+
     /** {@code constraint_add} passes title/statement/type through and renders the created constraint. */
     @Test
     void addPassesTheCommandThroughAndRendersTheCreatedConstraint() {
@@ -305,7 +332,7 @@ class ConstraintMcpToolsTest {
         String rendered = adapter.delete(null, "TCON-1", null);
 
         assertEquals(new ConstraintCode("TCON-1"), stub.lastDeleteCode);
-        assertEquals("Deleted: TCON-1", rendered);
+        assertEquals("Deleted: TCON-1\n\nproject: test-project", rendered);
     }
 
     private static Constraint constraint(String code, ConstraintType type, String title, String statement) {

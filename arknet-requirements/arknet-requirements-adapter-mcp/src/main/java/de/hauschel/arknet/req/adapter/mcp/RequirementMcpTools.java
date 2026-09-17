@@ -12,6 +12,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -25,6 +28,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -36,7 +40,10 @@ import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.ProposeRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
+import de.hauschel.arknet.req.application.port.in.UnlinkConstraint;
+import de.hauschel.arknet.req.application.port.in.UnlinkTerm;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.RemovedPositions;
@@ -51,7 +58,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 /**
  * Driving (in) adapter of the requirements component: exposes the requirement
  * use-cases as MCP tools ({@code req_add}, {@code req_list}, {@code req_get},
- * {@code req_set_status}, {@code req_link_term}, {@code req_update}, {@code req_schema}) and
+ * {@code req_set_status}, {@code req_link_term}, {@code req_unlink_term}, {@code req_link_constraint},
+ * {@code req_unlink_constraint}, {@code req_update}, {@code req_schema}) and
  * delegates each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the requirements hexagon (symmetric to the out-adapter
@@ -90,6 +98,19 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * rendering logic of its own. See {@link RequirementPresenter} for the term
  * display resolution that borrows {@link ResolveTerms} purely for
  * display.</p>
+ *
+ * <p><strong>What a writing answer says (kogn-io/arknet#597/#598/#600).</strong> Every writing
+ * tool closes its answer with {@code project: <name>}, so a call whose {@code projectAnchor} was
+ * forgotten shows which project it actually hit instead of landing silently in the session's one.
+ * {@code req_link_term}/{@code req_unlink_term}/{@code req_link_constraint}/
+ * {@code req_unlink_constraint} take a list of codes (one call, several edges) and answer with a
+ * one-line confirmation per edge rather than the whole resource - their caller already holds both
+ * ends. {@code req_update} keeps the full resource and its stale-translation signal, preceded by a
+ * diff line for every list field that came out holding something else than it held before - the
+ * codes-based {@code usesTerm} edge names what left and joined, the text-only acceptance-criterion
+ * edge names only how many did (kogn-io/arknet#598 E5: an empty acceptance-criteria list stays
+ * rejected, a retiring requirement belongs on the deletion path tracked in #566, not on a loosened
+ * invariant here). All three shapes are rendered by {@link WriteResponse}.</p>
  */
 public final class RequirementMcpTools {
 
@@ -135,6 +156,22 @@ public final class RequirementMcpTools {
     private static final List<String> MULTILINGUAL_FIELDS =
             List.of(TITLE_FIELD, DESCRIPTION_FIELD, RATIONALE_FIELD, ACCEPTANCE_CRITERION_FIELD);
 
+    /**
+     * The model name of the edge {@code req_link_term}/{@code req_unlink_term} draw and
+     * {@code req_update}'s {@code usesTermCodes} replaces - the local name of {@code arkreq:usesTerm},
+     * the same vocabulary {@code store_check} and {@code StaleTranslationHint} name fields in. Names
+     * the edge in both the short link confirmation and the diff line, so the two never drift apart
+     * on what they are talking about.
+     */
+    private static final String USES_TERM_EDGE = "usesTerm";
+
+    /**
+     * The model name of the edge {@code req_link_constraint}/{@code req_unlink_constraint} draw -
+     * the local name of {@code oslc_rm:constrainedBy}. {@code req_update} has no wholesale
+     * counterpart for this edge, so this constant only ever labels the short link confirmation.
+     */
+    private static final String CONSTRAINED_BY_EDGE = "constrainedBy";
+
     private final AddRequirement addRequirement;
     private final ListRequirements listRequirements;
     private final DescribeRequirementDisplayFallback describeRequirementDisplayFallback;
@@ -142,7 +179,9 @@ public final class RequirementMcpTools {
     private final AcceptRequirement acceptRequirement;
     private final ProposeRequirement proposeRequirement;
     private final LinkTerm linkTerm;
+    private final UnlinkTerm unlinkTerm;
     private final LinkConstraint linkConstraint;
+    private final UnlinkConstraint unlinkConstraint;
     private final UpdateRequirement updateRequirement;
     private final GetRequirementSchema getRequirementSchema;
     private final ProjectResolver projects;
@@ -150,7 +189,7 @@ public final class RequirementMcpTools {
     private final StaleTranslationHint staleTranslations;
 
     /**
-     * Creates the adapter with its ten driving in-ports, the borrowed ubiquitous-language and
+     * Creates the adapter with its twelve driving in-ports, the borrowed ubiquitous-language and
      * (same-module) constraint display ports, and the resolver that maps each call's origin
      * directory to a project.
      *
@@ -162,7 +201,9 @@ public final class RequirementMcpTools {
      * @param acceptRequirement     in-port backing {@code req_set_status}'s {@code ACCEPTED} target
      * @param proposeRequirement    in-port backing {@code req_set_status}'s {@code PROPOSED} target
      * @param linkTerm              in-port backing {@code req_link_term}
+     * @param unlinkTerm            in-port backing {@code req_unlink_term} (kogn-io/arknet#598)
      * @param linkConstraint        in-port backing {@code req_link_constraint}
+     * @param unlinkConstraint      in-port backing {@code req_unlink_constraint} (kogn-io/arknet#598)
      * @param updateRequirement     in-port backing {@code req_update}
      * @param getRequirementSchema  in-port backing {@code req_schema}
      * @param resolveTerms          ubiquitous-language driving port used only to render a linked
@@ -181,7 +222,9 @@ public final class RequirementMcpTools {
             final AcceptRequirement acceptRequirement,
             final ProposeRequirement proposeRequirement,
             final LinkTerm linkTerm,
+            final UnlinkTerm unlinkTerm,
             final LinkConstraint linkConstraint,
+            final UnlinkConstraint unlinkConstraint,
             final UpdateRequirement updateRequirement,
             final GetRequirementSchema getRequirementSchema,
             final ResolveTerms resolveTerms,
@@ -196,7 +239,9 @@ public final class RequirementMcpTools {
         this.acceptRequirement = Objects.requireNonNull(acceptRequirement, "acceptRequirement");
         this.proposeRequirement = Objects.requireNonNull(proposeRequirement, "proposeRequirement");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
+        this.unlinkTerm = Objects.requireNonNull(unlinkTerm, "unlinkTerm");
         this.linkConstraint = Objects.requireNonNull(linkConstraint, "linkConstraint");
+        this.unlinkConstraint = Objects.requireNonNull(unlinkConstraint, "unlinkConstraint");
         this.updateRequirement = Objects.requireNonNull(updateRequirement, "updateRequirement");
         this.getRequirementSchema = Objects.requireNonNull(getRequirementSchema, "getRequirementSchema");
         this.projects = Objects.requireNonNull(projects, "projects");
@@ -296,7 +341,7 @@ public final class RequirementMcpTools {
                         blankToNull(language),
                         usesTermCodes == null ? null : List.copyOf(usesTermCodes)),
                 project.defaultLanguage());
-        return presenter.format(project.id(), created);
+        return WriteResponse.withProject(presenter.format(project.id(), created), project);
     }
 
     @McpTool(name = "req_list", description = "List all managed requirements. A requirement shown under a "
@@ -406,20 +451,23 @@ public final class RequirementMcpTools {
                     "req_set_status only supports transitioning a requirement to PROPOSED or ACCEPTED, not "
                             + status);
         };
-        return presenter.format(projectId, updated);
+        return WriteResponse.withProject(presenter.format(projectId, updated), project);
     }
 
     @McpTool(name = "req_link_term",
-            description = "Link a requirement to a glossary term of the ubiquitous language it uses. "
-                    + "The term must already exist (create it with term_add first). Linking the same "
-                    + "term twice is a no-op. To remove a link (or replace the whole set), use "
-                    + "req_update's usesTermCodes instead.")
+            description = "Link a requirement to one or more glossary terms of the ubiquitous language it "
+                    + "uses, in one call. Each term must already exist (create it with term_add first). "
+                    + "Linking an already-linked term is a no-op for that one code; every other code in the "
+                    + "list still links. Answers with one short confirmation line per edge. Not atomic across "
+                    + "the list: a term that fails to resolve leaves every term named before it already "
+                    + "linked. To remove a link, use req_unlink_term; req_update's usesTermCodes remains the "
+                    + "way to replace the whole set at once.")
     public String linkTerm(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
-            @McpToolParam(description = "Term code, e.g. TERM-1 (the term's business code, resolved "
-                    + "against the glossary - not its skos:prefLabel or its store IRI)")
-            final String termId,
+            @McpToolParam(description = "Term codes, e.g. ['TERM-1', 'TERM-2'] (the terms' business codes, "
+                    + "resolved against the glossary - not their skos:prefLabel or their store IRIs)")
+            final List<String> termIds,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -429,24 +477,59 @@ public final class RequirementMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
+        final RequirementCode code = new RequirementCode(reqId);
         // Touches no language-tagged field itself, but the read-modify-write round trip behind it
         // still needs the project's own default language to echo an untouched field back under it
         // rather than the process default (issue #468).
-        final Requirement updated =
-                linkTerm.linkTerm(projectId, new RequirementCode(reqId), termId, project.defaultLanguage());
-        return presenter.format(projectId, updated);
+        final List<String> lines = new ArrayList<>();
+        for (final String termId : termIds) {
+            linkTerm.linkTerm(projectId, code, termId, project.defaultLanguage());
+            lines.add(WriteResponse.linked(reqId, termId, USES_TERM_EDGE));
+        }
+        return WriteResponse.withProject(String.join("\n", lines), project);
+    }
+
+    @McpTool(name = "req_unlink_term",
+            description = "Remove a requirement's link to one or more glossary terms, in one call, without "
+                    + "restating the rest (req_update's usesTermCodes replaces the whole set). Never a "
+                    + "silent no-op: a term that is not currently linked is rejected. Not atomic across the "
+                    + "list: a term that fails leaves every term named before it already unlinked.")
+    public String unlinkTerm(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
+            @McpToolParam(description = "Term codes to unlink, e.g. ['TERM-1', 'TERM-2']")
+            final List<String> termIds,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
+        final RequirementCode code = new RequirementCode(reqId);
+        final List<String> lines = new ArrayList<>();
+        for (final String termId : termIds) {
+            unlinkTerm.unlinkTerm(projectId, code, termId, project.defaultLanguage());
+            lines.add(WriteResponse.unlinked(reqId, termId, USES_TERM_EDGE));
+        }
+        return WriteResponse.withProject(String.join("\n", lines), project);
     }
 
     @McpTool(name = "req_link_constraint",
-            description = "Link a requirement to a constraint it is bound by. The constraint must already "
-                    + "exist (create it first with constraint_add). Linking the same constraint twice is a "
-                    + "no-op.")
+            description = "Link a requirement to one or more constraints it is bound by, in one call. Each "
+                    + "constraint must already exist (create it first with constraint_add). Linking an "
+                    + "already-linked constraint is a no-op for that one code; every other code in the list "
+                    + "still links. Answers with one short confirmation line per edge. Not atomic across the "
+                    + "list: a constraint that fails to resolve leaves every constraint named before it "
+                    + "already linked.")
     public String linkConstraint(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
-            @McpToolParam(description = "Constraint code, e.g. TCON-1, BCON-1 or RCON-1 (the constraint's "
-                    + "business code, not its store IRI)")
-            final String constraintId,
+            @McpToolParam(description = "Constraint codes, e.g. ['TCON-1', 'BCON-1'] (the constraints' "
+                    + "business codes, not their store IRIs)")
+            final List<String> constraintIds,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -456,12 +539,44 @@ public final class RequirementMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
+        final RequirementCode code = new RequirementCode(reqId);
         // Touches no language-tagged field itself, but the read-modify-write round trip behind it
         // still needs the project's own default language to echo an untouched field back under it
         // rather than the process default (issue #468).
-        final Requirement updated = linkConstraint.linkConstraint(
-                projectId, new RequirementCode(reqId), constraintId, project.defaultLanguage());
-        return presenter.format(projectId, updated);
+        final List<String> lines = new ArrayList<>();
+        for (final String constraintId : constraintIds) {
+            linkConstraint.linkConstraint(projectId, code, constraintId, project.defaultLanguage());
+            lines.add(WriteResponse.linked(reqId, constraintId, CONSTRAINED_BY_EDGE));
+        }
+        return WriteResponse.withProject(String.join("\n", lines), project);
+    }
+
+    @McpTool(name = "req_unlink_constraint",
+            description = "Remove a requirement's link to one or more constraints, in one call. Never a "
+                    + "silent no-op: a constraint that is not currently linked is rejected. Not atomic "
+                    + "across the list: a constraint that fails leaves every constraint named before it "
+                    + "already unlinked.")
+    public String unlinkConstraint(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
+            @McpToolParam(description = "Constraint codes to unlink, e.g. ['TCON-1', 'BCON-1']")
+            final List<String> constraintIds,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
+        final RequirementCode code = new RequirementCode(reqId);
+        final List<String> lines = new ArrayList<>();
+        for (final String constraintId : constraintIds) {
+            unlinkConstraint.unlinkConstraint(projectId, code, constraintId, project.defaultLanguage());
+            lines.add(WriteResponse.unlinked(reqId, constraintId, CONSTRAINED_BY_EDGE));
+        }
+        return WriteResponse.withProject(String.join("\n", lines), project);
     }
 
     @McpTool(name = "req_update",
@@ -473,12 +588,17 @@ public final class RequirementMcpTools {
                     + "acceptanceCriteriaTextPatches corrects the wording of one or more existing criteria "
                     + "by position; removeAcceptanceCriterionPositions takes one or more out by that same "
                     + "position and moves the ones after it up - a position cannot be both corrected and "
-                    + "removed in one call, and removing every remaining criterion is rejected (at least "
-                    + "one must stay). "
+                    + "removed in one call. At least one acceptance criterion must always remain - a "
+                    + "requirement without one is not a requirement in this metamodel; to retire a withdrawn "
+                    + "requirement entirely, use the upcoming deletion path (kogn-io/arknet#566), not an "
+                    + "empty criteria list. "
                     + "usesTermCodes replaces the requirement's arkreq:usesTerm links wholesale: omit it to "
                     + "leave the existing links untouched, pass an empty list to remove them all, or pass the "
                     + "full set of TERM-N codes the requirement should use going forward (req_link_term remains "
-                    + "the convenient way to add a single link without restating the rest). "
+                    + "the convenient way to add one or more links without restating the rest). The answer is "
+                    + "preceded by a diff line for usesTerm/acceptanceCriterion whenever this call actually "
+                    + "changed them (removed/added codes for usesTerm, removed/added counts for "
+                    + "acceptanceCriterion). "
                     + "Does not touch status (use req_set_status)."
                     + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
     public String update(
@@ -546,6 +666,12 @@ public final class RequirementMcpTools {
         final String staleHint = staleTranslationHint(project, code, blankToNull(language), blankToNull(title),
                 blankToNull(description), blankToNull(rationale), newAcceptanceCriteria,
                 acceptanceCriteriaTextPatches, removeAcceptanceCriterionPositions);
+        // Read before the write for the same reason the stale-translation hint is: the diff is
+        // what left and joined the field, and only the state before this call can say that
+        // (kogn-io/arknet#598). An unknown code yields no "before" state - the write is about to
+        // reject it with its own, more specific message, and the diff has no business deciding
+        // that first.
+        final Requirement before = getRequirement.get(project.id(), code, null).orElse(null);
         final Requirement updated = updateRequirement.update(project.id(), code, blankToNull(title),
                 blankToNull(description), blankToNull(rationale),
                 newAcceptanceCriteria == null ? null : List.copyOf(newAcceptanceCriteria),
@@ -553,7 +679,46 @@ public final class RequirementMcpTools {
                 toRemovedPositions(removeAcceptanceCriterionPositions),
                 requirementPriority, usesTermCodes == null ? null : List.copyOf(usesTermCodes),
                 blankToNull(language), project.defaultLanguage());
-        return presenter.format(project.id(), updated) + staleHint;
+        final String termDiff = WriteResponse.listFieldDiff(USES_TERM_EDGE,
+                presenter.termCodesOf(project.id(), before), presenter.termCodesOf(project.id(), updated));
+        final String criterionDiff = acceptanceCriterionCountDiff(
+                acceptanceCriterionTexts(before), acceptanceCriterionTexts(updated));
+        final String diffLines = Stream.of(termDiff, criterionDiff)
+                .filter(line -> !line.isEmpty())
+                .collect(Collectors.joining("\n"));
+        final String body = (diffLines.isEmpty() ? "" : diffLines + "\n")
+                + presenter.format(project.id(), updated) + staleHint;
+        return WriteResponse.withProject(body, project);
+    }
+
+    /** The acceptance-criterion texts of {@code r}, or an empty list if {@code r} is {@code null}. */
+    private static List<String> acceptanceCriterionTexts(final Requirement r) {
+        return r == null ? List.of() : r.acceptanceCriteria().stream().map(AcceptanceCriterion::text).toList();
+    }
+
+    /**
+     * The diff line for the acceptance-criterion edge, reporting only how many criteria left and
+     * joined - never their text. Unlike {@link WriteResponse#listFieldDiff}'s codes-based fields
+     * (e.g. {@code usesTerm}), a criterion carries no stable code a caller could recognise across
+     * two calls, and its full text can run long; the diff line stays a cheap, at-a-glance signal
+     * rather than a second rendering of the resource.
+     */
+    private static String acceptanceCriterionCountDiff(final List<String> before, final List<String> after) {
+        final Set<String> previous = new LinkedHashSet<>(before);
+        final Set<String> current = new LinkedHashSet<>(after);
+        final long removed = previous.stream().filter(text -> !current.contains(text)).count();
+        final long added = current.stream().filter(text -> !previous.contains(text)).count();
+        if (removed == 0 && added == 0) {
+            return "";
+        }
+        final List<String> parts = new ArrayList<>();
+        if (removed > 0) {
+            parts.add("removed " + removed);
+        }
+        if (added > 0) {
+            parts.add("added " + added);
+        }
+        return ACCEPTANCE_CRITERION_FIELD + ": " + String.join(", ", parts);
     }
 
     /**
