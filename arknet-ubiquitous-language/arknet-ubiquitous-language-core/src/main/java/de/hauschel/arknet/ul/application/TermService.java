@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.ul.application;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -23,8 +24,10 @@ import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
 import de.hauschel.arknet.ul.application.port.in.DescribeTermDisplayFallback;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
+import de.hauschel.arknet.ul.application.port.in.LinkRelatedTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.application.port.in.UnlinkRelatedTerm;
 import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
@@ -33,6 +36,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermDisplayFallback;
 import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
+import de.hauschel.arknet.ul.domain.TermNotRelatedException;
 
 /**
  * Application service implementing the glossary-term use cases.
@@ -99,9 +103,18 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * {@link #list} pays none at all, inverting the forward edges of the terms it already read in
  * memory. {@link #add} pays none either, for a stronger reason: nothing can already point at an
  * identity minted moments ago.</p>
+ *
+ * <p><strong>Single-edge add/remove (kogn-io/arknet#598).</strong> {@link #linkRelated}/
+ * {@link #unlinkRelated} are the counterparts {@link #update}'s wholesale {@code related} argument
+ * was missing: adding or dropping one peer no longer means restating the whole set. Both read the
+ * peer term's own forward field directly (a targeted {@link TermRepository#findByCode}, not the
+ * all-terms scan {@link TermRepository#findRelatedCodes} performs) to tell which side, if either,
+ * already asserts the edge - the write, if any, only ever targets whichever one term's own field
+ * actually needs to change, never a full re-derivation of the merged view written back as if it
+ * were one side's own edges.</p>
  */
 public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, UpdateTerm, DeleteTerm,
-        DescribeTermDisplayFallback {
+        DescribeTermDisplayFallback, LinkRelatedTerm, UnlinkRelatedTerm {
 
     private static final String ID_PREFIX = "TERM";
 
@@ -259,6 +272,74 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
     /** {@code term} with its {@code related} list replaced - every other field untouched. */
     private static Term withRelated(Term term, List<TermCode> related) {
         return new Term(term.id(), term.code(), term.prefLabel(), term.definition(), term.broader(), related);
+    }
+
+    /**
+     * Adds one {@code skos:related} edge from {@code code} to {@code peerCode}, unless the two are
+     * already related in either direction (kogn-io/arknet#598).
+     *
+     * <p>Reads both terms' own forward peers - {@code code}'s to check whether it already points at
+     * {@code peerCode}, {@code peerCode}'s to check the reverse: whether {@code peerCode} already
+     * points at {@code code} instead, the same asymmetry {@link #mergeRelated(ProjectId, Term)}
+     * already accounts for when rendering a merged list. Either way is an idempotent no-op; only
+     * the genuinely absent case reaches {@link TermRepository#update}, so the write this method
+     * ever performs touches {@code code}'s own {@code related} field alone - never {@code
+     * peerCode}'s, and never a full re-assertion of an already-symmetric pair.</p>
+     */
+    @Override
+    public Term linkRelated(ProjectId projectId, TermCode code, TermCode peerCode) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(peerCode, "peerCode");
+        if (code.equals(peerCode)) {
+            throw new IllegalArgumentException("a term must not be related to itself: " + code.value());
+        }
+        Term current = repository.findByCode(projectId, code, null)
+                .orElseThrow(() -> new TermNotFoundException(projectId, code));
+        Term peer = repository.findByCode(projectId, peerCode, null)
+                .orElseThrow(() -> new TermNotFoundException(projectId, peerCode));
+        if (current.related().contains(peerCode) || peer.related().contains(code)) {
+            return mergeRelated(projectId, current);
+        }
+        List<TermCode> updatedRelated = new ArrayList<>(current.related());
+        updatedRelated.add(peerCode);
+        Term updated = repository.update(projectId, code, null, null, null, null, null, updatedRelated);
+        return mergeRelated(projectId, updated);
+    }
+
+    /**
+     * Removes the {@code skos:related} edge between {@code code} and {@code peerCode}, from
+     * whichever side currently asserts it (kogn-io/arknet#598, the richtungsblind defect #595
+     * Defekt 2 shares its root cause with).
+     *
+     * <p>Checks {@code code}'s own forward peers first; if {@code peerCode} is there, the edge is
+     * removed from {@code code}'s own field, exactly as {@link #update} already does for a
+     * wholesale replace. Otherwise reads {@code peerCode}'s own forward peers: if {@code code} is
+     * there instead, that side's {@code related} field is patched, never {@code code}'s. Neither
+     * side asserting it - including {@code peerCode} not resolving at all - is a caller mistake,
+     * not a silent no-op, see {@link TermNotRelatedException}.</p>
+     */
+    @Override
+    public Term unlinkRelated(ProjectId projectId, TermCode code, TermCode peerCode) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(peerCode, "peerCode");
+        Term current = repository.findByCode(projectId, code, null)
+                .orElseThrow(() -> new TermNotFoundException(projectId, code));
+        if (current.related().contains(peerCode)) {
+            List<TermCode> updatedRelated = new ArrayList<>(current.related());
+            updatedRelated.remove(peerCode);
+            Term updated = repository.update(projectId, code, null, null, null, null, null, updatedRelated);
+            return mergeRelated(projectId, updated);
+        }
+        Optional<Term> peer = repository.findByCode(projectId, peerCode, null);
+        if (peer.isPresent() && peer.get().related().contains(code)) {
+            List<TermCode> peerRelated = new ArrayList<>(peer.get().related());
+            peerRelated.remove(code);
+            repository.update(projectId, peerCode, null, null, null, null, null, peerRelated);
+            return mergeRelated(projectId, current);
+        }
+        throw new TermNotRelatedException(projectId, code, peerCode);
     }
 
     @Override

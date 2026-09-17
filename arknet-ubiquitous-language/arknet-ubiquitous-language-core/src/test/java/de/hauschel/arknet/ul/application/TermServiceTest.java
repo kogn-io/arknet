@@ -29,6 +29,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermDisplayFallback;
 import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
+import de.hauschel.arknet.ul.domain.TermNotRelatedException;
 
 /**
  * Policy tests for {@link TermService}: opaque identity minting, code assignment, listing and
@@ -301,6 +302,122 @@ class TermServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.update(
                 WS, added.code(), null, null, null, DEFAULT_LANGUAGE, null,
                 List.of(peer.code(), peer.code())));
+    }
+
+    // ---- linkRelated/unlinkRelated: single-edge add/remove (kogn-io/arknet#598) --------------
+
+    @Test
+    void linkRelatedAssertsTheForwardEdgeAndReturnsTheMergedView() {
+        Term first = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        Term second = service.add(WS, new NewTerm("Anker", "def b", null), DEFAULT_LANGUAGE);
+
+        Term linked = service.linkRelated(WS, first.code(), second.code());
+
+        assertEquals(List.of(second.code()), linked.related());
+        assertEquals(List.of(second.code()), repository.findByCode(WS, first.code(), null).orElseThrow().related());
+        assertEquals(List.of(), repository.findByCode(WS, second.code(), null).orElseThrow().related());
+    }
+
+    /** Calling it again from the same side writes nothing more - the established idempotent no-op. */
+    @Test
+    void linkRelatedTwiceFromTheSameSideIsAnIdempotentNoOp() {
+        Term first = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        Term second = service.add(WS, new NewTerm("Anker", "def b", null), DEFAULT_LANGUAGE);
+        service.linkRelated(WS, first.code(), second.code());
+
+        Term linked = service.linkRelated(WS, first.code(), second.code());
+
+        assertEquals(List.of(second.code()), linked.related());
+    }
+
+    /**
+     * kogn-io/arknet#598 (a), the richtungsblind defect: the edge already exists, asserted from
+     * {@code peerCode}'s own side - linking from this side must not write a second, redundant
+     * forward edge.
+     */
+    @Test
+    void linkRelatedFromTheOtherSideIsAnIdempotentNoOpToo() {
+        Term first = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        Term second = service.add(WS, new NewTerm("Anker", "def b", null, null, List.of(first.code())),
+                DEFAULT_LANGUAGE);
+
+        Term linked = service.linkRelated(WS, first.code(), second.code());
+
+        assertEquals(List.of(second.code()), linked.related());
+        assertEquals(List.of(), repository.findByCode(WS, first.code(), null).orElseThrow().related());
+        assertEquals(List.of(first.code()), repository.findByCode(WS, second.code(), null).orElseThrow().related());
+    }
+
+    @Test
+    void linkRelatedRejectsATermAsItsOwnPeer() {
+        Term added = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+
+        assertThrows(IllegalArgumentException.class, () -> service.linkRelated(WS, added.code(), added.code()));
+    }
+
+    @Test
+    void linkRelatedThrowsWhenTheCodeIsUnknown() {
+        Term peer = service.add(WS, new NewTerm("Anker", "def b", null), DEFAULT_LANGUAGE);
+
+        assertThrows(TermNotFoundException.class,
+                () -> service.linkRelated(WS, new TermCode("TERM-99"), peer.code()));
+    }
+
+    @Test
+    void linkRelatedThrowsWhenThePeerCodeIsUnknown() {
+        Term added = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+
+        assertThrows(TermNotFoundException.class,
+                () -> service.linkRelated(WS, added.code(), new TermCode("TERM-99")));
+    }
+
+    @Test
+    void unlinkRelatedRemovesTheForwardEdge() {
+        Term first = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        Term second = service.add(WS, new NewTerm("Anker", "def b", null, null, List.of(first.code())),
+                DEFAULT_LANGUAGE);
+
+        Term unlinked = service.unlinkRelated(WS, first.code(), second.code());
+
+        assertEquals(List.of(), unlinked.related());
+        assertEquals(List.of(), repository.findByCode(WS, second.code(), null).orElseThrow().related());
+    }
+
+    /**
+     * kogn-io/arknet#598 (a): the edge is asserted from {@code first}'s own side, but the removal
+     * is requested from {@code second} - the field patched must be {@code first}'s, not {@code
+     * second}'s (which never carried it).
+     */
+    @Test
+    void unlinkRelatedRemovesTheEdgeFromWhicheverSideAssertsIt() {
+        Term first = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        Term second = service.add(WS, new NewTerm("Anker", "def b", null, null, List.of(first.code())),
+                DEFAULT_LANGUAGE);
+
+        Term unlinked = service.unlinkRelated(WS, second.code(), first.code());
+
+        assertEquals(List.of(), unlinked.related());
+        assertEquals(List.of(), repository.findByCode(WS, second.code(), null).orElseThrow().related());
+    }
+
+    /** Never a silent no-op: a pair that is not related in either direction is rejected. */
+    @Test
+    void unlinkRelatedRejectsAPairThatIsNotRelated() {
+        Term first = service.add(WS, new NewTerm("Projekt", "def a", null), DEFAULT_LANGUAGE);
+        Term second = service.add(WS, new NewTerm("Anker", "def b", null), DEFAULT_LANGUAGE);
+
+        TermNotRelatedException ex = assertThrows(TermNotRelatedException.class,
+                () -> service.unlinkRelated(WS, first.code(), second.code()));
+        assertEquals(first.code(), ex.code());
+        assertEquals(second.code(), ex.peerCode());
+    }
+
+    @Test
+    void unlinkRelatedThrowsWhenTheCodeIsUnknown() {
+        Term peer = service.add(WS, new NewTerm("Anker", "def b", null), DEFAULT_LANGUAGE);
+
+        assertThrows(TermNotFoundException.class,
+                () -> service.unlinkRelated(WS, new TermCode("TERM-99"), peer.code()));
     }
 
     /**
