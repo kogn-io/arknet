@@ -90,6 +90,29 @@ final class UseCasePresenter {
     }
 
     /**
+     * {@link #formatShort(UseCase)}, optionally followed by the numbered main-flow steps and the
+     * extensions - both in the same compact form {@link #formatFull} uses, but without its
+     * {@code realises}/role/term edge resolution (issue #600 part 3: an auditor who only wants the
+     * flow text no longer needs a separate {@code uc_get} per use case).
+     */
+    static String formatShort(final UseCase uc, final boolean withSteps) {
+        final StringBuilder sb = new StringBuilder(formatShort(uc));
+        if (!withSteps) {
+            return sb.toString();
+        }
+        for (final Step step : uc.steps()) {
+            sb.append('\n').append("  ").append(step.position()).append(". ").append(step.text());
+        }
+        if (!uc.extensions().isEmpty()) {
+            sb.append('\n').append("  extensions:");
+            for (final String extension : uc.extensions()) {
+                sb.append('\n').append("    - ").append(extension);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
      * @param displayLocale the BCP-47 language tag the caller's own read call is showing this use
      *                      case's other fields under, passed straight through to
      *                      {@link ResolveRoles#resolveExisting} so a rendered role's overridden

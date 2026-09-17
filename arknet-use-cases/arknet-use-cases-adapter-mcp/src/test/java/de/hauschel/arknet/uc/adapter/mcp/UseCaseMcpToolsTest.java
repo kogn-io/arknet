@@ -272,7 +272,7 @@ class UseCaseMcpToolsTest {
                 resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
 
-        adapterWithGermanDefault.list(null, null, null);
+        adapterWithGermanDefault.list(null, null, null, null);
 
         assertEquals("de", stub.lastListDisplayLocale);
     }
@@ -287,7 +287,7 @@ class UseCaseMcpToolsTest {
                 resolveRoles, resolveTerms, resolveRequirements, resolveConstraints,
                 anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
 
-        adapterWithGermanDefault.list(null, "fr", null);
+        adapterWithGermanDefault.list(null, "fr", null, null);
 
         assertEquals("fr", stub.lastListDisplayLocale);
     }
@@ -304,7 +304,7 @@ class UseCaseMcpToolsTest {
         stub.listResult = List.of(uc);
         stub.fallbacksForList = Map.of(uc.code(), new UseCaseDisplayFallback("en", null));
 
-        String rendered = adapter.list(null, null, null);
+        String rendered = adapter.list(null, null, null, null);
 
         assertTrue(rendered.contains("[fallback: title=en]"), rendered);
     }
@@ -322,7 +322,7 @@ class UseCaseMcpToolsTest {
         stub.listResult = List.of(uc);
         stub.fallbacksForList = Map.of();
 
-        String rendered = adapter.list(null, "de", null);
+        String rendered = adapter.list(null, "de", null, null);
 
         assertFalse(rendered.contains("[fallback:"), rendered);
     }
@@ -460,16 +460,54 @@ class UseCaseMcpToolsTest {
                         customer, List.of(), null, null,
                         List.of(new Step(1, "request link", List.of())), List.of(), List.of(), List.of()));
 
-        String rendered = adapter.list(null, null, null);
+        String rendered = adapter.list(null, null, null, null);
 
         assertEquals("UC1 | Place order | Customer places an order\n"
                 + "UC2 | Reset password | User resets password", rendered);
     }
 
+    /**
+     * {@code withSteps=false} (the default) renders the same compact lines as before - the new
+     * parameter is opt-in (issue #600 part 3).
+     */
+    @Test
+    void ucListOmitsStepsByDefault() {
+        RoleRef customer = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer"));
+        stub.listResult = List.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
+                "Customer places an order", null, null, customer, List.of(), null, null,
+                List.of(new Step(1, "select items", List.of())), List.of("payment declined"), List.of(), List.of()));
+
+        String rendered = adapter.list(null, null, false, null);
+
+        assertEquals("UC1 | Place order | Customer places an order", rendered);
+    }
+
+    /**
+     * {@code withSteps=true} appends each use case's numbered main-flow steps and its extensions
+     * in a compact form, without the {@code realises} edge {@code uc_get} resolves (issue #600
+     * part 3: an auditor no longer needs a separate {@code uc_get} per use case to see the flow).
+     */
+    @Test
+    void ucListRendersStepsAndExtensionsWhenRequested() {
+        RoleRef customer = new RoleRef(ResourceId.of("https://w3id.org/arknet/id/role-customer"));
+        stub.listResult = List.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
+                "Customer places an order", null, null, customer, List.of(), null, null,
+                List.of(new Step(1, "select items", List.of()), new Step(2, "checkout", List.of())),
+                List.of("payment declined"), List.of(), List.of()));
+
+        String rendered = adapter.list(null, null, true, null);
+
+        assertEquals("UC1 | Place order | Customer places an order\n"
+                + "  1. select items\n"
+                + "  2. checkout\n"
+                + "  extensions:\n"
+                + "    - payment declined", rendered);
+    }
+
     @Test
     void ucListReturnsPlaceholderWhenEmpty() {
         stub.listResult = List.of();
-        assertEquals("(no use cases)", adapter.list(null, null, null));
+        assertEquals("(no use cases)", adapter.list(null, null, null, null));
     }
 
     @Test
