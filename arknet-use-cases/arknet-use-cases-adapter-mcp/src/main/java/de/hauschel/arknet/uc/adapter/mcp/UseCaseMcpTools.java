@@ -372,10 +372,10 @@ public final class UseCaseMcpTools {
         return presenter.formatFull(project.id(), created, null);
     }
 
-    @McpTool(name = "uc_list", description = "List all use cases in this project (id, title, goal). A use "
-            + "case shown under a fallen-back language (its title/goal is missing in the requested/"
-            + "project-default language) carries an inline [fallback: ...] tag naming the language "
-            + "actually shown - see displayLocale.",
+    @McpTool(name = "uc_list", description = "List all use cases in this project (id, title, goal; "
+            + "optionally steps, see withSteps). A use case shown under a fallen-back language (its "
+            + "title/goal is missing in the requested/project-default language) carries an inline "
+            + "[fallback: ...] tag naming the language actually shown - see displayLocale.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
@@ -387,6 +387,9 @@ public final class UseCaseMcpTools {
                     + "requested/project-default language is marked with an inline [fallback: ...] tag.",
                     required = false)
             final String displayLocale,
+            @McpToolParam(description = "Optional: also show each use case's numbered main-flow steps and "
+                    + "extensions. Defaults to false, i.e. id/title/goal only.", required = false)
+            final Boolean withSteps,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -400,10 +403,11 @@ public final class UseCaseMcpTools {
         if (all.isEmpty()) {
             return "(no use cases)";
         }
+        final boolean steps = Boolean.TRUE.equals(withSteps);
         final Map<UseCaseCode, UseCaseDisplayFallback> fallbacks =
                 describeUseCaseDisplayFallback.describe(project.id(), effective);
         return all.stream()
-                .map(uc -> UseCasePresenter.formatShort(uc) + fallbackSuffix(fallbacks.get(uc.code())))
+                .map(uc -> UseCasePresenter.formatShort(uc, steps) + fallbackSuffix(fallbacks.get(uc.code())))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no use cases)");
     }
 
