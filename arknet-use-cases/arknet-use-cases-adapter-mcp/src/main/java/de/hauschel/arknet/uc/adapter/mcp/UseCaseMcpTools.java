@@ -348,6 +348,12 @@ public final class UseCaseMcpTools {
                     + "the project has no default either, the call is rejected rather than writing an untagged "
                     + "literal.", required = false)
             final String language,
+            @McpToolParam(description = "Optional: business codes of the glossary terms this use case uses "
+                    + "from the start, e.g. ['TERM-1', 'TERM-2'] (resolved against the glossary, not "
+                    + "skos:prefLabel or store IRIs; an unknown code rejects the whole call). None if omitted - "
+                    + "uc_link_term remains the way to add one afterwards without restating the rest "
+                    + "(kogn-io/arknet#598).", required = false)
+            final List<String> usesTermCodes,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -367,7 +373,8 @@ public final class UseCaseMcpTools {
                 blankToNull(postcondition),
                 toNewSteps(steps),
                 extensions == null ? List.of() : List.copyOf(extensions),
-                blankToNull(language));
+                blankToNull(language),
+                usesTermCodes == null ? null : List.copyOf(usesTermCodes));
         final UseCase created = addUseCase.add(project.id(), command, project.defaultLanguage());
         return presenter.formatFull(project.id(), created, null);
     }
