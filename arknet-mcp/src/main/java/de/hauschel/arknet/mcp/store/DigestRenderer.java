@@ -24,16 +24,18 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <p>Pure and domain-agnostic: it consumes only a {@link StoreSnapshot} plus a
  * {@link Prefixes} resolver, so it is fully unit-testable and renders any bounded context's
- * data the same way. The handle it prints is never the label; the preference is (1) a CURIE,
- * if the subject IRI shortens against a {@link Prefixes} namespace, (2) else the resource's
- * {@code dcterms:identifier} (a bare business id, e.g. {@code FR-1}), if it carries one AND no
- * other resource in the same snapshot carries the same lexical identifier, (3) else the full
- * IRI. Case (2) is what keeps opaque, kernel-minted identities (a
- * {@link de.hauschel.arknet.kernel.ResourceId} is not bound to any CURIE namespace)
- * human-readable in the digest; the "AND" clause matters because {@code resource_get} rejects a
- * bare id that resolves to more than one resource as ambiguous (issue #150) - printing it as a
- * handle in that case would promise a drill-down affordance guaranteed to fail, so the digest
- * falls back to the (always unique) full IRI instead.</p>
+ * data the same way. The handle it prints is never the label - see {@link ResourceHandles} for
+ * the preference order, shared with {@code resource_get}'s incoming-neighbour lines.</p>
+ *
+ * <p><strong>Unlabeled, id-less resources are collapsed, not listed.</strong> A resource that
+ * carries neither a {@link StoreResource#label(DisplayLocale)} nor a {@code dcterms:identifier}
+ * has no readable handle at all - its line would be a bare, unclickable-looking IRI, and a use
+ * case's dozens of {@code arkreq:Step}s or a requirement's {@code arkreq:AcceptanceCriterion}s
+ * are exactly that (issue #600): opaque value objects meant to be read through their owning
+ * resource's {@code resource_get}, never addressed on their own. Per {@code rdf:type} bucket,
+ * such resources are counted into one trailing summary line instead of one line each - a purely
+ * structural rule (label present? identifier present?) that names no type, so it applies the same
+ * way to a future bounded context's own opaque children.</p>
  */
 public final class DigestRenderer {
 
@@ -150,16 +152,35 @@ public final class DigestRenderer {
             DisplayLocale displayLocale) {
         snapshot.byPrimaryType().forEach((type, members) -> {
             out.append("## ").append(displayType(type)).append(" (").append(members.size()).append(")\n");
+            int collapsed = 0;
             for (StoreResource resource : members) {
+                if (isUnlabeledAndIdLess(resource, displayLocale)) {
+                    collapsed++;
+                    continue;
+                }
                 out.append(renderResourceLine(resource, ambiguousIdentifiers, displayLocale)).append('\n');
+            }
+            if (collapsed > 0) {
+                out.append(collapsed).append(" more without a label or business id"
+                        + " (not listed individually - reachable via their owning resource's"
+                        + " resource_get)\n");
             }
             out.append('\n');
         });
     }
 
+    /**
+     * @return {@code true} if {@code resource} carries neither a label nor a
+     *         {@code dcterms:identifier} - see the class Javadoc for why such a resource is
+     *         collapsed into a summary line rather than printed on its own.
+     */
+    private static boolean isUnlabeledAndIdLess(StoreResource resource, DisplayLocale displayLocale) {
+        return resource.label(displayLocale).isEmpty() && resource.identifier().isEmpty();
+    }
+
     private String renderResourceLine(StoreResource resource, Set<String> ambiguousIdentifiers,
             DisplayLocale displayLocale) {
-        String handle = handleFor(resource, ambiguousIdentifiers);
+        String handle = ResourceHandles.of(prefixes, resource.iri(), resource.identifier(), ambiguousIdentifiers);
         StringBuilder line = new StringBuilder(handle);
         String types = String.join(",", resource.types().stream().map(StoreResource::localName).toList());
         if (!types.isEmpty()) {
@@ -170,23 +191,6 @@ public final class DigestRenderer {
         resource.priority().ifPresent(priority -> line.append(' ').append(priority));
         line.append("  -> resource_get(\"").append(handle).append("\")");
         return line.toString();
-    }
-
-    /**
-     * The display/drill-down handle for one resource: a CURIE if the subject IRI shortens
-     * against a known {@link Prefixes} namespace, else its {@code dcterms:identifier} (bare
-     * business id) - but only if that lexical identifier is not shared by another resource in
-     * the same snapshot, else the full IRI. See the class-level note for why the uniqueness
-     * check matters.
-     */
-    private String handleFor(StoreResource resource, Set<String> ambiguousIdentifiers) {
-        String curie = prefixes.toCurie(resource.iri());
-        if (!curie.equals(resource.iri())) {
-            return curie;
-        }
-        return resource.identifier()
-                .filter(identifier -> !ambiguousIdentifiers.contains(identifier))
-                .orElse(resource.iri());
     }
 
     /**

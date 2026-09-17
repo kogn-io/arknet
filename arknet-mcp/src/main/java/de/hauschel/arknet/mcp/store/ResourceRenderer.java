@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.mcp.store;
 
+import java.util.Map;
 import java.util.List;
 import java.util.Objects;
 
@@ -11,8 +12,12 @@ import java.util.Objects;
  * HTML card shows, as compact text - the subject's outgoing statements plus the incoming
  * statements (its neighbours).
  *
- * <p>Pure and domain-agnostic: consumes only the subject IRI and its out/in statement lists
- * plus a {@link Prefixes} resolver.</p>
+ * <p>Pure and domain-agnostic: consumes only the subject IRI, its out/in statement lists, a
+ * {@link Prefixes} resolver, and (issue #594) the already-resolved display handle for each
+ * incoming neighbour. Resolving that handle needs store access (the {@link ResourceHandles}
+ * preference order can fall back to a neighbour's own {@code dcterms:identifier}, which this
+ * renderer has no way to look up on its own), so {@link StoreReportTools} resolves it beforehand
+ * and hands the finished text in - this class stays free of any store dependency.</p>
  */
 public final class ResourceRenderer {
 
@@ -28,15 +33,22 @@ public final class ResourceRenderer {
     /**
      * Renders the resource view.
      *
-     * @param iri      the subject IRI
-     * @param outgoing statements with {@code iri} as subject
-     * @param incoming statements with {@code iri} as object (neighbours)
+     * @param iri             the subject IRI
+     * @param outgoing        statements with {@code iri} as subject
+     * @param incoming        statements with {@code iri} as object (neighbours)
+     * @param incomingHandles the display handle for every neighbour subject appearing in
+     *                        {@code incoming} ({@link ResourceHandles}'s CURIE / bare-id /
+     *                        full-IRI preference, resolved by the caller); a subject missing
+     *                        here falls back to a plain CURIE, the same default this renderer
+     *                        applied before issue #594
      * @return the resource text, or a not-found notice when the resource has no statements
      */
-    public String render(String iri, List<Triple> outgoing, List<Triple> incoming) {
+    public String render(String iri, List<Triple> outgoing, List<Triple> incoming,
+            Map<String, String> incomingHandles) {
         Objects.requireNonNull(iri, "iri");
         Objects.requireNonNull(outgoing, "outgoing");
         Objects.requireNonNull(incoming, "incoming");
+        Objects.requireNonNull(incomingHandles, "incomingHandles");
 
         if (outgoing.isEmpty() && incoming.isEmpty()) {
             return notFoundMessage(prefixes, iri);
@@ -59,7 +71,8 @@ public final class ResourceRenderer {
             out.append("- (none)\n");
         }
         for (Triple triple : incoming) {
-            out.append(prefixes.toCurie(triple.subject())).append("  ")
+            String subjectHandle = incomingHandles.getOrDefault(triple.subject(), prefixes.toCurie(triple.subject()));
+            out.append(subjectHandle).append("  ")
                     .append(prefixes.toCurie(triple.predicate())).append("  -> (this)\n");
         }
         return out.toString();

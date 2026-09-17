@@ -27,6 +27,7 @@ class DigestRendererTest {
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private static final String TITLE = "http://purl.org/dc/terms/title";
     private static final String IDENTIFIER = "http://purl.org/dc/terms/identifier";
+    private static final String ARKNET_NAME = "https://w3id.org/arknet/core#name";
 
     private final DigestRenderer renderer = new DigestRenderer(Prefixes.defaults());
 
@@ -99,6 +100,54 @@ class DigestRendererTest {
         assertThat(digest).contains("resource_get(\"" + first + "\")");
         assertThat(digest).contains("resource_get(\"" + second + "\")");
         assertThat(digest).doesNotContain("resource_get(\"FR-1\")");
+    }
+
+    /**
+     * Issue #600: {@code arknet:name} is the predicate an Actor, Role, BoundedContext or ADR
+     * carries its display name under - before this, none of the three recognised label
+     * predicates matched, so all four showed up nameless in the digest.
+     */
+    @Test
+    void rendersTheArknetNamePredicateAsALabel() {
+        String actorIri = "https://w3id.org/arknet/id/store-overview-test-actor-1";
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(actorIri, RDF_TYPE, "https://w3id.org/arknet/process#Actor"),
+                lit(actorIri, ARKNET_NAME, "Product Owner"),
+                lit(actorIri, IDENTIFIER, "ACTOR-1")));
+
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(),
+                snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(digest).contains("\"Product Owner\"");
+    }
+
+    /**
+     * Issue #600: a resource with neither a label nor a {@code dcterms:identifier} - an
+     * {@code arkreq:Step}, an {@code arkreq:AcceptanceCriterion} and their like, meant to be read
+     * only through their owning resource - is collapsed into one trailing summary line per type
+     * rather than listed as an unreadable bare IRI, once for every such resource.
+     */
+    @Test
+    void collapsesUnlabeledIdLessResourcesIntoOneSummaryLinePerType() {
+        String uc1 = "https://w3id.org/arknet/id/store-overview-test-uc-1";
+        String step1 = "https://w3id.org/arknet/id/store-overview-test-step-1";
+        String step2 = "https://w3id.org/arknet/id/store-overview-test-step-2";
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(uc1, RDF_TYPE, ARKREQ + "UseCase"),
+                lit(uc1, TITLE, "Login"),
+                lit(uc1, IDENTIFIER, "UC-1"),
+                iri(uc1, ARKREQ + "mainStep", step1),
+                iri(step1, RDF_TYPE, ARKREQ + "Step"),
+                lit(step1, ARKREQ + "stepText", "Enter credentials"),
+                iri(step2, RDF_TYPE, ARKREQ + "Step"),
+                lit(step2, ARKREQ + "stepText", "Submit form")));
+
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(),
+                snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(digest).doesNotContain(step1).doesNotContain(step2);
+        assertThat(digest).contains("2 more without a label or business id");
+        assertThat(digest).contains("UC-1 [UseCase] \"Login\"");
     }
 
     @Test
