@@ -59,6 +59,12 @@ public interface AddRequirement {
      *                        or {@code null} to fall back to the target project's configured
      *                        default language - the same tag applies to all of them, since a
      *                        requirement is normally elicited in one language at a time
+     * @param usesTermCodes   business codes of the glossary terms this requirement uses from the
+     *                        start, e.g. {@code TERM-1} (resolved against the glossary the same way
+     *                        {@link UpdateRequirement}'s field of the same name is, an unknown code
+     *                        rejected before anything is written - kogn-io/arknet#598), or
+     *                        {@code null}/empty for none; {@code req_link_term} remains the way to
+     *                        add one afterwards without restating the rest
      */
     record NewRequirement(
             String title,
@@ -68,6 +74,17 @@ public interface AddRequirement {
             Priority priority,
             String qualityCategory,
             List<String> acceptanceCriteria,
-            String language) {
+            String language,
+            List<String> usesTermCodes) {
+
+        /**
+         * Convenience constructor for a requirement started without any glossary term yet - the
+         * shape every caller used before {@code usesTermCodes} existed (kogn-io/arknet#598).
+         */
+        public NewRequirement(String title, String description, String rationale, RequirementType type,
+                Priority priority, String qualityCategory, List<String> acceptanceCriteria, String language) {
+            this(title, description, rationale, type, priority, qualityCategory, acceptanceCriteria, language,
+                    null);
+        }
     }
 }

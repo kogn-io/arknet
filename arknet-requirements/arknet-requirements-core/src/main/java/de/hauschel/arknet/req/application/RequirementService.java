@@ -216,13 +216,22 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
         // the call before any code is even computed (issue #258).
         String language = LanguageTag.resolveWriteLanguage(command.language(), defaultLanguage);
         List<AcceptanceCriterion> acceptanceCriteria = toPositionedAcceptanceCriteria(command.acceptanceCriteria());
+        // Resolved once, outside the retry, mirroring update()'s own usesTermCodes resolution: an
+        // unknown TERM-9 must reject the whole call before any code is even computed, not surface
+        // as a race worth retrying (kogn-io/arknet#598).
+        List<TermRef> usesTerms = command.usesTermCodes() == null
+                ? List.of()
+                : command.usesTermCodes().stream()
+                        .map(termCode -> new TermRef(termLookup.resolveByCode(projectId, termCode)))
+                        .distinct()
+                        .toList();
         return CodeAssignment.createRetryingOnCodeCollision(MAX_RETRY_ATTEMPTS,
                 DuplicateRequirementCodeException.class, () -> {
                     RequirementCode code = nextCode(projectId, command.type());
                     Requirement requirement = new Requirement(id, code, command.title(),
                             command.description(), command.rationale(), command.type(),
                             RequirementStatus.PROPOSED, command.priority(),
-                            command.qualityCategory(), List.of(), acceptanceCriteria, List.of());
+                            command.qualityCategory(), usesTerms, acceptanceCriteria, List.of());
                     repository.create(projectId, requirement, language);
                     return requirement;
                 });

@@ -270,6 +270,12 @@ public final class RequirementMcpTools {
                     + "(project_update) if omitted; if the project has no default either, the call is "
                     + "rejected rather than writing an untagged literal.", required = false)
             final String language,
+            @McpToolParam(description = "Business codes of the glossary terms this requirement uses from the "
+                    + "start, e.g. ['TERM-1', 'TERM-2'] (resolved against the glossary, not skos:prefLabel or "
+                    + "store IRIs; an unknown code rejects the whole call). Optional, none if omitted - "
+                    + "req_link_term remains the way to add one afterwards without restating the rest.",
+                    required = false)
+            final List<String> usesTermCodes,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -287,7 +293,8 @@ public final class RequirementMcpTools {
                         requirementPriority,
                         blankToNull(qualityCategory),
                         acceptanceCriteria == null ? List.of() : List.copyOf(acceptanceCriteria),
-                        blankToNull(language)),
+                        blankToNull(language),
+                        usesTermCodes == null ? null : List.copyOf(usesTermCodes)),
                 project.defaultLanguage());
         return presenter.format(project.id(), created);
     }
