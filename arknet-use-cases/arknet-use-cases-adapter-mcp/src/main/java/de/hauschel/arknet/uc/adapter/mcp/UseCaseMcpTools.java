@@ -654,7 +654,7 @@ public final class UseCaseMcpTools {
      * field's state before and after the write rather than from the request. {@code usesTerm}/
      * {@code supportingRole} are diffed by code ({@link WriteResponse#listFieldDiff}); {@code
      * mainStep}/{@code extensionStep} carry no stable per-entry identity a caller types, so they
-     * are diffed by count only ({@link #countDiff}).
+     * are diffed by count only ({@link WriteResponse#countDiff}).
      */
     private String updateDiffLines(final ProjectId projectId, final UseCaseCorrection correction,
             final Optional<UseCase> before, final UseCase updated, final List<NewMainStepInput> newMainSteps,
@@ -677,12 +677,12 @@ public final class UseCaseMcpTools {
         // no read needed, and no risk of an invisible loss the way a wholesale field has.
         final int mainStepsRemoved = removeMainStepPositions == null ? 0 : removeMainStepPositions.size();
         final int mainStepsAdded = newMainSteps == null ? 0 : newMainSteps.size();
-        addIfNotEmpty(lines, countDiff(MAIN_STEP_FIELD, mainStepsRemoved, mainStepsAdded));
+        addIfNotEmpty(lines, WriteResponse.countDiff(MAIN_STEP_FIELD, mainStepsRemoved, mainStepsAdded));
         if (correction.extensions() != null) {
             final int beforeSize = before.map(uc -> uc.extensions().size()).orElse(0);
             final int afterSize = updated.extensions().size();
             addIfNotEmpty(lines,
-                    countDiff(EXTENSION_STEP_FIELD, Math.max(0, beforeSize - afterSize),
+                    WriteResponse.countDiff(EXTENSION_STEP_FIELD, Math.max(0, beforeSize - afterSize),
                             Math.max(0, afterSize - beforeSize)));
         }
         return String.join("\n", lines);
@@ -693,25 +693,6 @@ public final class UseCaseMcpTools {
         if (!line.isEmpty()) {
             lines.add(line);
         }
-    }
-
-    /**
-     * A count-only diff line for a list field with no stable per-entry identity a caller types
-     * (a main-flow step, an extension line) - e.g. {@code mainStep: removed 1, added 2}. Empty
-     * when nothing changed, mirroring {@link WriteResponse#listFieldDiff}'s own convention.
-     */
-    private static String countDiff(final String field, final int removedCount, final int addedCount) {
-        if (removedCount == 0 && addedCount == 0) {
-            return "";
-        }
-        final List<String> parts = new ArrayList<>();
-        if (removedCount > 0) {
-            parts.add("removed " + removedCount);
-        }
-        if (addedCount > 0) {
-            parts.add("added " + addedCount);
-        }
-        return field + ": " + String.join(", ", parts);
     }
 
     @McpTool(name = "uc_link_term",

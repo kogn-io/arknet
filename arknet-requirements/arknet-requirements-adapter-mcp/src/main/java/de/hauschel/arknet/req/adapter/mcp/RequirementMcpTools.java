@@ -701,24 +701,15 @@ public final class RequirementMcpTools {
      * joined - never their text. Unlike {@link WriteResponse#listFieldDiff}'s codes-based fields
      * (e.g. {@code usesTerm}), a criterion carries no stable code a caller could recognise across
      * two calls, and its full text can run long; the diff line stays a cheap, at-a-glance signal
-     * rather than a second rendering of the resource.
+     * rather than a second rendering of the resource. Counts what actually left/joined by text
+     * equality, then hands the counts to {@link WriteResponse#countDiff}.
      */
     private static String acceptanceCriterionCountDiff(final List<String> before, final List<String> after) {
         final Set<String> previous = new LinkedHashSet<>(before);
         final Set<String> current = new LinkedHashSet<>(after);
-        final long removed = previous.stream().filter(text -> !current.contains(text)).count();
-        final long added = current.stream().filter(text -> !previous.contains(text)).count();
-        if (removed == 0 && added == 0) {
-            return "";
-        }
-        final List<String> parts = new ArrayList<>();
-        if (removed > 0) {
-            parts.add("removed " + removed);
-        }
-        if (added > 0) {
-            parts.add("added " + added);
-        }
-        return ACCEPTANCE_CRITERION_FIELD + ": " + String.join(", ", parts);
+        final int removed = (int) previous.stream().filter(text -> !current.contains(text)).count();
+        final int added = (int) current.stream().filter(text -> !previous.contains(text)).count();
+        return WriteResponse.countDiff(ACCEPTANCE_CRITERION_FIELD, removed, added);
     }
 
     /**

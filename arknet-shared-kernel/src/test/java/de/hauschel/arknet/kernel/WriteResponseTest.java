@@ -83,6 +83,23 @@ class WriteResponseTest {
     }
 
     @Test
+    void rendersWhatLeftAndWhatJoinedByCountAlone() {
+        assertEquals("mainStep: removed 1, added 2", WriteResponse.countDiff("mainStep", 1, 2));
+    }
+
+    @Test
+    void countDiffNamesOnlyTheSideThatChanged() {
+        assertEquals("mainStep: added 2", WriteResponse.countDiff("mainStep", 0, 2));
+        assertEquals("mainStep: removed 1", WriteResponse.countDiff("mainStep", 1, 0));
+    }
+
+    /** An unchanged field costs no line, the same convention {@link WriteResponse#listFieldDiff} follows. */
+    @Test
+    void countDiffStaysSilentWhenNothingChanged() {
+        assertEquals("", WriteResponse.countDiff("mainStep", 0, 0));
+    }
+
+    @Test
     void rejectsNullArguments() {
         assertThrows(NullPointerException.class, () -> WriteResponse.withProject(null,
                 new ResolvedProject(PROJECT, "en")));
@@ -90,5 +107,6 @@ class WriteResponseTest {
         assertThrows(NullPointerException.class, () -> WriteResponse.linked(null, "TERM-7", "usesTerm"));
         assertThrows(NullPointerException.class, () -> WriteResponse.unlinked("FR-3", null, "usesTerm"));
         assertThrows(NullPointerException.class, () -> WriteResponse.listFieldDiff("usesTerm", null, List.of()));
+        assertThrows(NullPointerException.class, () -> WriteResponse.countDiff(null, 1, 1));
     }
 }
