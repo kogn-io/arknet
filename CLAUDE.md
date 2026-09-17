@@ -69,7 +69,7 @@ Wie die Module zu Komponenten und Bounded Contexts gehoeren (Bausteinsicht), ste
 `docs/building-block-view.md`.
 
 - **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes). `arknet-ontology/CLAUDE.md`
-- **arknet-mcp**: MCP-Server (geteilter lokaler Daemon, `127.0.0.1:47331`) + Composition Root, verdrahtet alle sieben BC-Hexagons, die Anker-Aufloesung, den generischen Store-Lesepfad und den Pruefpfad `store_check`. `arknet-mcp/CLAUDE.md`
+- **arknet-mcp**: MCP-Server (geteilter lokaler Daemon, `127.0.0.1:47331`) + Composition Root, verdrahtet alle sieben BC-Hexagons, die Anker-Aufloesung, den generischen Store-Lesepfad, den Pruefpfad `store_check` und das Suchwerkzeug `text_search`. `arknet-mcp/CLAUDE.md`
 - **arknet-shared-kernel**: DDD Shared Kernel -- ProjectId, ProjectResolver-Port, ResourceId, DisplayLocale/LocalizedLiteral. `arknet-shared-kernel/CLAUDE.md`
 - **arknet-persistence-support**: technischer Support der kognio-rdf-Out-Adapter -- SHACL-Write-Gate, WriteFunnel (PROV-O-Revision + Head-Pointer je Write), SparqlTerms, die `Ark*Vocabulary`-Konstanten. `arknet-persistence-support/CLAUDE.md`
 - **arknet-persistence-test-support**: Test-Support derselben Out-Adapter -- die Guarded*-Dekoratoren fuer die `*RealStoreConcurrencyTest`; main-Scope-Artefakt, im test-Scope gezogen. `arknet-persistence-test-support/CLAUDE.md`

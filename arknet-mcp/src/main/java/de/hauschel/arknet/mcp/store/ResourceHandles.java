@@ -14,6 +14,10 @@ import java.util.Set;
  * one place for the "how do I name this resource" rule instead of two drifting copies (issue
  * #594).
  *
+ * <p>Public rather than package-private since {@code text_search} (kogn-io/arknet#594 Part 1, in
+ * {@code de.hauschel.arknet.mcp.search}) reuses the very same rule for the resource a hit is
+ * reported under, rather than growing a third copy.</p>
+ *
  * <p>Preference order: (1) a CURIE, if the subject IRI shortens against a {@link Prefixes}
  * namespace, (2) else the resource's {@code dcterms:identifier} (a bare business id, e.g.
  * {@code FR-1}), if it carries one AND no other resource in scope carries the same lexical
@@ -24,7 +28,7 @@ import java.util.Set;
  * that case would promise a drill-down affordance guaranteed to fail, so callers fall back to the
  * (always unique) full IRI instead.</p>
  */
-final class ResourceHandles {
+public final class ResourceHandles {
 
     private ResourceHandles() {
     }
@@ -38,7 +42,8 @@ final class ResourceHandles {
      *                             Javadoc for why a shared identifier cannot be used as a handle
      * @return the handle to display for {@code iri}
      */
-    static String of(Prefixes prefixes, String iri, Optional<String> identifier, Set<String> ambiguousIdentifiers) {
+    public static String of(Prefixes prefixes, String iri, Optional<String> identifier,
+            Set<String> ambiguousIdentifiers) {
         Objects.requireNonNull(prefixes, "prefixes");
         Objects.requireNonNull(iri, "iri");
         Objects.requireNonNull(identifier, "identifier");
