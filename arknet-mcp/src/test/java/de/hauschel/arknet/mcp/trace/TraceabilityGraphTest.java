@@ -656,7 +656,9 @@ class TraceabilityGraphTest {
         /**
          * Issue #252's negative case: a term's definition mentioning some <em>other</em> glossary
          * term - not its own broader term - is exactly the kind of unlinked mention
-         * {@code orphan_check} should surface, with {@code "broader"} as the missing edge's name.
+         * {@code orphan_check} should surface, with {@code "broader/narrower/related"} as the
+         * missing edge's name (kogn-io/arknet#595: any of the three would resolve the finding, so
+         * the message names all three instead of prescribing one).
          */
         @Test
         void unlinkedMentionsFlagsATermsMentionOfAnotherTermThatIsNotItsBroaderTerm() {
@@ -674,7 +676,29 @@ class TraceabilityGraphTest {
             assertThat(freshGraph.unlinkedMentions())
                     .filteredOn(mention -> mention.sourceIri().equals(mentioningIri))
                     .extracting(TraceabilityGraph.UnlinkedMention::termIri, TraceabilityGraph.UnlinkedMention::edgeLocalName)
-                    .containsExactly(org.assertj.core.api.Assertions.tuple(otherTermIri, "broader"));
+                    .containsExactly(org.assertj.core.api.Assertions.tuple(otherTermIri, "broader/narrower/related"));
+        }
+
+        /**
+         * The reverse of {@link #unlinkedMentionsDoesNotFlagATermsMentionOfItsOwnBroaderTerm()}
+         * (kogn-io/arknet#595): a taxonomy term's definition commonly names one of its own
+         * narrower terms too ("An Actor, e.g. a Human Actor, ..."), and {@link
+         * TraceabilityGraph#broaderTerm(String)} only ever looks outward from a term to its
+         * superordinate - so before this fix the mention was flagged, even though the very same
+         * {@code skos:broader} edge links the two, just asserted from the other end.
+         */
+        @Test
+        void unlinkedMentionsDoesNotFlagATermsMentionOfANarrowerTerm() {
+            String broaderIri = "https://w3id.org/arknet/id/trace-test-mention-narrower-parent";
+            String narrowerIri = "https://w3id.org/arknet/id/trace-test-mention-narrower-child";
+            seedTermWithBroader(narrowerIri, "TERM-MN-2", "Human Actor", "A human acting.", broaderIri);
+            seedTermWithBroader(broaderIri, "TERM-MN-1", "Actor", "Someone acting, e.g. a Human Actor.", null);
+            StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+            TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+            assertThat(freshGraph.unlinkedMentions())
+                    .filteredOn(mention -> mention.sourceIri().equals(broaderIri) && mention.termIri().equals(narrowerIri))
+                    .isEmpty();
         }
 
         /**
