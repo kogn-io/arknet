@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -930,48 +931,83 @@ public final class TraceabilityGraph {
      * never appear in the returned set: a step is an aggregate-internal value object with no
      * identity of its own, never a reportable "affected" artifact in its own right.</p>
      *
+     * <p>Equivalent to {@link #dependents(String, boolean)} with {@code directOnly=false}.</p>
+     *
      * @return the transitively affected IRIs, sorted, deduplicated, excluding {@code targetIri}
      *         itself and any {@code arkreq:Step}
      */
     public List<String> dependents(String targetIri) {
+        return dependents(targetIri, false);
+    }
+
+    /**
+     * {@link #dependents(String)}, optionally narrowed to only the resources one hop away from
+     * {@code targetIri} - the "who references this directly" view a strongly-coupled term's full
+     * transitive closure can bury (issue #594, e.g. a glossary term used by a requirement dozens
+     * of use cases realise transitively reports only that requirement, not every use case behind
+     * it). A hop through an {@code arkreq:Step} does not count against this depth-1 cutoff: the
+     * two-RDF-hop {@code mainStep}/{@code extensionStep} then {@code stepRealises} path is one
+     * semantic "realises" edge, per the {@code arkreq:Step} note above, so a use case realising a
+     * requirement directly still counts as depth 1 from that requirement.
+     *
+     * @param directOnly {@code true} to report only depth-1 dependents instead of the full
+     *                   transitive closure
+     * @return the (transitively, or depth-1-only if {@code directOnly}) affected IRIs, sorted,
+     *         deduplicated, excluding {@code targetIri} itself and any {@code arkreq:Step}
+     */
+    public List<String> dependents(String targetIri, boolean directOnly) {
         Objects.requireNonNull(targetIri, "targetIri");
         Set<String> frontier = new HashSet<>();
         frontier.add(targetIri);
+        Map<String, Integer> depthOf = new HashMap<>();
+        depthOf.put(targetIri, 0);
         Set<String> reported = new TreeSet<>();
         Deque<String> queue = new ArrayDeque<>();
         queue.add(targetIri);
         while (!queue.isEmpty()) {
             String current = queue.poll();
+            int currentDepth = depthOf.get(current);
             for (Triple triple : incomingByObject.getOrDefault(current, List.of())) {
                 if (!DEPENDENT_EDGE_PREDICATES.contains(triple.predicate())) {
                     continue;
                 }
-                addDependent(triple.subject(), frontier, queue, reported);
+                addDependent(triple.subject(), currentDepth, frontier, queue, reported, depthOf);
             }
             for (Triple triple : outgoingBySubject.getOrDefault(current, List.of())) {
                 if (!FORWARD_DEPENDENT_EDGE_PREDICATES.contains(triple.predicate())
                         || !(triple.object() instanceof RdfNode.Resource resourceObject)) {
                     continue;
                 }
-                addDependent(resourceObject.iri(), frontier, queue, reported);
+                addDependent(resourceObject.iri(), currentDepth, frontier, queue, reported, depthOf);
             }
         }
-        return List.copyOf(reported);
+        if (!directOnly) {
+            return List.copyOf(reported);
+        }
+        return reported.stream().filter(iri -> depthOf.get(iri) == 1).toList();
     }
 
     /**
      * Adds {@code candidate} to the traversal's frontier/queue/reported set, unless it was already
-     * visited - shared by {@link #dependents(String)}'s backward and forward hops so both follow
-     * exactly the same "visit once, report once, skip a {@code arkreq:Step}" rule.
+     * visited - shared by {@link #dependents(String, boolean)}'s backward and forward hops so both
+     * follow exactly the same "visit once, report once, skip a {@code arkreq:Step}" rule. Records
+     * {@code candidate}'s depth in {@code depthOf}: a {@code arkreq:Step} inherits {@code
+     * sourceDepth} unchanged (it is not a reportable hop of its own), every other candidate gets
+     * {@code sourceDepth + 1} - so a use case reached only through a step still lands one depth
+     * below the requirement it realises, not two.
      */
-    private void addDependent(String candidate, Set<String> frontier, Deque<String> queue, Set<String> reported) {
+    private void addDependent(String candidate, int sourceDepth, Set<String> frontier, Deque<String> queue,
+            Set<String> reported, Map<String, Integer> depthOf) {
         if (!frontier.add(candidate)) {
             return;
         }
         queue.add(candidate);
-        if (!isType(candidate, STEP_TYPE)) {
-            reported.add(candidate);
+        if (isType(candidate, STEP_TYPE)) {
+            depthOf.put(candidate, sourceDepth);
+            return;
         }
+        depthOf.put(candidate, sourceDepth + 1);
+        reported.add(candidate);
     }
 
     /**

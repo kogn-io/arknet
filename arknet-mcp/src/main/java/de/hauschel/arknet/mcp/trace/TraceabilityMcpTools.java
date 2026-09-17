@@ -128,6 +128,9 @@ public final class TraceabilityMcpTools {
             final McpSyncRequestContext context,
             @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, or bare id (FR-1)")
             final String id,
+            @McpToolParam(description = "true: only direct (one-hop) dependents instead of the full"
+                    + " transitive closure. Default false.", required = false)
+            final Boolean directOnly,
             @McpToolParam(description = "Optional anchor identifying the project to analyse, used "
                     + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
                     + "Only needed for a client that cannot set that header - most callers should omit "
@@ -136,7 +139,8 @@ public final class TraceabilityMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
         final String targetIri = handleResolver.resolve(project.id(), id);
-        return renderer.impactAnalysis(project.id(), readGraph(project), targetIri);
+        return renderer.impactAnalysis(project.id(), readGraph(project), targetIri,
+                Boolean.TRUE.equals(directOnly));
     }
 
     @McpTool(name = "role_usecase_matrix",

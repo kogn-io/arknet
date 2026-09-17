@@ -200,12 +200,51 @@ class TraceabilityMcpToolsTest {
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
                     List.of(), null), "en");
 
-            String impact = tools.impactAnalysis(null, term.code().value(), ANCHOR);
+            String impact = tools.impactAnalysis(null, term.code().value(), null, ANCHOR);
 
             assertThat(impact).contains("# Impact analysis -- project " + project.value());
             assertThat(impact).contains("target: " + term.code().value());
             assertThat(impact).contains("## Transitively affected (2)");
             assertThat(impact).contains(fr1.code().value()).contains("UC1");
+        });
+    }
+
+    /**
+     * Same chain (term -&gt; FR-1 via usesTerm -&gt; UC1 via the step-collapsed realises hop) as
+     * {@link #impactAnalysisResolvesABareBusinessIdAndReportsTransitiveDependents}, but with
+     * {@code directOnly=true}: UC1 is two semantic hops from the term, so only FR-1 must be
+     * reported (issue #594).
+     */
+    @Test
+    void impactAnalysisWithDirectOnlyReportsOnlyTheDirectDependent() {
+        runner().run(context -> {
+            assertThat(context).hasNotFailed();
+            ProjectId project = registerProject(context);
+            RequirementService requirements = context.getBean(RequirementService.class);
+            TermService terms = context.getBean(TermService.class);
+            RoleService roles = context.getBean(RoleService.class);
+            UseCaseService useCases = context.getBean(UseCaseService.class);
+            TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
+
+            Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null), "en");
+            RoleDetail role = roles.add(project, new NewRole("Customer", null, List.of(), "en"), "en");
+
+            Requirement fr1 = requirements.add(project, new NewRequirement("Login",
+                    "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL, null, null,
+                    List.of("Login succeeds with valid credentials"), null), "en");
+            requirements.linkTerm(project, fr1.code(), term.code().value(), "en");
+
+            useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null,
+                    role.role().code().value(),
+                    List.of(), null, null,
+                    List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
+                    List.of(), null), "en");
+
+            String impact = tools.impactAnalysis(null, term.code().value(), true, ANCHOR);
+
+            assertThat(impact).contains("## Directly affected (1)");
+            assertThat(impact).contains(fr1.code().value());
+            assertThat(impact).doesNotContain("UC1");
         });
     }
 
@@ -216,7 +255,7 @@ class TraceabilityMcpToolsTest {
             ProjectId project = registerProject(context);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            assertThatThrownBy(() -> tools.impactAnalysis(null, "FR-999", ANCHOR))
+            assertThatThrownBy(() -> tools.impactAnalysis(null, "FR-999", null, ANCHOR))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("No resource found");
         });
@@ -237,7 +276,7 @@ class TraceabilityMcpToolsTest {
             ProjectId project = registerProject(context);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            String impact = tools.impactAnalysis(null, "req:FR-999", ANCHOR);
+            String impact = tools.impactAnalysis(null, "req:FR-999", null, ANCHOR);
 
             assertThat(impact).startsWith("Resource not found (no statements): req:FR-999");
             assertThat(impact).doesNotContain("Transitively affected");

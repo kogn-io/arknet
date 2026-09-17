@@ -201,13 +201,13 @@ class TraceabilityRendererTest {
      * The load-bearing assertion: {@code impact_analysis} on TERM-1 must reach FR-1 (direct
      * {@code usesTerm} reference) and UC1 (through the {@code stepRealises} then {@code
      * mainStep} hop) - but never STEP-1 itself, which is an aggregate-internal value object,
-     * not a reportable artifact (see {@link TraceabilityGraph#dependents(String)}).
+     * not a reportable artifact (see {@link TraceabilityGraph#dependents(String, boolean)}).
      */
     @Test
     void impactAnalysisCollapsesTheStepHopAndNeverReportsTheStepItself() {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
 
-        String impact = renderer.impactAnalysis(PROJECT, graph, TERM_1);
+        String impact = renderer.impactAnalysis(PROJECT, graph, TERM_1, false);
 
         assertThat(impact).contains("# Impact analysis -- project sample-project -- target: TERM-1");
         assertThat(impact).contains("## Transitively affected (2)");
@@ -215,11 +215,26 @@ class TraceabilityRendererTest {
         assertThat(impact).doesNotContain(STEP_1);
     }
 
+    /**
+     * {@code directOnly=true} narrows the same TERM-1 target to only FR-1: UC1 is two semantic
+     * hops away (TERM-1 -&gt; FR-1 via {@code usesTerm}, FR-1 -&gt; UC1 via the step-collapsed
+     * {@code realises} hop), so it must drop out of the depth-1 view (issue #594).
+     */
+    @Test
+    void impactAnalysisWithDirectOnlyReportsOnlyTheDirectDependent() {
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
+
+        String impact = renderer.impactAnalysis(PROJECT, graph, TERM_1, true);
+
+        assertThat(impact).contains("## Directly affected (1)");
+        assertThat(impact).contains("FR-1").doesNotContain("UC1");
+    }
+
     @Test
     void impactAnalysisOfAnUnreferencedResourceReportsNone() {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
 
-        String impact = renderer.impactAnalysis(PROJECT, graph, FR_2);
+        String impact = renderer.impactAnalysis(PROJECT, graph, FR_2, false);
 
         assertThat(impact).contains("## Transitively affected (0)");
         assertThat(impact).contains("- none");
@@ -237,7 +252,7 @@ class TraceabilityRendererTest {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
         String unknownIri = ID + "fr-999";
 
-        String impact = renderer.impactAnalysis(PROJECT, graph, unknownIri);
+        String impact = renderer.impactAnalysis(PROJECT, graph, unknownIri, false);
 
         assertThat(impact).isEqualTo("Resource not found (no statements): " + unknownIri + "\n<" + unknownIri + ">");
         assertThat(impact).doesNotContain("Transitively affected");

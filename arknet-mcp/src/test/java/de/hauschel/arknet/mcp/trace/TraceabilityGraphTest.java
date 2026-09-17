@@ -361,6 +361,23 @@ class TraceabilityGraphTest {
             assertThat(graph.dependents(TERM_1_IRI)).containsExactlyInAnyOrder(FR_1_IRI, UC_1_IRI);
         }
 
+        /**
+         * Same chain as {@link #dependentsOfTerm1TransitivelyReachesFr1AndUc1ButNotTheStep}
+         * (TERM-1 -&gt; FR-1 -&gt; UC1), but {@code directOnly=true} narrows it to only FR-1: UC1
+         * is a second semantic hop away (the step-collapsed realises edge), not a direct
+         * dependent of TERM-1 (issue #594).
+         */
+        @Test
+        void dependentsOfTerm1WithDirectOnlyReachesOnlyFr1() {
+            assertThat(graph.dependents(TERM_1_IRI, true)).containsExactly(FR_1_IRI);
+        }
+
+        /** Without {@code directOnly}, {@link #dependentsOfTerm1TransitivelyReachesFr1AndUc1ButNotTheStep}. */
+        @Test
+        void dependentsOfTerm1WithoutDirectOnlyStillReachesFr1AndUc1() {
+            assertThat(graph.dependents(TERM_1_IRI, false)).containsExactlyInAnyOrder(FR_1_IRI, UC_1_IRI);
+        }
+
         @Test
         void dependentsOfTheRoleReachesUc1Directly() {
             assertThat(graph.dependents(ROLE_IRI)).containsExactly(UC_1_IRI);

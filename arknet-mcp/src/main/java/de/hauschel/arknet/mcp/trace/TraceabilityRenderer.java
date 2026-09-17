@@ -118,7 +118,8 @@ public final class TraceabilityRenderer {
 
     /**
      * Renders {@code impact_analysis}: every resource transitively affected if {@code
-     * targetIri} changes (see {@link TraceabilityGraph#dependents(String)}).
+     * targetIri} changes (see {@link TraceabilityGraph#dependents(String, boolean)}), or, with
+     * {@code directOnly}, only the resources one hop away (issue #594).
      *
      * <p>{@link HandleResolver} only expands a CURIE/bare-id syntactically or via a store lookup
      * that can itself go stale between resolution and read - it never guarantees {@code
@@ -128,12 +129,15 @@ public final class TraceabilityRenderer {
      * ResourceRenderer#notFoundMessage}, reused here so both tools describe an unknown handle
      * identically.</p>
      *
-     * @param projectId the project the graph was read from
-     * @param graph       the traceability graph to report on
-     * @param targetIri   the already-resolved target resource IRI
+     * @param projectId  the project the graph was read from
+     * @param graph      the traceability graph to report on
+     * @param targetIri  the already-resolved target resource IRI
+     * @param directOnly {@code true} to report only direct (depth-1) dependents instead of the
+     *                   full transitive closure
      * @return the digest text
      */
-    public String impactAnalysis(ProjectId projectId, TraceabilityGraph graph, String targetIri) {
+    public String impactAnalysis(ProjectId projectId, TraceabilityGraph graph, String targetIri,
+            boolean directOnly) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(graph, "graph");
         Objects.requireNonNull(targetIri, "targetIri");
@@ -142,11 +146,12 @@ public final class TraceabilityRenderer {
             return ResourceRenderer.notFoundMessage(prefixes, targetIri);
         }
 
-        List<String> affected = graph.dependents(targetIri);
+        List<String> affected = graph.dependents(targetIri, directOnly);
         StringBuilder out = new StringBuilder();
         out.append("# Impact analysis -- project ").append(projectId.value())
                 .append(" -- target: ").append(displayLine(graph, targetIri)).append('\n');
-        out.append("\n## Transitively affected (").append(affected.size()).append(")\n");
+        String sectionTitle = directOnly ? "## Directly affected (" : "## Transitively affected (";
+        out.append('\n').append(sectionTitle).append(affected.size()).append(")\n");
         appendLines(out, graph, affected);
         return out.toString();
     }
