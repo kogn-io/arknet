@@ -155,6 +155,27 @@ class StoreReaderTest {
         assertThat(matches.get(0)).startsWith("_:");
     }
 
+    // --- literalContaining (kogn-io/arknet#594 Part 1) ------------------------
+
+    @Test
+    void literalContainingFindsAMatchCaseInsensitively() {
+        List<Triple> matches = storeReader.literalContaining(PROJECT, "LOGIN");
+
+        assertThat(matches).anyMatch(triple -> triple.subject().equals(FR_1_IRI)
+                && triple.object() instanceof RdfNode.Literal literal
+                && literal.lexicalForm().contains("Login"));
+    }
+
+    @Test
+    void literalContainingRejectsABlankNeedle() {
+        assertThatIllegalArgumentException().isThrownBy(() -> storeReader.literalContaining(PROJECT, "   "));
+    }
+
+    @Test
+    void literalContainingDoesNotSurfaceTheProvenanceGraph() {
+        assertThat(storeReader.literalContaining(PROJECT, "Login")).noneMatch(StoreReaderTest::isProvenance);
+    }
+
     @Test
     void outgoingStillReturnsTheStatementsOfAWellFormedIri() {
         List<Triple> outgoing = storeReader.outgoing(PROJECT, FR_1_IRI);

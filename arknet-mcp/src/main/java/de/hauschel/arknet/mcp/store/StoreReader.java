@@ -20,6 +20,7 @@ import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDFTerm;
+import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
@@ -235,6 +236,47 @@ public final class StoreReader {
                     .map(StoreReader::subjectReference)
                     .filter(Objects::nonNull)
                     .distinct()
+                    .toList();
+        }
+    }
+
+    /**
+     * Finds every statement whose literal object contains {@code needle}, case-insensitively,
+     * regardless of language tag or datatype - the free-text search behind {@code text_search}
+     * (kogn-io/arknet#594 Part 1). {@code impact_analysis} answers "what references this
+     * resource" over a fixed set of edges; this answers "where does this text occur" over every
+     * literal the project holds, a question the edge-only tools cannot answer at all.
+     *
+     * <p><strong>{@code needle} is bound, never concatenated.</strong> Unlike {@link
+     * #findByIdentifier}, which validates a caller-typed handle against the narrow {@code
+     * dcterms:identifier} shape before splicing it into the query text, this method's input is
+     * unconstrained free text an agent chooses - so the match itself runs as {@code
+     * FILTER(CONTAINS(LCASE(STR(?o)), LCASE(?q)))} with {@code ?q} substituted through {@link
+     * io.kogn.rdf.dataset.SparqlQuery#select(String, Map)}'s pre-bound-variable overload, the
+     * same discipline that overload's own Javadoc recommends for exactly this case.</p>
+     *
+     * @param projectId the project to search
+     * @param needle    the substring to search for; must not be blank (an empty needle would
+     *                  match every literal in the project, which answers no question a caller
+     *                  could have meant to ask)
+     * @return every matching statement (subject, predicate, literal object), in no particular
+     *         order
+     * @throws IllegalArgumentException if {@code needle} is blank
+     */
+    public List<Triple> literalContaining(ProjectId projectId, String needle) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(needle, "needle");
+        if (needle.isBlank()) {
+            throw new IllegalArgumentException("needle must not be blank");
+        }
+        String pattern = "?s ?p ?o . FILTER(isLiteral(?o) && CONTAINS(LCASE(STR(?o)), LCASE(?q)))";
+        String query = "SELECT DISTINCT ?s ?p ?o WHERE { " + excludingInfrastructure(pattern) + " }";
+        Map<String, RDFTerm> bindings = Map.of("q", new SimpleRdf().createLiteral(needle));
+        try (DatasetHandle handle = acquire(projectId)) {
+            return handle.sparqlQuery().select(query, bindings)
+                    .map(StoreReader::toTriple)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
                     .toList();
         }
     }

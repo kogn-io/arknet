@@ -44,7 +44,7 @@ where the recorded relationships differ from the code.
 | BC-3 | Architecture & Decisions     | ArchitectureDecisionRecord, Consequence, ConsideredOption     | ADR-52 (succeeds ADR-10) |
 | BC-4 | Actor                        | Actor, Role                                                   | ADR-36, ADR-37 |
 | BC-5 | Project Registry             | Project, Anchor, language commitment -- supporting context outside the eight lifecycle contexts, upstream of every other | ADR-53 (succeeds ADR-13) |
-| BC-6 | Model Analysis               | no resource of its own; reads every other context: impact analysis, trace matrix, orphans, role/use-case matrix, term co-occurrence, `store_check`, the HTML report | ADR-54 |
+| BC-6 | Model Analysis               | no resource of its own; reads every other context: impact analysis, trace matrix, orphans, role/use-case matrix, term co-occurrence, `store_check`, `text_search`, the HTML report | ADR-54 |
 
 Three core contexts (BC-1..3) are the realised part of the eight-context lifecycle
 target cut (ADR-46); three supporting contexts (BC-4..6) sit outside it (ADR-52).
@@ -100,7 +100,7 @@ Outside every Bounded Context:
 
 | Role in the schema                 | Module                          | Note |
 |------------------------------------|---------------------------------|------|
-| Application (composition root)     | arknet-mcp                      | Spring Boot daemon; additionally carries the generic store read path, the type-independent exception (ADR-55: `store_overview`, `resource_get`). The five cross-context evaluations, `store_check` and the HTML report still live here; their target is Model Analysis (ADR-54, #560) |
+| Application (composition root)     | arknet-mcp                      | Spring Boot daemon; additionally carries the generic store read path, the type-independent exception (ADR-55: `store_overview`, `resource_get`). The five cross-context evaluations, `store_check`, `text_search` and the HTML report still live here; their target is Model Analysis (ADR-54, #560) |
 | Shared Kernel                      | arknet-shared-kernel            | ADR-56: keeps ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale. As built it also carries LocalizedLiteral (target: persistence-support) and the anchor/translation mechanics ProjectResolver, StaleTranslationHint, FieldLanguageLookup (target: a support module of the tool adapters, #561) |
 | Technical library                  | arknet-persistence-support      | SHACL gate, WriteFunnel, vocabulary constants -- no model term, hence neither Shared Kernel nor vocabulary |
 | Technical library (test scope)     | arknet-persistence-test-support | Guarded* decorators |

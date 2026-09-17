@@ -77,6 +77,7 @@ import de.hauschel.arknet.mcp.store.StoreFieldLanguageLookup;
 import de.hauschel.arknet.mcp.store.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreReportController;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
+import de.hauschel.arknet.mcp.search.TextSearchMcpTools;
 import de.hauschel.arknet.mcp.trace.TraceabilityMcpTools;
 import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepositoryFactory;
@@ -1134,5 +1135,17 @@ public class ArknetMcpConfiguration {
             final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projectResolver,
             final DisplayLocale displayLocale) {
         return new TraceabilityMcpTools(storeReader, prefixes, projectResolver, displayLocale);
+    }
+
+    /**
+     * The one free-text search tool ({@code text_search}, kogn-io/arknet#594 Part 1). Wired here
+     * rather than into any hexagon for the same reason {@link #storeCheckMcpTools} is: it reads
+     * whatever the seven bounded contexts wrote, through the very same {@link #storeReader}/
+     * {@link #storeReportPrefixes} beans, and has no domain of its own.
+     */
+    @Bean
+    TextSearchMcpTools textSearchMcpTools(
+            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projectResolver) {
+        return new TextSearchMcpTools(storeReader, prefixes, projectResolver);
     }
 }
