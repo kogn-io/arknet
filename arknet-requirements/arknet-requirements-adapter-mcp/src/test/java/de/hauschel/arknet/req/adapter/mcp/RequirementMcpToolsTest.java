@@ -213,7 +213,7 @@ class RequirementMcpToolsTest {
     void addPassesAcceptanceCriteriaThroughAndRendersThem() {
         List<String> criteria = List.of("Login succeeds with valid credentials", "Login is rate-limited");
 
-        String rendered = adapter.add(null, "t", "d", null, "FUNCTIONAL", criteria, null, null, null, null);
+        String rendered = adapter.add(null, "t", "d", null, "FUNCTIONAL", criteria, null, null, null, null, null);
 
         assertEquals(criteria, stub.lastAddCommand.acceptanceCriteria());
         assertTrue(rendered.contains("[done when: Login succeeds with valid credentials; Login is rate-limited]"),
@@ -228,7 +228,7 @@ class RequirementMcpToolsTest {
     @Test
     void addRendersTheNormativeDescriptionAlongsideTheTitle() {
         String rendered = adapter.add(null, "Login", "The system shall authenticate users via OAuth2", null,
-                "FUNCTIONAL", List.of("Done when it works"), null, null, null, null);
+                "FUNCTIONAL", List.of("Done when it works"), null, null, null, null, null);
 
         assertTrue(rendered.contains("The system shall authenticate users via OAuth2"), rendered);
     }
@@ -241,7 +241,7 @@ class RequirementMcpToolsTest {
     @Test
     void addWithoutAcceptanceCriteriaIsRejectedByTheDomainInvariant() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "t", "d", null, "FUNCTIONAL", null, null, null, null, null));
+                () -> adapter.add(null, "t", "d", null, "FUNCTIONAL", null, null, null, null, null, null));
     }
 
     // --- rationale (issue #321) --------------------------------------------------------------
@@ -250,7 +250,7 @@ class RequirementMcpToolsTest {
     @Test
     void addPassesTheRationaleThroughAndRendersIt() {
         String rendered = adapter.add(null, "t", "d", RATIONALE, "FUNCTIONAL", List.of("Done when it works"),
-                null, null, null, null);
+                null, null, null, null, null);
 
         assertEquals(RATIONALE, stub.lastAddCommand.rationale());
         assertTrue(rendered.contains("[why: " + RATIONALE + "]"), rendered);
@@ -260,7 +260,7 @@ class RequirementMcpToolsTest {
     @Test
     void addWithoutARationaleRendersNoWhyBlock() {
         String rendered = adapter.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"),
-                null, null, null, null);
+                null, null, null, null, null);
 
         assertNull(stub.lastAddCommand.rationale());
         assertFalse(rendered.contains("[why:"), rendered);
@@ -269,7 +269,8 @@ class RequirementMcpToolsTest {
     /** A blank rationale is treated as omitted, mirroring every other optional string field. */
     @Test
     void addTreatsABlankRationaleAsOmitted() {
-        adapter.add(null, "t", "d", "   ", "FUNCTIONAL", List.of("Done when it works"), null, null, null, null);
+        adapter.add(null, "t", "d", "   ", "FUNCTIONAL", List.of("Done when it works"), null, null, null, null,
+                null);
 
         assertNull(stub.lastAddCommand.rationale());
     }
@@ -300,7 +301,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void addPassesTheLanguageThrough() {
-        adapter.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"), null, null, "de", null);
+        adapter.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"), null, null, "de", null, null);
 
         assertEquals("de", stub.lastAddCommand.language());
     }
@@ -308,7 +309,7 @@ class RequirementMcpToolsTest {
     /** A blank {@code language} is treated as omitted (untagged), mirroring every other optional field. */
     @Test
     void addTreatsABlankLanguageAsOmitted() {
-        adapter.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"), null, null, "  ", null);
+        adapter.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"), null, null, "  ", null, null);
 
         assertEquals(null, stub.lastAddCommand.language());
     }

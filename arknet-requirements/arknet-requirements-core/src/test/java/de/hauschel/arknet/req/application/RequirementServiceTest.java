@@ -759,6 +759,40 @@ class RequirementServiceTest {
         assertEquals(List.of(), added.usesTerms());
     }
 
+    /**
+     * {@code req_add}'s {@code usesTermCodes} resolves the same way {@code req_update}'s field of
+     * the same name does - a known code links the term straight away, sparing the caller the
+     * separate {@code req_link_term} round trip {@code newFunctionalRequirement()} above still
+     * needs (kogn-io/arknet#598).
+     */
+    @Test
+    void addWithUsesTermCodesLinksTheGivenTermsFromTheStart() {
+        Requirement added = service.add(WS,
+                new NewRequirement("User can log in", "The system shall let a registered user authenticate.", null,
+                        RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null,
+                        List.of("TERM-1", "TERM-2")),
+                DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new TermRef(TERM_1), new TermRef(TERM_2)), added.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1), new TermRef(TERM_2)),
+                service.get(WS, added.code(), null).orElseThrow().usesTerms());
+    }
+
+    /**
+     * An unknown term code in {@code usesTermCodes} is rejected before anything is written - the
+     * same didactic rejection {@code req_update}'s field of the same name raises (kogn-io/arknet#598).
+     */
+    @Test
+    void addWithAnUnknownUsesTermCodeIsRejectedAndCreatesNothing() {
+        assertThrows(NoSuchElementException.class, () -> service.add(WS,
+                new NewRequirement("User can log in", "The system shall let a registered user authenticate.", null,
+                        RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null,
+                        List.of("TERM-99")),
+                DEFAULT_LANGUAGE));
+
+        assertTrue(repository.findAll(WS, null).isEmpty());
+    }
+
     @Test
     void linkTermAddsTheTermToTheRequirement() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
