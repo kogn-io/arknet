@@ -735,7 +735,7 @@ class AdrMcpToolsTest {
 
         assertEquals(new AdrCode("ADR-1"), stub.lastDeletedCode);
         assertEquals(PROJECT, stub.lastProjectId);
-        assertEquals("Deleted: ADR-1", rendered);
+        assertEquals("Deleted: ADR-1\n\nproject: test-project", rendered);
     }
 
     @Test
@@ -880,6 +880,112 @@ class AdrMcpToolsTest {
                 assertEquals(List.of(), dateParameters, tool + " must not take a date");
             }
         });
+    }
+
+    // --- Answer shapes: project line, short link confirmation, list-field diff (kogn-io/arknet#597/#598/#600) --
+
+    /**
+     * kogn-io/arknet#597: a call whose {@code projectAnchor} was forgotten writes into the
+     * session's project, silently. Every writing answer therefore ends by naming the project it
+     * hit - here for each of the six writing tools, so none of them can lose the line on its own.
+     */
+    @Test
+    void everyWritingToolClosesItsAnswerWithTheProject() {
+        AdrMcpTools named = new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                requirements, contexts, terms,
+                anchor -> new ResolvedProject(PROJECT, "en", List.of(), "arknet"), NO_TRANSLATIONS);
+        String trailer = "\n\nproject: arknet";
+
+        assertTrue(named.add(null, "A title", "Why this was needed", "What was decided",
+                null, null, null, null, null, null, null, ANCHOR).endsWith(trailer));
+        assertTrue(named.update(null, "ADR-1", "A better title", null, null, null, null, null, null, null,
+                null, null, null, null, null, null, ANCHOR).endsWith(trailer));
+        assertTrue(named.setStatus(null, "ADR-1", "ACCEPTED", null, ANCHOR).endsWith(trailer));
+        assertTrue(named.supersede(null, "ADR-2", "ADR-1", ANCHOR).endsWith(trailer));
+        assertTrue(named.unsupersede(null, "ADR-1", ANCHOR).endsWith(trailer));
+        assertTrue(named.delete(null, "ADR-1", ANCHOR).endsWith(trailer));
+    }
+
+    /** A read tool carries no project line - the signal is about writes (kogn-io/arknet#597). */
+    @Test
+    void readingToolsCarryNoProjectLine() {
+        assertTrue(!adapter.list(null, null, ANCHOR).contains("project:"), "adr_list");
+        assertTrue(!adapter.get(null, "ADR-99", null, ANCHOR).contains("project:"), "adr_get");
+    }
+
+    /**
+     * kogn-io/arknet#600: {@code adr_supersede}/{@code adr_unsupersede} are link-shaped - their
+     * caller already holds both ends - and answer with a one-line confirmation naming the status
+     * change instead of the whole decision.
+     */
+    @Test
+    void supersedeAndUnsupersedeAnswerWithAConfirmationRatherThanTheWholeResource() {
+        String superseded = adapter.supersede(null, "ADR-2", "ADR-1", ANCHOR);
+        String unsuperseded = adapter.unsupersede(null, "ADR-1", ANCHOR);
+
+        assertTrue(superseded.startsWith("superseded ADR-1 by ADR-2 (ACCEPTED -> SUPERSEDED)"), superseded);
+        assertTrue(unsuperseded.startsWith("unsuperseded ADR-1 (SUPERSEDED -> ACCEPTED)"), unsuperseded);
+        assertTrue(!superseded.contains("Use an embedded triple store"), superseded);
+    }
+
+    /**
+     * kogn-io/arknet#598: {@code addressesRequirement} et al. replace the set wholesale, so a
+     * caller restating it from memory silently drops what it forgot. The diff is computed from the
+     * field before and after the write - the request cannot show what fell out of it.
+     */
+    @Test
+    void updateNamesWhatLeftAndWhatJoinedAReferenceList() {
+        ResourceId before = ResourceId.of("https://w3id.org/arknet/id/req-before");
+        ResourceId after = ResourceId.of("https://w3id.org/arknet/id/req-after");
+        requirements.register(before, new RequirementCode("FR-3"));
+        requirements.register(after, new RequirementCode("FR-9"));
+        stub.nextDetail = detail(adrWith(List.of(before), List.of(), null), List.of(), List.of());
+        stub.nextUpdatedRequirementIds = List.of(after);
+
+        String rendered = adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, null,
+                null, List.of("FR-9"), null, null, null, ANCHOR);
+
+        assertTrue(rendered.startsWith("addressesRequirement: removed FR-3, added FR-9\n"), rendered);
+    }
+
+    /** An {@code adr_update} that leaves a reference list alone costs no diff line for it. */
+    @Test
+    void updateStaysSilentWhenAReferenceListDidNotChange() {
+        ResourceId unchanged = ResourceId.of("https://w3id.org/arknet/id/req-unchanged");
+        requirements.register(unchanged, new RequirementCode("FR-1"));
+        stub.nextDetail = detail(adrWith(List.of(unchanged), List.of(), null), List.of(), List.of());
+        stub.nextUpdatedRequirementIds = List.of(unchanged);
+
+        String rendered = adapter.update(null, "ADR-1", "Renamed", null, null, null, null, null, null, null,
+                null, null, List.of("FR-1"), null, null, null, ANCHOR);
+
+        assertTrue(!rendered.contains("addressesRequirement:"), rendered);
+        assertTrue(rendered.startsWith("ADR-1"), rendered);
+    }
+
+    /**
+     * consequence/consideredOption carry no business code of their own (positions shift on
+     * removal), so their diff line names only what actually left/joined the list as a count.
+     */
+    @Test
+    void updateNamesOnlyCountsForTheTextListFields() {
+        String rendered = adapter.update(null, "ADR-1", null, null, null,
+                List.of(new NewConsequenceInput("New one", "NEGATIVE")), null,
+                List.of(new NewConsideredOptionInput("New option", "reason", "REJECTED")), null,
+                null, null, null, null, null, null, null, ANCHOR);
+
+        assertTrue(rendered.contains("consequence: added 1"), rendered);
+        assertTrue(rendered.contains("consideredOption: added 1"), rendered);
+    }
+
+    /** Correcting an existing consequence's wording in place is neither a removal nor an addition. */
+    @Test
+    void updatePositionCorrectionAloneCostsNoCountDiffLine() {
+        String rendered = adapter.update(null, "ADR-1", null, null, null, null,
+                List.of(new ConsequenceCorrectionInput(1, "Corrected", "POSITIVE")), null, null, null, null,
+                null, null, null, null, null, ANCHOR);
+
+        assertTrue(!rendered.contains("consequence:"), rendered);
     }
 
     private static Adr adrWith(List<ResourceId> requirementIds, List<ResourceId> contextIds,
@@ -1046,6 +1152,8 @@ class AdrMcpToolsTest {
         private AdrCode lastDeletedCode;
         private RuntimeException deleteFailure;
         private AdrDetail nextDetail;
+        /** What {@link #update} reports as the addressed requirements after the write. */
+        private List<ResourceId> nextUpdatedRequirementIds = List.of();
         private List<AdrDetail> allAdrs = List.of();
         private Map<AdrCode, AdrDisplayFallback> fallbacksForList = Map.of();
         /** What {@link #skippedCount} answers next - {@code 0} unless a test sets otherwise. */
@@ -1090,7 +1198,7 @@ class AdrMcpToolsTest {
             lastUpdatedCode = code;
             lastCorrection = correction;
             lastProjectId = projectId;
-            return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
+            return detail(adrWith(nextUpdatedRequirementIds, List.of(), null), List.of(), List.of());
         }
 
         @Override
