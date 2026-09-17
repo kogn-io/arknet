@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.uc.adapter.mcp;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -288,6 +289,30 @@ final class UseCasePresenter {
         }
         return resolveConstraints.resolveExisting(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedConstraint::id, c -> c, (first, second) -> first));
+    }
+
+    /**
+     * The business codes {@code uc}'s {@code usesTerms} resolve to, in the order the use case
+     * carries them - the "before"/"after" side of {@code uc_update}'s {@code usesTerm} diff line
+     * (kogn-io/arknet#598). An id {@link ResolveTerms} cannot resolve contributes its bare IRI,
+     * exactly as {@link #renderTerm} does elsewhere - a term missing from the glossary must still
+     * show up on both sides of the diff, or removing it would read as if nothing had changed.
+     */
+    List<String> usesTermCodesOf(final ProjectId projectId, final UseCase uc) {
+        final Map<ResourceId, ResolvedTerm> byId = resolveUsesTermsFor(projectId, uc);
+        return uc.usesTerms().stream().map(ref -> renderTerm(ref, byId)).toList();
+    }
+
+    /**
+     * The business codes {@code uc}'s {@code supportingRoles} resolve to, in the order the use
+     * case carries them - the "before"/"after" side of {@code uc_update}'s {@code supportingRole}
+     * diff line (kogn-io/arknet#598). Resolves through the same batch call
+     * {@link #formatFull}/{@link #resolveRolesFor} use for {@code primaryRole} together with
+     * {@code supportingRoles}; the primary role's own resolution is simply unused here.
+     */
+    List<String> supportingRoleCodesOf(final ProjectId projectId, final UseCase uc) {
+        final Map<ResourceId, ResolvedRole> byId = resolveRolesFor(projectId, uc, null);
+        return uc.supportingRoles().stream().map(ref -> renderRole(ref, byId)).toList();
     }
 
     private static void appendOptional(final StringBuilder sb, final String field, final String value) {

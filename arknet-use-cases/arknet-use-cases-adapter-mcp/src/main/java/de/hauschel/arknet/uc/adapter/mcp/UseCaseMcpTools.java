@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -20,6 +21,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
@@ -30,6 +32,8 @@ import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
 import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
+import de.hauschel.arknet.uc.application.port.in.UnlinkConstraint;
+import de.hauschel.arknet.uc.application.port.in.UnlinkTerm;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.domain.RemovedPositions;
@@ -42,7 +46,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 /**
  * Driving (in) adapter of the use-cases component: exposes the use-case use-cases as MCP
  * tools ({@code uc_add}, {@code uc_list}, {@code uc_get}, {@code uc_update}, {@code uc_link_term},
- * {@code uc_link_constraint}) and delegates each tool call to the corresponding in-port.
+ * {@code uc_unlink_term}, {@code uc_link_constraint}, {@code uc_unlink_constraint}) and delegates
+ * each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the use-cases hexagon (symmetric to the out-adapter
  * {@code arknet-use-cases-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -67,6 +72,24 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  * "Requirement 'FR-1' does not exist ... create it first with req_add") reaches the agent as
  * a tool error rather than a raw stack trace. Keeping the tool method thin preserves that
  * message verbatim.</p>
+ *
+ * <p><strong>What a writing answer says (kogn-io/arknet#597/#598/#600).</strong> Every writing
+ * tool closes its answer with {@code project: <name>}, so a call whose {@code projectAnchor} was
+ * forgotten shows which project it actually hit instead of landing silently in the session's one.
+ * {@code uc_link_term}/{@code uc_unlink_term}/{@code uc_link_constraint}/{@code
+ * uc_unlink_constraint} take a list of codes and answer with one short confirmation line per edge
+ * rather than the whole resource - their caller already holds both ends, and this is not atomic
+ * across the list: a code that fails leaves every edge named before it already written or
+ * removed. {@code uc_update} keeps the full resource and its stale-translation signal, preceded
+ * by a diff line for every list field that came out holding something else than it held before
+ * ({@code usesTerm}/{@code supportingRole} by code, {@code mainStep}/{@code extensionStep} by
+ * count only, since neither carries a stable per-entry identity a caller types) - the diff is
+ * computed from the field's state before and after the write, never from the request, because a
+ * wholesale replace drops whatever it forgets to restate and that loss is exactly what the
+ * request cannot show. All three shapes are rendered by {@link WriteResponse}, so every bounded
+ * context's tools read the same. {@code constrainedBy} has no wholesale correction field on
+ * {@code uc_update} at all - {@code uc_link_constraint}/{@code uc_unlink_constraint} are its only
+ * correction path, so it never needs a diff line there.</p>
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a
  * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
@@ -124,6 +147,30 @@ public final class UseCaseMcpTools {
     private static final String EXTENSION_STEP_FIELD = "extensionStep";
 
     /**
+     * The local name of {@code arkreq:usesTerm} - the edge {@code uc_link_term}/{@code
+     * uc_unlink_term} draw and {@code uc_update}'s {@code usesTermCodes} replaces. Names the edge
+     * in the short link/unlink confirmation and in {@code uc_update}'s diff line alike, so the two
+     * never drift apart on what they are talking about (kogn-io/arknet#598/#600).
+     */
+    private static final String TERM_EDGE = "usesTerm";
+
+    /**
+     * The local name of {@code oslc_rm:constrainedBy} - the edge {@code uc_link_constraint}/
+     * {@code uc_unlink_constraint} draw. {@code constrainedBy} has no wholesale correction field
+     * on {@code uc_update}, so unlike {@link #TERM_EDGE} this name is only ever used in a link/
+     * unlink confirmation line, never in a diff line.
+     */
+    private static final String CONSTRAINT_EDGE = "constrainedBy";
+
+    /**
+     * The local name of {@code arkreq:supportingRole} - {@code uc_update}'s diff-line field for
+     * {@code supportingRoles} (kogn-io/arknet#598). {@code primaryRole} carries no diff line: it
+     * is a plain replace-or-leave field with no wholesale-loss risk to make visible (a use case
+     * always has exactly one, so there is nothing a caller could forget to restate).
+     */
+    private static final String SUPPORTING_ROLE_FIELD = "supportingRole";
+
+    /**
      * The multilingual fields {@code uc_update} can write, as {@code FieldLanguageLookup} keys - the
      * local names of the predicates behind them, or of the edge owning a child resource's text.
      * {@code arknet-architecture-tests} reads this list reflectively and holds it against the
@@ -139,13 +186,15 @@ public final class UseCaseMcpTools {
     private final GetUseCase getUseCase;
     private final UpdateUseCase updateUseCase;
     private final LinkTerm linkTerm;
+    private final UnlinkTerm unlinkTerm;
     private final LinkConstraint linkConstraint;
+    private final UnlinkConstraint unlinkConstraint;
     private final ProjectResolver projects;
     private final UseCasePresenter presenter;
     private final StaleTranslationHint staleTranslations;
 
     /**
-     * Creates the adapter with its seven driving in-ports, the four borrowed sibling-hexagon
+     * Creates the adapter with its nine driving in-ports, the four borrowed sibling-hexagon
      * display ports and the resolver that maps each call's origin anchor to a project.
      *
      * @param addUseCase          in-port backing {@code uc_add}
@@ -155,7 +204,9 @@ public final class UseCaseMcpTools {
      * @param getUseCase          in-port backing {@code uc_get}
      * @param updateUseCase       in-port backing {@code uc_update}
      * @param linkTerm            in-port backing {@code uc_link_term}
+     * @param unlinkTerm          in-port backing {@code uc_unlink_term} (kogn-io/arknet#598)
      * @param linkConstraint      in-port backing {@code uc_link_constraint}
+     * @param unlinkConstraint    in-port backing {@code uc_unlink_constraint} (kogn-io/arknet#598)
      * @param resolveRoles        the actor register's driving port used only to render a
      *                            referenced role's business code instead of its bare IRI
      *                            (ADR-37/kogn-io/arknet#405 Part C)
@@ -176,7 +227,9 @@ public final class UseCaseMcpTools {
             final GetUseCase getUseCase,
             final UpdateUseCase updateUseCase,
             final LinkTerm linkTerm,
+            final UnlinkTerm unlinkTerm,
             final LinkConstraint linkConstraint,
+            final UnlinkConstraint unlinkConstraint,
             final ResolveRoles resolveRoles,
             final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements,
@@ -190,7 +243,9 @@ public final class UseCaseMcpTools {
         this.getUseCase = Objects.requireNonNull(getUseCase, "getUseCase");
         this.updateUseCase = Objects.requireNonNull(updateUseCase, "updateUseCase");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
+        this.unlinkTerm = Objects.requireNonNull(unlinkTerm, "unlinkTerm");
         this.linkConstraint = Objects.requireNonNull(linkConstraint, "linkConstraint");
+        this.unlinkConstraint = Objects.requireNonNull(unlinkConstraint, "unlinkConstraint");
         this.projects = Objects.requireNonNull(projects, "projects");
         this.presenter = new UseCasePresenter(resolveRoles, resolveTerms, resolveRequirements, resolveConstraints);
         this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
@@ -376,7 +431,7 @@ public final class UseCaseMcpTools {
                 blankToNull(language),
                 usesTermCodes == null ? null : List.copyOf(usesTermCodes));
         final UseCase created = addUseCase.add(project.id(), command, project.defaultLanguage());
-        return presenter.formatFull(project.id(), created, null);
+        return WriteResponse.withProject(presenter.formatFull(project.id(), created, null), project);
     }
 
     @McpTool(name = "uc_list", description = "List all use cases in this project (id, title, goal; "
@@ -573,23 +628,105 @@ public final class UseCaseMcpTools {
                 .usesTermCodes(usesTermCodes == null ? null : List.copyOf(usesTermCodes))
                 .language(blankToNull(language))
                 .build();
+        // Read once, before the write, for the same reason the stale-translation hint is: the
+        // diff line is what left and joined a wholesale-replaced field, and only the state before
+        // this call can say that. A caller that restates usesTermCodes/supportingRoles from memory
+        // silently unlinks what it forgot, and the request it sent is precisely where that loss
+        // cannot be seen (kogn-io/arknet#598). extensionCountChanges reuses the same read.
+        final boolean needsBeforeRead = correction.usesTermCodes() != null || correction.supportingRoles() != null
+                || correction.extensions() != null;
+        final Optional<UseCase> before = needsBeforeRead
+                ? getUseCase.get(project.id(), code, null)
+                : Optional.empty();
         final String staleHint = staleTranslationHint(project, code, correction, extensions, stepTextPatches,
-                newMainSteps, removeMainStepPositions);
+                newMainSteps, removeMainStepPositions, before);
         final UseCase updated = updateUseCase.update(project.id(), code, correction, project.defaultLanguage());
-        return presenter.formatFull(project.id(), updated, null) + staleHint;
+        final String diff = updateDiffLines(project.id(), correction, before, updated, newMainSteps,
+                removeMainStepPositions);
+        final String body = (diff.isEmpty() ? "" : diff + "\n")
+                + presenter.formatFull(project.id(), updated, null) + staleHint;
+        return WriteResponse.withProject(body, project);
+    }
+
+    /**
+     * The diff lines {@code uc_update} prefixes its answer with (kogn-io/arknet#598): one per list
+     * field that came out holding something else than it held before this call, computed from the
+     * field's state before and after the write rather than from the request. {@code usesTerm}/
+     * {@code supportingRole} are diffed by code ({@link WriteResponse#listFieldDiff}); {@code
+     * mainStep}/{@code extensionStep} carry no stable per-entry identity a caller types, so they
+     * are diffed by count only ({@link #countDiff}).
+     */
+    private String updateDiffLines(final ProjectId projectId, final UseCaseCorrection correction,
+            final Optional<UseCase> before, final UseCase updated, final List<NewMainStepInput> newMainSteps,
+            final List<Integer> removeMainStepPositions) {
+        final List<String> lines = new ArrayList<>();
+        if (correction.usesTermCodes() != null) {
+            final List<String> beforeCodes = before.map(uc -> presenter.usesTermCodesOf(projectId, uc))
+                    .orElseGet(List::of);
+            addIfNotEmpty(lines, WriteResponse.listFieldDiff(TERM_EDGE, beforeCodes,
+                    presenter.usesTermCodesOf(projectId, updated)));
+        }
+        if (correction.supportingRoles() != null) {
+            final List<String> beforeCodes = before.map(uc -> presenter.supportingRoleCodesOf(projectId, uc))
+                    .orElseGet(List::of);
+            addIfNotEmpty(lines, WriteResponse.listFieldDiff(SUPPORTING_ROLE_FIELD, beforeCodes,
+                    presenter.supportingRoleCodesOf(projectId, updated)));
+        }
+        // mainStep is corrected incrementally (append/remove by position, never a wholesale
+        // resend), so the exact removed/added counts are already in this call's own arguments -
+        // no read needed, and no risk of an invisible loss the way a wholesale field has.
+        final int mainStepsRemoved = removeMainStepPositions == null ? 0 : removeMainStepPositions.size();
+        final int mainStepsAdded = newMainSteps == null ? 0 : newMainSteps.size();
+        addIfNotEmpty(lines, countDiff(MAIN_STEP_FIELD, mainStepsRemoved, mainStepsAdded));
+        if (correction.extensions() != null) {
+            final int beforeSize = before.map(uc -> uc.extensions().size()).orElse(0);
+            final int afterSize = updated.extensions().size();
+            addIfNotEmpty(lines,
+                    countDiff(EXTENSION_STEP_FIELD, Math.max(0, beforeSize - afterSize),
+                            Math.max(0, afterSize - beforeSize)));
+        }
+        return String.join("\n", lines);
+    }
+
+    /** Appends {@code line} to {@code lines} unless it is empty - {@link WriteResponse} convention. */
+    private static void addIfNotEmpty(final List<String> lines, final String line) {
+        if (!line.isEmpty()) {
+            lines.add(line);
+        }
+    }
+
+    /**
+     * A count-only diff line for a list field with no stable per-entry identity a caller types
+     * (a main-flow step, an extension line) - e.g. {@code mainStep: removed 1, added 2}. Empty
+     * when nothing changed, mirroring {@link WriteResponse#listFieldDiff}'s own convention.
+     */
+    private static String countDiff(final String field, final int removedCount, final int addedCount) {
+        if (removedCount == 0 && addedCount == 0) {
+            return "";
+        }
+        final List<String> parts = new ArrayList<>();
+        if (removedCount > 0) {
+            parts.add("removed " + removedCount);
+        }
+        if (addedCount > 0) {
+            parts.add("added " + addedCount);
+        }
+        return field + ": " + String.join(", ", parts);
     }
 
     @McpTool(name = "uc_link_term",
-            description = "Link a use case to a glossary term of the ubiquitous language it uses. The term "
-                    + "must already exist (create it with term_add first). Linking the same term twice is a "
-                    + "no-op. To remove a link (or replace the whole set), use uc_update's usesTermCodes "
-                    + "instead.")
+            description = "Link a use case to one or more glossary terms of the ubiquitous language it uses, "
+                    + "each of which must already exist (create with term_add first). One call, one edge per "
+                    + "term - the answer is one short confirmation line per term, not the whole use case. "
+                    + "Linking an already-linked term is a no-op. Not atomic across the list: a term that "
+                    + "fails to resolve leaves every term named before it already linked. To remove a link, "
+                    + "use uc_unlink_term; to replace the whole set, use uc_update's usesTermCodes.")
     public String linkTerm(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
-            @McpToolParam(description = "Term code, e.g. TERM-1 (the term's business code, resolved "
-                    + "against the glossary - not its skos:prefLabel or its store IRI)")
-            final String termId,
+            @McpToolParam(description = "Term codes, e.g. ['TERM-1', 'TERM-2'] (each the term's business "
+                    + "code, resolved against the glossary - not its skos:prefLabel or its store IRI)")
+            final List<String> termIds,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -599,23 +736,59 @@ public final class UseCaseMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
-        // Touches no language-tagged field itself, but the read-modify-write round trip behind it
-        // still needs the project's own default language to echo an untouched field back under it
-        // rather than the process default (issue #468).
-        final UseCase updated =
-                linkTerm.linkTerm(projectId, new UseCaseCode(id), termId, project.defaultLanguage());
-        return presenter.formatFull(projectId, updated, null);
+        final UseCaseCode code = new UseCaseCode(id);
+        final List<String> lines = new ArrayList<>();
+        for (final String termId : termIds) {
+            // Touches no language-tagged field itself, but the read-modify-write round trip
+            // behind it still needs the project's own default language to echo an untouched
+            // field back under it rather than the process default (issue #468).
+            linkTerm.linkTerm(projectId, code, termId, project.defaultLanguage());
+            lines.add(WriteResponse.linked(id, termId, TERM_EDGE));
+        }
+        return WriteResponse.withProject(String.join("\n", lines), project);
+    }
+
+    @McpTool(name = "uc_unlink_term",
+            description = "Remove one use case's link to one or more glossary terms, without restating the "
+                    + "rest (uc_update's usesTermCodes replaces the whole set). One call, one edge per term. "
+                    + "Never a silent no-op: a term that is not currently linked is rejected. Not atomic "
+                    + "across the list: a term that fails leaves every term named before it already "
+                    + "unlinked.")
+    public String unlinkTerm(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
+            @McpToolParam(description = "Term codes, e.g. ['TERM-1', 'TERM-2']") final List<String> termIds,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
+        final UseCaseCode code = new UseCaseCode(id);
+        final List<String> lines = new ArrayList<>();
+        for (final String termId : termIds) {
+            unlinkTerm.unlinkTerm(projectId, code, termId, project.defaultLanguage());
+            lines.add(WriteResponse.unlinked(id, termId, TERM_EDGE));
+        }
+        return WriteResponse.withProject(String.join("\n", lines), project);
     }
 
     @McpTool(name = "uc_link_constraint",
-            description = "Link a use case to a constraint it is bound by. The constraint must already exist "
-                    + "(create it first with constraint_add). Linking the same constraint twice is a no-op.")
+            description = "Link a use case to one or more constraints it is bound by, each of which must "
+                    + "already exist (create with constraint_add first). One call, one edge per constraint - "
+                    + "the answer is one short confirmation line per constraint, not the whole use case. "
+                    + "Linking an already-linked constraint is a no-op. Not atomic across the list: a "
+                    + "constraint that fails to resolve leaves every constraint named before it already "
+                    + "linked. To remove a link, use uc_unlink_constraint.")
     public String linkConstraint(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
-            @McpToolParam(description = "Constraint code, e.g. TCON-1, BCON-1 or RCON-1 (the constraint's "
+            @McpToolParam(description = "Constraint codes, e.g. ['TCON-1', 'BCON-1'] (each the constraint's "
                     + "business code, not its store IRI)")
-            final String constraintId,
+            final List<String> constraintIds,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -625,12 +798,45 @@ public final class UseCaseMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
-        // Touches no language-tagged field itself, but the read-modify-write round trip behind it
-        // still needs the project's own default language to echo an untouched field back under it
-        // rather than the process default (issue #468).
-        final UseCase updated = linkConstraint.linkConstraint(
-                projectId, new UseCaseCode(id), constraintId, project.defaultLanguage());
-        return presenter.formatFull(projectId, updated, null);
+        final UseCaseCode code = new UseCaseCode(id);
+        final List<String> lines = new ArrayList<>();
+        for (final String constraintId : constraintIds) {
+            // Touches no language-tagged field itself, but the read-modify-write round trip
+            // behind it still needs the project's own default language to echo an untouched
+            // field back under it rather than the process default (issue #468).
+            linkConstraint.linkConstraint(projectId, code, constraintId, project.defaultLanguage());
+            lines.add(WriteResponse.linked(id, constraintId, CONSTRAINT_EDGE));
+        }
+        return WriteResponse.withProject(String.join("\n", lines), project);
+    }
+
+    @McpTool(name = "uc_unlink_constraint",
+            description = "Remove one use case's link to one or more constraints. uc_update has no wholesale "
+                    + "field for constrainedBy - this is the only way to remove a link. One call, one edge "
+                    + "per constraint. Never a silent no-op: a constraint that is not currently linked is "
+                    + "rejected. Not atomic across the list: a constraint that fails leaves every constraint "
+                    + "named before it already unlinked.")
+    public String unlinkConstraint(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
+            @McpToolParam(description = "Constraint codes, e.g. ['TCON-1', 'BCON-1']")
+            final List<String> constraintIds,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
+        final UseCaseCode code = new UseCaseCode(id);
+        final List<String> lines = new ArrayList<>();
+        for (final String constraintId : constraintIds) {
+            unlinkConstraint.unlinkConstraint(projectId, code, constraintId, project.defaultLanguage());
+            lines.add(WriteResponse.unlinked(id, constraintId, CONSTRAINT_EDGE));
+        }
+        return WriteResponse.withProject(String.join("\n", lines), project);
     }
 
     // --- mapping helpers -------------------------------------------------------
@@ -751,14 +957,15 @@ public final class UseCaseMcpTools {
      * ({@code UseCaseService#update}'s {@code stableExtensionPrefixLength}). A length change
      * collapses the prefix of positions that keep their identity, and anything beyond it loses
      * every language variant but the one this call writes - the same "answer next to the hint no
-     * longer has it" failure as above. This call's extension count is therefore read once, before
-     * the write, purely to compare lengths; the edge is reported only when the count stays the
-     * same (kogn-io/arknet#538).</p>
+     * longer has it" failure as above. This call's extension count is therefore compared against
+     * {@code before}'s, read once before the write for both this hint and {@code uc_update}'s own
+     * diff line (kogn-io/arknet#538/#598); the edge is reported only when the count stays the
+     * same.</p>
      */
     private String staleTranslationHint(final ResolvedProject project, final UseCaseCode code,
             final UseCaseCorrection correction, final List<String> extensions,
             final List<StepPatchInput> stepTextPatches, final List<NewMainStepInput> newMainSteps,
-            final List<Integer> removeMainStepPositions) {
+            final List<Integer> removeMainStepPositions, final Optional<UseCase> before) {
         final List<String> fieldsWritten = new ArrayList<>();
         addIfWritten(fieldsWritten, TITLE_FIELD, correction.title());
         addIfWritten(fieldsWritten, GOAL_FIELD, correction.goal());
@@ -772,7 +979,7 @@ public final class UseCaseMcpTools {
                         || newMainSteps != null && !newMainSteps.isEmpty())) {
             fieldsWritten.add(MAIN_STEP_FIELD);
         }
-        if (extensions != null && !extensions.isEmpty() && !extensionCountChanges(project, code, extensions)) {
+        if (extensions != null && !extensions.isEmpty() && !extensionCountChanges(before, extensions)) {
             fieldsWritten.add(EXTENSION_STEP_FIELD);
         }
         if (fieldsWritten.isEmpty()) {
@@ -793,14 +1000,12 @@ public final class UseCaseMcpTools {
     /**
      * Whether {@code extensions} would replace the stored list with a different length - the one
      * thing a wholesale {@code extensions} replace does not say about itself (kogn-io/arknet#538).
-     * Reads the current use case once, before the write the caller is about to make, purely to
-     * compare counts; a use case the lookup cannot find (the write is about to fail anyway) counts
-     * as a change, the same "say less rather than say it wrong" choice as elsewhere in this method.
+     * Compares against {@code before}, the use case read once before the write the caller is about
+     * to make; a use case the read could not find (the write is about to fail anyway) counts as a
+     * change, the same "say less rather than say it wrong" choice as elsewhere in this method.
      */
-    private boolean extensionCountChanges(final ResolvedProject project, final UseCaseCode code,
-            final List<String> extensions) {
-        return getUseCase.get(project.id(), code, null)
-                .map(current -> current.extensions().size() != extensions.size())
+    private static boolean extensionCountChanges(final Optional<UseCase> before, final List<String> extensions) {
+        return before.map(current -> current.extensions().size() != extensions.size())
                 .orElse(true);
     }
 

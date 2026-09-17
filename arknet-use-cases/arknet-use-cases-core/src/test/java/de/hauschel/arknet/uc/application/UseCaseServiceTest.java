@@ -29,11 +29,13 @@ import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepRealisesPatch
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.RoleRef;
+import de.hauschel.arknet.uc.domain.ConstraintNotLinkedException;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.RemovedPositions;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
+import de.hauschel.arknet.uc.domain.TermNotLinkedException;
 import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -62,6 +64,7 @@ class UseCaseServiceTest {
     private static final ResourceId TERM_1_ID = ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2_ID = ResourceId.of("https://w3id.org/arknet/id/term-2");
     private static final ResourceId TCON_1_ID = ResourceId.of("https://w3id.org/arknet/id/constraint-1");
+    private static final ResourceId TCON_2_ID = ResourceId.of("https://w3id.org/arknet/id/constraint-2");
 
     private InMemoryUseCaseRepository repository;
     private FakeResourceIdFactory resourceIdFactory;
@@ -86,6 +89,7 @@ class UseCaseServiceTest {
         termLookup.register("TERM-1", TERM_1_ID);
         termLookup.register("TERM-2", TERM_2_ID);
         constraintLookup.register("TCON-1", TCON_1_ID);
+        constraintLookup.register("TCON-2", TCON_2_ID);
         service = new UseCaseService(
                 repository, resourceIdFactory, requirementLookup, roleLookup, termLookup, constraintLookup);
     }
@@ -1022,6 +1026,60 @@ class UseCaseServiceTest {
     }
 
     /**
+     * kogn-io/arknet#598: {@link UseCaseService#unlinkTerm} is {@link UseCaseService#linkTerm}'s
+     * counterpart, addressed by the same term code - mirrors
+     * {@code de.hauschel.arknet.bc.application.BoundedContextService}'s own {@code unlinkTerm}.
+     */
+    @Test
+    void unlinkTermRemovesOnlyTheNamedTerm() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+        service.linkTerm(WS, code, "TERM-2", DEFAULT_LANGUAGE);
+
+        UseCase unlinked = service.unlinkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new TermRef(TERM_2_ID)), unlinked.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_2_ID)), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    /**
+     * The asymmetry {@code bc_unlink_context}/{@code bc_unlink_term} already carry: adding what
+     * is already linked is idempotent, removing what is not linked is a caller mistake and must
+     * not read as success.
+     */
+    @Test
+    void unlinkTermRejectsATermThatIsNotLinked() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        TermNotLinkedException ex = assertThrows(TermNotLinkedException.class,
+                () -> service.unlinkTerm(WS, code, "TERM-2", DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.code());
+        assertEquals("TERM-2", ex.termCode());
+        assertEquals(List.of(new TermRef(TERM_1_ID)), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    @Test
+    void unlinkTermThrowsWhenUseCaseUnknown() {
+        assertThrows(UseCaseNotFoundException.class,
+                () -> service.unlinkTerm(WS, new UseCaseCode("UC99"), "TERM-1", DEFAULT_LANGUAGE));
+    }
+
+    /** An unknown term code is a didactic rejection, and the use case stays untouched. */
+    @Test
+    void unlinkTermPropagatesTheLookupFailureForAnUnknownTermCodeAndUnlinksNothing() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        assertThrows(NoSuchElementException.class,
+                () -> service.unlinkTerm(WS, code, "TERM-99", DEFAULT_LANGUAGE));
+
+        assertEquals(List.of(new TermRef(TERM_1_ID)), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    /**
      * kogn-io/arknet#540: an omitted {@code usesTermCodes} (the {@code UseCaseCorrection} field
      * left {@code null}) leaves the existing {@code arkreq:usesTerm} edges untouched - mirroring
      * {@code supportingRoles}' own tri-state.
@@ -1134,6 +1192,50 @@ class UseCaseServiceTest {
         assertThrows(NoSuchElementException.class, () -> service.linkConstraint(WS, code, "TCON-99", DEFAULT_LANGUAGE));
 
         assertEquals(List.of(), service.get(WS, code, null).orElseThrow().constrainedBy());
+    }
+
+    /** {@link UseCaseService#unlinkConstraint} mirrors {@link UseCaseService#unlinkTerm}. */
+    @Test
+    void unlinkConstraintRemovesOnlyTheNamedConstraint() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkConstraint(WS, code, "TCON-1", DEFAULT_LANGUAGE);
+        service.linkConstraint(WS, code, "TCON-2", DEFAULT_LANGUAGE);
+
+        UseCase unlinked = service.unlinkConstraint(WS, code, "TCON-1", DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new ConstraintRef(TCON_2_ID)), unlinked.constrainedBy());
+        assertEquals(List.of(new ConstraintRef(TCON_2_ID)), service.get(WS, code, null).orElseThrow().constrainedBy());
+    }
+
+    @Test
+    void unlinkConstraintRejectsAConstraintThatIsNotLinked() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkConstraint(WS, code, "TCON-1", DEFAULT_LANGUAGE);
+
+        ConstraintNotLinkedException ex = assertThrows(ConstraintNotLinkedException.class,
+                () -> service.unlinkConstraint(WS, code, "TCON-2", DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.code());
+        assertEquals("TCON-2", ex.constraintCode());
+        assertEquals(List.of(new ConstraintRef(TCON_1_ID)), service.get(WS, code, null).orElseThrow().constrainedBy());
+    }
+
+    @Test
+    void unlinkConstraintThrowsWhenUseCaseUnknown() {
+        assertThrows(UseCaseNotFoundException.class,
+                () -> service.unlinkConstraint(WS, new UseCaseCode("UC99"), "TCON-1", DEFAULT_LANGUAGE));
+    }
+
+    @Test
+    void unlinkConstraintPropagatesTheLookupFailureForAnUnknownConstraintCodeAndUnlinksNothing() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkConstraint(WS, code, "TCON-1", DEFAULT_LANGUAGE);
+
+        assertThrows(NoSuchElementException.class,
+                () -> service.unlinkConstraint(WS, code, "TCON-99", DEFAULT_LANGUAGE));
+
+        assertEquals(List.of(new ConstraintRef(TCON_1_ID)), service.get(WS, code, null).orElseThrow().constrainedBy());
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
