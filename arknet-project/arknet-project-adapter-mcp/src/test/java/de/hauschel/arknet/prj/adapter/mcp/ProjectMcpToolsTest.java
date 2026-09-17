@@ -318,6 +318,88 @@ class ProjectMcpToolsTest {
         assertTrue(rendered.contains("Ein Beispielprojekt."), rendered);
     }
 
+    // --- Answer shapes: project line, list-field diff (kogn-io/arknet#597/#598) ---------------
+
+    /**
+     * Every writing tool closes its answer with the project it actually hit - here for each of
+     * the five writing tools, rendered from the very {@link Project} the in-port returned rather
+     * than from any session anchor (kogn-io/arknet#597).
+     */
+    @Test
+    void everyWritingToolClosesItsAnswerWithTheProject() {
+        final String addRendered = adapter.add(
+                contextWithOrigin("/home/f/DEV/arknet"), "arknet", null, null, null, null, null, null);
+        assertTrue(addRendered.endsWith("\n\nproject: arknet"), addRendered);
+
+        final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor));
+        resolveProject.register(callerAnchor, target);
+
+        attachAnchor.result = new Project(target.id(), "arknet",
+                List.of(callerAnchor, new Anchor("/home/f/DEV/arknet-wt", AnchorType.PATH)));
+        final String attachRendered = adapter.attachAnchor(
+                contextWithOrigin("/home/f/DEV/arknet"), "/home/f/DEV/arknet-wt", "path", null);
+        assertTrue(attachRendered.endsWith("\n\nproject: arknet"), attachRendered);
+
+        renameProject.result = new Project(target.id(), "arknet-renamed", target.anchors());
+        final String renameRendered =
+                adapter.rename(contextWithOrigin("/home/f/DEV/arknet"), "arknet-renamed", null);
+        assertTrue(renameRendered.endsWith("\n\nproject: arknet-renamed"), renameRendered);
+
+        updateProject.result = new Project(target.id(), "arknet", target.anchors(), "Ein Beispielprojekt.", "de");
+        final String updateRendered = adapter.update(
+                contextWithOrigin("/home/f/DEV/arknet"), "Ein Beispielprojekt.", "de", "de", null, null);
+        assertTrue(updateRendered.endsWith("\n\nproject: arknet"), updateRendered);
+
+        final String adoptRendered =
+                adapter.adopt(contextWithOrigin("/home/f/DEV/arknet"), "arknet", "arknet", null, null);
+        assertTrue(adoptRendered.endsWith("\n\nproject: arknet"), adoptRendered);
+    }
+
+    /** A read tool carries no project line - the signal is about writes (kogn-io/arknet#597). */
+    @Test
+    void listCarriesNoProjectLine() {
+        listProjects.all = List.of(new Project(new ProjectId("p-1"), "arknet",
+                List.of(new Anchor("/home/f/DEV/arknet", AnchorType.PATH))));
+
+        assertTrue(!adapter.list().contains("project:"), adapter.list());
+    }
+
+    /**
+     * {@code languages} replaces the maintained set wholesale, so a caller restating it from
+     * memory silently drops what it forgot. The diff is computed from the field before and after
+     * the write (kogn-io/arknet#598).
+     */
+    @Test
+    void updateNamesWhatLeftAndWhatJoinedTheMaintainedLanguages() {
+        final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor),
+                null, "de", List.of("de", "en"));
+        resolveProject.register(callerAnchor, target);
+        updateProject.result = new Project(target.id(), target.label(), target.anchors(), null, "de",
+                List.of("de", "fr"));
+
+        final String rendered = adapter.update(
+                contextWithOrigin("/home/f/DEV/arknet"), null, null, null, List.of("de", "fr"), null);
+
+        assertTrue(rendered.startsWith("maintainedLanguage: removed en, added fr\n"), rendered);
+    }
+
+    /** A {@code project_update} that leaves the maintained set alone costs no diff line. */
+    @Test
+    void updateStaysSilentWhenTheMaintainedLanguagesDidNotChange() {
+        final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor),
+                null, "de", List.of("de", "en"));
+        resolveProject.register(callerAnchor, target);
+        updateProject.result = target;
+
+        final String rendered =
+                adapter.update(contextWithOrigin("/home/f/DEV/arknet"), null, null, "de", null, null);
+
+        assertTrue(!rendered.contains("maintainedLanguage:"), rendered);
+    }
+
     @Test
     void listRendersEveryProjectWithAllItsAnchorsAndItsOpaqueId() {
         listProjects.all = List.of(
