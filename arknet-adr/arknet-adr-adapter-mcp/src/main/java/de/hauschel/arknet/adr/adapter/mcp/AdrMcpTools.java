@@ -62,6 +62,7 @@ import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
@@ -100,6 +101,21 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a {@link ProjectId} routing
  * key, resolved per call from the request's anchor.</p>
+ *
+ * <p><strong>What a writing answer says (kogn-io/arknet#597/#598/#600).</strong> Every writing tool
+ * closes its answer with {@code project: <name>}, so a call whose {@code projectAnchor} was
+ * forgotten shows which project it actually hit. {@code adr_supersede}/{@code adr_unsupersede} are
+ * link-shaped rather than resource-shaped: their caller already holds both ends, so they answer
+ * with a one-line confirmation that also names the status change ({@code superseded ADR-10 by
+ * ADR-52 (ACCEPTED -> SUPERSEDED)}) instead of the whole decision. {@code adr_update} keeps the
+ * full resource and its warnings/stale-translation signal, preceded by a diff line for every list
+ * field that came out holding something else than it held before -
+ * {@code addressesRequirement}/{@code affectsContext}/{@code usesTerm}/{@code relatedTo} named by
+ * code, {@code consequence}/{@code consideredOption} by count only (they carry no business code of
+ * their own). The diff is computed from each field's state before and after the write, never from
+ * the request - what a wholesale list replace drops is exactly what the request cannot show. All
+ * three shapes are rendered by {@link WriteResponse}, so every bounded context's tools read the
+ * same.</p>
  */
 public final class AdrMcpTools {
 
@@ -429,7 +445,8 @@ public final class AdrMcpTools {
                 toNewConsequences(consequences), toNewConsideredOptions(consideredOptions),
                 blankToNull(language), addressesRequirements, affectsContexts, usesTerms, relatedTo),
                 project.defaultLanguage());
-        return format(project, created) + missingContentWarnings(created.adr());
+        return WriteResponse.withProject(
+                format(project, created) + missingContentWarnings(created.adr()), project);
     }
 
     @McpTool(name = "adr_list", description = "List all recorded architecture decisions, one compact "
@@ -640,8 +657,98 @@ public final class AdrMcpTools {
         final String staleHint = staleTranslationHint(project, code, correction, newConsequences,
                 consequenceCorrections, newConsideredOptions, consideredOptionCorrections,
                 removeConsequencePositions, removeConsideredOptionPositions);
+        // Read before the write for the same reason the stale-translation hint is: the diff is
+        // what left and joined a list field, and only the state before this call can say that. A
+        // caller restating a reference list from memory silently drops what it forgot, and the
+        // request it sent is precisely where that loss cannot be seen (kogn-io/arknet#598).
+        final AdrDetail before = getAdr.get(project.id(), code, project.defaultLanguage()).orElse(null);
         final AdrDetail updated = updateAdr.update(project.id(), code, correction, project.defaultLanguage());
-        return format(project, updated) + missingContentWarnings(updated.adr()) + staleHint;
+        final String diff = listFieldDiffs(project.id(), before, updated, newConsequences,
+                removeConsequencePositions, newConsideredOptions, removeConsideredOptionPositions);
+        final String body =
+                diff + format(project, updated) + missingContentWarnings(updated.adr()) + staleHint;
+        return WriteResponse.withProject(body, project);
+    }
+
+    /**
+     * The diff lines {@code adr_update} prefixes its answer with (kogn-io/arknet#598): one per list
+     * field that came out of the write holding something else than it held before. The four
+     * reference lists are named by business code, computed from {@code before}/{@code after} via
+     * the very same rendering {@link #format} uses - a caller sees the identical codes in the diff
+     * and in the resource that follows it. {@code consequence}/{@code consideredOption} carry no
+     * business code of their own (they are addressed by position, which shifts on every removal),
+     * so their line is a count of what actually left/joined the list - a position corrected in
+     * place is neither.
+     *
+     * @param before the decision as it stood before this write, or {@code null} if it could not be
+     *               read (the write itself is then about to reject the call with its own message,
+     *               and a diff has no business deciding that first)
+     */
+    private String listFieldDiffs(final ProjectId projectId, final AdrDetail before, final AdrDetail after,
+            final List<NewConsequenceInput> newConsequences, final List<Integer> removeConsequencePositions,
+            final List<NewConsideredOptionInput> newConsideredOptions,
+            final List<Integer> removeConsideredOptionPositions) {
+        final List<AdrDetail> both = before == null ? List.of(after) : List.of(before, after);
+        final Map<ResourceId, ResolvedRequirement> requirementsById = resolveRequirementsFor(projectId, both);
+        final Map<ResourceId, ResolvedBoundedContext> contextsById = resolveContextsFor(projectId, both);
+        final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(projectId, both);
+        final List<String> lines = new ArrayList<>();
+        addDiff(lines, WriteResponse.listFieldDiff("addressesRequirement",
+                requirementCodesOrEmpty(before, requirementsById), requirementCodes(after, requirementsById)));
+        addDiff(lines, WriteResponse.listFieldDiff("affectsContext",
+                contextCodesOrEmpty(before, contextsById), contextCodes(after, contextsById)));
+        addDiff(lines, WriteResponse.listFieldDiff("usesTerm",
+                termCodesOrEmpty(before, termsById), termCodes(after, termsById)));
+        addDiff(lines, WriteResponse.listFieldDiff("relatedTo",
+                codeValues(before == null ? List.of() : before.relatedTo()), codeValues(after.relatedTo())));
+        addDiff(lines, countFieldDiff(CONSEQUENCE_FIELD,
+                sizeOf(removeConsequencePositions), sizeOf(newConsequences)));
+        addDiff(lines, countFieldDiff(CONSIDERED_OPTION_FIELD,
+                sizeOf(removeConsideredOptionPositions), sizeOf(newConsideredOptions)));
+        return lines.isEmpty() ? "" : String.join("\n", lines) + "\n";
+    }
+
+    private static void addDiff(final List<String> lines, final String diff) {
+        if (!diff.isEmpty()) {
+            lines.add(diff);
+        }
+    }
+
+    private static int sizeOf(final List<?> values) {
+        return values == null ? 0 : values.size();
+    }
+
+    /**
+     * The count-only counterpart of {@link WriteResponse#listFieldDiff} for a text list with no
+     * business code of its own, e.g. {@code consequence: removed 1, added 2}.
+     */
+    private static String countFieldDiff(final String field, final int removedCount, final int addedCount) {
+        if (removedCount == 0 && addedCount == 0) {
+            return "";
+        }
+        final List<String> parts = new ArrayList<>();
+        if (removedCount > 0) {
+            parts.add("removed " + removedCount);
+        }
+        if (addedCount > 0) {
+            parts.add("added " + addedCount);
+        }
+        return field + ": " + String.join(", ", parts);
+    }
+
+    private static List<String> requirementCodesOrEmpty(final AdrDetail detail,
+            final Map<ResourceId, ResolvedRequirement> resolved) {
+        return detail == null ? List.of() : requirementCodes(detail, resolved);
+    }
+
+    private static List<String> contextCodesOrEmpty(final AdrDetail detail,
+            final Map<ResourceId, ResolvedBoundedContext> resolved) {
+        return detail == null ? List.of() : contextCodes(detail, resolved);
+    }
+
+    private static List<String> termCodesOrEmpty(final AdrDetail detail,
+            final Map<ResourceId, ResolvedTerm> resolved) {
+        return detail == null ? List.of() : termCodes(detail, resolved);
     }
 
     @McpTool(name = "adr_set_status", description = "Change the lifecycle status of an architecture "
@@ -687,7 +794,7 @@ public final class AdrMcpTools {
         // still needs it to echo an untouched name/context/decision back under the project's own
         // language instead of the process default (issue #468, extending #456's fix for
         // adr_update to the lifecycle tools).
-        return switch (target) {
+        return WriteResponse.withProject(switch (target) {
             case ACCEPTED ->
                     format(project, acceptAdr.accept(project.id(), code, decisionDay, project.defaultLanguage()));
             case REJECTED ->
@@ -710,13 +817,14 @@ public final class AdrMcpTools {
             case null, default -> throw new IllegalArgumentException(
                     "adr_set_status only supports transitioning an ADR to ACCEPTED, REJECTED or "
                             + "DEPRECATED, not " + status);
-        };
+        }, project);
     }
 
     @McpTool(name = "adr_supersede", description = "Record that one architecture decision replaces an "
             + "older one. Both must already be ACCEPTED. Sets the older decision's status to "
             + "SUPERSEDED and its supersededBy edge to the newer decision, together in one write - "
-            + "the older decision's own record is what this call returns. Recording the same pair "
+            + "the answer is a one-line confirmation naming the status change, not the older "
+            + "decision's full record (use adr_get for that). Recording the same pair "
             + "twice is a no-op; naming a different successor for an already-superseded decision is "
             + "refused. Named the wrong successor, or the wrong decision as superseded? adr_unsupersede "
             + "undoes it, restoring ACCEPTED and clearing the edge - then call adr_supersede again with "
@@ -733,15 +841,20 @@ public final class AdrMcpTools {
         // Touches no language-tagged field on the superseded record itself, but the
         // read-modify-write round trip behind it still needs the project's own default language
         // to echo an untouched field back under it rather than the process default (issue #468).
-        final AdrDetail updated = supersedeAdr.supersede(
-                project.id(), new AdrCode(id), new AdrCode(supersededId), project.defaultLanguage());
-        return format(project, updated);
+        supersedeAdr.supersede(project.id(), new AdrCode(id), new AdrCode(supersededId), project.defaultLanguage());
+        // Link-shaped, not resource-shaped (kogn-io/arknet#600): the caller already holds both
+        // ends, and the status change the write makes on the superseded record is the one bit of
+        // news worth naming alongside the edge.
+        return WriteResponse.withProject("superseded %s by %s (%s -> %s)"
+                .formatted(supersededId, id, AdrStatus.ACCEPTED, AdrStatus.SUPERSEDED), project);
     }
 
     @McpTool(name = "adr_unsupersede", description = "Undo a mistaken adr_supersede call: restores a "
             + "SUPERSEDED decision to ACCEPTED and clears its supersededBy edge, together in one write. "
-            + "Only the decision named here is touched - the former successor's own record is not read "
-            + "or changed. Use this to correct a supersession recorded against the wrong decision (a "
+            + "The answer is a one-line confirmation naming the status change, not the decision's full "
+            + "record (use adr_get for that). Only the decision named here is touched - the former "
+            + "successor's own record is not read or changed. Use this to correct a supersession "
+            + "recorded against the wrong decision (a "
             + "mistyped code, a confused direction), then call adr_supersede again with the right pair. "
             + "Refused unless the decision is currently SUPERSEDED.")
     public String unsupersede(
@@ -754,9 +867,10 @@ public final class AdrMcpTools {
         // Touches no language-tagged field itself, but the read-modify-write round trip behind it
         // still needs the project's own default language to echo an untouched field back under it
         // rather than the process default (issue #468).
-        final AdrDetail restored =
-                unsupersedeAdr.unsupersede(project.id(), new AdrCode(id), project.defaultLanguage());
-        return format(project, restored);
+        unsupersedeAdr.unsupersede(project.id(), new AdrCode(id), project.defaultLanguage());
+        // Link-shaped, not resource-shaped (kogn-io/arknet#600), symmetric to adr_supersede.
+        return WriteResponse.withProject(
+                "unsuperseded %s (%s -> %s)".formatted(id, AdrStatus.SUPERSEDED, AdrStatus.ACCEPTED), project);
     }
 
     @McpTool(name = "adr_delete", description = "Delete a recorded architecture decision and every "
@@ -786,7 +900,7 @@ public final class AdrMcpTools {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrCode code = new AdrCode(id);
         deleteAdr.delete(project.id(), code);
-        return "Deleted: " + code.value();
+        return WriteResponse.withProject("Deleted: " + code.value(), project);
     }
 
     // --- Rendering ------------------------------------------------------------
