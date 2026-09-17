@@ -431,23 +431,25 @@ public final class UbiquitousLanguageMcpTools {
 
     @McpTool(name = "term_link_related",
             description = "Add one or more skos:related edges from this term to already-existing peer terms, "
-                    + "without restating the rest (term_update's related replaces the whole set). The relation "
-                    + "is symmetric and only one direction is ever asserted as a triple: a peer that already "
-                    + "asserts related towards this term from its own side is reported as already linked "
-                    + "rather than getting a second, redundant edge. Rejected if a code does not resolve to an "
-                    + "existing term, or names this term itself.")
+                    + "each of which must already exist. One call, one edge per peer - the answer is one short "
+                    + "confirmation line per peer, not the whole term. The relation is symmetric and only one "
+                    + "direction is ever asserted as a triple: a peer that already asserts related towards this "
+                    + "term from its own side is reported as already linked rather than getting a second, "
+                    + "redundant edge. Not atomic across the list: a code that fails to resolve leaves every "
+                    + "peer named before it already linked. Rejected if a code does not resolve to an existing "
+                    + "term, or names this term itself. To replace the whole set, use term_update's related.")
     public String linkRelated(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
-            @McpToolParam(description = "Identities (e.g. TERM-1) of the already-existing terms to relate this "
-                    + "one to")
-            final List<String> relatedCodes,
+            @McpToolParam(description = "Peer term codes, e.g. ['TERM-1', 'TERM-2'] (each the term's business "
+                    + "code, resolved against the glossary - not its skos:prefLabel or its store IRI)")
+            final List<String> relatedIds,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
         final List<String> lines = new ArrayList<>();
-        for (final String raw : relatedCodes) {
+        for (final String raw : relatedIds) {
             final TermCode peerCode = new TermCode(raw.trim());
             final Term before = getTerm.get(project.id(), code, null)
                     .orElseThrow(() -> new TermNotFoundException(project.id(), code));
@@ -462,21 +464,22 @@ public final class UbiquitousLanguageMcpTools {
 
     @McpTool(name = "term_unlink_related",
             description = "Remove one or more skos:related edges between this term and already-existing peer "
-                    + "terms, without restating the rest (term_update's related replaces the whole set). "
-                    + "Removes the edge regardless of which side stores it (the relation is symmetric, but "
-                    + "only one direction is ever asserted as a triple). Never a silent no-op: a peer that is "
-                    + "not currently related is rejected.")
+                    + "terms, without restating the rest (term_update's related replaces the whole set). One "
+                    + "call, one edge per peer. Removes the edge regardless of which side stores it (the "
+                    + "relation is symmetric, but only one direction is ever asserted as a triple). Never a "
+                    + "silent no-op: a peer that is not currently related is rejected. Not atomic across the "
+                    + "list: a peer that fails leaves every peer named before it already unlinked.")
     public String unlinkRelated(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
-            @McpToolParam(description = "Identities (e.g. TERM-1) of the peer terms to unlink from this one")
-            final List<String> relatedCodes,
+            @McpToolParam(description = "Peer term codes, e.g. ['TERM-1', 'TERM-2']")
+            final List<String> relatedIds,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
         final List<String> lines = new ArrayList<>();
-        for (final String raw : relatedCodes) {
+        for (final String raw : relatedIds) {
             final TermCode peerCode = new TermCode(raw.trim());
             unlinkRelatedTerm.unlinkRelated(project.id(), code, peerCode);
             lines.add(WriteResponse.unlinked(code.value(), peerCode.value(), RELATED_FIELD));
