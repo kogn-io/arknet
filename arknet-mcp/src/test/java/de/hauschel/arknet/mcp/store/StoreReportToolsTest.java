@@ -721,6 +721,59 @@ class StoreReportToolsTest {
     }
 
     /**
+     * Issue #594, finding 3: an incoming neighbour whose own subject IRI shortens to no known
+     * {@link Prefixes} CURIE (an opaque, kernel-minted identity) used to appear in the
+     * {@code # Incoming} section as that raw IRI. It now falls back to the neighbour's own
+     * {@code dcterms:identifier} - the same handle {@code store_overview} already shows for it -
+     * via the {@link ResourceHandles} helper shared with {@link DigestRenderer}.
+     */
+    @Test
+    void resourceGetShowsAnIncomingNeighbourByItsBusinessIdWhenItsIriHasNoCurie() {
+        String referencingIri = "https://w3id.org/arknet/id/store-report-test-referencing-1";
+        seedReferenceToFr1(referencingIri, "REF-1");
+
+        String result = tools.resourceGet(null, FR_1_IRI, ANCHOR);
+
+        assertThat(result).contains("# Incoming").contains("REF-1");
+        assertThat(result).doesNotContain(referencingIri);
+    }
+
+    /**
+     * Issue #594: two incoming neighbours sharing the very same {@code dcterms:identifier}
+     * lexical value would promise an ambiguous {@code resource_get} drill-down (issue #150) if
+     * printed as that shared bare id - both fall back to their full, always-unique IRI instead,
+     * mirroring {@link DigestRendererTest#handleFallsBackToTheFullIriWhenTheDctermsIdentifierIsSharedByAnotherResource()}.
+     */
+    @Test
+    void resourceGetFallsBackToTheFullIriForAnIncomingNeighbourWithAnAmbiguousBusinessId() {
+        String first = "https://w3id.org/arknet/id/store-report-test-referencing-2";
+        String second = "https://w3id.org/arknet/id/store-report-test-referencing-3";
+        seedReferenceToFr1(first, "REF-2");
+        seedReferenceToFr1(second, "REF-2");
+
+        String result = tools.resourceGet(null, FR_1_IRI, ANCHOR);
+
+        assertThat(result).contains(first).contains(second);
+        assertThat(result).doesNotContain("REF-2  ");
+    }
+
+    /** Writes a single triple pointing at {@link #FR_1_IRI}, straight into a model graph. */
+    private void seedReferenceToFr1(String subjectIri, String identifier) {
+        RDF rdf = new SimpleRdf();
+        Graph graph = rdf.createGraph();
+        graph.add(rdf.createIRI(subjectIri), rdf.createIRI("http://purl.org/dc/terms/identifier"),
+                rdf.createLiteral(identifier));
+        graph.add(rdf.createIRI(subjectIri), rdf.createIRI("https://w3id.org/arknet/requirements#refinesTerm"),
+                rdf.createIRI(FR_1_IRI));
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(rdf.createIRI(subjectIri + "-graph"), graph);
+                return null;
+            });
+        }
+    }
+
+    /**
      * Happy path for issue #251: {@code setUp}'s create is the only write {@code fr1} has gone
      * through so far, so its history is exactly one revision, and it is the current one.
      */

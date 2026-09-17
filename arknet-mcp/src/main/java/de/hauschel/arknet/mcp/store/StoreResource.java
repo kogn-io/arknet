@@ -14,8 +14,8 @@ import de.hauschel.arknet.kernel.LocalizedLiteral;
  * A single subject (an IRI, or a blank-node reference - see {@link Triple#subject()}) together
  * with its outgoing statements, plus a few generic display helpers (rdf:type, label, status,
  * priority). {@link #label(DisplayLocale)} recognises well-known predicates common across the
- * arknet bounded contexts (dcterms:title, skos:prefLabel, rdfs:label) and never depends on a
- * specific one.
+ * arknet bounded contexts (dcterms:title, skos:prefLabel, rdfs:label, arknet:name) and never
+ * depends on a specific one.
  * {@link #status()}/{@link #priority()} are a deliberate, bounded exception: they hardcode the
  * requirements-BC's {@code arkreq:status}/{@code arkreq:priority} predicates rather than a
  * structural (e.g. SHACL-driven) mechanism - a resource without them, or a future BC's analogous
@@ -31,7 +31,8 @@ public record StoreResource(String iri, List<Triple> outgoing) {
     private static final List<String> LABEL_PREDICATES = List.of(
             "http://purl.org/dc/terms/title",
             "http://www.w3.org/2004/02/skos/core#prefLabel",
-            "http://www.w3.org/2000/01/rdf-schema#label");
+            "http://www.w3.org/2000/01/rdf-schema#label",
+            "https://w3id.org/arknet/core#name");
     private static final String STATUS_PREDICATE = "https://w3id.org/arknet/requirements#status";
     private static final String PRIORITY_PREDICATE = "https://w3id.org/arknet/requirements#priority";
     private static final String IDENTIFIER_PREDICATE = "http://purl.org/dc/terms/identifier";
@@ -59,11 +60,11 @@ public record StoreResource(String iri, List<Triple> outgoing) {
     }
 
     /**
-     * The label among dcterms:title / skos:prefLabel / rdfs:label, in that priority order - the
-     * first of the three predicates that carries any literal at all wins, and {@code locale}
-     * then picks which one of that predicate's (possibly language-tagged) literals to show, via
-     * its documented fallback chain. Never disagrees with itself between calls for the same
-     * {@code locale}: {@link DisplayLocale#select} is deterministic.
+     * The label among dcterms:title / skos:prefLabel / rdfs:label / arknet:name, in that
+     * priority order - the first of the four predicates that carries any literal at all wins,
+     * and {@code locale} then picks which one of that predicate's (possibly language-tagged)
+     * literals to show, via its documented fallback chain. Never disagrees with itself between
+     * calls for the same {@code locale}: {@link DisplayLocale#select} is deterministic.
      *
      * @param locale the display language to select among same-predicate candidates
      */

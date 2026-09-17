@@ -8,9 +8,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -123,11 +126,14 @@ public final class StoreReportTools {
 
     @McpTool(name = "store_overview",
             description = "Overview of everything in the project store: a compact, domain-agnostic text"
-                    + " digest (resource/triple/type counts, prefix legend, one line per resource with a"
-                    + " '-> resource_get(...)' drill-down, integrity hint) plus a self-contained HTML report"
-                    + " for humans, written to disk (its path is returned). The HTML groups the model by"
-                    + " bounded context - use cases with their flow, requirements with their acceptance"
-                    + " criteria, glossary, bounded contexts - and keeps a raw section for the rest.",
+                    + " digest (resource/triple/type counts, prefix legend, one line per labeled or"
+                    + " identified resource with a '-> resource_get(...)' drill-down, integrity hint) plus a"
+                    + " self-contained HTML report for humans, written to disk (its path is returned)."
+                    + " A resource with neither a label nor a business id (e.g. a use case's flow steps) is"
+                    + " summed into one trailing count per type instead of listed - drill into its owning"
+                    + " resource via resource_get to see it. The HTML groups the model by bounded context -"
+                    + " use cases with their flow, requirements with their acceptance criteria, glossary,"
+                    + " bounded contexts - and keeps a raw section for the rest.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String storeOverview(
             final McpSyncRequestContext context,
@@ -202,7 +208,48 @@ public final class StoreReportTools {
         final String iri = handleResolver.resolve(projectId, id);
         final List<Triple> outgoing = storeReader.outgoing(projectId, iri);
         final List<Triple> incoming = storeReader.incoming(projectId, iri);
-        return resourceRenderer.render(iri, outgoing, incoming);
+        final Map<String, String> incomingHandles = incomingHandles(projectId, incoming);
+        return resourceRenderer.render(iri, outgoing, incoming, incomingHandles);
+    }
+
+    /**
+     * The {@link ResourceHandles} handle for every distinct incoming-neighbour subject in
+     * {@code incoming} (issue #594) - the same CURIE-or-unambiguous-business-id-or-IRI preference
+     * {@code store_overview} already applies to every listed resource, resolved here per
+     * neighbour rather than over the whole project the way {@link DigestRenderer} does, since
+     * {@code resource_get} otherwise reads only the two targeted queries this method's caller
+     * already runs.
+     */
+    private Map<String, String> incomingHandles(final ProjectId projectId, final List<Triple> incoming) {
+        final Map<String, String> handles = new LinkedHashMap<>();
+        for (final Triple triple : incoming) {
+            handles.computeIfAbsent(triple.subject(), subject -> incomingHandle(projectId, subject));
+        }
+        return handles;
+    }
+
+    /**
+     * A blank-node reference keeps its {@code "_:"}-prefixed form unchanged (it never had a
+     * mintable identity to look up). Otherwise: a CURIE needs no further store access; only when
+     * none applies is the neighbour's own {@code dcterms:identifier} looked up and checked for
+     * ambiguity against the whole project, exactly the check {@code resource_get}'s own handle
+     * resolution ({@link HandleResolver}) already performs when a caller passes a bare id.
+     */
+    private String incomingHandle(final ProjectId projectId, final String subjectIri) {
+        if (subjectIri.startsWith("_:")) {
+            return subjectIri;
+        }
+        final String curie = prefixes.toCurie(subjectIri);
+        if (!curie.equals(subjectIri)) {
+            return curie;
+        }
+        final Optional<String> identifier =
+                new StoreResource(subjectIri, storeReader.outgoing(projectId, subjectIri)).identifier();
+        final Set<String> ambiguous = identifier
+                .filter(value -> storeReader.findByIdentifier(projectId, value).size() > 1)
+                .map(Set::of)
+                .orElseGet(Set::of);
+        return ResourceHandles.of(prefixes, subjectIri, identifier, ambiguous);
     }
 
     @McpTool(name = "resource_history",
