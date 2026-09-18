@@ -44,6 +44,7 @@ import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -63,6 +64,7 @@ import de.hauschel.arknet.req.domain.RequirementDisplayFallback;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementReadConflictException;
+import de.hauschel.arknet.req.domain.RequirementReferencedException;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
@@ -1564,6 +1566,138 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                         new RequirementCode(literalOf(row, "identifier").getLexicalForm())));
             });
             return List.copyOf(bySubject.values());
+        }
+    }
+
+    /**
+     * Deletes the requirement identified by {@code code}, and every triple it carries in
+     * {@link #REQUIREMENTS_GRAPH} (including every acceptance criterion child's own triples), from
+     * the project (kogn-io/arknet#566). Resolves the subject by code outside any transaction
+     * (mirroring {@link #findByCode}'s own read), then hands the whole check-and-delete to
+     * {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
+     * write transaction, and only once it finds nothing pointing at the requirement does the body
+     * remove the subject's triples wholesale. Mirrors {@code KognioRdfConstraintRepository#delete},
+     * with {@code KognioRdfAdrRepository#delete}'s {@code UNION} over the owned child resources.
+     *
+     * <p>Passes {@code code} through to {@link WriteFunnel#delete}, which keeps it out of
+     * circulation on the tombstoned revision - the model triple carrying {@code dcterms:identifier}
+     * is exactly what this delete removes, so the tombstone is the only place the number survives
+     * (see {@link #findRetainedCodes}).</p>
+     *
+     * <p>No status is consulted: unlike {@code adr_delete}, an {@code ACCEPTED} requirement is as
+     * deletable as a {@code PROPOSED} one - see
+     * {@link de.hauschel.arknet.req.application.port.in.DeleteRequirement}.</p>
+     */
+    @Override
+    public void delete(ProjectId projectId, RequirementCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+
+        DatasetId dataset = new DatasetId(projectId.value());
+        String subjectIriString;
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            // The type join and the identifier, nothing else: a requirement whose mandatory
+            // status/title triple a store-first write left unreadable still holds its code and must
+            // still be deletable - the listing read's further joins would hide exactly the resource
+            // a caller most wants gone. Same reasoning as findAllCodes'.
+            String query = "SELECT ?s WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                    + requirementTypeClause()
+                    + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
+                    + "FILTER(isIRI(?s)) } }";
+            subjectIriString = handle.sparqlQuery().select(query).findFirst()
+                    .map(row -> iriOf(row, "s").getIRIString())
+                    .orElseThrow(() -> new RequirementNotFoundException(projectId, code));
+        }
+        String subject = SparqlTerms.iriRef(subjectIriString);
+
+        funnel.delete(dataset, REQUIREMENTS_GRAPH, subjectIriString, code.value(),
+                () -> new RequirementNotFoundException(projectId, code),
+                tx -> {
+                    rejectIfReferenced(tx, subjectIriString, projectId, code);
+                    // The requirement's own triples AND, following each acceptanceCriterion edge,
+                    // every AcceptanceCriterion child's triples (issue #266 minted them without an
+                    // identity of their own, so nothing would ever reach them again).
+                    tx.update("DELETE { GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s ?p ?o } } WHERE { "
+                            + "GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                            + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
+                            + "{ " + subject + " <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?s . ?s ?p ?o } } }");
+                });
+    }
+
+    /**
+     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained
+     * (kogn-io/arknet#566): the shared funnel keeps the number out of circulation, this hexagon
+     * only maps its raw strings to {@link RequirementCode}. Queried once per type prefix - the
+     * funnel's {@code findRetainedCodes} takes a single prefix, and a requirement's two counters
+     * are told apart on exactly that prefix - and merged into one unordered list, matching
+     * {@link #findAllCodes}'s own "every type in one list" shape.
+     *
+     * <p>The two prefixes do not bleed into each other, in either direction: the funnel filters on
+     * {@code STRSTARTS}, so {@code "FR-"} never matches an {@code NFR-3} (it starts with an
+     * {@code N}) and {@code "NFR-"} never matches an {@code FR-3}. Mirrors
+     * {@code KognioRdfConstraintRepository#findRetainedCodes}.</p>
+     */
+    @Override
+    public List<RequirementCode> findRetainedCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        DatasetId dataset = new DatasetId(projectId.value());
+        List<RequirementCode> retained = new ArrayList<>();
+        for (RequirementType type : RequirementType.values()) {
+            funnel.findRetainedCodes(dataset, type.idPrefix() + "-").stream()
+                    .map(RequirementCode::new)
+                    .forEach(retained::add);
+        }
+        return List.copyOf(retained);
+    }
+
+    /**
+     * The predicates that, if found pointing at a requirement, block its deletion
+     * (kogn-io/arknet#566) - every property a shipped ontology gives
+     * {@code rdfs:range arkreq:Requirement}, or a shipped SHACL property shape gives
+     * {@code sh:class arkreq:Requirement}: {@code arkarch:addressesRequirement} (a decision,
+     * {@code adr_add}/{@code adr_update}), {@code arkreq:stepRealises} (a use-case step,
+     * {@code uc_add}/{@code uc_update}), {@code oslc_rm:satisfies} (a use case, same tools) and
+     * {@code arkreq:dependsOn} (another requirement - declared by the ontology, written by no tool
+     * today, and listed anyway: a store-first edge is exactly as real as a tool-written one).
+     *
+     * <p>{@code oslc_rm:constrainedBy} is deliberately absent: it points <em>from</em> a
+     * requirement <em>at</em> a constraint, so it holds the constraint, not this requirement (that
+     * direction is {@code KognioRdfConstraintRepository#REFERENCING_PREDICATES}' business). The
+     * same goes for {@code arkreq:usesTerm}.</p>
+     *
+     * <p>Mirrors {@code KognioRdfConstraintRepository#REFERENCING_PREDICATES}; the field must stay
+     * named and typed exactly this way and remain {@code static} - an architecture test
+     * ({@code ReferenceGuardsCoverEveryOntologyEdgeTest}) reads it via reflection.</p>
+     */
+    private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
+            ArkarchVocabulary.ADDRESSES_REQUIREMENT, "addressesRequirement",
+            ArkreqVocabulary.STEP_REALISES, "stepRealises",
+            ArkreqVocabulary.SATISFIES, "satisfies",
+            ArkreqVocabulary.DEPENDS_ON, "dependsOn");
+
+    /**
+     * Rejects the delete, without touching a single triple, if anything in the project still
+     * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
+     * every named graph ({@code GRAPH ?g}), since a referencing edge lives in the decisions graph,
+     * the use-cases graph or (for {@code dependsOn}) {@link #REQUIREMENTS_GRAPH} itself. Runs
+     * inside the live write transaction {@link WriteFunnel#delete} hands its {@code body}, so the
+     * check and the eventual delete share one atomic snapshot. Mirrors
+     * {@code KognioRdfConstraintRepository#rejectIfReferenced}.
+     *
+     * <p>The shorthands are reported in a stable order rather than in {@link Map} iteration order,
+     * so the message a caller reads is reproducible.</p>
+     */
+    private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, RequirementCode code) {
+        IRI target = rdf.createIRI(subjectIri);
+        List<String> referencing = REFERENCING_PREDICATES.entrySet().stream()
+                .filter(entry -> tx.ask("ASK { GRAPH ?g { ?s <" + entry.getKey() + "> ?target } }",
+                        Map.of("target", target)))
+                .map(Map.Entry::getValue)
+                .sorted()
+                .toList();
+        if (!referencing.isEmpty()) {
+            throw new RequirementReferencedException(projectId, code, referencing);
         }
     }
 

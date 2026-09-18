@@ -12,6 +12,8 @@ import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
 import de.hauschel.arknet.bc.domain.BoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
+import de.hauschel.arknet.bc.domain.BoundedContextReferencedException;
+import de.hauschel.arknet.bc.domain.ContextRelationship;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
@@ -233,14 +235,51 @@ public interface BoundedContextRepository {
      * number it feeds the counter never depends on how complete a context's remaining fields
      * happen to be.</p>
      *
-     * <p>There is deliberately no companion for deleted contexts: this hexagon has no delete
-     * operation at all, so a code recorded here is the only kind of code that was ever handed
-     * out.</p>
+     * <p>Read together with {@link #findRetainedCodes}, never alone: a deleted context's code stays
+     * taken, and only the two lists together say which numbers were ever handed out.</p>
      *
      * @param projectId the project (architecture model) to read codes from
      * @return every recorded bounded context's business code, never {@code null}
      */
     List<BoundedContextCode> findAllCodes(ProjectId projectId);
+
+    /**
+     * Deletes the bounded context identified by {@code code}, and every triple it carries in this
+     * hexagon's own named graph, from the project (kogn-io/arknet#566, mirroring
+     * {@code ConstraintRepository#delete}). Rejects outright, without deleting anything, if
+     * anything still references the bounded context - see {@link BoundedContextReferencedException}.
+     *
+     * <p>The reference check and the removal share one atomic view of the store: an implementation
+     * runs the check against its own write transaction, so an edge written between a caller's
+     * earlier read and this delete cannot slip through and be orphaned. There is no status gate to
+     * repeat alongside it - a bounded context carries no lifecycle status, so the reference check is
+     * the whole protection.</p>
+     *
+     * <p>Only the context's own triples go; the edges it holds outward
+     * ({@code arkddd:ubiquitousLanguageTerm}, {@code arkddd:partOf}, {@code arkddd:ownedBy}) are
+     * its own triples and vanish with it, while a {@link ContextRelationship} is a separate
+     * resource and is never deleted along with it - its {@code upstream}/{@code downstream} edge is
+     * one of the references that block this call.</p>
+     *
+     * @param projectId the project (architecture model) the bounded context lives in
+     * @param code      the bounded-context code, e.g. {@code BC-1}
+     * @throws BoundedContextNotFoundException   if no bounded context with this code exists
+     * @throws BoundedContextReferencedException if anything still references the bounded context
+     */
+    void delete(ProjectId projectId, BoundedContextCode code);
+
+    /**
+     * Returns the business codes of bounded contexts that were deleted from the project and are
+     * kept out of circulation - what {@link #delete} retains so a code can never name two different
+     * bounded contexts over a project's lifetime (mirrors
+     * {@code ConstraintRepository#findRetainedCodes}, kogn-io/arknet#566). Read together with
+     * {@link #findAllCodes} whenever the next free code is derived; the two sets are disjoint, since
+     * a retained code belongs to a context that no longer exists.
+     *
+     * @param projectId the project (architecture model) to read the retained codes of
+     * @return the retained codes, never {@code null}
+     */
+    List<BoundedContextCode> findRetainedCodes(ProjectId projectId);
 
     /**
      * Finds every bounded context in a project whose identity is among {@code ids}, in one store

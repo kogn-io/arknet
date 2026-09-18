@@ -1359,6 +1359,95 @@ class RequirementServiceTest {
         assertEquals(RATIONALE, updated.rationale());
     }
 
+    // --- req_delete (kogn-io/arknet#566) ---------------------------------------------
+
+    @Test
+    void deleteDelegatesToTheRepository() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        service.delete(WS, code);
+
+        assertFalse(service.get(WS, code, null).isPresent());
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(RequirementNotFoundException.class,
+                () -> service.delete(WS, new RequirementCode("FR-99")));
+    }
+
+    /**
+     * No status gates the deletion (Fred, 2026-09-18): a requirement is a promise that changes,
+     * not a decision that was taken, and the occasion for deleting one is usually an accepted
+     * duplicate. Build an {@code isDeletable()} onto {@link RequirementStatus} the way
+     * {@code AdrStatus} carries one and this goes red.
+     */
+    @Test
+    void deleteRemovesAnAcceptedRequirement() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        service.delete(WS, code);
+
+        assertFalse(service.get(WS, code, null).isPresent());
+    }
+
+    /**
+     * Mutation test for {@code nextCode} counting over
+     * {@link RequirementRepository#findRetainedCodes} in addition to
+     * {@link RequirementRepository#findAllCodes} (kogn-io/arknet#566): drop the
+     * {@code findRetainedCodes} term from {@code nextCode}'s maximum and this goes red - deleting
+     * the highest-numbered functional requirement would let the count fall back to the survivor
+     * and hand the deleted requirement's code out a second time.
+     */
+    @Test
+    void addDoesNotReissueAFunctionalCodeAfterItsHighestRequirementWasDeleted() {
+        service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+        RequirementCode second = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.delete(WS, second);
+
+        Requirement third = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertEquals(new RequirementCode("FR-3"), third.code());
+    }
+
+    /** The same for the second counter - the two are kept apart by prefix, not by type triple. */
+    @Test
+    void addDoesNotReissueANonFunctionalCodeAfterItsHighestRequirementWasDeleted() {
+        service.add(WS, newNonFunctionalRequirement(), DEFAULT_LANGUAGE);
+        RequirementCode second = service.add(WS, newNonFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.delete(WS, second);
+
+        Requirement third = service.add(WS, newNonFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertEquals(new RequirementCode("NFR-3"), third.code());
+    }
+
+    /**
+     * The prefix trap, from both sides: a retained {@code NFR-} code must not push the {@code FR-}
+     * counter along, and a retained {@code FR-} code must not push the {@code NFR-} counter -
+     * {@code CodeCounter} anchors its match at the start of the code, so neither prefix can see
+     * the other's numbers.
+     */
+    @Test
+    void aRetainedCodeOfOneTypeLeavesTheOtherTypesCounterAlone() {
+        RequirementCode functional = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        RequirementCode nonFunctional = service.add(WS, newNonFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.delete(WS, functional);
+        service.delete(WS, nonFunctional);
+
+        assertEquals(new RequirementCode("FR-2"), service.add(WS, newFunctionalRequirement(),
+                DEFAULT_LANGUAGE).code());
+        assertEquals(new RequirementCode("NFR-2"), service.add(WS, newNonFunctionalRequirement(),
+                DEFAULT_LANGUAGE).code());
+    }
+
+    /** {@link #newFunctionalRequirement()}'s non-functional sibling, for the second code counter. */
+    private static NewRequirement newNonFunctionalRequirement() {
+        return new NewRequirement("Login stays fast", "The system shall answer a login within a second.",
+                null, RequirementType.NON_FUNCTIONAL, null, null, List.of("Done when it works"), null);
+    }
+
     private static NewRequirement newFunctionalRequirement() {
         return new NewRequirement("User can log in", "The system shall let a registered user authenticate.", null,
                 RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null);

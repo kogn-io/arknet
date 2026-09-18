@@ -276,6 +276,16 @@ class RequirementServiceConcurrencyTest {
                 List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
         }
+
+        @Override
+        public void delete(ProjectId projectId, RequirementCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<RequirementCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
+        }
     }
 
     /**
@@ -347,6 +357,16 @@ class RequirementServiceConcurrencyTest {
                 List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
         }
+
+        @Override
+        public void delete(ProjectId projectId, RequirementCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<RequirementCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
+        }
     }
 
     /** A repository whose {@code compareAndUpdate} always reports a conflict, never applying. */
@@ -413,6 +433,16 @@ class RequirementServiceConcurrencyTest {
         public List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId,
                 List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
+        }
+
+        @Override
+        public void delete(ProjectId projectId, RequirementCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<RequirementCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
         }
     }
 }

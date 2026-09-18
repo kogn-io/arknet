@@ -58,6 +58,9 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
      */
     private final Map<ProjectId, List<UseCaseCode>> unmaterialisableByProject = new LinkedHashMap<>();
 
+    /** The codes {@link #delete} took out of circulation, per project - see {@link #findRetainedCodes}. */
+    private final Map<ProjectId, List<UseCaseCode>> retainedByProject = new LinkedHashMap<>();
+
     /**
      * The {@code stableExtensionPrefixLength} {@link UseCaseService} passed on the most recent
      * {@link #compareAndUpdate} call - lets a test assert on the service's own safe-to-preserve
@@ -207,5 +210,29 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
      */
     void seedUnmaterialisableCode(ProjectId projectId, UseCaseCode code) {
         unmaterialisableByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
+    }
+
+    @Override
+    public void delete(ProjectId projectId, UseCaseCode code) {
+        // The reference check (kogn-io/arknet#566) is the real out-adapter's concern - this fake
+        // only exercises UseCaseService's own pass-through and the not-found case.
+        Map<UseCaseId, UseCase> useCases = byProject.getOrDefault(projectId, Map.of());
+        UseCaseId id = useCases.values().stream()
+                .filter(uc -> uc.code().equals(code))
+                .findFirst()
+                .map(UseCase::id)
+                .orElseThrow(() -> new UseCaseNotFoundException(projectId, code));
+        useCases.remove(id);
+        headByIdentity.remove(id);
+        retainedByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
+    }
+
+    /**
+     * Mirrors the real out-adapter's code retention so {@link UseCaseService#add} cannot hand the
+     * deleted use case's number out again (kogn-io/arknet#566).
+     */
+    @Override
+    public List<UseCaseCode> findRetainedCodes(ProjectId projectId) {
+        return List.copyOf(retainedByProject.getOrDefault(projectId, List.of()));
     }
 }

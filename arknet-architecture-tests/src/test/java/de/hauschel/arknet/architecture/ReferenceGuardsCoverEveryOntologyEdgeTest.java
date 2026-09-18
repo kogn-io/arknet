@@ -28,20 +28,27 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepository;
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfRoleRepository;
+import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepository;
+import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepository;
+import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfUseCaseRepository;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepository;
 
 /**
  * Nails down that a resource cannot be deleted out from under an edge nobody remembered to list.
  *
- * <p>Three out-adapters refuse a delete while something still points at the resource:
- * {@code KognioRdfTermRepository} for glossary terms (issue #335), {@code KognioRdfActorRepository}
- * for actors (issue #336) and {@code KognioRdfConstraintRepository} for constraints
- * (kogn-io/arknet#481). Each carries a hand-written {@code REFERENCING_PREDICATES} map of the
- * predicates it looks for - and each of those maps is written in one bounded context while the
- * edges it must know about are written in others. Nothing ties them together.</p>
+ * <p>Every out-adapter with a delete path refuses that delete while something still points at the
+ * resource: {@code KognioRdfTermRepository} for glossary terms (issue #335),
+ * {@code KognioRdfActorRepository} and {@code KognioRdfRoleRepository} for actors and roles
+ * (issue #336, ADR-37), {@code KognioRdfConstraintRepository} for constraints
+ * (kogn-io/arknet#481) and, since kogn-io/arknet#566, {@code KognioRdfBoundedContextRepository},
+ * {@code KognioRdfRequirementRepository} and {@code KognioRdfUseCaseRepository}. Each carries a
+ * hand-written {@code REFERENCING_PREDICATES} map of the predicates it looks for - and each of
+ * those maps is written in one bounded context while the edges it must know about are written in
+ * others. Nothing ties them together.</p>
  *
  * <p><strong>Why this cannot be caught elsewhere.</strong> That is not a hypothetical:
  * {@code arkarch:usesTerm} shipped in kogn-io/arknet#393 and the term guard was never told about
@@ -58,6 +65,16 @@ import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepository;
  * is borrowed from OSLC RM, and an {@code rdfs:range} axiom on it would be a global claim about
  * the foreign vocabulary, not a statement about arknet's use of it - the shapes are where
  * arknet's local rule lives.</p>
+ *
+ * <p><strong>Why the three newest guards read both derivations at once.</strong> Requirement, use
+ * case and bounded context are each pointed at by a mix of arknet-owned and borrowed properties:
+ * {@code arkarch:addressesRequirement} declares an {@code rdfs:range} and {@code oslc_rm:satisfies}
+ * cannot, {@code arkddd:upstream} declares one and is shaped as well. Reading only one derivation
+ * would miss half the edges in either direction, so {@link #propertiesPointingAt(String)} takes
+ * the union - which is also why kogn-io/arknet#566 could not simply copy the term-side test: the
+ * issue's own hand-written edge list was short by {@code arkreq:scopedTo},
+ * {@code oslc_rm:satisfies}, {@code arkreq:dependsOn} and both use-case edges, exactly the gap
+ * this test exists to close.</p>
  *
  * <p><strong>Why reflection.</strong> Both maps are private implementation detail of their
  * adapter, and widening them to public just so a test can read them would turn an internal into
@@ -86,6 +103,26 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
      * via {@code sh:class} (kogn-io/arknet#481).
      */
     private static final String CONSTRAINT_CLASS = ArkreqVocabulary.CONSTRAINT_TYPE;
+
+    /**
+     * The requirement class every requirement-referencing property points at, whether by
+     * {@code rdfs:range} ({@code arkarch:addressesRequirement}, {@code arkreq:stepRealises},
+     * {@code arkreq:dependsOn}) or by {@code sh:class} on a borrowed property
+     * ({@code oslc_rm:satisfies}) - kogn-io/arknet#566.
+     */
+    private static final String REQUIREMENT_CLASS = ArkreqVocabulary.REQUIREMENT_TYPE;
+
+    /** The use case class every use-case-referencing property points at (kogn-io/arknet#566). */
+    private static final String USE_CASE_CLASS = ArkreqVocabulary.USE_CASE_TYPE;
+
+    /**
+     * The bounded context class every context-referencing property points at
+     * (kogn-io/arknet#566). Its edges span three ontology modules - {@code arkarch:affectsContext}
+     * from the architecture module, {@code arkddd:upstream}/{@code downstream}/{@code hasContext}
+     * from the DDD module and {@code arkreq:scopedTo} from the requirements module - which is the
+     * clearest case for deriving the list rather than writing it down.
+     */
+    private static final String BOUNDED_CONTEXT_CLASS = ArkdddVocabulary.BOUNDED_CONTEXT_TYPE;
 
     private final Model ontologies = parseShippedOntologies();
 
@@ -180,6 +217,62 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
     }
 
     /**
+     * The requirement-side counterpart, guarding {@code req_delete} the same way
+     * (kogn-io/arknet#566). Unlike the four guards above it reads both derivations at once - see
+     * the class comment on why neither alone is enough here.
+     */
+    @Test
+    void everyPropertyPointingAtARequirementBlocksTheRequirementsDeletion() {
+        Set<String> pointingAtRequirements = propertiesPointingAt(REQUIREMENT_CLASS);
+
+        assertFalse(pointingAtRequirements.isEmpty(),
+                "no property pointing at arkreq:Requirement found - the ontologies were not loaded");
+        assertTrue(referencingPredicatesOf(KognioRdfRequirementRepository.class).keySet()
+                        .containsAll(pointingAtRequirements),
+                () -> "req_delete would not notice these edges: "
+                        + new TreeSet<>(missing(pointingAtRequirements, KognioRdfRequirementRepository.class))
+                        + " - add them to KognioRdfRequirementRepository.REFERENCING_PREDICATES");
+    }
+
+    /**
+     * The use-case-side counterpart, guarding {@code uc_delete} the same way
+     * (kogn-io/arknet#566). Both edges it requires - {@code arkreq:includesUseCase} and
+     * {@code arkreq:extendsUseCase} - are declared by the ontology and written by no tool yet,
+     * which is precisely the case this test is worth having: the guard is in place before the
+     * first writer arrives, rather than being remembered afterwards the way
+     * {@code arkarch:usesTerm} was not (kogn-io/arknet#399).
+     */
+    @Test
+    void everyPropertyPointingAtAUseCaseBlocksTheUseCasesDeletion() {
+        Set<String> pointingAtUseCases = propertiesPointingAt(USE_CASE_CLASS);
+
+        assertFalse(pointingAtUseCases.isEmpty(),
+                "no property pointing at arkreq:UseCase found - the ontologies were not loaded");
+        assertTrue(referencingPredicatesOf(KognioRdfUseCaseRepository.class).keySet()
+                        .containsAll(pointingAtUseCases),
+                () -> "uc_delete would not notice these edges: "
+                        + new TreeSet<>(missing(pointingAtUseCases, KognioRdfUseCaseRepository.class))
+                        + " - add them to KognioRdfUseCaseRepository.REFERENCING_PREDICATES");
+    }
+
+    /**
+     * The bounded-context-side counterpart, guarding {@code bc_delete} the same way
+     * (kogn-io/arknet#566).
+     */
+    @Test
+    void everyPropertyPointingAtABoundedContextBlocksTheContextsDeletion() {
+        Set<String> pointingAtContexts = propertiesPointingAt(BOUNDED_CONTEXT_CLASS);
+
+        assertFalse(pointingAtContexts.isEmpty(),
+                "no property pointing at arkddd:BoundedContext found - the ontologies were not loaded");
+        assertTrue(referencingPredicatesOf(KognioRdfBoundedContextRepository.class).keySet()
+                        .containsAll(pointingAtContexts),
+                () -> "bc_delete would not notice these edges: "
+                        + new TreeSet<>(missing(pointingAtContexts, KognioRdfBoundedContextRepository.class))
+                        + " - add them to KognioRdfBoundedContextRepository.REFERENCING_PREDICATES");
+    }
+
+    /**
      * The rejection message names each blocking edge by a shorthand, and the caller picks the tool
      * that drops it from that name - so two predicates must never answer to the same one.
      * {@code arkreq:usesTerm} and {@code arkarch:usesTerm} share a local name and are dropped
@@ -190,7 +283,8 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
     void noTwoBlockingPredicatesAnswerToTheSameShorthand() {
         for (Class<?> repository : Set.of(
                 KognioRdfTermRepository.class, KognioRdfActorRepository.class, KognioRdfConstraintRepository.class,
-                KognioRdfRoleRepository.class)) {
+                KognioRdfRoleRepository.class, KognioRdfRequirementRepository.class,
+                KognioRdfUseCaseRepository.class, KognioRdfBoundedContextRepository.class)) {
             Collection<String> shorthands = referencingPredicatesOf(repository).values();
             assertEquals(shorthands.size(), Set.copyOf(shorthands).size(),
                     repository.getSimpleName() + ": two predicates share one shorthand, so the "
@@ -210,6 +304,18 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
                 .map(Statement::getSubject)
                 .map(Resource::stringValue)
                 .collect(Collectors.toSet());
+    }
+
+    /**
+     * Every property the shipped ontologies point at {@code targetClass} with, by either
+     * derivation - the union of {@link #propertiesRangingOver(String)} and
+     * {@link #propertiesShapedTo(String)}. See the class comment for why the newer guards need
+     * both where the older four each need only one.
+     */
+    private Set<String> propertiesPointingAt(String targetClass) {
+        Set<String> pointing = new HashSet<>(propertiesRangingOver(targetClass));
+        pointing.addAll(propertiesShapedTo(targetClass));
+        return pointing;
     }
 
     /**

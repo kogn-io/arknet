@@ -164,8 +164,9 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@link UseCaseMcpTools}.</li>
  *   <li><strong>bounded-context</strong> ({@link BoundedContextMcpTools} over
  *       {@link BoundedContextService} over an RDF-persisted bounded-context repository) - the
- *       five bounded-context tools ({@code bc_add}/{@code bc_list}/{@code bc_get}/
- *       {@code bc_link_term}/{@code bc_link_context}), assembled through
+ *       nine bounded-context tools ({@code bc_add}/{@code bc_list}/{@code bc_get}/
+ *       {@code bc_update}/{@code bc_link_term}/{@code bc_unlink_term}/{@code bc_link_context}/
+ *       {@code bc_unlink_context}/{@code bc_delete}), assembled through
  *       {@link KognioRdfBoundedContextRepositoryFactory}. {@code bc_link_term}'s cross-BC
  *       code-to-identity resolution is a separate {@code KognioRdfTermLookup} bean over the same
  *       shared dataset lifecycle; {@code bc_get}/{@code bc_list}'s reverse direction (identity
@@ -424,7 +425,8 @@ public class ArknetMcpConfiguration {
             final StaleTranslationHint staleTranslationHint) {
         return new RequirementMcpTools(
                 service, service, service, service, service, service, service, service, service, service,
-                service, service, resolveTerms, constraintService, projectResolver, staleTranslationHint);
+                service, service, service, resolveTerms, constraintService, projectResolver,
+                staleTranslationHint);
     }
 
     /**
@@ -578,8 +580,8 @@ public class ArknetMcpConfiguration {
             final ResolveRequirements resolveRequirements, final ConstraintService constraintService,
             final ProjectResolver projectResolver, final StaleTranslationHint staleTranslationHint) {
         return new UseCaseMcpTools(service, service, service, service, service, service, service, service,
-                service, resolveRoles, resolveTerms, resolveRequirements, constraintService, projectResolver,
-                staleTranslationHint);
+                service, service, resolveRoles, resolveTerms, resolveRequirements, constraintService,
+                projectResolver, staleTranslationHint);
     }
 
     // --- Bounded-context hexagon -----------------------------------------------
@@ -639,7 +641,7 @@ public class ArknetMcpConfiguration {
             final BoundedContextService service, final ResolveTerms resolveTerms,
             final ProjectResolver projectResolver, final StaleTranslationHint staleTranslationHint) {
         return new BoundedContextMcpTools(
-                service, service, service, service, service, service, service, service, service,
+                service, service, service, service, service, service, service, service, service, service,
                 resolveTerms, projectResolver, staleTranslationHint);
     }
 

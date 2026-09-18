@@ -703,6 +703,43 @@ class BoundedContextServiceTest {
         assertEquals(new BoundedContextCode("<unresolved>"), dangling.peerCode());
     }
 
+    // --- bc_delete (kogn-io/arknet#566) -----------------------------------------------
+
+    @Test
+    void deleteDelegatesToTheRepository() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+
+        service.delete(WS, code);
+
+        assertFalse(service.get(WS, code, null).isPresent());
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(BoundedContextNotFoundException.class,
+                () -> service.delete(WS, new BoundedContextCode("BC-99")));
+    }
+
+    /**
+     * Mutation test for {@code nextCode} counting over
+     * {@link BoundedContextRepository#findRetainedCodes} in addition to
+     * {@link BoundedContextRepository#findAllCodes} (kogn-io/arknet#566, mirroring
+     * {@code ConstraintServiceTest}'s equivalent for {@code constraint_add}): drop the
+     * {@code findRetainedCodes} term from {@code nextCode}'s maximum and this goes red - deleting
+     * the highest-numbered context would let the count fall back to the survivor and hand the
+     * deleted context's code out a second time.
+     */
+    @Test
+    void addDoesNotReissueACodeAfterItsHighestBoundedContextWasDeleted() {
+        service.add(WS, newBoundedContext(), null);
+        BoundedContextCode second = service.add(WS, newBoundedContext(), null).code();
+        service.delete(WS, second);
+
+        BoundedContext third = service.add(WS, newBoundedContext(), null);
+
+        assertEquals(new BoundedContextCode("BC-3"), third.code());
+    }
+
     private static NewBoundedContext newBoundedContext() {
         return new NewBoundedContext("OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",

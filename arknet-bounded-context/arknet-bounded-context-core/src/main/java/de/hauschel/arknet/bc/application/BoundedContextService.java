@@ -15,6 +15,7 @@ import java.util.function.Function;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
+import de.hauschel.arknet.bc.application.port.in.DeleteBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.DescribeBoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.LinkContext;
@@ -34,6 +35,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
 import de.hauschel.arknet.bc.domain.BoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
+import de.hauschel.arknet.bc.domain.BoundedContextReferencedException;
 import de.hauschel.arknet.bc.domain.ContextRelationship;
 import de.hauschel.arknet.bc.domain.ContextRelationshipId;
 import de.hauschel.arknet.bc.domain.ContextRelationshipNotFoundException;
@@ -73,6 +75,14 @@ import de.hauschel.arknet.kernel.ProjectId;
  * the term edge: adding what is already linked is idempotent, removing what is not linked raises
  * {@link TermNotLinkedException}.</p>
  *
+ * <p><strong>Delete.</strong> {@link #delete} removes a bounded context whole, edges it owns
+ * included, and is the one operation with no lifecycle condition to check first - a bounded context
+ * carries no status. Whether anything still points at the context is decided in the out-adapter,
+ * which is the only side that sees the other hexagons' named graphs; a
+ * {@link ContextRelationship} is never deleted along with a context it connects, so
+ * {@link #unlinkContext} comes first. {@link #add} counts a deleted context's code as taken
+ * forever - see {@link #nextCode}.</p>
+ *
  * <p><strong>Multilingual, mirroring {@code ConstraintService}'s policy (kogn-io/arknet#520).
  * </strong> {@code name}/{@code domainVision} are language-tagged; {@link #add} and {@link #update}
  * resolve and pass through the BCP-47 tags exactly the way {@code ConstraintService} does for
@@ -100,7 +110,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  */
 public class BoundedContextService implements AddBoundedContext, ListBoundedContexts,
         GetBoundedContext, LinkTerm, UnlinkTerm, ResolveBoundedContexts, LinkContext, UnlinkContext,
-        DescribeBoundedContextDisplayFallback, UpdateBoundedContext {
+        DescribeBoundedContextDisplayFallback, UpdateBoundedContext, DeleteBoundedContext {
 
     private static final String CODE_PREFIX = "BC";
 
@@ -504,9 +514,27 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
                 : currentLanguage;
     }
 
+    @Override
+    public void delete(ProjectId projectId, BoundedContextCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        // The reference check (does a decision, a context relationship, a requirement or a domain
+        // still point at this context?) is the out-adapter's business - it is the only side that
+        // can traverse the store's other named graphs. Mirrors ConstraintService#delete.
+        repository.delete(projectId, code);
+    }
+
     /**
      * Derives the next free business code in {@code projectId}: the highest running number the
-     * project already uses, plus one (starting at 1).
+     * project has <em>ever</em> used, plus one (starting at 1).
+     *
+     * <p><strong>Ever used, not currently in use (kogn-io/arknet#566).</strong> The maximum runs
+     * over the living contexts <em>and</em> the codes
+     * {@link BoundedContextRepository#findRetainedCodes} kept from deleted ones - mirrors
+     * {@code TermService#nextCode} exactly. Over the living ones alone, deleting the
+     * highest-numbered context would let the maximum fall back and the next {@code bc_add} hand out
+     * that same number again - and {@code BC-3} already written into a commit message, an ADR's
+     * {@code affectsContext} note or a diagram would then name a different boundary entirely.</p>
      *
      * <p><strong>{@link BoundedContextRepository#findAllCodes}, not
      * {@link BoundedContextRepository#findAll} (kogn-io/arknet#360).</strong> A bounded context
@@ -522,8 +550,10 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
      */
     private BoundedContextCode nextCode(ProjectId projectId) {
         String prefix = CODE_PREFIX + "-";
-        int highest = CodeCounter.highestRunningNumber(prefix,
+        int highestLiving = CodeCounter.highestRunningNumber(prefix,
                 repository.findAllCodes(projectId), BoundedContextCode::value);
-        return new BoundedContextCode(prefix + (highest + 1));
+        int highestRetained = CodeCounter.highestRunningNumber(prefix,
+                repository.findRetainedCodes(projectId), BoundedContextCode::value);
+        return new BoundedContextCode(prefix + (Math.max(highestLiving, highestRetained) + 1));
     }
 }

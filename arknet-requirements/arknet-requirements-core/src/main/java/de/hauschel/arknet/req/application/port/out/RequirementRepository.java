@@ -18,6 +18,7 @@ import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.RequirementDisplayFallback;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementReadConflictException;
+import de.hauschel.arknet.req.domain.RequirementReferencedException;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
 
@@ -419,4 +420,47 @@ public interface RequirementRepository {
      * @return the resolved requirements found, in no particular order, never {@code null}
      */
     List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId, List<ResourceId> ids);
+
+    /**
+     * Deletes the requirement identified by {@code code}, and every triple it carries in this
+     * hexagon's own named graph, from the project (kogn-io/arknet#566, mirroring
+     * {@link ConstraintRepository#delete}). The {@code arkreq:AcceptanceCriterion} resources the
+     * requirement owns go with it: they carry no identity of their own and no reader once their
+     * requirement is gone, so leaving them behind would only accumulate orphaned triples.
+     *
+     * <p><strong>The reference check runs inside the delete's own write transaction.</strong>
+     * Rejects outright, without deleting anything, if a decision
+     * ({@code arkarch:addressesRequirement}), a use-case step ({@code arkreq:stepRealises}), a use
+     * case ({@code oslc_rm:satisfies}) or another requirement ({@code arkreq:dependsOn}) still
+     * references it - see {@link RequirementReferencedException}. An implementation must run that
+     * check and the delete under one atomic snapshot, not as a read beforehand: a check outside
+     * the transaction would leave a window for a concurrent writer to draw the very edge this
+     * delete is about to orphan.</p>
+     *
+     * <p><strong>No status gate.</strong> A requirement in any status is deletable, {@code
+     * ACCEPTED} included - see {@link de.hauschel.arknet.req.application.port.in.DeleteRequirement}
+     * for why this differs from {@code adr_delete}.</p>
+     *
+     * @param projectId the project (architecture model) the requirement lives in
+     * @param code      the requirement code, e.g. {@code FR-1}
+     * @throws RequirementNotFoundException   if no requirement with this identity exists
+     * @throws RequirementReferencedException if anything still references the requirement
+     */
+    void delete(ProjectId projectId, RequirementCode code);
+
+    /**
+     * Returns the business codes of requirements that were deleted from the project and are kept
+     * out of circulation - what {@link #delete} retains so a code can never name two different
+     * requirements over a project's lifetime (kogn-io/arknet#566, mirroring
+     * {@link ConstraintRepository#findRetainedCodes}). Read together with {@link #findAllCodes}
+     * whenever the next free code for a type is derived; the two sets are disjoint, since a
+     * retained code belongs to a requirement that no longer exists.
+     *
+     * <p>Both types in one list, exactly like {@link #findAllCodes}: the caller tells the two
+     * counters ({@code FR-}/{@code NFR-}) apart by the code's own prefix.</p>
+     *
+     * @param projectId the project (architecture model) to read the retained codes of
+     * @return the retained codes, of either type, never {@code null}
+     */
+    List<RequirementCode> findRetainedCodes(ProjectId projectId);
 }

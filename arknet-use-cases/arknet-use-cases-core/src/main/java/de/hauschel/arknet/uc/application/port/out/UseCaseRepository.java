@@ -16,6 +16,7 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
 import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
+import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
 
 /**
  * Driven port: persistence capability the component needs from the outside.
@@ -315,12 +316,49 @@ public interface UseCaseRepository {
      * mandatory {@code dcterms:identifier}, neither of which any read-time skip depends on, so the
      * number it feeds {@code nextCode} is independent of materialisability.</p>
      *
-     * <p>There is no retained-code counterpart here as there is in the ADR hexagon: this port has no
-     * {@code delete}, so no use case's code ever leaves circulation and every code ever minted is
-     * still carried by a live subject this method reads.</p>
+     * <p>Read together with {@link #findRetainedCodes} whenever the next free code is derived: this
+     * method sees only the codes live subjects still carry, and {@link #delete} takes a code out of
+     * circulation without leaving such a subject behind.</p>
      *
      * @param projectId the project (architecture model) to read codes from
      * @return every recorded use case's business code, never {@code null}
      */
     List<UseCaseCode> findAllCodes(ProjectId projectId);
+
+    /**
+     * Deletes the use case identified by {@code code}, and every triple it carries in this
+     * hexagon's own named graph - including the {@code arkreq:Step} resources hanging off its
+     * {@code arkreq:mainStep}/{@code arkreq:extensionStep} edges - from the project
+     * (kogn-io/arknet#566, mirroring {@code ConstraintRepository#delete}).
+     *
+     * <p>Rejects outright, without deleting anything, if another use case still points at this one
+     * via {@code arkreq:includesUseCase} or {@code arkreq:extendsUseCase} - see
+     * {@link UseCaseReferencedException}. That check is this port's own guarantee rather than the
+     * caller's: an implementation runs it <em>inside</em> the very write transaction that performs
+     * the delete, so a reference written between an earlier, advisory read and the commit cannot
+     * slip through and leave the edge dangling. Every other edge a use case carries -
+     * {@code oslc_rm:satisfies}, {@code arkreq:usesTerm}, {@code oslc_rm:constrainedBy},
+     * {@code arkreq:primaryRole}/{@code arkreq:supportingRole}, a step's own
+     * {@code arkreq:stepRealises} - points away from it and simply disappears with it; the
+     * requirement, term, constraint or role at the far end is left untouched.</p>
+     *
+     * @param projectId the project (architecture model) the use case lives in
+     * @param code      the use-case code, e.g. {@code UC1}
+     * @throws UseCaseNotFoundException   if no use case with this identity exists
+     * @throws UseCaseReferencedException if another use case still includes or extends it
+     */
+    void delete(ProjectId projectId, UseCaseCode code);
+
+    /**
+     * Returns the business codes of use cases that were deleted from the project and are kept out
+     * of circulation - what {@link #delete} retains so a code can never name two different use
+     * cases over a project's lifetime (mirrors {@code ConstraintRepository#findRetainedCodes},
+     * kogn-io/arknet#566). Read together with {@link #findAllCodes} whenever the next free code is
+     * derived; the two sets are disjoint, since a retained code belongs to a use case that no
+     * longer exists.
+     *
+     * @param projectId the project (architecture model) to read the retained codes of
+     * @return the retained codes, never {@code null}
+     */
+    List<UseCaseCode> findRetainedCodes(ProjectId projectId);
 }

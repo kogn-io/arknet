@@ -61,6 +61,8 @@ final class InMemoryRequirementRepository implements RequirementRepository {
      * (kogn-io/arknet#360).
      */
     private final Map<ProjectId, List<RequirementCode>> unmaterialisableByProject = new LinkedHashMap<>();
+    /** Codes of deleted requirements, kept out of circulation exactly as the real adapter does. */
+    private final Map<ProjectId, List<RequirementCode>> retainedByProject = new LinkedHashMap<>();
     private final Map<RequirementId, RevisionToken> headByIdentity = new LinkedHashMap<>();
     private final Set<RequirementId> legacyAcceptanceCriteria = new HashSet<>();
     private final Map<RequirementId, String> titleLanguageByIdentity = new LinkedHashMap<>();
@@ -231,5 +233,34 @@ final class InMemoryRequirementRepository implements RequirementRepository {
                 .filter(r -> wanted.contains(r.id().value()))
                 .map(r -> new ResolveRequirements.ResolvedRequirement(r.id().value(), r.code()))
                 .toList();
+    }
+
+    @Override
+    public void delete(ProjectId projectId, RequirementCode code) {
+        // The cross-BC reference check (kogn-io/arknet#566) is the real out-adapter's concern -
+        // this fake only exercises RequirementService's own pass-through and the not-found case.
+        Map<RequirementId, Requirement> requirements = byProject.getOrDefault(projectId, Map.of());
+        RequirementId id = requirements.values().stream()
+                .filter(r -> r.code().equals(code))
+                .findFirst()
+                .map(Requirement::id)
+                .orElseThrow(() -> new RequirementNotFoundException(projectId, code));
+        requirements.remove(id);
+        headByIdentity.remove(id);
+        legacyAcceptanceCriteria.remove(id);
+        titleLanguageByIdentity.remove(id);
+        descriptionLanguageByIdentity.remove(id);
+        rationaleLanguageByIdentity.remove(id);
+        acceptanceCriteriaLanguageByIdentity.remove(id);
+        retainedByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
+    }
+
+    /**
+     * Mirrors the real out-adapter's code retention so {@link RequirementService#add} cannot hand
+     * the deleted requirement's number out again (kogn-io/arknet#566).
+     */
+    @Override
+    public List<RequirementCode> findRetainedCodes(ProjectId projectId) {
+        return List.copyOf(retainedByProject.getOrDefault(projectId, List.of()));
     }
 }

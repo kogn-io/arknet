@@ -38,7 +38,9 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
@@ -58,6 +60,7 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
+import de.hauschel.arknet.req.domain.RequirementReferencedException;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
@@ -1781,6 +1784,240 @@ class KognioRdfRequirementRepositoryTest {
                 new ConstraintCode(code), "A constraint", "A real, SHACL-conforming constraint statement.", type);
         constraints.create(projectId, constraint, "en");
         return new ConstraintRef(constraint.id().value());
+    }
+
+    // ---- delete (kogn-io/arknet#566) -----------------------------------------------------------
+
+    /** The named graph this hexagon owns - where a deleted requirement must leave nothing behind. */
+    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
+
+    @Test
+    void deleteRemovesTheRequirementAndItsTriples() {
+        Requirement stored = requirement("FR-1", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+        repository.create(PROJECT_A, stored, "en");
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isEmpty());
+        assertFalse(askInProjectA("ASK { GRAPH <" + REQUIREMENTS_GRAPH + "> { <"
+                + stored.id().value().value() + "> ?p ?o } }"),
+                "no triple of the deleted requirement may remain");
+    }
+
+    /**
+     * The acceptance criteria go with their requirement (issue #266 minted them as resources of
+     * their own, reachable only through the {@code arkreq:acceptanceCriterion} edge this delete
+     * removes). Drop the {@code UNION} branch from the delete's {@code DELETE ... WHERE} and this
+     * goes red with orphaned criterion triples still in the graph.
+     */
+    @Test
+    void deleteAlsoRemovesItsAcceptanceCriteria() {
+        Requirement stored = requirement("FR-1", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+        repository.create(PROJECT_A, stored, "en");
+        List<String> criteria = selectIris("SELECT ?v WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { <"
+                + stored.id().value().value() + "> <" + ArkreqVocabulary.ACCEPTANCE_CRITERION + "> ?v } }");
+        assertEquals(1, criteria.size(), "fixture must have written exactly one criterion resource");
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertFalse(askInProjectA("ASK { GRAPH <" + REQUIREMENTS_GRAPH + "> { <" + criteria.get(0) + "> ?p ?o } }"),
+                "the criterion resource must go with its requirement");
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(RequirementNotFoundException.class,
+                () -> repository.delete(PROJECT_A, new RequirementCode("FR-99")));
+    }
+
+    /**
+     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
+     * the {@code arkprov:head} pointer is removed and the last revision is marked
+     * {@code prov:invalidatedAtTime} rather than erased.
+     */
+    @Test
+    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+        Requirement stored = requirement("FR-1", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+        repository.create(PROJECT_A, stored, "en");
+        String lastRevision = headsOf(stored.id()).get(0);
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(headsOf(stored.id()).isEmpty(), "the head pointer must be removed");
+        assertEquals(1, selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t . BIND(<" + lastRevision
+                + "> AS ?v) } }").size(), "the last revision must be tombstoned, not erased");
+    }
+
+    /**
+     * The one thing the funnel's tombstone cannot carry: the business code lives on the model
+     * triple the delete removes, so it is hung on the tombstoned revision itself - the only place
+     * it can outlive its resource, and what keeps {@code FR-1} from naming a second requirement
+     * later.
+     */
+    @Test
+    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+        Requirement stored = requirement("FR-1", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+        repository.create(PROJECT_A, stored, "en");
+        String lastRevision = headsOf(stored.id()).get(0);
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertEquals(List.of("FR-1"), identifiersOf(lastRevision));
+        assertEquals(List.of(new RequirementCode("FR-1")), repository.findRetainedCodes(PROJECT_A));
+    }
+
+    /**
+     * The two code counters do not bleed into each other through the retained codes either: the
+     * funnel filters on {@code STRSTARTS}, so a deleted {@code NFR-1} is never read back under the
+     * {@code FR-} prefix, nor a deleted {@code FR-1} under {@code NFR-}.
+     */
+    @Test
+    void retainedCodesKeepTheTwoTypePrefixesApart() {
+        Requirement functional = requirement("FR-1", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+        Requirement nonFunctional = requirement("NFR-1", RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED);
+        repository.create(PROJECT_A, functional, "en");
+        repository.create(PROJECT_A, nonFunctional, "en");
+
+        repository.delete(PROJECT_A, nonFunctional.code());
+
+        assertEquals(List.of(new RequirementCode("NFR-1")), repository.findRetainedCodes(PROJECT_A));
+    }
+
+    @Test
+    void projectsAreIsolatedForDelete() {
+        Requirement stored = requirement("FR-1", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+        repository.create(PROJECT_A, stored, "en");
+
+        assertThrows(RequirementNotFoundException.class, () -> repository.delete(PROJECT_B, stored.code()));
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isPresent(),
+                "a delete in another project must not touch this project's requirement");
+    }
+
+    /**
+     * No status gates the delete: an {@code ACCEPTED} requirement nothing points at is as
+     * deletable as a {@code PROPOSED} one (Fred, 2026-09-18) - unlike {@code adr_delete}, which
+     * refuses an accepted record. Add an {@code isDeletable()} check on {@link RequirementStatus}
+     * and this goes red.
+     */
+    @Test
+    void deleteRemovesAnAcceptedRequirement() {
+        Requirement stored = requirement("FR-1", RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED);
+        repository.create(PROJECT_A, stored, "en");
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isEmpty());
+    }
+
+    /**
+     * {@code arkarch:addressesRequirement}, written by {@code adr_add}/{@code adr_update} into the
+     * decisions graph - proof that the reference check really searches across every named graph
+     * ({@code GRAPH ?g}), not just this hexagon's own. Remove the entry from
+     * {@code KognioRdfRequirementRepository#REFERENCING_PREDICATES} and this goes red.
+     */
+    @Test
+    void deleteRejectsARequirementStillReferencedByAnArchitectureDecision() {
+        assertDeleteRejectedFor("https://w3id.org/arknet/model/architecture-decisions",
+                ArkarchVocabulary.ADDRESSES_REQUIREMENT, "addressesRequirement");
+    }
+
+    /** {@code arkreq:stepRealises}, written by {@code uc_add}/{@code uc_update} for a use-case step. */
+    @Test
+    void deleteRejectsARequirementStillReferencedByAUseCaseStep() {
+        assertDeleteRejectedFor("https://w3id.org/arknet/model/use-cases",
+                ArkreqVocabulary.STEP_REALISES, "stepRealises");
+    }
+
+    /** {@code oslc_rm:satisfies}, the use case's own edge at the requirement it fulfils. */
+    @Test
+    void deleteRejectsARequirementStillReferencedByAUseCaseSatisfies() {
+        assertDeleteRejectedFor("https://w3id.org/arknet/model/use-cases",
+                ArkreqVocabulary.SATISFIES, "satisfies");
+    }
+
+    /**
+     * {@code arkreq:dependsOn}, declared by the ontology and written by no tool today - a
+     * store-first edge is exactly as real as a tool-written one, and it lives in this hexagon's
+     * own graph rather than a neighbour's.
+     */
+    @Test
+    void deleteRejectsARequirementStillReferencedByAnotherRequirementsDependsOn() {
+        assertDeleteRejectedFor(REQUIREMENTS_GRAPH, ArkreqVocabulary.DEPENDS_ON, "dependsOn");
+    }
+
+    /**
+     * The other direction does not hold the requirement: {@code oslc_rm:constrainedBy} and
+     * {@code arkreq:usesTerm} point <em>from</em> it <em>at</em> something else, so a requirement
+     * carrying nothing but outgoing edges stays deletable. Add {@code constrainedBy} to
+     * {@code REFERENCING_PREDICATES} and this goes red.
+     */
+    @Test
+    void deleteRemovesARequirementThatOnlyCarriesOutgoingEdges() {
+        givenTerm(PROJECT_A, "TERM-1");
+        ConstraintRef constraint = givenConstraint(PROJECT_A, "TCON-1", ConstraintType.TECHNICAL);
+        Requirement stored = new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
+                "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, List.of(termRef("TERM-1")),
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of(constraint));
+        repository.create(PROJECT_A, stored, "en");
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isEmpty());
+    }
+
+    /**
+     * Writes one incoming edge of {@code predicate} into {@code graph} and asserts that the delete
+     * refuses, naming {@code shorthand}, and leaves the requirement untouched - the shared body of
+     * the four per-edge rejection tests.
+     */
+    private void assertDeleteRejectedFor(String graph, String predicate, String shorthand) {
+        Requirement stored = requirement("FR-1", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+        repository.create(PROJECT_A, stored, "en");
+        insertInProjectA("INSERT DATA { GRAPH <" + graph + "> { <https://w3id.org/arknet/id/referrer-1> <"
+                + predicate + "> <" + stored.id().value().value() + "> } }");
+
+        RequirementReferencedException ex = assertThrows(RequirementReferencedException.class,
+                () -> repository.delete(PROJECT_A, stored.code()));
+
+        assertEquals(List.of(shorthand), ex.referencingPredicates());
+        assertTrue(ex.getMessage().contains("still referenced via " + shorthand), ex.getMessage());
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isPresent(),
+                "a rejected delete must leave the requirement untouched");
+    }
+
+    /** A plain, SHACL-conforming requirement under {@code code}, carrying one acceptance criterion. */
+    private static Requirement requirement(String code, RequirementType type, RequirementStatus status) {
+        return new Requirement(freshId(), new RequirementCode(code), "Login",
+                "The system shall authenticate a user.", null, type, status, null, null, List.of(),
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
+    }
+
+    private boolean askInProjectA(String query) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            return handle.sparqlQuery().ask(query);
+        }
+    }
+
+    private void insertInProjectA(String update) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(update);
+                return null;
+            });
+        }
+    }
+
+    /** The {@code dcterms:identifier}s hung on one revision - what the delete's tombstone retains. */
+    private List<String> identifiersOf(String revisionIri) {
+        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
+                    .toList();
+        }
     }
 
     // ---- revision trail: one revision per write, head queryable ----------------

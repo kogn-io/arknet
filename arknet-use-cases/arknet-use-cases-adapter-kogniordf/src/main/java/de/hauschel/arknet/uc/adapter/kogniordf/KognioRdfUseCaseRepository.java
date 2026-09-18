@@ -58,6 +58,7 @@ import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
 import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
+import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
 
 /**
  * Out-adapter: {@link UseCaseRepository} backed by the kognio-rdf substrate
@@ -213,6 +214,15 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String IDENTIFIER_PROPERTY = VocabDct.NAMESPACE + "identifier";
     private static final String USES_TERM_PROPERTY = ArkreqVocabulary.USES_TERM;
     private static final String CONSTRAINED_BY_PROPERTY = ArkreqVocabulary.CONSTRAINED_BY;
+
+    /**
+     * The prefix every code this hexagon mints carries - the very literal
+     * {@code UseCaseService} prepends, with no separator of its own (see {@code CodeCounter}).
+     * Used only by {@link #findRetainedCodes} to tell a use case's own retained code apart from a
+     * neighbouring bounded context's, since the provenance graph
+     * {@link WriteFunnel#findRetainedCodes} reads from is shared by all of them.
+     */
+    private static final String CODE_PREFIX = "UC";
 
     private final DatasetLifecycle lifecycle;
     private final ResourceIdFactory resourceIdFactory;
@@ -863,6 +873,112 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     .distinct()
                     .map(UseCaseCode::new)
                     .toList();
+        }
+    }
+
+    /**
+     * Deletes the use case identified by {@code code}, and every triple it carries in
+     * {@link #USE_CASES_GRAPH} (including every main-flow/extension step child's own triples), from
+     * the project (kogn-io/arknet#566). Resolves the subject by code outside any transaction
+     * (mirroring {@link #findByCode}'s own read), then hands the whole check-and-delete to
+     * {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
+     * write transaction, and only once it finds nothing pointing at the use case does the body
+     * remove the subject's and its steps' triples wholesale. Mirrors
+     * {@code KognioRdfConstraintRepository#delete}, with {@code adr_delete}'s child-resource
+     * {@code UNION} for the steps.
+     *
+     * <p>The step traversal is the same one {@code write}'s {@code deleteExisting} runs: a step's
+     * IRI is opaque and sits nowhere below the use case's own, so only following
+     * {@code mainStep}/{@code extensionStep} reaches it. A step's outgoing
+     * {@code arkreq:stepRealises} edge goes with the step; the requirement it named stays, since
+     * only the step's own triples are removed, never the target's.</p>
+     */
+    @Override
+    public void delete(ProjectId projectId, UseCaseCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+
+        DatasetId dataset = new DatasetId(projectId.value());
+        String subjectIriString;
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            String query = "SELECT ?s WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                    + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \""
+                    + SparqlTerms.escape(code.value()) + "\" . FILTER(isIRI(?s)) } }";
+            subjectIriString = handle.sparqlQuery().select(query).findFirst()
+                    .map(row -> iriOf(row, "s").getIRIString())
+                    .orElseThrow(() -> new UseCaseNotFoundException(projectId, code));
+        }
+        String subject = SparqlTerms.iriRef(subjectIriString);
+
+        funnel.delete(dataset, USE_CASES_GRAPH, subjectIriString, code.value(),
+                () -> new UseCaseNotFoundException(projectId, code),
+                tx -> {
+                    rejectIfReferenced(tx, subjectIriString, projectId, code);
+                    tx.update("DELETE { GRAPH <" + USE_CASES_GRAPH + "> { ?s ?p ?o } } WHERE { "
+                            + "GRAPH <" + USE_CASES_GRAPH + "> { "
+                            + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
+                            + "{ " + subject + " (<" + MAIN_STEP_PROPERTY + ">|<" + EXTENSION_STEP_PROPERTY
+                            + ">) ?s . ?s ?p ?o } } }");
+                });
+    }
+
+    /**
+     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained
+     * (kogn-io/arknet#566): the shared funnel keeps the number out of circulation, this hexagon
+     * only maps its raw strings to {@link UseCaseCode}. One prefix ({@link #CODE_PREFIX}), unlike
+     * the constraint hexagon's three - a use case has a single counter.
+     */
+    @Override
+    public List<UseCaseCode> findRetainedCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        return funnel.findRetainedCodes(new DatasetId(projectId.value()), CODE_PREFIX).stream()
+                .map(UseCaseCode::new)
+                .toList();
+    }
+
+    /**
+     * The predicates that, if found pointing at a use case, block its deletion
+     * (kogn-io/arknet#566): the two UML flow relations between use cases,
+     * {@code arkreq:includesUseCase} (include) and {@code arkreq:extendsUseCase} (extend). Neither
+     * is written by any tool today - the shipped ontology declares them with
+     * {@code rdfs:range arkreq:UseCase}, and store-first data may carry them, which is exactly the
+     * case a guard is for. Mirrors {@code KognioRdfConstraintRepository#REFERENCING_PREDICATES};
+     * the field must stay named and typed exactly this way and remain {@code static} - an
+     * architecture test ({@code ReferenceGuardsCoverEveryOntologyEdgeTest}) reads it via
+     * reflection.
+     */
+    private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
+            ArkreqVocabulary.INCLUDES_USE_CASE, "includesUseCase",
+            ArkreqVocabulary.EXTENDS_USE_CASE, "extendsUseCase");
+
+    /**
+     * Rejects the delete, without touching a single triple, if anything in the project still
+     * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
+     * every named graph ({@code GRAPH ?g}) rather than {@link #USE_CASES_GRAPH} alone, so a
+     * store-first edge written into some other graph is caught too. Runs inside the live write
+     * transaction {@link WriteFunnel#delete} hands its {@code body}, so the check and the eventual
+     * delete share one atomic snapshot. Mirrors
+     * {@code KognioRdfConstraintRepository#rejectIfReferenced}, with the found shorthands sorted
+     * before they reach the message: {@link Map#of} fixes no iteration order, and a caller reading
+     * two rejections of the same delete should not see the two edges swap places between them.
+     *
+     * <p>A use case's own outgoing edges are deliberately absent from the guard: {@code satisfies},
+     * {@code usesTerm}, {@code constrainedBy}, {@code primaryRole}/{@code supportingRole} and a
+     * step's {@code stepRealises} all point away from the subject and vanish with it.</p>
+     */
+    private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, UseCaseCode code) {
+        IRI target = rdf.createIRI(subjectIri);
+        List<String> referencing = new ArrayList<>();
+        REFERENCING_PREDICATES.forEach((predicateIri, shorthand) -> {
+            String query = "ASK { GRAPH ?g { ?s <" + predicateIri + "> ?target } }";
+            if (tx.ask(query, Map.of("target", target))) {
+                referencing.add(shorthand);
+            }
+        });
+        if (!referencing.isEmpty()) {
+            referencing.sort(String::compareTo);
+            throw new UseCaseReferencedException(projectId, code, referencing);
         }
     }
 
