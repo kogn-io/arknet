@@ -44,9 +44,10 @@ class StoreCheckMcpToolsTest {
 
     /** Point (c) of kogn-io/arknet#512: an omitted selector runs every check, this one included. */
     @Test
-    void runsBothChecksWhenTheSelectorIsOmitted() {
+    void runsEveryDeclaredCheckWhenTheSelectorIsOmitted() {
         assertThat(StoreCheckMcpTools.select(null))
-                .containsExactly(StoreCheckKind.LANGUAGE, StoreCheckKind.ROLE_TERM_DUPLICATE);
+                .containsExactly(StoreCheckKind.LANGUAGE, StoreCheckKind.ROLE_TERM_DUPLICATE,
+                        StoreCheckKind.STEP_ACCEPTANCE);
     }
 
     /** A silently skipped rule is worse than a rejected call: nobody notices a check that did not run. */
@@ -56,7 +57,8 @@ class StoreCheckMcpToolsTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("orphans")
                 .hasMessageContaining("LANGUAGE")
-                .hasMessageContaining("ROLE_TERM_DUPLICATE");
+                .hasMessageContaining("ROLE_TERM_DUPLICATE")
+                .hasMessageContaining("STEP_ACCEPTANCE");
     }
 
     @Test
@@ -97,5 +99,25 @@ class StoreCheckMcpToolsTest {
         assertThat(tool.description())
                 .contains("ROLE_TERM_DUPLICATE")
                 .contains("never a rejection");
+    }
+
+    /**
+     * The scope limit of kogn-io/arknet#317 only reaches an agent through the schema: a caller
+     * that does not know extension steps are out of scope reads a clean STEP_ACCEPTANCE section as
+     * "every step is covered".
+     */
+    @Test
+    void namesStepAcceptanceAndWhatItCannotSeeInItsOwnDescription() {
+        McpTool tool = Arrays.stream(StoreCheckMcpTools.class.getDeclaredMethods())
+                .map(method -> method.getAnnotation(McpTool.class))
+                .filter(annotation -> annotation != null)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(tool.description())
+                .contains("STEP_ACCEPTANCE")
+                .contains("arkreq:stepRealises")
+                .contains("does NOT see")
+                .contains("extension steps");
     }
 }

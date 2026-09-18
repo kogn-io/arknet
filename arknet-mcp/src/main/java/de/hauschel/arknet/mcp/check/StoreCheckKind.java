@@ -13,9 +13,10 @@ import java.util.Locale;
  * store, not a bounded context of its own, and a tool per check would grow the tool surface every
  * agent pays for on every call by one entry per rule.
  *
- * <p>{@link #LANGUAGE} and {@link #ROLE_TERM_DUPLICATE} exist today. The remaining check-shaped
- * tools ({@code orphan_check}, and whatever follows) are folded in separately
- * (kogn-io/arknet#473); this enum is the seam they arrive at, not a placeholder for them.</p>
+ * <p>{@link #LANGUAGE}, {@link #ROLE_TERM_DUPLICATE} and {@link #STEP_ACCEPTANCE} exist today. The
+ * remaining check-shaped tools ({@code orphan_check}, and whatever follows) are folded in
+ * separately (kogn-io/arknet#473); this enum is the seam they arrive at, not a placeholder for
+ * them.</p>
  */
 public enum StoreCheckKind {
 
@@ -30,7 +31,14 @@ public enum StoreCheckKind {
      * name (kogn-io/arknet#512) - reported, never rejected: {@code role_add}/{@code term_add}
      * stay independent of each other.
      */
-    ROLE_TERM_DUPLICATE;
+    ROLE_TERM_DUPLICATE,
+
+    /**
+     * Which main-flow use-case step no acceptance criterion stands behind (kogn-io/arknet#622) -
+     * either because the step realises no requirement at all, or because no requirement it
+     * realises carries an {@code arkreq:acceptanceCriterion}.
+     */
+    STEP_ACCEPTANCE;
 
     /**
      * Parses one caller-supplied selector, case-insensitively.

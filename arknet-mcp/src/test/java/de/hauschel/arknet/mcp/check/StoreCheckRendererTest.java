@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.mcp.check.LanguageGapCheck.Gap;
 import de.hauschel.arknet.mcp.check.RoleTermDuplicateCheck.Finding;
+import de.hauschel.arknet.mcp.check.StepAcceptanceCheck.Kind;
 import de.hauschel.arknet.mcp.store.Prefixes;
 
 /** Unit tests for {@code store_check}'s text output. */
@@ -95,5 +96,50 @@ class StoreCheckRendererTest {
                 .contains("ROLE_TERM_DUPLICATE")
                 .contains("| Role | Term | Name |")
                 .contains("| ROLE-1 | TERM-6 | Requirements Engineer |");
+    }
+
+    @Test
+    void saysEveryStepReachesACriterionWhenTheStepCheckFoundNothing() {
+        assertThat(renderer.stepAcceptanceSection(List.of()))
+                .contains("STEP_ACCEPTANCE")
+                .contains("every main-flow step reaches an acceptance criterion");
+    }
+
+    /**
+     * The distinction issue #622 turns on: a missing edge and an incomplete requirement are not
+     * the same defect, so they must not be read off one list.
+     */
+    @Test
+    void rendersTheTwoCasesInTwoTablesRatherThanOne() {
+        String rendered = renderer.stepAcceptanceSection(List.of(
+                new StepAcceptanceCheck.Finding(Kind.NO_REQUIREMENT, "UC-1", 1, List.of()),
+                new StepAcceptanceCheck.Finding(Kind.REQUIREMENT_WITHOUT_CRITERION, "UC-1", 2,
+                        List.of("FR-3", "FR-4"))));
+
+        assertThat(rendered)
+                .contains("2 main-flow steps have no acceptance criterion behind them.")
+                .contains("No requirement (arkreq:stepRealises missing):")
+                .contains("| Use case | Step |")
+                .contains("| UC-1 | 1 |")
+                .contains("Requirement without an acceptance criterion:")
+                .contains("| Use case | Step | Requirement |")
+                .contains("| UC-1 | 2 | FR-3, FR-4 |");
+    }
+
+    /** A step with no position of its own is shown as having none, never under an invented number. */
+    @Test
+    void showsAStepWithoutAPositionAsHavingNone() {
+        assertThat(renderer.stepAcceptanceSection(
+                List.of(new StepAcceptanceCheck.Finding(Kind.NO_REQUIREMENT, "UC-1", null, List.of()))))
+                .contains("| UC-1 | - |");
+    }
+
+    @Test
+    void alwaysNamesTheStepChecksBlindSpotWhetherItFoundSomethingOrNot() {
+        assertThat(renderer.stepAcceptanceSection(List.of()))
+                .contains(StoreCheckRenderer.STEP_BLIND_SPOT);
+        assertThat(renderer.stepAcceptanceSection(
+                List.of(new StepAcceptanceCheck.Finding(Kind.NO_REQUIREMENT, "UC-1", 1, List.of()))))
+                .contains(StoreCheckRenderer.STEP_BLIND_SPOT);
     }
 }
