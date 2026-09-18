@@ -57,7 +57,7 @@ public final class StoreCheckMcpTools {
     @McpTool(name = "store_check", description = "Check this project's stored model against what the "
             + "project declares about itself, and report what is decidable; it reads only, changes "
             + "nothing and refuses nothing. Select rules with 'checks'; omit it to run all of them. "
-            + "Two checks exist today. LANGUAGE reports every field that carries at least one "
+            + "Three checks exist today. LANGUAGE reports every field that carries at least one "
             + "language-tagged value but not one for each language the project maintains "
             + "(project_update languages) - one row per resource and field, with the missing tags. If "
             + "the project declares no maintained language set, LANGUAGE says so instead of reporting "
@@ -70,14 +70,24 @@ public final class StoreCheckMcpTools {
             + "(arkproc:Role, role_add) and glossary term (skos:Concept, term_add) that carry the same "
             + "name, compared case-insensitively and trimmed across every language variant of the "
             + "role's name against the term's prefLabel - a report only, never a rejection: the two "
-            + "resource types stay independent of each other (kogn-io/arknet#512). Further checks fold "
+            + "resource types stay independent of each other (kogn-io/arknet#512). STEP_ACCEPTANCE "
+            + "reports every main-flow use-case step (arkreq:mainStep) that no acceptance criterion "
+            + "stands behind, walking the two-hop path step -> arkreq:stepRealises -> requirement -> "
+            + "arkreq:acceptanceCriterion, and keeps its two cases apart: a step realising no "
+            + "requirement at all is a missing edge, a step whose realised requirements carry no "
+            + "criterion is an incomplete requirement. One criterion on one realised requirement is "
+            + "enough for the step to count as covered. What STEP_ACCEPTANCE does NOT see: extension "
+            + "steps, which carry no realises edge at tool level (kogn-io/arknet#317) and are out of "
+            + "scope rather than reported; whether a criterion actually covers the step, which is a "
+            + "reading and not a check; and a use case with no business code of its own, which is "
+            + "skipped rather than named by a guessed handle. Further checks fold "
             + "in here rather than arriving as new tools (kogn-io/arknet#473); orphan_check is still "
             + "its own tool for now.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String storeCheck(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Which checks to run, as a list of names. Allowed: LANGUAGE, "
-                    + "ROLE_TERM_DUPLICATE. Omit the parameter (or pass an empty list) to run every "
+                    + "ROLE_TERM_DUPLICATE, STEP_ACCEPTANCE. Omit the parameter (or pass an empty list) to run every "
                     + "check - which is what most callers want, since the set is small and each is "
                     + "cheap.", required = false)
             final List<String> checks,
@@ -98,6 +108,8 @@ public final class StoreCheckMcpTools {
                         LanguageGapCheck.run(snapshot, project.maintainedLanguages()));
                 case ROLE_TERM_DUPLICATE ->
                         renderer.roleTermDuplicateSection(RoleTermDuplicateCheck.run(snapshot));
+                case STEP_ACCEPTANCE ->
+                        renderer.stepAcceptanceSection(StepAcceptanceCheck.run(snapshot));
             });
         }
         return renderer.report(selected, sections);

@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 
 import de.hauschel.arknet.mcp.check.LanguageGapCheck.Gap;
 import de.hauschel.arknet.mcp.check.RoleTermDuplicateCheck.Finding;
+import de.hauschel.arknet.mcp.check.StepAcceptanceCheck.Kind;
 import de.hauschel.arknet.mcp.store.Prefixes;
 
 /**
@@ -30,6 +31,17 @@ public final class StoreCheckRenderer {
                     + "untagged value written before a project had a default language, or a field never "
                     + "written) is indistinguishable from a field that is simply not multilingual, and "
                     + "is not reported. resource_get shows a resource's raw literals.";
+
+    /**
+     * The same discipline for {@code STEP_ACCEPTANCE}: what the check deliberately does not look
+     * at travels in its output, not only in a {@code CLAUDE.md}.
+     */
+    static final String STEP_BLIND_SPOT =
+            "Not seen here: extension steps - they carry no arkreq:stepRealises edge at tool level "
+                    + "(kogn-io/arknet#317), so they are out of scope rather than reported as a missing "
+                    + "edge; whether a criterion actually covers the step it is reached from, which is a "
+                    + "reading and not a check; and a use case without a business code of its own, which "
+                    + "is skipped rather than named by a guessed handle.";
 
     private final Prefixes prefixes;
 
@@ -102,6 +114,57 @@ public final class StoreCheckRenderer {
                     .append(" |");
         }
         return rendered.toString();
+    }
+
+    /**
+     * Renders the step/acceptance-criterion section (kogn-io/arknet#622).
+     *
+     * <p>Two tables, not one: a step hanging off no requirement is a missing edge, a step whose
+     * requirement carries no criterion is an incomplete requirement, and reading them in one list
+     * would hide which of the two a row is.</p>
+     *
+     * @param findings every main-flow step no acceptance criterion stands behind, already ordered
+     * @return the section text
+     */
+    public String stepAcceptanceSection(final List<StepAcceptanceCheck.Finding> findings) {
+        Objects.requireNonNull(findings, "findings");
+        if (findings.isEmpty()) {
+            return "STEP_ACCEPTANCE: every main-flow step reaches an acceptance criterion through the "
+                    + "requirement it realises.\n\n" + STEP_BLIND_SPOT;
+        }
+        final List<StepAcceptanceCheck.Finding> unrealised = findings.stream()
+                .filter(finding -> finding.kind() == Kind.NO_REQUIREMENT).toList();
+        final List<StepAcceptanceCheck.Finding> uncovered = findings.stream()
+                .filter(finding -> finding.kind() == Kind.REQUIREMENT_WITHOUT_CRITERION).toList();
+        final StringBuilder rendered = new StringBuilder("STEP_ACCEPTANCE: ")
+                .append(findings.size())
+                .append(findings.size() == 1 ? " main-flow step has" : " main-flow steps have")
+                .append(" no acceptance criterion behind them.");
+        if (!unrealised.isEmpty()) {
+            rendered.append("\n\nNo requirement (arkreq:stepRealises missing):")
+                    .append("\n\n| Use case | Step |\n| --- | --- |");
+            for (final StepAcceptanceCheck.Finding finding : unrealised) {
+                rendered.append("\n| ").append(finding.useCaseCode())
+                        .append(" | ").append(positionOf(finding)).append(" |");
+            }
+        }
+        if (!uncovered.isEmpty()) {
+            rendered.append("\n\nRequirement without an acceptance criterion:")
+                    .append("\n\n| Use case | Step | Requirement |\n| --- | --- | --- |");
+            for (final StepAcceptanceCheck.Finding finding : uncovered) {
+                rendered.append("\n| ").append(finding.useCaseCode())
+                        .append(" | ").append(positionOf(finding))
+                        .append(" | ").append(finding.requirementCodes().isEmpty()
+                                ? "-" : String.join(", ", finding.requirementCodes()))
+                        .append(" |");
+            }
+        }
+        return rendered.append("\n\n").append(STEP_BLIND_SPOT).toString();
+    }
+
+    /** A step's 1-based position, or {@code -} when it carries none - never an invented number. */
+    private static String positionOf(final StepAcceptanceCheck.Finding finding) {
+        return finding.position() == null ? "-" : String.valueOf(finding.position());
     }
 
     /**
