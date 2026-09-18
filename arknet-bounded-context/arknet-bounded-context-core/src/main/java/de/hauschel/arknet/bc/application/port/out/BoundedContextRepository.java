@@ -253,13 +253,20 @@ public interface BoundedContextRepository {
      * runs the check against its own write transaction, so an edge written between a caller's
      * earlier read and this delete cannot slip through and be orphaned. There is no status gate to
      * repeat alongside it - a bounded context carries no lifecycle status, so the reference check is
-     * the whole protection.</p>
+     * the whole protection. The identical promise of {@code RequirementRepository#delete} is pinned
+     * by a real-store racer, Pinned by {@code RequirementServiceRealStoreConcurrencyTest#deleteRacingAConcurrentlyCommittedAddressesRequirementEdgeLeavesNoDanglingReference}; it
+     * exercises the shared {@code WriteFunnel#delete} body this port's implementation uses too,
+     * differing only in which predicates the check looks for.</p>
      *
-     * <p>Only the context's own triples go; the edges it holds outward
+     * <p>The context's own triples go, and with them any node derived from them that nothing else
+     * can reach - the {@code arkddd:Subdomain} node behind {@code arkddd:partOf} in particular,
+     * which would otherwise pile up one orphaned, typed node per deleted context in a graph the
+     * store's generic read path renders. The edges the context holds outward
      * ({@code arkddd:ubiquitousLanguageTerm}, {@code arkddd:partOf}, {@code arkddd:ownedBy}) are
-     * its own triples and vanish with it, while a {@link ContextRelationship} is a separate
-     * resource and is never deleted along with it - its {@code upstream}/{@code downstream} edge is
-     * one of the references that block this call.</p>
+     * its own triples and vanish with it, while what sits at the far end of one - a glossary term,
+     * a domain - is a resource of its own and is left standing. A {@link ContextRelationship} is
+     * likewise never deleted along with it; its {@code upstream}/{@code downstream} edge is one of
+     * the references that block this call.</p>
      *
      * @param projectId the project (architecture model) the bounded context lives in
      * @param code      the bounded-context code, e.g. {@code BC-1}

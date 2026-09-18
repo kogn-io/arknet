@@ -47,6 +47,7 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
+import de.hauschel.arknet.persistence.testsupport.PausingOnFirstUpdateTx;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
@@ -459,105 +460,6 @@ class TermServiceRealStoreConcurrencyTest {
             return tx;
         });
         return KognioRdfTermRepositoryFactory.over(guarded);
-    }
-
-    /**
-     * Runs {@code beforeFirstUpdate} once, immediately before its delegate's first
-     * {@link DatasetTx#update(String)} call. Mirrors {@link PausingOnFirstAddTx}'s shape but hooks
-     * {@code update} instead of {@code add}, since {@link KognioRdfTermRepository#delete}'s write
-     * body issues no {@code add} at all - only {@code ask} (the reference checks) followed by one
-     * {@code update} (the physical {@code DELETE WHERE}).
-     */
-    private static final class PausingOnFirstUpdateTx implements DatasetTx {
-
-        private final DatasetTx delegate;
-        private final Runnable beforeFirstUpdate;
-        private boolean pending = true;
-
-        PausingOnFirstUpdateTx(DatasetTx delegate, Runnable beforeFirstUpdate) {
-            this.delegate = delegate;
-            this.beforeFirstUpdate = beforeFirstUpdate;
-        }
-
-        @Override
-        public void update(String sparqlUpdate) {
-            if (pending) {
-                pending = false;
-                beforeFirstUpdate.run();
-            }
-            delegate.update(sparqlUpdate);
-        }
-
-        @Override
-        public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
-            delegate.update(sparqlUpdate, bindings);
-        }
-
-        @Override
-        public long add(IRI graph, ReadableGraph data) {
-            return delegate.add(graph, data);
-        }
-
-        @Override
-        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
-                io.kogn.rdf.terms.RDFTerm object) {
-            return delegate.contains(graph, subject, predicate, object);
-        }
-
-        @Override
-        public boolean ask(String query) {
-            return delegate.ask(query);
-        }
-
-        @Override
-        public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
-            return delegate.ask(query, bindings);
-        }
-
-        @Override
-        public long remove(IRI graph, ReadableGraph data) {
-            return delegate.remove(graph, data);
-        }
-
-        @Override
-        public void clear(IRI graph) {
-            delegate.clear(graph);
-        }
-
-        @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
-        }
-
-        @Override
-        public long count(IRI graph) {
-            return delegate.count(graph);
-        }
-
-        @Override
-        public long count() {
-            return delegate.count();
-        }
-
-        @Override
-        public Stream<BindingSet> select(String query) {
-            return delegate.select(query);
-        }
-
-        @Override
-        public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
-            return delegate.select(query, bindings);
-        }
-
-        @Override
-        public ReadableGraph construct(String query) {
-            return delegate.construct(query);
-        }
-
-        @Override
-        public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
-            return delegate.construct(query, bindings);
-        }
     }
 
     /** Whether {@code subject} carries a {@code skos:broader} edge to exactly {@code target}. */

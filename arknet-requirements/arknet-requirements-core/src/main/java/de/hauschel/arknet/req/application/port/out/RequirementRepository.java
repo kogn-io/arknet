@@ -435,7 +435,17 @@ public interface RequirementRepository {
      * references it - see {@link RequirementReferencedException}. An implementation must run that
      * check and the delete under one atomic snapshot, not as a read beforehand: a check outside
      * the transaction would leave a window for a concurrent writer to draw the very edge this
-     * delete is about to orphan.</p>
+     * delete is about to orphan. Pinned by {@code RequirementServiceRealStoreConcurrencyTest#deleteRacingAConcurrentlyCommittedAddressesRequirementEdgeLeavesNoDanglingReference}, which
+     * holds a delete paused between the check and the physical removal while a second transaction
+     * commits a fresh {@code arkarch:addressesRequirement} edge onto the very same requirement.
+     * Hoisting the check into a transaction of its own ahead of the delete turns that test red
+     * through the project-wide JUnit timeout rather than through its assertions: the test's pause
+     * is anchored on the first transaction the delete opens, so moving the check out moves the
+     * anchor with it, the deleting thread never reaches the pause, and the writer waiting on it
+     * never returns. Red either way, and the timeout is the project's standing net for exactly
+     * this - but a reader who expects a named assertion should know which signal to look for. The use-case and
+     * bounded-context ports make the same promise through the same mechanism and point at that one
+     * racer rather than each adding another real-store race to the critical build path.</p>
      *
      * <p><strong>No status gate.</strong> A requirement in any status is deletable, {@code
      * ACCEPTED} included - see {@link de.hauschel.arknet.req.application.port.in.DeleteRequirement}

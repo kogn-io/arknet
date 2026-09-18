@@ -336,7 +336,11 @@ public interface UseCaseRepository {
      * {@link UseCaseReferencedException}. That check is this port's own guarantee rather than the
      * caller's: an implementation runs it <em>inside</em> the very write transaction that performs
      * the delete, so a reference written between an earlier, advisory read and the commit cannot
-     * slip through and leave the edge dangling. Every other edge a use case carries -
+     * slip through and leave the edge dangling. The identical promise of
+     * {@code RequirementRepository#delete} is pinned by a real-store racer,
+     * Pinned by {@code RequirementServiceRealStoreConcurrencyTest#deleteRacingAConcurrentlyCommittedAddressesRequirementEdgeLeavesNoDanglingReference}; it exercises the shared
+     * {@code WriteFunnel#delete} body this port's implementation uses too, differing only in which
+     * predicates the check looks for. Every other edge a use case carries -
      * {@code oslc_rm:satisfies}, {@code arkreq:usesTerm}, {@code oslc_rm:constrainedBy},
      * {@code arkreq:primaryRole}/{@code arkreq:supportingRole}, a step's own
      * {@code arkreq:stepRealises} - points away from it and simply disappears with it; the

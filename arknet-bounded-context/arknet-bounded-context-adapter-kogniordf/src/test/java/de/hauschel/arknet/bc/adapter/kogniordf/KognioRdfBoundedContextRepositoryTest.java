@@ -1075,6 +1075,13 @@ class KognioRdfBoundedContextRepositoryTest {
      * outgoing edges - glossary term links and the derived {@code arkddd:partOf} subdomain node -
      * stays deletable. Those edges belong to the context and go with it; only an edge pointing
      * <em>at</em> it holds it.
+     *
+     * <p>The subdomain node goes with it too, checked here rather than in a test of its own: it is
+     * minted by this adapter, reachable only from the subject, and left behind by a subject-only
+     * delete it would accumulate one typed, unreferenced node per deleted context in a graph the
+     * generic store read path does render ({@code store_overview}, {@code store-report.html}, the
+     * committed {@code .trig} export). Drop the {@code UNION} branch from {@code delete} and the
+     * second assertion below goes red.</p>
      */
     @Test
     void deleteRemovesAContextThatOnlyCarriesItsOwnOutgoingEdges() {
@@ -1082,10 +1089,25 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext stored = boundedContext(new BoundedContextCode("BC-1"),
                 Subdomain.CORE_DOMAIN, "orders-team", List.of(term));
         repository.create(PROJECT_A, stored, "en");
+        String subdomainNodeQuery = "SELECT ?subdomainNode WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
+                + stored.id().value().value() + "> <" + ArkdddVocabulary.PART_OF_PROPERTY
+                + "> ?subdomainNode } }";
+        String subdomainNode;
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            subdomainNode = handle.sparqlQuery().select(subdomainNodeQuery)
+                    .map(row -> ((IRI) row.getValue("subdomainNode").orElseThrow()).getIRIString())
+                    .findFirst().orElseThrow();
+        }
 
         repository.delete(PROJECT_A, stored.code());
 
         assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isEmpty());
+        String subdomainStillThere = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + subdomainNode
+                + "> ?p ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertFalse(handle.sparqlQuery().ask(subdomainStillThere),
+                    "the derived subdomain node must not survive the delete as orphaned garbage");
+        }
     }
 
     /**

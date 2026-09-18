@@ -815,15 +815,25 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * does the body remove the subject's triples wholesale. Mirrors
      * {@code KognioRdfConstraintRepository#delete} exactly.
      *
-     * <p><strong>The subject's own triples, nothing that hangs off them.</strong> The delete is
-     * {@code <s> ?p ?o} on this graph, so the outgoing edges
+     * <p><strong>The subject's own triples, plus the subdomain node they mint.</strong> The
+     * delete is {@code <s> ?p ?o} on this graph, so the outgoing edges
      * ({@code arkddd:ubiquitousLanguageTerm}, {@code arkddd:ownedBy}, {@code arkddd:domainVision},
-     * {@code arkddd:partOf}) go with the context. The {@code arkddd:Subdomain} node behind
-     * {@code partOf} is the one thing this leaves behind - unlike
-     * {@link #replaceExistingTriples}, which follows the {@code partOf} edge because a superseded
-     * node would otherwise linger beside a live context. Here there is no live context left to
-     * mislead a reader, and none of the store's reads ever reach an unreferenced subdomain node.
-     * </p>
+     * {@code arkddd:partOf}) go with the context - and, over the same {@code UNION} shape
+     * {@link #replaceExistingTriples} uses, the derived {@code arkddd:Subdomain} node behind
+     * {@code partOf} goes too. It has to: that node is reachable only from the subject, so a
+     * subject-only delete would leave a typed, unreferenced {@code arkddd:Subdomain} node in this
+     * graph for every context ever deleted - and the store's generic read path does reach it.
+     * {@code StoreReader} selects every triple of every graph but the hidden provenance and
+     * identity ones, {@code StoreSnapshot} groups each subject by its primary type and the digest
+     * renders it, so the leftover would show up in {@code store_overview}, in
+     * {@code store-report.html} and in the committed {@code .trig} dump under
+     * {@code docs/adr-export/} - exactly the "disconnected, ever-accumulating garbage"
+     * {@link #replaceExistingTriples} follows the edge to avoid.</p>
+     *
+     * <p>What hangs off an <em>outgoing</em> edge to a first-class resource is untouched all the
+     * same: a glossary term the context linked survives its deletion, as does the domain on the
+     * far end of {@code arkddd:hasContext} - those are resources of their own, not nodes this
+     * adapter minted.</p>
      */
     @Override
     public void delete(ProjectId projectId, BoundedContextCode code) {
@@ -847,7 +857,10 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 () -> new BoundedContextNotFoundException(projectId, code),
                 tx -> {
                     rejectIfReferenced(tx, subjectIriString, projectId, code);
-                    tx.update("DELETE WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " ?p ?o } }");
+                    tx.update("DELETE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { ?s ?p ?o } } WHERE { "
+                            + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                            + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
+                            + "{ " + subject + " <" + PART_OF_PROPERTY + "> ?s . ?s ?p ?o } } }");
                 });
     }
 
