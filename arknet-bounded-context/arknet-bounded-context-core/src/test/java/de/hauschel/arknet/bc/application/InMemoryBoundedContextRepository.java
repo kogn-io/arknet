@@ -70,6 +70,9 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
      */
     private final Map<ProjectId, List<BoundedContextCode>> unmaterialisableByProject = new LinkedHashMap<>();
 
+    /** Codes kept out of circulation by {@link #delete}, mirroring the real funnel's tombstone. */
+    private final Map<ProjectId, List<BoundedContextCode>> retainedByProject = new LinkedHashMap<>();
+
     @Override
     public void create(ProjectId projectId, BoundedContext boundedContext, String language) {
         Map<BoundedContextId, BoundedContext> contexts = byProject.computeIfAbsent(projectId,
@@ -163,6 +166,32 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
      */
     void seedUnmaterialisableCode(ProjectId projectId, BoundedContextCode code) {
         unmaterialisableByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
+    }
+
+    @Override
+    public void delete(ProjectId projectId, BoundedContextCode code) {
+        // The cross-BC reference check (kogn-io/arknet#566) is the real out-adapter's concern -
+        // this fake only exercises BoundedContextService's own pass-through and the not-found case.
+        Map<BoundedContextId, BoundedContext> contexts = byProject.getOrDefault(projectId, Map.of());
+        BoundedContextId id = contexts.values().stream()
+                .filter(bc -> bc.code().equals(code))
+                .findFirst()
+                .map(BoundedContext::id)
+                .orElseThrow(() -> new BoundedContextNotFoundException(projectId, code));
+        contexts.remove(id);
+        headByIdentity.remove(id);
+        nameLanguageByIdentity.remove(id);
+        domainVisionLanguageByIdentity.remove(id);
+        retainedByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
+    }
+
+    /**
+     * Mirrors the real out-adapter's code retention so {@link BoundedContextService#add} cannot
+     * hand the deleted context's number out again (kogn-io/arknet#566).
+     */
+    @Override
+    public List<BoundedContextCode> findRetainedCodes(ProjectId projectId) {
+        return List.copyOf(retainedByProject.getOrDefault(projectId, List.of()));
     }
 
     @Override

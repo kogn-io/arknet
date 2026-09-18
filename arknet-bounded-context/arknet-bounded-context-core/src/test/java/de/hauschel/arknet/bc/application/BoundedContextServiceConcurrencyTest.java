@@ -262,6 +262,16 @@ class BoundedContextServiceConcurrencyTest {
                 ProjectId projectId, List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
         }
+
+        @Override
+        public void delete(ProjectId projectId, BoundedContextCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<BoundedContextCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
+        }
     }
 
     /**
@@ -332,6 +342,16 @@ class BoundedContextServiceConcurrencyTest {
                 ProjectId projectId, List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
         }
+
+        @Override
+        public void delete(ProjectId projectId, BoundedContextCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<BoundedContextCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
+        }
     }
 
     /** A repository whose {@code compareAndUpdate} always reports a conflict, never applying. */
@@ -389,6 +409,16 @@ class BoundedContextServiceConcurrencyTest {
         public List<ResolveBoundedContexts.ResolvedBoundedContext> findByIds(
                 ProjectId projectId, List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
+        }
+
+        @Override
+        public void delete(ProjectId projectId, BoundedContextCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<BoundedContextCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
         }
     }
 }

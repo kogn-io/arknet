@@ -31,6 +31,7 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
@@ -43,6 +44,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
+import de.hauschel.arknet.bc.domain.BoundedContextReferencedException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.bc.domain.Subdomain;
@@ -51,7 +53,10 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
+import de.hauschel.arknet.persistence.ArkarchVocabulary;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 
@@ -938,6 +943,208 @@ class KognioRdfBoundedContextRepositoryTest {
                 ResourceId.of(subject), new BoundedContextCode("BC-7"))), resolved);
         assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-7"), null).isEmpty(),
                 "precondition: the single-context read path cannot surface it at all");
+    }
+
+    // ---- delete (kogn-io/arknet#566) -----------------------------------------------------------
+
+    @Test
+    void deleteRemovesTheContextAndItsTriples() {
+        BoundedContext stored = boundedContext(new BoundedContextCode("BC-1"),
+                Subdomain.CORE_DOMAIN, "orders-team", List.of());
+        repository.create(PROJECT_A, stored, "en");
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isEmpty());
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertFalse(handle.sparqlQuery().ask("ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
+                    + stored.id().value().value() + "> ?p ?o } }"),
+                    "no triple of the deleted bounded context may remain");
+        }
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(BoundedContextNotFoundException.class,
+                () -> repository.delete(PROJECT_A, new BoundedContextCode("BC-99")));
+    }
+
+    /**
+     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
+     * the {@code arkprov:head} pointer is removed and the last revision is marked
+     * {@code prov:invalidatedAtTime} rather than erased.
+     */
+    @Test
+    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+        BoundedContext stored = boundedContext(new BoundedContextCode("BC-1"),
+                Subdomain.CORE_DOMAIN, "orders-team", List.of());
+        repository.create(PROJECT_A, stored, "en");
+        String subject = stored.id().value().value();
+        String lastRevision = headsOf(subject).get(0);
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(headsOf(subject).isEmpty(), "the head pointer must be removed");
+        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
+                    "the last revision must be tombstoned, not erased");
+        }
+    }
+
+    /**
+     * The one thing the funnel's tombstone cannot carry: the business code lives on the model
+     * triple the delete removes, so the adapter hangs it on the tombstoned revision itself - the
+     * only place it can outlive its resource, and what keeps {@code BC-1} from naming a second
+     * bounded context later.
+     */
+    @Test
+    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+        BoundedContext stored = boundedContext(new BoundedContextCode("BC-1"),
+                Subdomain.CORE_DOMAIN, "orders-team", List.of());
+        repository.create(PROJECT_A, stored, "en");
+        String lastRevision = headsOf(stored.id().value().value()).get(0);
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertEquals(List.of("BC-1"), identifiersOf(lastRevision));
+        assertEquals(List.of(new BoundedContextCode("BC-1")), repository.findRetainedCodes(PROJECT_A));
+    }
+
+    @Test
+    void projectsAreIsolatedForDelete() {
+        BoundedContext stored = boundedContext(new BoundedContextCode("BC-1"),
+                Subdomain.CORE_DOMAIN, "orders-team", List.of());
+        repository.create(PROJECT_A, stored, "en");
+
+        assertThrows(BoundedContextNotFoundException.class, () -> repository.delete(PROJECT_B, stored.code()));
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isPresent(),
+                "a delete in another project must not touch this project's bounded context");
+    }
+
+    /**
+     * {@code arkarch:affectsContext}, written by {@code adr_add}/{@code adr_update} into the ADR
+     * hexagon's own named graph - not {@link #BOUNDED_CONTEXT_GRAPH} - which is what proves
+     * {@code rejectIfReferenced} really searches across every named graph.
+     */
+    @Test
+    void deleteRejectsAContextStillReferencedByAnArchitectureDecision() {
+        assertDeleteRejectedFor(ArkarchVocabulary.AFFECTS_CONTEXT,
+                "https://w3id.org/arknet/model/adr", "https://w3id.org/arknet/id/adr-1", "affectsContext");
+    }
+
+    /** The upstream half of a {@code bc_link_context} relationship - its own resource, not a field. */
+    @Test
+    void deleteRejectsAContextStillReferencedByAContextRelationshipUpstream() {
+        assertDeleteRejectedFor(ArkdddVocabulary.UPSTREAM,
+                "https://w3id.org/arknet/model/bounded-context-relationship",
+                "https://w3id.org/arknet/id/relationship-1", "upstream");
+    }
+
+    /** The downstream half of the same relationship, checked separately so neither can go missing. */
+    @Test
+    void deleteRejectsAContextStillReferencedByAContextRelationshipDownstream() {
+        assertDeleteRejectedFor(ArkdddVocabulary.DOWNSTREAM,
+                "https://w3id.org/arknet/model/bounded-context-relationship",
+                "https://w3id.org/arknet/id/relationship-2", "downstream");
+    }
+
+    /**
+     * {@code arkreq:scopedTo} is declared by the shipped requirements ontology but written by no
+     * tool today - guarded all the same, because a store-first edge is exactly what this check is
+     * for.
+     */
+    @Test
+    void deleteRejectsAContextStillReferencedByARequirementsScopedTo() {
+        assertDeleteRejectedFor(ArkreqVocabulary.SCOPED_TO,
+                "https://w3id.org/arknet/model/requirements", "https://w3id.org/arknet/id/requirement-1",
+                "scopedTo");
+    }
+
+    /** {@code arkddd:hasContext} - a domain holding the context; likewise declared, not yet written. */
+    @Test
+    void deleteRejectsAContextStillReferencedByADomainsHasContext() {
+        assertDeleteRejectedFor(ArkdddVocabulary.HAS_CONTEXT,
+                "https://w3id.org/arknet/model/bounded-context-domain", "https://w3id.org/arknet/id/domain-1",
+                "hasContext");
+    }
+
+    /**
+     * The counterpart to the five rejection tests: a context that carries nothing but its <em>own</em>
+     * outgoing edges - glossary term links and the derived {@code arkddd:partOf} subdomain node -
+     * stays deletable. Those edges belong to the context and go with it; only an edge pointing
+     * <em>at</em> it holds it.
+     *
+     * <p>The subdomain node goes with it too, checked here rather than in a test of its own: it is
+     * minted by this adapter, reachable only from the subject, and left behind by a subject-only
+     * delete it would accumulate one typed, unreferenced node per deleted context in a graph the
+     * generic store read path does render ({@code store_overview}, {@code store-report.html}, the
+     * committed {@code .trig} export). Drop the {@code UNION} branch from {@code delete} and the
+     * second assertion below goes red.</p>
+     */
+    @Test
+    void deleteRemovesAContextThatOnlyCarriesItsOwnOutgoingEdges() {
+        TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-1"));
+        BoundedContext stored = boundedContext(new BoundedContextCode("BC-1"),
+                Subdomain.CORE_DOMAIN, "orders-team", List.of(term));
+        repository.create(PROJECT_A, stored, "en");
+        String subdomainNodeQuery = "SELECT ?subdomainNode WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
+                + stored.id().value().value() + "> <" + ArkdddVocabulary.PART_OF_PROPERTY
+                + "> ?subdomainNode } }";
+        String subdomainNode;
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            subdomainNode = handle.sparqlQuery().select(subdomainNodeQuery)
+                    .map(row -> ((IRI) row.getValue("subdomainNode").orElseThrow()).getIRIString())
+                    .findFirst().orElseThrow();
+        }
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isEmpty());
+        String subdomainStillThere = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + subdomainNode
+                + "> ?p ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertFalse(handle.sparqlQuery().ask(subdomainStillThere),
+                    "the derived subdomain node must not survive the delete as orphaned garbage");
+        }
+    }
+
+    /**
+     * Writes one referencing triple {@code holder predicate <context>} into {@code graphIri} and
+     * asserts the delete is rejected naming {@code shorthand}, with the context left untouched.
+     * Remove {@code predicate} from {@code REFERENCING_PREDICATES} and the caller goes red.
+     */
+    private void assertDeleteRejectedFor(String predicateIri, String graphIri, String holderIri,
+            String shorthand) {
+        BoundedContext stored = boundedContext(new BoundedContextCode("BC-1"),
+                Subdomain.CORE_DOMAIN, "orders-team", List.of());
+        repository.create(PROJECT_A, stored, "en");
+        String reference = "INSERT DATA { GRAPH <" + graphIri + "> { <" + holderIri + "> <" + predicateIri
+                + "> <" + stored.id().value().value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(reference);
+                return null;
+            });
+        }
+
+        BoundedContextReferencedException rejected = assertThrows(BoundedContextReferencedException.class,
+                () -> repository.delete(PROJECT_A, stored.code()));
+
+        assertEquals(List.of(shorthand), rejected.referencingPredicates());
+        assertTrue(repository.findByCode(PROJECT_A, stored.code(), null).isPresent(),
+                "a rejected delete must leave the bounded context untouched");
+    }
+
+    private List<String> identifiersOf(String revisionIri) {
+        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
+                    .toList();
+        }
     }
 
     /** The head a caller would observe right now - what a well-behaved compare-and-set passes. */

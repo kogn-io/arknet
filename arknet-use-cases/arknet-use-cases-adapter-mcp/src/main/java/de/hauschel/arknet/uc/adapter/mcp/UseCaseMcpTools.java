@@ -27,6 +27,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
+import de.hauschel.arknet.uc.application.port.in.DeleteUseCase;
 import de.hauschel.arknet.uc.application.port.in.DescribeUseCaseDisplayFallback;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
@@ -46,7 +47,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 /**
  * Driving (in) adapter of the use-cases component: exposes the use-case use-cases as MCP
  * tools ({@code uc_add}, {@code uc_list}, {@code uc_get}, {@code uc_update}, {@code uc_link_term},
- * {@code uc_unlink_term}, {@code uc_link_constraint}, {@code uc_unlink_constraint}) and delegates
+ * {@code uc_unlink_term}, {@code uc_link_constraint}, {@code uc_unlink_constraint},
+ * {@code uc_delete}) and delegates
  * each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the use-cases hexagon (symmetric to the out-adapter
@@ -87,7 +89,9 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  * computed from the field's state before and after the write, never from the request, because a
  * wholesale replace drops whatever it forgets to restate and that loss is exactly what the
  * request cannot show. All three shapes are rendered by {@link WriteResponse}, so every bounded
- * context's tools read the same. {@code constrainedBy} has no wholesale correction field on
+ * context's tools read the same. {@code uc_delete} answers with that same short shape - one
+ * {@code Deleted: UC1} line, since the resource it would otherwise render no longer exists.
+ * {@code constrainedBy} has no wholesale correction field on
  * {@code uc_update} at all - {@code uc_link_constraint}/{@code uc_unlink_constraint} are its only
  * correction path, so it never needs a diff line there.</p>
  *
@@ -189,12 +193,13 @@ public final class UseCaseMcpTools {
     private final UnlinkTerm unlinkTerm;
     private final LinkConstraint linkConstraint;
     private final UnlinkConstraint unlinkConstraint;
+    private final DeleteUseCase deleteUseCase;
     private final ProjectResolver projects;
     private final UseCasePresenter presenter;
     private final StaleTranslationHint staleTranslations;
 
     /**
-     * Creates the adapter with its nine driving in-ports, the four borrowed sibling-hexagon
+     * Creates the adapter with its ten driving in-ports, the four borrowed sibling-hexagon
      * display ports and the resolver that maps each call's origin anchor to a project.
      *
      * @param addUseCase          in-port backing {@code uc_add}
@@ -207,6 +212,7 @@ public final class UseCaseMcpTools {
      * @param unlinkTerm          in-port backing {@code uc_unlink_term} (kogn-io/arknet#598)
      * @param linkConstraint      in-port backing {@code uc_link_constraint}
      * @param unlinkConstraint    in-port backing {@code uc_unlink_constraint} (kogn-io/arknet#598)
+     * @param deleteUseCase       in-port backing {@code uc_delete} (kogn-io/arknet#566)
      * @param resolveRoles        the actor register's driving port used only to render a
      *                            referenced role's business code instead of its bare IRI
      *                            (ADR-37/kogn-io/arknet#405 Part C)
@@ -230,6 +236,7 @@ public final class UseCaseMcpTools {
             final UnlinkTerm unlinkTerm,
             final LinkConstraint linkConstraint,
             final UnlinkConstraint unlinkConstraint,
+            final DeleteUseCase deleteUseCase,
             final ResolveRoles resolveRoles,
             final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements,
@@ -246,6 +253,7 @@ public final class UseCaseMcpTools {
         this.unlinkTerm = Objects.requireNonNull(unlinkTerm, "unlinkTerm");
         this.linkConstraint = Objects.requireNonNull(linkConstraint, "linkConstraint");
         this.unlinkConstraint = Objects.requireNonNull(unlinkConstraint, "unlinkConstraint");
+        this.deleteUseCase = Objects.requireNonNull(deleteUseCase, "deleteUseCase");
         this.projects = Objects.requireNonNull(projects, "projects");
         this.presenter = new UseCasePresenter(resolveRoles, resolveTerms, resolveRequirements, resolveConstraints);
         this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
@@ -818,6 +826,35 @@ public final class UseCaseMcpTools {
             lines.add(WriteResponse.unlinked(id, constraintId, CONSTRAINT_EDGE));
         }
         return WriteResponse.withProject(String.join("\n", lines), project);
+    }
+
+    @McpTool(name = "uc_delete",
+            description = "Delete an already-created use case and every triple it carries, including its "
+                    + "flow steps - not just a correction, the whole resource goes away. The typical case is "
+                    + "a use case that should never have been written: a duplicate, or a flow that belongs to "
+                    + "another use case. It is not a way to retire a use case the system still has - a use "
+                    + "case carries no status, so a deleted one leaves no trace of ever having been "
+                    + "specified; correct one that only drifted with uc_update instead. Rejected if another "
+                    + "use case still points at this one via includesUseCase or extendsUseCase - remove those "
+                    + "edges on the referencing use case first. Everything the use case itself points at "
+                    + "(satisfies, usesTerm, constrainedBy, primaryRole, supportingRole, and a step's "
+                    + "stepRealises) simply goes with it; the requirement, term, constraint or role at the "
+                    + "far end is left alone. The code (UC1, UC2, ...) stays taken so it never names two "
+                    + "different use cases.")
+    public String delete(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final UseCaseCode code = new UseCaseCode(id);
+        deleteUseCase.delete(project.id(), code);
+        return WriteResponse.withProject("Deleted: " + code.value(), project);
     }
 
     // --- mapping helpers -------------------------------------------------------

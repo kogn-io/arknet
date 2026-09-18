@@ -1238,6 +1238,43 @@ class UseCaseServiceTest {
         assertEquals(List.of(new ConstraintRef(TCON_1_ID)), service.get(WS, code, null).orElseThrow().constrainedBy());
     }
 
+    // --- uc_delete (kogn-io/arknet#566) ----------------------------------------------
+
+    @Test
+    void deleteDelegatesToTheRepository() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        service.delete(WS, code);
+
+        assertFalse(service.get(WS, code, null).isPresent());
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(UseCaseNotFoundException.class,
+                () -> service.delete(WS, new UseCaseCode("UC99")));
+    }
+
+    /**
+     * Mutation test for {@code nextCode} counting over
+     * {@link UseCaseRepository#findRetainedCodes} in addition to
+     * {@link UseCaseRepository#findAllCodes} (kogn-io/arknet#566, mirroring
+     * {@code ConstraintServiceTest}'s equivalent for {@code constraint_add}): drop the
+     * {@code findRetainedCodes} term from {@code nextCode}'s maximum and this goes red - deleting
+     * the highest-numbered use case would let the count fall back to the survivor and hand the
+     * deleted use case's code out a second time.
+     */
+    @Test
+    void addDoesNotReissueACodeAfterItsHighestUseCaseWasDeleted() {
+        service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE);
+        UseCaseCode second = service.add(WS, newUseCase("Reset password"), DEFAULT_LANGUAGE).code();
+        service.delete(WS, second);
+
+        UseCase third = service.add(WS, newUseCase("Cancel order"), DEFAULT_LANGUAGE);
+
+        assertEquals(new UseCaseCode("UC3"), third.code());
+    }
+
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
     private static final class FakeResourceIdFactory implements ResourceIdFactory {
 

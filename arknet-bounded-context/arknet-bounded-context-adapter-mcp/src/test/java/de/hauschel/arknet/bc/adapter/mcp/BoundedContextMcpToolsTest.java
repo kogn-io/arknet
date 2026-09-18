@@ -20,6 +20,7 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
+import de.hauschel.arknet.bc.application.port.in.DeleteBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.DescribeBoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.LinkContext;
@@ -105,7 +106,7 @@ class BoundedContextMcpToolsTest {
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final BoundedContextMcpTools adapter = new BoundedContextMcpTools(
-            stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS);
+            stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS);
 
     /**
      * The explicit tool parameter is a full second delivery path, open to a
@@ -133,45 +134,48 @@ class BoundedContextMcpToolsTest {
     }
 
     @Test
-    void declaresTheEightBoundedContextTools() {
+    void declaresTheNineBoundedContextTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(8, names.size());
+        assertEquals(9, names.size());
         assertTrue(names.containsAll(
                 List.of("bc_add", "bc_list", "bc_get", "bc_update", "bc_link_term", "bc_unlink_term",
-                        "bc_link_context", "bc_unlink_context")));
+                        "bc_link_context", "bc_unlink_context", "bc_delete")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                null, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                null, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, null, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, null, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, null, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, stub, null, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, null, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, stub, stub, null, stub, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, stub, null, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, stub, stub, stub, null, stub, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, stub, stub, null, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, stub, stub, stub, stub, null, stub, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, stub, stub, stub, null, resolveTerms, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, stub, stub, stub, stub, stub, null, stub, resolveTerms, PROJECTS, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, stub, stub, stub, stub, null, PROJECTS, NO_TRANSLATIONS));
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, null, resolveTerms, PROJECTS,
+                NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, null));
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS, null));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class, () -> new BoundedContextMcpTools(
-                stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, null, NO_TRANSLATIONS));
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, null, NO_TRANSLATIONS));
     }
 
     @Test
@@ -222,7 +226,7 @@ class BoundedContextMcpToolsTest {
                 stubWithMaintainedLanguages, stubWithMaintainedLanguages, stubWithMaintainedLanguages,
                 stubWithMaintainedLanguages, stubWithMaintainedLanguages, stubWithMaintainedLanguages,
                 stubWithMaintainedLanguages, stubWithMaintainedLanguages, stubWithMaintainedLanguages,
-                resolveTerms,
+                stubWithMaintainedLanguages, resolveTerms,
                 anchor -> new ResolvedProject(PROJECT, "en", List.of("en", "de")),
                 hints(Map.of("name", Set.of("en", "de"))));
 
@@ -468,12 +472,12 @@ class BoundedContextMcpToolsTest {
     /**
      * kogn-io/arknet#597: a call whose {@code projectAnchor} was forgotten writes into the
      * session's project, silently. Every writing answer therefore ends by naming the project it
-     * hit - here for each of the six writing tools, so none of them can lose the line on its own.
+     * hit - here for each of the seven writing tools, so none of them can lose the line on its own.
      */
     @Test
     void everyWritingToolClosesItsAnswerWithTheProject() {
         BoundedContextMcpTools named = new BoundedContextMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                stub, stub, resolveTerms,
+                stub, stub, stub, resolveTerms,
                 anchor -> new ResolvedProject(PROJECT, "en", List.of(), "arknet"), NO_TRANSLATIONS);
         String trailer = "\n\nproject: arknet";
 
@@ -484,6 +488,16 @@ class BoundedContextMcpToolsTest {
         assertTrue(named.unlinkTerm(null, "BC-1", "TERM-1", ANCHOR).endsWith(trailer));
         assertTrue(named.linkContext(null, "BC-1", "BC-2", "CONFORMIST", ANCHOR).endsWith(trailer));
         assertTrue(named.unlinkContext(null, "BC-1", "BC-2", "CONFORMIST", ANCHOR).endsWith(trailer));
+        assertTrue(named.delete(null, "BC-1", ANCHOR).endsWith(trailer));
+    }
+
+    /** {@code bc_delete} passes the parsed code straight through to the in-port. */
+    @Test
+    void deletePassesTheCodeThrough() {
+        String rendered = adapter.delete(null, "BC-1", ANCHOR);
+
+        assertEquals(new BoundedContextCode("BC-1"), stub.lastDeleteCode);
+        assertEquals("Deleted: BC-1\n\nproject: test-project", rendered);
     }
 
     /** A read tool carries no project line - the signal is about writes (kogn-io/arknet#597). */
@@ -577,7 +591,8 @@ class BoundedContextMcpToolsTest {
     /** Structural stub implementing the nine driving in-ports. */
     private static final class Stub
             implements AddBoundedContext, ListBoundedContexts, DescribeBoundedContextDisplayFallback,
-            GetBoundedContext, UpdateBoundedContext, LinkTerm, UnlinkTerm, LinkContext, UnlinkContext {
+            GetBoundedContext, UpdateBoundedContext, LinkTerm, UnlinkTerm, LinkContext, UnlinkContext,
+            DeleteBoundedContext {
 
         private BoundedContextCode lastLinkedBoundedContext;
         private String lastLinkedTermCode;
@@ -605,6 +620,7 @@ class BoundedContextMcpToolsTest {
         private List<String> lastUpdatedTermCodes;
         private List<ResourceId> nextUpdatedTerms = List.of();
         private String lastUpdatedLanguage;
+        private BoundedContextCode lastDeleteCode;
 
         @Override
         public BoundedContext add(ProjectId projectId, NewBoundedContext command, String defaultLanguage) {
@@ -693,6 +709,12 @@ class BoundedContextMcpToolsTest {
             lastUnlinkedUpstreamCode = upstreamCode;
             lastUnlinkedDownstreamCode = downstreamCode;
             lastUnlinkedRelationshipType = relationshipType;
+        }
+
+        @Override
+        public void delete(ProjectId projectId, BoundedContextCode code) {
+            lastProjectId = projectId;
+            lastDeleteCode = code;
         }
     }
 

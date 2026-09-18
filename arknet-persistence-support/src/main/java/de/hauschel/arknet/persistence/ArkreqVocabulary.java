@@ -71,6 +71,44 @@ public final class ArkreqVocabulary {
     public static final String STEP_REALISES = NAMESPACE + "stepRealises";
 
     /**
+     * {@code arkreq:scopedTo} - Requirement -&gt; the BoundedContext it is realised in. Declared in
+     * the requirements ontology, but read by the bounded-context out-adapter: it is one of the
+     * edges that hold a context against {@code bc_delete} (kogn-io/arknet#566), which is why the
+     * IRI is named here rather than privately in either adapter.
+     */
+    public static final String SCOPED_TO = NAMESPACE + "scopedTo";
+
+    /**
+     * {@code arkreq:dependsOn} - Requirement -&gt; another Requirement it presupposes. An edge the
+     * ontology declares and no tool writes yet; the requirements out-adapter reads it as one of
+     * the edges that hold a requirement against {@code req_delete} (kogn-io/arknet#566), so a
+     * later tool that starts writing it finds the guard already in place.
+     */
+    public static final String DEPENDS_ON = NAMESPACE + "dependsOn";
+
+    /**
+     * {@code oslc_rm:satisfies} - UseCase -&gt; the Requirement it satisfies. Reused from OSLC RM
+     * like {@link #CONSTRAINED_BY}, and named here for the same reason as {@link #SCOPED_TO}: the
+     * use-cases out-adapter writes it, the requirements out-adapter reads it as an edge that holds
+     * a requirement against {@code req_delete} (kogn-io/arknet#566).
+     */
+    public static final String SATISFIES = OSLC_RM_NAMESPACE + "satisfies";
+
+    /**
+     * {@code arkreq:includesUseCase} - UseCase -&gt; a UseCase it binds in (UML include). Declared
+     * in the ontology and not written by any tool yet; read as an edge that holds a use case
+     * against {@code uc_delete} (kogn-io/arknet#566).
+     */
+    public static final String INCLUDES_USE_CASE = NAMESPACE + "includesUseCase";
+
+    /**
+     * {@code arkreq:extendsUseCase} - UseCase -&gt; a UseCase it optionally extends (UML extend).
+     * Declared in the ontology and not written by any tool yet; read as an edge that holds a use
+     * case against {@code uc_delete} (kogn-io/arknet#566).
+     */
+    public static final String EXTENDS_USE_CASE = NAMESPACE + "extendsUseCase";
+
+    /**
      * {@code arkreq:stepText} - the text of a main-flow Step or of an extension, reached one hop
      * past {@link #MAIN_STEP} or {@link #EXTENSION_STEP}. Shared here since issue #319, when the
      * HTML report became a reader of it: it builds a step's language switch from the literals
@@ -146,6 +184,14 @@ public final class ArkreqVocabulary {
 
     /** {@code arkreq:NonFunctionalRequirement} - the type of a non-functional requirement. */
     public static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = NAMESPACE + "NonFunctionalRequirement";
+
+    /**
+     * {@code arkreq:Requirement} - the abstract superclass both requirement subtypes specialize;
+     * the {@code rdfs:range}/{@code sh:class} every edge into a requirement names, read by the
+     * delete-guard architecture test the same way it already reads {@link #CONSTRAINT_TYPE}
+     * (kogn-io/arknet#566).
+     */
+    public static final String REQUIREMENT_TYPE = NAMESPACE + "Requirement";
 
     /** {@code arkreq:UseCase} - the type of a flow-oriented use case. */
     public static final String USE_CASE_TYPE = NAMESPACE + "UseCase";

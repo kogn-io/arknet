@@ -4,6 +4,7 @@
 package de.hauschel.arknet.req.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -39,9 +40,11 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
+import de.hauschel.arknet.persistence.testsupport.PausingOnFirstUpdateTx;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
@@ -54,6 +57,10 @@ import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.Requirement;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
+import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementId;
+import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 
 /**
@@ -315,6 +322,137 @@ class RequirementServiceRealStoreConcurrencyTest {
         return "availableProcessors=" + Runtime.getRuntime().availableProcessors()
                 + ", systemLoadAverage=" + loadAverageText
                 + ", threadInterrupted=" + Thread.currentThread().isInterrupted();
+    }
+
+    /**
+     * The delete-vs-reference race the three new out-port contracts of kogn-io/arknet#566 promise
+     * to hold, and which nothing pinned before: {@code RequirementRepository#delete}'s javadoc
+     * demands the reference check and the delete run "under one atomic snapshot, not as a read
+     * beforehand", and this is the test that goes red if someone hoists
+     * {@code rejectIfReferenced} out of {@code WriteFunnel#delete}'s write body.
+     *
+     * <p><strong>Which signal that mutation produces.</strong> Verified by actually making it: the
+     * check moved into a transaction of its own ahead of the delete fails this test through the
+     * project-wide JUnit timeout, not through the assertions at the bottom. {@link
+     * #pausingBeforeFirstUpdateRepository} arms on the <em>first</em> transaction its lifecycle
+     * hands out, so a hoisted check takes the decorator with it, the deleting thread never reaches
+     * the pause, {@code deletePausedAfterReferenceCheck} never counts down and the writer thread
+     * waits forever. Red is red - but do not go looking for a named assertion failure.</p>
+     *
+     * <p>Built to the shape issue #335's own review asked for on {@code term_delete}
+     * ({@code TermServiceRealStoreConcurrencyTest#deleteRacingAConcurrentlyCommittedUsesTermReferenceLeavesNoDanglingReference}),
+     * over the now-shared {@link PausingOnFirstUpdateTx}: the delete's transaction is paused right
+     * after {@code rejectIfReferenced}'s {@code ASK} checks have run and found nothing (there is
+     * nothing to find yet) and right before the physical {@code DELETE WHERE}. While it is held
+     * there, a second writer commits a fresh {@code arkarch:addressesRequirement} edge onto the
+     * very same requirement, in its own transaction against the same real store - deliberately raw
+     * SPARQL rather than an {@code AdrService} call, since this adapter module cannot depend on the
+     * decisions bounded context and the race is a store-level phenomenon between two write
+     * transactions regardless of which BC authored either one.</p>
+     *
+     * <p><strong>One racer for three ports, on purpose.</strong> {@code uc_delete} and
+     * {@code bc_delete} make the identical promise through the identical mechanism - the same
+     * {@code WriteFunnel#delete} body, the same in-transaction {@code ask}, differing only in which
+     * predicates they look for. Their port javadocs point here rather than each paying for another
+     * real-store racer in the critical build path; what those two would add is coverage of a
+     * predicate list, which {@code ReferenceGuardsCoverEveryOntologyEdgeTest} already holds against
+     * the shipped ontologies.</p>
+     *
+     * <p><strong>What must hold regardless of which side the store resolves the conflict.</strong>
+     * Either the store's {@code SERIALIZABLE} isolation sees the delete's read set invalidated by
+     * the concurrent insert and rejects the delete's commit - requirement and fresh reference both
+     * survive - or the two do not conflict at the store's read/write-set granularity and the delete
+     * commits, in which case the edge must be gone with it. The outcome this pins against is the
+     * third one: the requirement gone <em>and</em> a decision still pointing at it.</p>
+     */
+    @Test
+    void deleteRacingAConcurrentlyCommittedAddressesRequirementEdgeLeavesNoDanglingReference()
+            throws InterruptedException {
+        RequirementRepository straightThrough =
+                KognioRdfRequirementRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT);
+        Requirement stored = new Requirement(new RequirementId(new UuidResourceIdFactory().newId()),
+                new RequirementCode("FR-1"), "Login",
+                "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, List.of(),
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
+        straightThrough.create(WS, stored, "en");
+
+        CountDownLatch deletePausedAfterReferenceCheck = new CountDownLatch(1);
+        CountDownLatch referenceCommitted = new CountDownLatch(1);
+        RequirementRepository deletingRepository = pausingBeforeFirstUpdateRepository(() -> {
+            deletePausedAfterReferenceCheck.countDown();
+            awaitLatch(referenceCommitted);
+        });
+
+        AtomicReference<Throwable> deleteFailure = new AtomicReference<>();
+        Thread deleteThread = new Thread(() -> {
+            try {
+                deletingRepository.delete(WS, stored.code());
+            } catch (Throwable t) {
+                deleteFailure.set(t);
+            }
+        }, "racer-delete");
+        Thread referenceThread = new Thread(() -> {
+            awaitLatch(deletePausedAfterReferenceCheck);
+            String insert = "INSERT DATA { GRAPH <https://example.org/decisions> { "
+                    + "<https://example.org/decisions/1> <" + ArkarchVocabulary.ADDRESSES_REQUIREMENT + "> <"
+                    + stored.id().value().value() + "> } }";
+            try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
+                handle.transactor().inTransaction(tx -> {
+                    tx.update(insert);
+                    return null;
+                });
+            } finally {
+                referenceCommitted.countDown();
+            }
+        }, "racer-reference");
+
+        deleteThread.start();
+        referenceThread.start();
+        deleteThread.join();
+        referenceThread.join();
+
+        boolean requirementStillExists = straightThrough.findByCode(WS, stored.code(), null).isPresent();
+        boolean referenceStillExists = isReferencedViaAddressesRequirement(stored);
+        String diagnostics = "deleteFailure=" + (deleteFailure.get() == null ? "none"
+                : deleteFailure.get().getClass().getName() + ": " + deleteFailure.get().getMessage())
+                + ", requirementStillExists=" + requirementStillExists
+                + ", referenceStillExists=" + referenceStillExists;
+        assertFalse(!requirementStillExists && referenceStillExists,
+                "dangling reference: the requirement is gone but an addressesRequirement edge still points at it: "
+                        + diagnostics);
+        assertFalse(!requirementStillExists && deleteFailure.get() != null,
+                "the delete must not both fail and have removed the requirement: " + diagnostics);
+    }
+
+    /**
+     * {@code true} if any named graph holds an {@code arkarch:addressesRequirement} triple pointing
+     * at {@code requirement}.
+     */
+    private boolean isReferencedViaAddressesRequirement(Requirement requirement) {
+        String query = "ASK { GRAPH ?g { ?s <" + ArkarchVocabulary.ADDRESSES_REQUIREMENT + "> <"
+                + requirement.id().value().value() + "> } }";
+        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
+            return handle.sparqlQuery().ask(query);
+        }
+    }
+
+    /**
+     * A requirement repository whose first write transaction runs {@code beforeFirstUpdate} right
+     * before its delegate's first {@code update(String)} call - the point in
+     * {@link KognioRdfRequirementRepository#delete}'s write body where {@code rejectIfReferenced}'s
+     * {@code ASK} checks have already run and the physical {@code DELETE WHERE} is the very next
+     * thing to happen. Disarms itself afterwards, exactly like {@link #guardedService}.
+     */
+    private RequirementRepository pausingBeforeFirstUpdateRepository(Runnable beforeFirstUpdate) {
+        AtomicBoolean armed = new AtomicBoolean(true);
+        DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
+            if (armed.compareAndSet(true, false)) {
+                return new PausingOnFirstUpdateTx(tx, beforeFirstUpdate);
+            }
+            return tx;
+        });
+        return KognioRdfRequirementRepositoryFactory.over(guarded, DisplayLocale.DEFAULT);
     }
 
     private static String describe(Requirement requirement) {

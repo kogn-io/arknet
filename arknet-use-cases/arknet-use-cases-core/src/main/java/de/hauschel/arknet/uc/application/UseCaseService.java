@@ -22,6 +22,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
+import de.hauschel.arknet.uc.application.port.in.DeleteUseCase;
 import de.hauschel.arknet.uc.application.port.in.DescribeUseCaseDisplayFallback;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
@@ -104,9 +105,15 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * constructor-injected {@link ConstraintLookup} cross-BC port rather than a same-module
  * repository, since unlike the sibling requirements bounded context, {@code Constraint} does not
  * live in this bounded context.</p>
+ *
+ * <p><strong>Deletion.</strong> {@link #delete} is the counterpart of {@link #add}, not a further
+ * lifecycle step: a use case carries no status, so nothing about its own state can forbid the
+ * delete. The whole resource and its flow steps go away; what holds it back is another use case
+ * still including or extending it, which only the out-adapter can see and therefore checks itself
+ * (mirrors {@code ConstraintService#delete}).</p>
  */
 public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, DescribeUseCaseDisplayFallback,
-        UpdateUseCase, LinkTerm, UnlinkTerm, LinkConstraint, UnlinkConstraint {
+        UpdateUseCase, LinkTerm, UnlinkTerm, LinkConstraint, UnlinkConstraint, DeleteUseCase {
 
     private static final String CODE_PREFIX = "UC";
 
@@ -642,9 +649,27 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
         return resolveTouchedLanguage(touched, currentText, updatedText, currentLanguage, language, defaultLanguage);
     }
 
+    @Override
+    public void delete(ProjectId projectId, UseCaseCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        // The reference check (does another use case still point at this one via
+        // arkreq:includesUseCase/arkreq:extendsUseCase?) is the out-adapter's business - it is the
+        // only side that can run it inside the very transaction that deletes. Mirrors
+        // ConstraintService#delete.
+        repository.delete(projectId, code);
+    }
+
     /**
      * Derives the next free business code in {@code projectId}: the highest running number the
      * project has handed out, plus one (starting at 1).
+     *
+     * <p><strong>Ever used, not currently in use (kogn-io/arknet#566).</strong> The maximum runs
+     * over the living use cases <em>and</em> the codes {@link UseCaseRepository#findRetainedCodes}
+     * kept from deleted ones - mirrors {@code TermService#nextCode} exactly. Over the living ones
+     * alone, deleting the highest-numbered use case would let the maximum fall back and the next
+     * {@code uc_add} hand out that same number again - and a code that already appeared in a commit
+     * message or a note would then name something else entirely.</p>
      *
      * <p><strong>{@link UseCaseRepository#findAllCodes}, not {@link UseCaseRepository#findAll}
      * (kogn-io/arknet#360).</strong> A use case that exists and holds its code can still be missing
@@ -659,8 +684,10 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
      * {@code findAllCodes} reads the codes raw, past every one of those skips.</p>
      */
     private UseCaseCode nextCode(ProjectId projectId) {
-        int highest = CodeCounter.highestRunningNumber(CODE_PREFIX,
+        int highestLiving = CodeCounter.highestRunningNumber(CODE_PREFIX,
                 repository.findAllCodes(projectId), UseCaseCode::value);
-        return new UseCaseCode(CODE_PREFIX + (highest + 1));
+        int highestRetained = CodeCounter.highestRunningNumber(CODE_PREFIX,
+                repository.findRetainedCodes(projectId), UseCaseCode::value);
+        return new UseCaseCode(CODE_PREFIX + (Math.max(highestLiving, highestRetained) + 1));
     }
 }

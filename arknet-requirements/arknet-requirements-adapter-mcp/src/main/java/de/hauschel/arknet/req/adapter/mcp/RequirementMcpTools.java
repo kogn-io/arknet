@@ -32,6 +32,7 @@ import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
+import de.hauschel.arknet.req.application.port.in.DeleteRequirement;
 import de.hauschel.arknet.req.application.port.in.DescribeRequirementDisplayFallback;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
@@ -59,7 +60,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * Driving (in) adapter of the requirements component: exposes the requirement
  * use-cases as MCP tools ({@code req_add}, {@code req_list}, {@code req_get},
  * {@code req_set_status}, {@code req_link_term}, {@code req_unlink_term}, {@code req_link_constraint},
- * {@code req_unlink_constraint}, {@code req_update}, {@code req_schema}) and
+ * {@code req_unlink_constraint}, {@code req_update}, {@code req_delete}, {@code req_schema}) and
  * delegates each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the requirements hexagon (symmetric to the out-adapter
@@ -109,7 +110,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * diff line for every list field that came out holding something else than it held before - the
  * codes-based {@code usesTerm} edge names what left and joined, the text-only acceptance-criterion
  * edge names only how many did (kogn-io/arknet#598 E5: an empty acceptance-criteria list stays
- * rejected, a retiring requirement belongs on the deletion path tracked in #566, not on a loosened
+ * rejected, a retiring requirement belongs on {@code req_delete}, not on a loosened
  * invariant here). All three shapes are rendered by {@link WriteResponse}.</p>
  */
 public final class RequirementMcpTools {
@@ -183,13 +184,14 @@ public final class RequirementMcpTools {
     private final LinkConstraint linkConstraint;
     private final UnlinkConstraint unlinkConstraint;
     private final UpdateRequirement updateRequirement;
+    private final DeleteRequirement deleteRequirement;
     private final GetRequirementSchema getRequirementSchema;
     private final ProjectResolver projects;
     private final RequirementPresenter presenter;
     private final StaleTranslationHint staleTranslations;
 
     /**
-     * Creates the adapter with its twelve driving in-ports, the borrowed ubiquitous-language and
+     * Creates the adapter with its thirteen driving in-ports, the borrowed ubiquitous-language and
      * (same-module) constraint display ports, and the resolver that maps each call's origin
      * directory to a project.
      *
@@ -205,6 +207,7 @@ public final class RequirementMcpTools {
      * @param linkConstraint        in-port backing {@code req_link_constraint}
      * @param unlinkConstraint      in-port backing {@code req_unlink_constraint} (kogn-io/arknet#598)
      * @param updateRequirement     in-port backing {@code req_update}
+     * @param deleteRequirement     in-port backing {@code req_delete} (kogn-io/arknet#566)
      * @param getRequirementSchema  in-port backing {@code req_schema}
      * @param resolveTerms          ubiquitous-language driving port used only to render a linked
      *                              term's business code instead of its bare IRI
@@ -226,6 +229,7 @@ public final class RequirementMcpTools {
             final LinkConstraint linkConstraint,
             final UnlinkConstraint unlinkConstraint,
             final UpdateRequirement updateRequirement,
+            final DeleteRequirement deleteRequirement,
             final GetRequirementSchema getRequirementSchema,
             final ResolveTerms resolveTerms,
             final ResolveConstraints resolveConstraints,
@@ -243,6 +247,7 @@ public final class RequirementMcpTools {
         this.linkConstraint = Objects.requireNonNull(linkConstraint, "linkConstraint");
         this.unlinkConstraint = Objects.requireNonNull(unlinkConstraint, "unlinkConstraint");
         this.updateRequirement = Objects.requireNonNull(updateRequirement, "updateRequirement");
+        this.deleteRequirement = Objects.requireNonNull(deleteRequirement, "deleteRequirement");
         this.getRequirementSchema = Objects.requireNonNull(getRequirementSchema, "getRequirementSchema");
         this.projects = Objects.requireNonNull(projects, "projects");
         this.presenter = new RequirementPresenter(resolveTerms, resolveConstraints);
@@ -737,6 +742,35 @@ public final class RequirementMcpTools {
             return RemovedPositions.NONE;
         }
         return new RemovedPositions(new LinkedHashSet<>(positions));
+    }
+
+    @McpTool(name = "req_delete",
+            description = "Delete an already-created requirement and every triple it carries, "
+                    + "including its acceptance criteria - not just a correction, the whole resource "
+                    + "goes away. The typical case is a duplicate, or a promise the project withdrew "
+                    + "rather than reworded (req_update is the way to reword one). The status is "
+                    + "deliberately not consulted: an ACCEPTED requirement deletes just like a "
+                    + "PROPOSED one, because a requirement is a promise that changes, not a decision "
+                    + "that was taken - and the duplicate that prompts this is usually an accepted "
+                    + "one. Rejected if a decision still addresses it (adr_update), a use case "
+                    + "satisfies it or one of its steps realises it (uc_update), or another "
+                    + "requirement depends on it; a requirement that actually carries something is "
+                    + "held by those edges, and they have to go first. The code (FR-N / NFR-N) stays "
+                    + "taken so it never names two different requirements.")
+    public String delete(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-3") final String id,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final RequirementCode code = new RequirementCode(id);
+        deleteRequirement.delete(project.id(), code);
+        return WriteResponse.withProject("Deleted: " + code.value(), project);
     }
 
     @McpTool(name = "req_schema",

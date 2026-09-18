@@ -41,6 +41,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
 import de.hauschel.arknet.bc.domain.BoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
+import de.hauschel.arknet.bc.domain.BoundedContextReferencedException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.bc.domain.Subdomain;
@@ -52,8 +53,10 @@ import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -180,6 +183,13 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private static final String OWNED_BY_PROPERTY = ArkdddVocabulary.OWNED_BY_PROPERTY;
     private static final String UBIQUITOUS_LANGUAGE_TERM_PROPERTY = ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM;
     private static final String HAS_AGGREGATE_PROPERTY = ArkdddVocabulary.HAS_AGGREGATE_PROPERTY;
+
+    /**
+     * The prefix every code this hexagon mints carries. Used only by {@link #findRetainedCodes} to
+     * tell a bounded context's own retained code apart from a neighbouring hexagon's, since the
+     * provenance graph {@link WriteFunnel#findRetainedCodes} reads from is shared by all of them.
+     */
+    private static final String CODE_PREFIX = "BC-";
 
     private static final String CORE_DOMAIN = ArkdddVocabulary.CORE_DOMAIN;
     private static final String SUPPORTING_DOMAIN = ArkdddVocabulary.SUPPORTING_DOMAIN;
@@ -793,6 +803,127 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                     .distinct()
                     .map(BoundedContextCode::new)
                     .toList();
+        }
+    }
+
+    /**
+     * Deletes the bounded context identified by {@code code}, and every triple it carries in
+     * {@link #BOUNDED_CONTEXT_GRAPH}, from the project (kogn-io/arknet#566). Resolves the subject by
+     * code outside any transaction (mirroring {@link #findByCode}'s own read), then hands the whole
+     * check-and-delete to {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside
+     * the funnel's own write transaction, and only once it finds nothing pointing at the context
+     * does the body remove the subject's triples wholesale. Mirrors
+     * {@code KognioRdfConstraintRepository#delete} exactly.
+     *
+     * <p><strong>The subject's own triples, plus the subdomain node they mint.</strong> The
+     * delete is {@code <s> ?p ?o} on this graph, so the outgoing edges
+     * ({@code arkddd:ubiquitousLanguageTerm}, {@code arkddd:ownedBy}, {@code arkddd:domainVision},
+     * {@code arkddd:partOf}) go with the context - and, over the same {@code UNION} shape
+     * {@link #replaceExistingTriples} uses, the derived {@code arkddd:Subdomain} node behind
+     * {@code partOf} goes too. It has to: that node is reachable only from the subject, so a
+     * subject-only delete would leave a typed, unreferenced {@code arkddd:Subdomain} node in this
+     * graph for every context ever deleted - and the store's generic read path does reach it.
+     * {@code StoreReader} selects every triple of every graph but the hidden provenance and
+     * identity ones, {@code StoreSnapshot} groups each subject by its primary type and the digest
+     * renders it, so the leftover would show up in {@code store_overview}, in
+     * {@code store-report.html} and in the committed {@code .trig} dump under
+     * {@code docs/adr-export/} - exactly the "disconnected, ever-accumulating garbage"
+     * {@link #replaceExistingTriples} follows the edge to avoid.</p>
+     *
+     * <p>What hangs off an <em>outgoing</em> edge to a first-class resource is untouched all the
+     * same: a glossary term the context linked survives its deletion, as does the domain on the
+     * far end of {@code arkddd:hasContext} - those are resources of their own, not nodes this
+     * adapter minted.</p>
+     */
+    @Override
+    public void delete(ProjectId projectId, BoundedContextCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+
+        DatasetId dataset = new DatasetId(projectId.value());
+        String subjectIriString;
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            String query = "SELECT ?s WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                    + "?s a <" + BOUNDED_CONTEXT_TYPE + "> . "
+                    + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
+                    + "FILTER(isIRI(?s)) } }";
+            subjectIriString = handle.sparqlQuery().select(query).findFirst()
+                    .map(row -> iriOf(row, "s").getIRIString())
+                    .orElseThrow(() -> new BoundedContextNotFoundException(projectId, code));
+        }
+        String subject = SparqlTerms.iriRef(subjectIriString);
+
+        funnel.delete(dataset, BOUNDED_CONTEXT_GRAPH, subjectIriString, code.value(),
+                () -> new BoundedContextNotFoundException(projectId, code),
+                tx -> {
+                    rejectIfReferenced(tx, subjectIriString, projectId, code);
+                    tx.update("DELETE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { ?s ?p ?o } } WHERE { "
+                            + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                            + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
+                            + "{ " + subject + " <" + PART_OF_PROPERTY + "> ?s . ?s ?p ?o } } }");
+                });
+    }
+
+    /**
+     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained
+     * (kogn-io/arknet#566): the shared funnel keeps the number out of circulation, this hexagon only
+     * maps its raw strings to {@link BoundedContextCode}. One prefix, one call - a bounded context
+     * has a single counter, unlike a constraint's three.
+     */
+    @Override
+    public List<BoundedContextCode> findRetainedCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        return funnel.findRetainedCodes(new DatasetId(projectId.value()), CODE_PREFIX).stream()
+                .map(BoundedContextCode::new)
+                .toList();
+    }
+
+    /**
+     * The predicates that, if found pointing at a bounded context, block its deletion
+     * (kogn-io/arknet#566) - every property a shipped ontology or shape declares as targeting an
+     * {@code arkddd:BoundedContext}, whether or not a tool writes it today:
+     * {@code arkarch:affectsContext} (a decision, {@code adr_add}/{@code adr_update}),
+     * {@code arkddd:upstream}/{@code arkddd:downstream} (a context relationship,
+     * {@code bc_link_context}), {@code arkreq:scopedTo} (a requirement) and
+     * {@code arkddd:hasContext} (a domain). The last two are declared but written by no tool -
+     * listed all the same, because a store-first edge is exactly the kind this check exists to
+     * catch, and because an ontology that gains a writer later must not silently lose its guard.
+     *
+     * <p>Mirrors {@code KognioRdfConstraintRepository#REFERENCING_PREDICATES}; the field must stay
+     * named and typed exactly this way and remain {@code static} - an architecture test reads it via
+     * reflection and holds it against the shipped ontologies.</p>
+     */
+    private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
+            ArkarchVocabulary.AFFECTS_CONTEXT, "affectsContext",
+            ArkdddVocabulary.HAS_CONTEXT, "hasContext",
+            ArkdddVocabulary.UPSTREAM, "upstream",
+            ArkdddVocabulary.DOWNSTREAM, "downstream",
+            ArkreqVocabulary.SCOPED_TO, "scopedTo");
+
+    /**
+     * Rejects the delete, without touching a single triple, if anything in the project still
+     * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
+     * every named graph ({@code GRAPH ?g}), since every one of those edges is written by another
+     * hexagon into its own graph, never into {@link #BOUNDED_CONTEXT_GRAPH}. Runs inside the live
+     * write transaction {@link WriteFunnel#delete} hands its {@code body}, so the check and the
+     * eventual delete share one atomic snapshot. Mirrors
+     * {@code KognioRdfConstraintRepository#rejectIfReferenced}.
+     *
+     * <p>The shorthands are reported in a stable order, not in {@link Map}'s own - the message a
+     * caller reads must not depend on hash iteration order.</p>
+     */
+    private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId,
+            BoundedContextCode code) {
+        IRI target = rdf.createIRI(subjectIri);
+        List<String> referencing = REFERENCING_PREDICATES.entrySet().stream()
+                .filter(entry -> tx.ask("ASK { GRAPH ?g { ?s <" + entry.getKey() + "> ?target } }",
+                        Map.of("target", target)))
+                .map(Map.Entry::getValue)
+                .sorted()
+                .toList();
+        if (!referencing.isEmpty()) {
+            throw new BoundedContextReferencedException(projectId, code, referencing);
         }
     }
 

@@ -108,6 +108,26 @@ public final class TraceabilityGraph {
     private static final String UPSTREAM = ArkdddVocabulary.UPSTREAM;
     private static final String DOWNSTREAM = ArkdddVocabulary.DOWNSTREAM;
 
+    /**
+     * The six edges kogn-io/arknet#566's delete guards block on that this read side did not yet
+     * follow: {@code arkreq:scopedTo} (Requirement -&gt; BoundedContext) and {@code arkddd:hasContext}
+     * (Domain -&gt; BoundedContext) block {@code bc_delete}; {@code oslc_rm:satisfies} (UseCase -&gt;
+     * Requirement) and {@code arkreq:dependsOn} (Requirement -&gt; Requirement) block
+     * {@code req_delete}; {@code arkreq:includesUseCase}/{@code arkreq:extendsUseCase} (UseCase -&gt;
+     * UseCase) block {@code uc_delete}. Only {@code oslc_rm:satisfies} is written by a tool today
+     * ({@code uc_add}/{@code uc_update} mint it alongside a step's {@code arkreq:stepRealises}),
+     * so that one was a live edge this traversal did not follow, not a precaution. The other five
+     * are declared by a shipped ontology or shape all the same, which is precisely the store-first
+     * shape the guards exist to catch, so this side has to see them too (see
+     * {@link #DEPENDENT_EDGE_PREDICATES}).
+     */
+    private static final String SCOPED_TO = ArkreqVocabulary.SCOPED_TO;
+    private static final String HAS_CONTEXT = ArkdddVocabulary.HAS_CONTEXT;
+    private static final String SATISFIES = ArkreqVocabulary.SATISFIES;
+    private static final String DEPENDS_ON = ArkreqVocabulary.DEPENDS_ON;
+    private static final String INCLUDES_USE_CASE = ArkreqVocabulary.INCLUDES_USE_CASE;
+    private static final String EXTENDS_USE_CASE = ArkreqVocabulary.EXTENDS_USE_CASE;
+
     /** {@code skos:broader} - Term -&gt; its broader (superordinate) Term (issue #252). */
     private static final String BROADER = ArkreqVocabulary.BROADER;
 
@@ -296,11 +316,30 @@ public final class TraceabilityGraph {
      * {@code impact_analysis} answer "nothing depends on this" for exactly the actor
      * {@code actor_delete} then refuses to delete - the one tool asked "what breaks if I change
      * this" contradicting the one that enforces the answer.
+     *
+     * <p>{@code arkreq:scopedTo}, {@code arkddd:hasContext}, {@code oslc_rm:satisfies},
+     * {@code arkreq:dependsOn}, {@code arkreq:includesUseCase} and {@code arkreq:extendsUseCase}
+     * (kogn-io/arknet#566) join under exactly that obligation: each one blocks
+     * {@code bc_delete}/{@code req_delete}/{@code uc_delete}, so leaving any of them out would
+     * reproduce the {@code filledBy} contradiction six times over - {@code impact_analysis}
+     * answering "nothing depends on this" for a store-first-referenced use case that
+     * {@code uc_delete} then refuses to delete. ({@code orphan_check} is untouched by this set: it
+     * reads its own three dedicated predicates through {@link #realisingUseCases(String)},
+     * {@link #isReferencedTerm(String)} and {@link #isConstraintReferenced(String)}, and reports no
+     * use-case or bounded-context orphans at all.) The {@code relatedTo} exception does not
+     * cover the two use-case edges: it rests on that edge being <em>symmetric</em>, which turns a
+     * "see also" cluster into a single reachable blob, while {@code includesUseCase}/
+     * {@code extendsUseCase} are directed - the including use case is reported as affected by the
+     * included one, not the other way round, so a chain stays a chain. {@code
+     * KognioRdf*Repository#REFERENCING_PREDICATES} is kept in step with this set mechanically by
+     * {@code ImpactAnalysisFollowsEveryDeleteGuardEdgeTest} in arknet-architecture-tests, so the
+     * next guard added cannot quietly drop out here.
      */
     private static final Set<String> DEPENDENT_EDGE_PREDICATES = Set.of(
             USES_TERM, PRIMARY_ROLE, SUPPORTING_ROLE, STEP_REALISES, MAIN_STEP, EXTENSION_STEP,
             UBIQUITOUS_LANGUAGE_TERM, UPSTREAM, DOWNSTREAM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT,
-            ADR_USES_TERM, CONSTRAINED_BY, SUPERSEDES, FILLED_BY);
+            ADR_USES_TERM, CONSTRAINED_BY, SUPERSEDES, FILLED_BY,
+            SCOPED_TO, HAS_CONTEXT, SATISFIES, DEPENDS_ON, INCLUDES_USE_CASE, EXTENDS_USE_CASE);
 
     /**
      * The predicates {@link #dependents(String)} follows <em>forwards</em> instead - the target of

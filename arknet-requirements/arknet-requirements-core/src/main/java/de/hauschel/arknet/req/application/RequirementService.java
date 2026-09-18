@@ -23,6 +23,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
+import de.hauschel.arknet.req.application.port.in.DeleteRequirement;
 import de.hauschel.arknet.req.application.port.in.DescribeRequirementDisplayFallback;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
@@ -117,6 +118,14 @@ import de.hauschel.arknet.req.domain.TermRef;
  * {@link #updateWithOptimisticRetry}. Passing real criteria to {@code update} is exactly how a
  * caller closes that gap.</p>
  *
+ * <p><strong>Deletion.</strong> {@link #delete} is the closing counterpart of {@link #add}: the
+ * whole requirement goes away, acceptance criteria included, and its code stays taken. No status
+ * gates it - an {@code ACCEPTED} requirement is as deletable as a {@code PROPOSED} one, since a
+ * requirement is a promise rather than a decision, and the occasion this exists for is the
+ * accepted duplicate. What actually locks a requirement is an incoming edge, which the
+ * out-adapter checks inside its own delete transaction; see
+ * {@link de.hauschel.arknet.req.application.port.in.DeleteRequirement}.</p>
+ *
  * <p><strong>Language.</strong> {@code title}/{@code description}/{@code rationale} may each
  * legally carry several language-tagged variants. {@link #updateWithOptimisticRetry} determines,
  * per field, whether {@code update}'s caller named it ({@code title != null}/
@@ -155,7 +164,7 @@ import de.hauschel.arknet.req.domain.TermRef;
  */
 public class RequirementService implements AddRequirement, ListRequirements, DescribeRequirementDisplayFallback,
         GetRequirement, AcceptRequirement, ProposeRequirement, LinkTerm, UnlinkTerm, LinkConstraint,
-        UnlinkConstraint, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
+        UnlinkConstraint, UpdateRequirement, DeleteRequirement, ResolveRequirements, GetRequirementSchema {
 
     /**
      * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops.
@@ -704,6 +713,16 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
     }
 
     @Override
+    public void delete(ProjectId projectId, RequirementCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        // The reference check (does a decision, a use case, a use-case step or another requirement
+        // still point at this requirement?) is the out-adapter's business - it is the only side
+        // that can traverse the store's other named graphs. Mirrors ConstraintService#delete.
+        repository.delete(projectId, code);
+    }
+
+    @Override
     public List<ResolvedRequirement> resolveExisting(ProjectId projectId, ResourceId... ids) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(ids, "ids");
@@ -733,6 +752,14 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
      * recomputes the identical number. {@code findAllCodes} reads code and type only, so nothing
      * a listing skips can hide a taken number from this method.</p>
      *
+     * <p><strong>Ever used, not currently in use (kogn-io/arknet#566).</strong> The maximum runs
+     * over the living requirements of {@code type} <em>and</em> the codes
+     * {@link RequirementRepository#findRetainedCodes} kept from deleted ones - mirrors
+     * {@code ConstraintService#nextCode} exactly. Over the living ones alone, deleting the
+     * highest-numbered requirement of a type would let the maximum fall back and the next
+     * {@code req_add} hand out that same number again - a false trail for a number that may
+     * already appear in a commit message or a note.</p>
+     *
      * <p><strong>The type comes from the prefix, not from {@code r.type()}.</strong> Both counters
      * used to be separated by filtering the listing on the domain type, which the raw read no
      * longer offers - and deliberately so: a requirement whose type triple cannot be read is
@@ -742,8 +769,10 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
      */
     private RequirementCode nextCode(ProjectId projectId, RequirementType type) {
         String prefix = type.idPrefix() + "-";
-        int highest = CodeCounter.highestRunningNumber(prefix, repository.findAllCodes(projectId),
+        int highestLiving = CodeCounter.highestRunningNumber(prefix, repository.findAllCodes(projectId),
                 RequirementCode::value);
-        return new RequirementCode(prefix + (highest + 1));
+        int highestRetained = CodeCounter.highestRunningNumber(prefix, repository.findRetainedCodes(projectId),
+                RequirementCode::value);
+        return new RequirementCode(prefix + (Math.max(highestLiving, highestRetained) + 1));
     }
 }

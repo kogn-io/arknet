@@ -5,6 +5,7 @@ package de.hauschel.arknet.uc.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -55,6 +56,8 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
+import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 
 /**
  * Integration test for {@link KognioRdfUseCaseRepository} against an in-memory RDF4J-backed
@@ -1124,6 +1127,205 @@ class KognioRdfUseCaseRepositoryTest {
 
         UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
         assertEquals(List.of(new ConstraintRef(danglingConstraint)), found.constrainedBy());
+    }
+
+
+    // ---- delete (kogn-io/arknet#566) ----------------------------------------------------------
+
+    /** The {@code dcterms:identifier} literals a revision carries in the provenance graph. */
+    private List<String> identifiersOf(String revisionIri) {
+        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((io.kogn.rdf.terms.Literal) row.getValue("v").orElseThrow()).getLexicalForm())
+                    .toList();
+        }
+    }
+
+    private List<String> headsOf(String subjectIri) {
+        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + subjectIri + "> <" + ArkprovVocabulary.HEAD + "> ?v } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((io.kogn.rdf.terms.IRI) row.getValue("v").orElseThrow()).getIRIString())
+                    .toList();
+        }
+    }
+
+    /** Seeds an incoming edge from a second, otherwise irrelevant subject onto {@link #ID_1}. */
+    private void seedIncomingEdge(ProjectId project, String predicateIri) {
+        seed(project, USE_CASES_GRAPH,
+                "<https://w3id.org/arknet/id/uc-referencing> <" + predicateIri + "> <"
+                        + ID_1.value().value() + "> .");
+    }
+
+    @Test
+    void deleteRemovesTheUseCaseAndItsTriples() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+
+        repository.delete(PROJECT_A, CODE_1);
+
+        assertTrue(repository.findByCode(PROJECT_A, CODE_1, null).isEmpty());
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertFalse(handle.sparqlQuery().ask("ASK { GRAPH <" + USE_CASES_GRAPH + "> { <"
+                    + ID_1.value().value() + "> ?p ?o } }"),
+                    "no triple of the deleted use case may remain");
+        }
+    }
+
+    /**
+     * The steps are aggregate-internal children reachable only through {@code mainStep}/
+     * {@code extensionStep} - deleting the use case must follow both edges, exactly as
+     * {@code compareAndUpdate}'s own replace does, or their opaque subjects stay behind as
+     * unreachable orphans.
+     */
+    @Test
+    void deleteAlsoRemovesItsSteps() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+        // placeOrder has 2 main steps + 1 extension step = 3 step resources.
+        assertEquals(3, countSteps(PROJECT_A));
+
+        repository.delete(PROJECT_A, CODE_1);
+
+        assertEquals(0, countSteps(PROJECT_A));
+    }
+
+    /**
+     * A step's {@code arkreq:stepRealises} edge points away from the use case, so it goes with the
+     * step - but the requirement at the far end is a resource of another bounded context and must
+     * survive untouched.
+     */
+    @Test
+    void deleteLeavesARequirementRealisedByADeletedStepUntouched() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+
+        repository.delete(PROJECT_A, CODE_1);
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertTrue(handle.sparqlQuery().ask("ASK { GRAPH <" + REQUIREMENTS_GRAPH + "> { <"
+                    + FR_1.value() + "> ?p ?o } }"),
+                    "the requirement a deleted step realised must survive");
+        }
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(UseCaseNotFoundException.class,
+                () -> repository.delete(PROJECT_A, new UseCaseCode("UC99")));
+    }
+
+    /**
+     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
+     * the {@code arkprov:head} pointer is removed and the last revision is marked
+     * {@code prov:invalidatedAtTime} rather than erased.
+     */
+    @Test
+    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+        String subject = ID_1.value().value();
+        String lastRevision = headsOf(subject).get(0);
+
+        repository.delete(PROJECT_A, CODE_1);
+
+        assertTrue(headsOf(subject).isEmpty(), "the head pointer must be removed");
+        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
+                    "the last revision must be tombstoned, not erased");
+        }
+    }
+
+    /**
+     * The one thing the funnel's tombstone cannot carry: the business code lives on the model
+     * triple the delete removes, so the adapter hangs it on the tombstoned revision itself - the
+     * only place it can outlive its resource, and what keeps {@code UC1} from naming a second use
+     * case later.
+     */
+    @Test
+    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+        String lastRevision = headsOf(ID_1.value().value()).get(0);
+
+        repository.delete(PROJECT_A, CODE_1);
+
+        assertEquals(List.of("UC1"), identifiersOf(lastRevision));
+        assertEquals(List.of(CODE_1), repository.findRetainedCodes(PROJECT_A));
+    }
+
+    @Test
+    void projectsAreIsolatedForDelete() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+
+        assertThrows(UseCaseNotFoundException.class, () -> repository.delete(PROJECT_B, CODE_1));
+        assertTrue(repository.findByCode(PROJECT_A, CODE_1, null).isPresent(),
+                "a delete in another project must not touch this project's use case");
+    }
+
+    /**
+     * {@link UseCaseReferencedException} blocks the delete while another use case still includes
+     * this one ({@code arkreq:includesUseCase}) - drop that entry from
+     * {@code KognioRdfUseCaseRepository#REFERENCING_PREDICATES} and this goes green on a delete
+     * that leaves the edge dangling.
+     */
+    @Test
+    void deleteRejectsAUseCaseAnotherOneIncludes() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+        seedIncomingEdge(PROJECT_A, ArkreqVocabulary.INCLUDES_USE_CASE);
+
+        UseCaseReferencedException ex = assertThrows(UseCaseReferencedException.class,
+                () -> repository.delete(PROJECT_A, CODE_1));
+
+        assertEquals(List.of("includesUseCase"), ex.referencingPredicates());
+        assertTrue(repository.findByCode(PROJECT_A, CODE_1, null).isPresent(),
+                "a rejected delete must leave the use case untouched");
+        assertEquals(3, countSteps(PROJECT_A), "a rejected delete must leave the steps untouched");
+    }
+
+    /** The {@code arkreq:extendsUseCase} counterpart of the previous test, same mutation argument. */
+    @Test
+    void deleteRejectsAUseCaseAnotherOneExtends() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+        seedIncomingEdge(PROJECT_A, ArkreqVocabulary.EXTENDS_USE_CASE);
+
+        UseCaseReferencedException ex = assertThrows(UseCaseReferencedException.class,
+                () -> repository.delete(PROJECT_A, CODE_1));
+
+        assertEquals(List.of("extendsUseCase"), ex.referencingPredicates());
+        assertTrue(repository.findByCode(PROJECT_A, CODE_1, null).isPresent(),
+                "a rejected delete must leave the use case untouched");
+    }
+
+    /**
+     * The complement of the two rejection tests: a use case carrying nothing but outgoing edges -
+     * {@code satisfies} onto a requirement, {@code usesTerm}, {@code constrainedBy},
+     * {@code primaryRole}/{@code supportingRole} and its steps - stays deletable. Without this, a
+     * guard that accidentally also asked about an outgoing edge would look correct.
+     */
+    @Test
+    void deleteAcceptsAUseCaseThatOnlyCarriesOutgoingEdges() {
+        seedReferences(PROJECT_A);
+        seedTerm(PROJECT_A, "term-1", "Order");
+        seedConstraint(PROJECT_A, "tcon-1");
+        UseCase base = placeOrder();
+        UseCase withEdges = new UseCase(base.id(), base.code(), base.title(), base.goal(), base.scope(),
+                base.trigger(), base.primaryRole(), base.supportingRoles(), base.precondition(),
+                base.postcondition(), base.steps(), base.extensions(), List.of(TERM_1_REF),
+                List.of(TCON_1_REF));
+        repository.create(PROJECT_A, withEdges, null);
+
+        assertDoesNotThrow(() -> repository.delete(PROJECT_A, CODE_1));
+
+        assertTrue(repository.findByCode(PROJECT_A, CODE_1, null).isEmpty());
     }
 
 }

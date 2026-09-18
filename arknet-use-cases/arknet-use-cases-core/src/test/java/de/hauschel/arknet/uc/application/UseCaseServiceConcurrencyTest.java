@@ -253,6 +253,16 @@ class UseCaseServiceConcurrencyTest {
             }
             return result;
         }
+
+        @Override
+        public void delete(ProjectId projectId, UseCaseCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<UseCaseCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
+        }
     }
 
     /**
@@ -322,6 +332,16 @@ class UseCaseServiceConcurrencyTest {
         public List<UseCaseCode> findAllCodes(ProjectId projectId) {
             return delegate.findAllCodes(projectId);
         }
+
+        @Override
+        public void delete(ProjectId projectId, UseCaseCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<UseCaseCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
+        }
     }
 
     /** A repository whose {@code compareAndUpdate} always reports a conflict, never applying. */
@@ -381,6 +401,16 @@ class UseCaseServiceConcurrencyTest {
         @Override
         public List<UseCaseCode> findAllCodes(ProjectId projectId) {
             return delegate.findAllCodes(projectId);
+        }
+
+        @Override
+        public void delete(ProjectId projectId, UseCaseCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<UseCaseCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
         }
     }
 }

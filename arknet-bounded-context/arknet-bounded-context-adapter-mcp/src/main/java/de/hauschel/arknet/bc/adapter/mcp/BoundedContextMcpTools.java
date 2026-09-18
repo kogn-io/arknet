@@ -19,6 +19,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
+import de.hauschel.arknet.bc.application.port.in.DeleteBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.DescribeBoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.LinkContext;
@@ -48,8 +49,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 /**
  * Driving (in) adapter of the bounded-context component: exposes the bounded-context use-cases as
  * MCP tools ({@code bc_add}, {@code bc_list}, {@code bc_get}, {@code bc_update},
- * {@code bc_link_term}, {@code bc_unlink_term}, {@code bc_link_context}, {@code bc_unlink_context})
- * and delegates each tool call to the corresponding in-port.
+ * {@code bc_link_term}, {@code bc_unlink_term}, {@code bc_link_context}, {@code bc_unlink_context},
+ * {@code bc_delete}) and delegates each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the bounded-context hexagon (symmetric to the out-adapter
  * {@code arknet-bounded-context-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -170,6 +171,7 @@ public final class BoundedContextMcpTools {
     private final UnlinkTerm unlinkTerm;
     private final LinkContext linkContext;
     private final UnlinkContext unlinkContext;
+    private final DeleteBoundedContext deleteBoundedContext;
     private final ResolveTerms resolveTerms;
     private final ProjectResolver projects;
     private final StaleTranslationHint staleTranslations;
@@ -188,6 +190,7 @@ public final class BoundedContextMcpTools {
      * @param unlinkTerm          in-port backing {@code bc_unlink_term} (kogn-io/arknet#598)
      * @param linkContext         in-port backing {@code bc_link_context}
      * @param unlinkContext       in-port backing {@code bc_unlink_context} (kogn-io/arknet#565)
+     * @param deleteBoundedContext in-port backing {@code bc_delete} (kogn-io/arknet#566)
      * @param resolveTerms        ubiquitous-language driving port used only to render a linked
      *                            term's business code instead of its bare IRI
      * @param projects          resolves each call's target project from its origin directory
@@ -204,6 +207,7 @@ public final class BoundedContextMcpTools {
             final UnlinkTerm unlinkTerm,
             final LinkContext linkContext,
             final UnlinkContext unlinkContext,
+            final DeleteBoundedContext deleteBoundedContext,
             final ResolveTerms resolveTerms,
             final ProjectResolver projects,
             final StaleTranslationHint staleTranslations) {
@@ -217,6 +221,7 @@ public final class BoundedContextMcpTools {
         this.unlinkTerm = Objects.requireNonNull(unlinkTerm, "unlinkTerm");
         this.linkContext = Objects.requireNonNull(linkContext, "linkContext");
         this.unlinkContext = Objects.requireNonNull(unlinkContext, "unlinkContext");
+        this.deleteBoundedContext = Objects.requireNonNull(deleteBoundedContext, "deleteBoundedContext");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.projects = Objects.requireNonNull(projects, "projects");
         this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
@@ -531,6 +536,35 @@ public final class BoundedContextMcpTools {
                 project.id(), new BoundedContextCode(upstreamBcId), new BoundedContextCode(downstreamBcId), type);
         return WriteResponse.withProject(
                 WriteResponse.unlinked(upstreamBcId, downstreamBcId, type.name()), project);
+    }
+
+    @McpTool(name = "bc_delete",
+            description = "Delete an already-created bounded context and every triple it carries - "
+                    + "not just a correction, the whole resource goes away. The typical case is a "
+                    + "boundary that turned out not to be one: a context drawn before the language "
+                    + "break was understood, or two contexts that collapsed into one - use bc_update "
+                    + "to correct a context that stays. Rejected while anything still points at it: "
+                    + "a context relationship via upstream or downstream (remove it with "
+                    + "bc_unlink_context - a relationship is its own resource and is never deleted "
+                    + "along with a context), a decision via affectsContext (adr_update), a "
+                    + "requirement via scopedTo, or a domain via hasContext. The terms it links "
+                    + "(ubiquitousLanguageTerm) hold nothing: they are its own edges and go with it, "
+                    + "the glossary terms themselves stay. The code (BC-N) stays taken so it never "
+                    + "names two different contexts.")
+    public String delete(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Bounded-context identity, e.g. BC-1") final String id,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final BoundedContextCode code = new BoundedContextCode(id);
+        deleteBoundedContext.delete(project.id(), code);
+        return WriteResponse.withProject("Deleted: " + code.value(), project);
     }
 
     /**
