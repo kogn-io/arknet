@@ -10,6 +10,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import java.util.Set;
 
+import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
@@ -59,7 +60,8 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
  * {@code de.hauschel.arknet.mcp} class such as {@code StoreReportTools} (rule 5), or to a
  * {@code de.hauschel.arknet.kernel} class (rule 6) -- and confirm the rule fails before
  * trusting it. All six were confirmed to fail this way when introduced. Rule 13 is broken the
- * same way, by naming a neighbour's type in a {@code de.hauschel.arknet.analysis} class. Rule 12 is the one
+ * same way, by naming a neighbour's type in a {@code de.hauschel.arknet.analysis} class, and
+ * rule 14 by naming {@code WriteFunnel} there. Rule 12 is the one
  * rule that does not need the exercise: it turns red on any class in the kernel package whose
  * name is not on its list, which is the whole of what it claims.</p>
  *
@@ -103,6 +105,18 @@ class DependencyRulesTest {
             "MissingDefaultLanguageException",
             "DisplayLocale",
             "LocalizedLiteral");
+
+    /**
+     * The write half of {@code arknet-persistence-support}, by simple name -- everything in
+     * {@code de.hauschel.arknet.persistence} that serves a write rather than the type-independent
+     * read path (rule 14).
+     */
+    private static final Set<String> PERSISTENCE_WRITE_TYPES = Set.of(
+            "ShaclWriteGate",
+            "WriteFunnel",
+            "WriteConstraintViolationException",
+            "UnresolvedReferenceException",
+            "SparqlTerms");
 
     /** The bounded contexts, by their package abbreviation (see CLAUDE.md). */
     private static final String[] BOUNDED_CONTEXT_PACKAGES = {
@@ -442,6 +456,43 @@ class DependencyRulesTest {
                     .should().dependOnClassesThat().resideInAnyPackage(MODEL_CONTEXT_PACKAGES)
                     .because("model analysis owns no resource and reads every context over its "
                             + "published language in the store, never over one of its modules");
+
+    /**
+     * Rule 14 -- the one context that never writes stays off the write half of
+     * {@code arknet-persistence-support}.
+     *
+     * <p>Model analysis is the only bounded context whose core depends on that module: its subject
+     * is the published language itself, so it speaks the type-independent read model and the
+     * {@code Ark*Vocabulary} constants. The module carries more than that, and the same dependency
+     * hands a read-only context the SHACL write gate, the write funnel and the SPARQL term
+     * serialisation. Rule 3 does not catch it -- these are not {@code io.kogn} or RDF4J types --
+     * so the gap is the exact counterpart of what rule 11 closes for
+     * {@code arknet-mcp-support}.</p>
+     *
+     * <p>A list of names rather than a package, because the split runs through one package: today
+     * the structural fix (a module of its own for the read model, so Maven carries the rule) is
+     * not cut, and until it is, this rule is what stands in for it. A new write-side type in
+     * {@code de.hauschel.arknet.persistence} is not covered until it is named here -- the price of
+     * a deny list, and the reason the module split stays on the table.</p>
+     */
+    @ArchTest
+    static final ArchRule model_analysis_stays_off_the_write_half_of_the_persistence_support =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.analysis..")
+                    .should().dependOnClassesThat(theWriteHalfOfThePersistenceSupport())
+                    .because("a context that owns no resource and never writes has no business "
+                            + "with the write gate, the write funnel or the SPARQL term "
+                            + "serialisation it gets on its classpath along with the read path");
+
+    private static DescribedPredicate<JavaClass> theWriteHalfOfThePersistenceSupport() {
+        return new DescribedPredicate<>("the write half of arknet-persistence-support") {
+            @Override
+            public boolean test(final JavaClass input) {
+                return input.getPackageName().startsWith("de.hauschel.arknet.persistence")
+                        && PERSISTENCE_WRITE_TYPES.contains(topLevelSimpleName(input));
+            }
+        };
+    }
 
     private static ArchCondition<JavaClass> beOneOfTheAdmittedSharedKernelTerms() {
         return new ArchCondition<>("be one of the terms ADR-56 admits to the shared kernel") {

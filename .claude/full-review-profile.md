@@ -24,7 +24,7 @@ the skill's generic methodology.
   "stays free of RDF4J" Javadoc claim. Before trusting this module's silence on a given package as
   "verified clean", check its `pom.xml` actually depends on that package's module.
 - `arknet-mcp` is the composition root and additionally carries three cross-cutting,
-  BC-spanning read paths (`mcp/store`, `mcp/report`, and the model-analysis component) — a
+  BC-spanning read paths (`mcp/store`, `mcp/report`, and the model-analysis component) -- a
   contract hole there distorts all six hexagons at once. Weight it above the individual BC
   modules.
 - `StoreReader` (`arknet-persistence-support/.../persistence/StoreReader.java`, until #560 in

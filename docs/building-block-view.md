@@ -143,7 +143,12 @@ As built (from the POMs):
 
 - Every `-core` depends only on `arknet-shared-kernel`, plus its own context's
   vocabulary module where one exists (`arknet-product-requirements-shared`,
-  `arknet-domain-modelling-shared`). No core depends on a neighbouring core.
+  `arknet-domain-modelling-shared`). No core depends on a neighbouring core. One
+  exception, #560: `arknet-model-analysis-core` additionally names
+  `arknet-persistence-support`, because its subject is the published language itself --
+  the type-independent read model and the `Ark*Vocabulary` constants are what a snapshot
+  of that language is made of. It uses nothing of kognio-rdf (`DependencyRulesTest`
+  rule 3) and nothing of the module's write half (rule 14).
 - Every `-adapter-kogniordf` depends on its own core and `arknet-persistence-support`,
   the writing ones additionally on `arknet-ontology`; on no neighbouring module. It resolves neighbour codes
   by SPARQL in the neighbour's graph (Published Language).
