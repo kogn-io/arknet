@@ -83,9 +83,8 @@
         <module>arknet-persistence-support</module>
         <module>arknet-persistence-test-support</module>
         <module>arknet-requirements</module>
-        <module>arknet-ubiquitous-language</module>
+        <module>arknet-domain-modelling</module>
         <module>arknet-use-cases</module>
-        <module>arknet-bounded-context</module>
         <module>arknet-project</module>
         <module>arknet-adr</module>
         <module>arknet-actor</module>

@@ -72,7 +72,8 @@ Context map as recorded in the store, against the code:
   (ADR-56). The store records a shared kernel only pairwise, so that statement waits
   for #77.
 - Read side as built: the in-adapter borrows the neighbour's read in-port (a
-  "Borrowed In-Port"). The target has no such edge (ADR-49), see section 4.
+  "Borrowed In-Port"), except inside Domain Modelling, where #441 has already replaced
+  it with the target mechanism. The target has no such edge (ADR-49), see section 4.
 
 ## 3. Building blocks
 
@@ -87,12 +88,18 @@ Actor, Architecture & Decisions and Model Analysis hold one Component each and n
 none (ADR-57). No `api` module (ADR-58). Model Analysis becomes an eighth Component
 (ADR-54). Implementation: #439, #441, #560, #561.
 
+Built for Domain Modelling (#441): `arknet-domain-modelling` is the Maven parent of the
+two Components and of the vocabulary module `arknet-domain-modelling-shared`, which
+holds `TermCode`; the bounded-context Component gave up its own `TermRef` and its
+borrowed in-port. Everywhere else the Component is still the Maven parent.
+
 | Target Bounded Context       | Component (today = Maven parent) | Modules                                   |
 |------------------------------|----------------------------------|-------------------------------------------|
 | Product & Requirements       | arknet-requirements              | -core, -adapter-kogniordf, -adapter-mcp   |
 | Product & Requirements       | arknet-use-cases                 | -core, -adapter-kogniordf, -adapter-mcp   |
 | Domain Modelling             | arknet-ubiquitous-language       | -core, -adapter-kogniordf, -adapter-mcp   |
 | Domain Modelling             | arknet-bounded-context           | -core, -adapter-kogniordf, -adapter-mcp   |
+| Domain Modelling             | (vocabulary module, no Component) | arknet-domain-modelling-shared           |
 | Architecture & Decisions     | arknet-adr                       | -core, -adapter-kogniordf, -adapter-mcp   |
 | Actor                        | arknet-actor                     | -core, -adapter-kogniordf, -adapter-mcp   |
 | Project Registry             | arknet-project                   | -core, -adapter-kogniordf, -adapter-mcp   |
@@ -121,7 +128,8 @@ As built (from the POMs):
 - `-adapter-mcp` depends on neighbouring cores (Borrowed In-Port):
   - requirements-mcp -> ubiquitous-language-core
   - use-cases-mcp -> requirements-core, ubiquitous-language-core, actor-core
-  - bounded-context-mcp -> ubiquitous-language-core
+  - bounded-context-mcp: none since #441 -- it asks its own `ResolveLinkedTerms`
+    in-port, served by `TermLookup#codesById` over the glossary's Published Language
   - adr-mcp -> requirements-core, ubiquitous-language-core, bounded-context-core
   - actor-mcp, project-mcp, ubiquitous-language-mcp: none
 
@@ -136,13 +144,13 @@ its own core only; no module of a Component depends on a module of another.
 
 | Mandatory per schema                          | arknet as built                                     |
 |-----------------------------------------------|-----------------------------------------------------|
-| Bounded Context as Maven parent               | missing; today the parent is the Component (#439, #441, #560) |
+| Bounded Context as Maven parent               | built for Domain Modelling (#441); elsewhere the parent is still the Component (#439, #560) |
 | `api` per Component                           | not required: extension stage, no foreign in-port caller in arknet (ADR-58) |
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
-| `<bc>-shared` once ownerless identities exist | missing; one each for Product & Requirements and Domain Modelling (ADR-57; #439, #441) |
+| `<bc>-shared` once ownerless identities exist | built for Domain Modelling (`arknet-domain-modelling-shared`, #441); Product & Requirements still missing (ADR-57; #439) |
 | Application outside every Bounded Context     | present (arknet-mcp)                                 |
-| dependency rules as a checker                 | partial: the ArchUnit rules do not yet carry the schema's rule that no module of a Component depends on a module of another (ADR-49; Part B) |
+| dependency rules as a checker                 | partial: the ArchUnit rules carry the rule that no module of a Component depends on a module of another for Domain Modelling only (rule 9, #441); the other contexts still borrow in-ports (ADR-49; #439, #560) |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |
 
 ## 6. Cross-cutting concepts (pointers only)

@@ -167,12 +167,12 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       nine bounded-context tools ({@code bc_add}/{@code bc_list}/{@code bc_get}/
  *       {@code bc_update}/{@code bc_link_term}/{@code bc_unlink_term}/{@code bc_link_context}/
  *       {@code bc_unlink_context}/{@code bc_delete}), assembled through
- *       {@link KognioRdfBoundedContextRepositoryFactory}. {@code bc_link_term}'s cross-BC
+ *       {@link KognioRdfBoundedContextRepositoryFactory}. {@code bc_link_term}'s
  *       code-to-identity resolution is a separate {@code KognioRdfTermLookup} bean over the same
  *       shared dataset lifecycle; {@code bc_get}/{@code bc_list}'s reverse direction (identity
- *       back to a displayable term code) is the ubiquitous-language hexagon's own
- *       {@link ResolveTerms} in-port, wired straight into {@link BoundedContextMcpTools}
- *       (Borrowed In-Port). {@code bc_link_context} records an {@code arkddd:ContextRelationship} between
+ *       back to a displayable term code) runs through the very same out-port and bean, offered to
+ *       the adapter as the hexagon's own {@code ResolveLinkedTerms} in-port - no in-port of the
+ *       ubiquitous-language hexagon is borrowed (ADR-49). {@code bc_link_context} records an {@code arkddd:ContextRelationship} between
  *       two existing bounded contexts, persisted through a second, separately assembled
  *       {@link ContextRelationshipRepository} bean
  *       ({@link KognioRdfContextRelationshipRepositoryFactory}) over the same shared dataset
@@ -630,19 +630,19 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * {@code resolveTerms} is the ubiquitous-language hexagon's {@link ResolveTerms} in-port
-     * (implemented by its {@code TermService} bean) - borrowed here purely so {@code bc_get}/
-     * {@code bc_list} can render a linked term's business code instead of its bare IRI.
-     * This wires an In-Adapter to a <em>different</em> hexagon's In-Port, not to that hexagon's
-     * core - see the "kein *-core* haengt an einem anderen BC" precision in CLAUDE.md.
+     * Wired entirely from its own hexagon, including the display resolution of a linked term's
+     * business code: {@code BoundedContextService} answers that itself through its
+     * {@code ResolveLinkedTerms} in-port, backed by the {@code TermLookup} out-port that reads the
+     * glossary's published language (ADR-49, kogn-io/arknet#441). No in-port of the
+     * ubiquitous-language hexagon is borrowed here.
      */
     @Bean
     BoundedContextMcpTools boundedContextMcpTools(
-            final BoundedContextService service, final ResolveTerms resolveTerms,
+            final BoundedContextService service,
             final ProjectResolver projectResolver, final StaleTranslationHint staleTranslationHint) {
         return new BoundedContextMcpTools(
                 service, service, service, service, service, service, service, service, service, service,
-                resolveTerms, projectResolver, staleTranslationHint);
+                service, projectResolver, staleTranslationHint);
     }
 
     // --- ADR hexagon -----------------------------------------------------------

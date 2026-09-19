@@ -9,13 +9,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import de.hauschel.arknet.bc.application.port.in.BoundedContextDetail;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
 import de.hauschel.arknet.bc.application.port.in.RelatedContext;
 import de.hauschel.arknet.bc.domain.BoundedContext;
-import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 
@@ -84,9 +82,7 @@ public final class BoundedContextCards {
             badges.add(new Badge(Badge.Kind.Known.SUBDOMAIN, Labels.humanise(context.subdomain().name())));
         }
 
-        final Set<ResourceId> linked = context.usesTerms().stream()
-                .map(TermRef::value)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
+        final Set<ResourceId> linked = new LinkedHashSet<>(context.usesTerms());
 
         final List<Block> blocks = new ArrayList<>();
         blocks.add(ProseMarkdown.prose("Domain vision", context.domainVision(),

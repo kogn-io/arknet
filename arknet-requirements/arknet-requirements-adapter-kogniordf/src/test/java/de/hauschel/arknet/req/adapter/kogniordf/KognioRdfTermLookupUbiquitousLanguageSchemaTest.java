@@ -22,7 +22,7 @@ import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**

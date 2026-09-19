@@ -25,7 +25,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**
