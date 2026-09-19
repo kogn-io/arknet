@@ -78,10 +78,16 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Regel 9: die Vokabularmodule der Kontexte. -->
+        <!-- Regel 7: die Vokabularmodule der Kontexte. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-product-requirements-shared</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-domain-modelling-shared</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

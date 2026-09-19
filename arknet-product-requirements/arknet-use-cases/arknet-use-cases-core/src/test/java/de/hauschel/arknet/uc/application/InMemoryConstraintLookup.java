@@ -3,7 +3,9 @@
 
 package de.hauschel.arknet.uc.application;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -50,7 +52,7 @@ final class InMemoryConstraintLookup implements ConstraintLookup {
      */
     @Override
     public Map<ResourceId, ConstraintCode> resolveCodes(ProjectId projectId, ResourceId... ids) {
-        Set<ResourceId> wanted = Set.of(ids);
+        Set<ResourceId> wanted = new HashSet<>(Arrays.asList(ids));
         Map<ResourceId, ConstraintCode> resolved = new LinkedHashMap<>();
         knownConstraints.forEach((code, id) -> {
             if (wanted.contains(id)) {

@@ -39,9 +39,10 @@ public interface TermLookup {
      * and its whole job is to reject what does not resolve with a didactic message; a typed
      * parameter would move the first rejection into a value object's constructor and answer a
      * blank code with a different exception than an unknown one. It is also the shape every
-     * {@code *Lookup} out-port in this build shares, in all six contexts. The reverse direction
-     * returns {@link TermCode} because it does not take a caller's input: it hands a resolved
-     * code to an in-port result, where the context's vocabulary is the right type.</p>
+     * {@code *Lookup} out-port in this build shares: none of the contexts that have one deviates
+     * from it. The reverse direction returns {@link TermCode} because it does not take a caller's
+     * input: it hands a resolved code to an in-port result, where the context's vocabulary is the
+     * right type.</p>
      *
      * @param projectId the project (architecture model) to resolve the code in
      * @param termCode    the term's human-readable business code, e.g. {@code TERM-1}

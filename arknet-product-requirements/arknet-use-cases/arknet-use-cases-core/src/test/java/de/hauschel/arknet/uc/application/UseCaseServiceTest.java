@@ -26,6 +26,8 @@ import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.NewMainStep;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepRealisesPatch;
+import de.hauschel.arknet.uc.application.port.in.ResolveConstraints.ResolvedConstraint;
+import de.hauschel.arknet.uc.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.RoleRef;
@@ -36,6 +38,8 @@ import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
 import de.hauschel.arknet.uc.domain.TermNotLinkedException;
+import de.hauschel.arknet.pr.shared.ConstraintCode;
+import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.pr.shared.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -1273,6 +1277,26 @@ class UseCaseServiceTest {
         UseCase third = service.add(WS, newUseCase("Cancel order"), DEFAULT_LANGUAGE);
 
         assertEquals(new UseCaseCode("UC3"), third.code());
+    }
+
+    /**
+     * Regression for {@link InMemoryRequirementLookup#resolveCodes}: the fake used to reject a
+     * duplicate id in the batch with {@code IllegalArgumentException} ({@code Set.of}), something
+     * the real adapter's {@code VALUES} join tolerates (kogn-io/arknet#637 review).
+     */
+    @Test
+    void resolveRequirementsToleratesADuplicateIdInTheBatch() {
+        List<ResolvedRequirement> resolved = service.resolveRequirements(WS, FR5_ID, FR5_ID);
+
+        assertEquals(List.of(new ResolvedRequirement(FR5_ID, new RequirementCode("FR5"))), resolved);
+    }
+
+    /** Mirrors {@link #resolveRequirementsToleratesADuplicateIdInTheBatch} for constraints. */
+    @Test
+    void resolveConstraintsToleratesADuplicateIdInTheBatch() {
+        List<ResolvedConstraint> resolved = service.resolveConstraints(WS, TCON_1_ID, TCON_1_ID);
+
+        assertEquals(List.of(new ResolvedConstraint(TCON_1_ID, new ConstraintCode("TCON-1"))), resolved);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */

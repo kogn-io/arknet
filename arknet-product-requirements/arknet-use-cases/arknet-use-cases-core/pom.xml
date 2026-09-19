@@ -17,7 +17,6 @@
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-product-requirements-shared</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
