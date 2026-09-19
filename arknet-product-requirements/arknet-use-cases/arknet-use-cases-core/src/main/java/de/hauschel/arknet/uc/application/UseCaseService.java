@@ -1,0 +1,731 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Fred Hauschel
+
+package de.hauschel.arknet.uc.application;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.Set;
+import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
+
+import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.CodeCounter;
+import de.hauschel.arknet.kernel.LanguageTag;
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.ResourceIdFactory;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.uc.application.port.in.AddUseCase;
+import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
+import de.hauschel.arknet.uc.application.port.in.DeleteUseCase;
+import de.hauschel.arknet.uc.application.port.in.DescribeUseCaseDisplayFallback;
+import de.hauschel.arknet.uc.application.port.in.GetUseCase;
+import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
+import de.hauschel.arknet.uc.application.port.in.LinkTerm;
+import de.hauschel.arknet.uc.application.port.in.ListUseCases;
+import de.hauschel.arknet.uc.application.port.in.ResolveConstraints;
+import de.hauschel.arknet.uc.application.port.in.ResolveConstraints.ResolvedConstraint;
+import de.hauschel.arknet.uc.application.port.in.ResolveRequirements;
+import de.hauschel.arknet.uc.application.port.in.ResolveRequirements.ResolvedRequirement;
+import de.hauschel.arknet.uc.application.port.in.UnlinkConstraint;
+import de.hauschel.arknet.uc.application.port.in.UnlinkTerm;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
+import de.hauschel.arknet.uc.application.port.out.RoleLookup;
+import de.hauschel.arknet.uc.application.port.out.ConstraintLookup;
+import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
+import de.hauschel.arknet.uc.application.port.out.TermLookup;
+import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
+import de.hauschel.arknet.uc.domain.RoleRef;
+import de.hauschel.arknet.uc.domain.ConstraintNotLinkedException;
+import de.hauschel.arknet.uc.domain.ConstraintRef;
+import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
+import de.hauschel.arknet.uc.domain.RemovedPositions;
+import de.hauschel.arknet.uc.domain.RequirementRef;
+import de.hauschel.arknet.uc.domain.Step;
+import de.hauschel.arknet.uc.domain.StepTextPatch;
+import de.hauschel.arknet.uc.domain.TermNotLinkedException;
+import de.hauschel.arknet.pr.shared.TermRef;
+import de.hauschel.arknet.uc.domain.UseCase;
+import de.hauschel.arknet.uc.domain.UseCaseCode;
+import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
+import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
+import de.hauschel.arknet.uc.domain.UseCaseId;
+import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
+
+/**
+ * Application service implementing the use-case use cases.
+ *
+ * <p>This is the policy seat of the hexagon: it drives the {@link UseCaseRepository}
+ * driven port. The component is wired as a plain object (constructor injection) by
+ * the composition root; there are deliberately no framework annotations here.</p>
+ *
+ * <p><strong>Policy.</strong> Identity ({@link UseCaseId}) is opaque and minted once per use
+ * case via {@link ResourceIdFactory}; it never changes. The human-readable business code
+ * ({@link UseCaseCode}, {@code UCn}) is assigned independently, where {@code n} is one above
+ * the highest running number currently used in the target project (numbering is independent
+ * per project, starting at 1).</p>
+ *
+ * <p><strong>Reference resolution.</strong> {@code NewUseCase}'s role/requirement
+ * fields are raw human-typed strings, not domain refs - resolving them to the referenced
+ * resources' opaque identities is this service's job, via the driven {@link RoleLookup}/
+ * {@link RequirementLookup} ports, once per {@link #add}, before the real {@link UseCase} and its
+ * {@link Step}s are constructed. An unknown or ambiguous reference propagates as a didactic
+ * runtime exception from the lookup, rejecting the write; nothing is persisted.</p>
+ *
+ * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code against a
+ * fresh read whenever a concurrent {@code uc_add} claims the same {@code UCn} first, via
+ * {@link CodeAssignment#createRetryingOnCodeCollision}; the race is invisible to a well-formed
+ * caller. Parallel sessions of one user against one local store are the normal case, not a remote/
+ * multi-writer concern. {@link #update}/{@link #linkTerm}/{@link #linkConstraint} share
+ * that same concern: read-modify-write round trips retry via
+ * {@link UseCaseRepository#compareAndUpdate} whenever a concurrent writer commits in between -
+ * see {@link #updateWithOptimisticRetry} (mirrors {@code RequirementService}).</p>
+ *
+ * <p><strong>Correction.</strong> {@link #update} lets a caller correct a use case's
+ * goal-level fields and/or its main flow after the fact, without the delete-and-recreate round
+ * trip through {@code uc_add} that would risk a new {@link UseCaseCode} and orphaned
+ * {@code realises}/{@code extensions} references. Every scalar argument is optional
+ * ({@code null} leaves it unchanged); {@code stepTextPatches} corrects only the {@code text} of
+ * existing main-flow steps by position, never their {@code realises} references, while the
+ * separate, independent {@code stepRealisesPatches} corrects only a named step's
+ * {@code realises} set - replacing it wholesale, with an empty list explicitly clearing it
+ * (issue #255). {@code newMainSteps} appends steps after the existing ones, numbered continuing
+ * from the current highest; {@code removeMainStepPositions} takes one or more out by position and
+ * renumbers the survivors consecutively from 1 (kogn-io/arknet#513, literal precedent from
+ * {@code adr_update}'s {@code removeConsequencePositions}, issue #483). Reordering the main flow
+ * stays out of scope - see {@link UpdateUseCase}. {@code primaryRole} and
+ * {@code supportingRoles} are correctable too (issue #343), by business code and through the very same
+ * {@link RoleLookup} {@link #add} resolves against - {@code primaryRole} replace-or-leave,
+ * {@code supportingRoles} a wholesale replace whose empty list clears them.
+ * Linking a glossary term or a constraint is idempotent, independent of
+ * {@link #update}, and mirrors {@code RequirementService#linkTerm}/{@code #linkConstraint}
+ * exactly (issue #329) - {@link #linkConstraint} resolves the human-typed constraint code via the
+ * constructor-injected {@link ConstraintLookup} cross-BC port rather than a same-module
+ * repository, since unlike the sibling requirements bounded context, {@code Constraint} does not
+ * live in this bounded context.</p>
+ *
+ * <p><strong>Deletion.</strong> {@link #delete} is the counterpart of {@link #add}, not a further
+ * lifecycle step: a use case carries no status, so nothing about its own state can forbid the
+ * delete. The whole resource and its flow steps go away; what holds it back is another use case
+ * still including or extending it, which only the out-adapter can see and therefore checks itself
+ * (mirrors {@code ConstraintService#delete}).</p>
+ */
+public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, DescribeUseCaseDisplayFallback,
+        UpdateUseCase, LinkTerm, UnlinkTerm, LinkConstraint, UnlinkConstraint, DeleteUseCase,
+        ResolveRequirements, ResolveConstraints {
+
+    private static final String CODE_PREFIX = "UC";
+
+    /**
+     * Bound on {@link #updateWithOptimisticRetry}'s retry loop, mirroring
+     * {@code RequirementService#MAX_RETRY_ATTEMPTS}: a pathological, sustained storm
+     * of concurrent writers against the very same use case fails loudly instead of looping
+     * forever, rather than guarding against a race expected to resolve within a single retry.
+     */
+    static final int MAX_RETRY_ATTEMPTS = 20;
+
+    private final UseCaseRepository repository;
+    private final ResourceIdFactory resourceIdFactory;
+    private final RequirementLookup requirementLookup;
+    private final RoleLookup roleLookup;
+    private final TermLookup termLookup;
+    private final ConstraintLookup constraintLookup;
+
+    /**
+     * Creates the service.
+     *
+     * @param repository        the driven persistence port (must not be {@code null})
+     * @param resourceIdFactory mints the opaque identity of a newly added use case (must not be
+     *                          {@code null})
+     * @param requirementLookup resolves a human-typed requirement code to its opaque identity
+     *                          (must not be {@code null})
+     * @param roleLookup        resolves a human-typed role code to its opaque identity (must
+     *                          not be {@code null})
+     * @param termLookup        resolves a human-typed glossary term code to its opaque identity,
+     *                          for {@link #linkTerm} (must not be {@code null})
+     * @param constraintLookup  resolves a human-typed constraint code to its opaque identity, for
+     *                          {@link #linkConstraint} - a cross-BC lookup port rather than a
+     *                          same-module repository, since {@code Constraint} lives in the
+     *                          neighbouring requirements bounded context (must not be
+     *                          {@code null})
+     */
+    public UseCaseService(UseCaseRepository repository, ResourceIdFactory resourceIdFactory,
+            RequirementLookup requirementLookup, RoleLookup roleLookup, TermLookup termLookup,
+            ConstraintLookup constraintLookup) {
+        this.repository = Objects.requireNonNull(repository, "repository");
+        this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
+        this.requirementLookup = Objects.requireNonNull(requirementLookup, "requirementLookup");
+        this.roleLookup = Objects.requireNonNull(roleLookup, "roleLookup");
+        this.termLookup = Objects.requireNonNull(termLookup, "termLookup");
+        this.constraintLookup = Objects.requireNonNull(constraintLookup, "constraintLookup");
+    }
+
+    @Override
+    public UseCase add(ProjectId projectId, NewUseCase command, String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(command, "command");
+        // Identity is opaque and stable, so it is minted once, outside the retry. Reference
+        // resolution likewise happens once, before the retry: an unknown role or
+        // requirement must fail immediately and is not a code collision to retry on. Only the
+        // business code is recomputed when a concurrent uc_add claims the same candidate first -
+        // see CodeAssignment for why that race exists.
+        UseCaseId id = new UseCaseId(resourceIdFactory.newId());
+        // Resolved once, outside the retry, same as RequirementService#add: the language a fresh
+        // use case is written under does not depend on which code candidate ultimately wins, and a
+        // missing default must reject the call before any reference is even resolved (issue #258).
+        String language = LanguageTag.resolveWriteLanguage(command.language(), defaultLanguage);
+        RoleRef primaryRole = new RoleRef(roleLookup.resolveByCode(projectId, command.primaryRole()));
+        List<RoleRef> supportingRoles = command.supportingRoles() == null
+                ? List.of()
+                : command.supportingRoles().stream()
+                        .map(roleCode -> new RoleRef(roleLookup.resolveByCode(projectId, roleCode)))
+                        .toList();
+        List<Step> steps = command.steps() == null
+                ? List.of()
+                : command.steps().stream()
+                        .map(step -> toStep(projectId, step))
+                        .toList();
+        // Resolved once, outside the retry, mirroring RequirementService#add's own usesTermCodes
+        // resolution: an unknown TERM-9 must reject the whole call before any code is even
+        // computed, not surface as a race worth retrying (kogn-io/arknet#598).
+        List<TermRef> usesTerms = command.usesTermCodes() == null
+                ? List.of()
+                : command.usesTermCodes().stream()
+                        .map(termCode -> new TermRef(termLookup.resolveByCode(projectId, termCode)))
+                        .distinct()
+                        .toList();
+        return CodeAssignment.createRetryingOnCodeCollision(DuplicateUseCaseCodeException.class, () -> {
+            UseCaseCode code = nextCode(projectId);
+            UseCase useCase = new UseCase(id, code, command.title(), command.goal(), command.scope(),
+                    command.trigger(), primaryRole, supportingRoles,
+                    command.precondition(), command.postcondition(), steps,
+                    command.extensions(), usesTerms, List.of());
+            repository.create(projectId, useCase, language);
+            return useCase;
+        });
+    }
+
+    private Step toStep(ProjectId projectId, NewStep step) {
+        List<RequirementRef> realises = step.realises() == null
+                ? List.of()
+                : step.realises().stream()
+                        .map(code -> new RequirementRef(requirementLookup.resolveByCode(projectId, code)))
+                        .toList();
+        return new Step(step.position(), step.text(), realises);
+    }
+
+    @Override
+    public List<UseCase> list(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        return repository.findAll(projectId, displayLocale);
+    }
+
+    @Override
+    public Map<UseCaseCode, UseCaseDisplayFallback> describe(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        return repository.findAllDisplayFallback(projectId, displayLocale);
+    }
+
+    @Override
+    public Optional<UseCase> get(ProjectId projectId, UseCaseCode code, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        return repository.findByCode(projectId, code, displayLocale);
+    }
+
+    @Override
+    public UseCase update(ProjectId projectId, UseCaseCode code, UseCaseCorrection correction,
+            String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(correction, "correction");
+        // Reference resolution happens once, before the retry, mirroring add(): an unresolvable
+        // requirement or role reference must fail immediately and is not a code-collision race to
+        // retry on.
+        Map<Integer, List<RequirementRef>> realisesByPosition = correction.stepRealisesPatches() == null
+                ? null : toRealisesByPosition(projectId, correction.stepRealisesPatches());
+        // Null means "leave it" for both role fields; the difference is that an empty
+        // supportingRoles list is a legal, explicit clear, while primaryRole has no clear at all
+        // (a use case always has exactly one) - see UpdateUseCase (issue #343).
+        RoleRef newPrimaryRole = correction.primaryRole() == null
+                ? null : new RoleRef(roleLookup.resolveByCode(projectId, correction.primaryRole()));
+        List<RoleRef> newSupportingRoles = correction.supportingRoles() == null
+                ? null
+                : correction.supportingRoles().stream()
+                        .map(roleCode -> new RoleRef(roleLookup.resolveByCode(projectId, roleCode)))
+                        .toList();
+        // Same tri-state resolution as the two role fields above, this time for arkreq:usesTerm
+        // (kogn-io/arknet#540, precedent AdrService#update's own usesTermCodes resolution): null
+        // stays null (leave the edges alone), a non-null list resolves to a wholesale replacement,
+        // including an explicit empty list clearing every edge.
+        List<TermRef> newUsesTerms = correction.usesTermCodes() == null
+                ? null
+                : correction.usesTermCodes().stream()
+                        .map(termCode -> new TermRef(termLookup.resolveByCode(projectId, termCode)))
+                        .distinct()
+                        .toList();
+        // Which step positions this call itself patches, and whether it touches extensions at
+        // all (issue #271): the signal updateWithOptimisticRetry resolves a fresh language
+        // against, instead of comparing the patched/replaced text to what is already stored - a
+        // caller correcting a typo back to the project's already-current wording is still an
+        // explicit write, not a no-op. `extensions` is a wholesale replace (not a per-position
+        // patch), so a non-null `extensions` touches every position in the replacement list.
+        // The two role fields deliberately feed no touched signal at all: neither carries a
+        // language-tagged literal, so a role-only correction never resolves a write language and
+        // goes through even in a project with no defaultLanguage (issue #343).
+        Set<Integer> touchedStepPositions = correction.stepTextPatches() == null
+                ? Set.of()
+                : correction.stepTextPatches().stream()
+                        .map(StepTextPatch::position)
+                        .collect(Collectors.toUnmodifiableSet());
+        boolean extensionsTouched = correction.extensions() != null;
+        // Raw human-typed realises codes are resolved once, before the retry, mirroring add()'s
+        // toStep - an unresolvable FR-9 must abort the whole call, not be retried as if it were a
+        // code collision (kogn-io/arknet#513).
+        List<de.hauschel.arknet.uc.domain.NewMainStep> newMainSteps = correction.newMainSteps().stream()
+                .map(draft -> toNewMainStep(projectId, draft))
+                .toList();
+        RemovedPositions removedMainStepPositions = correction.removeMainStepPositions();
+        return updateWithOptimisticRetry(projectId, code, correction.language(), defaultLanguage, defaultLanguage,
+                correction.title() != null, correction.goal() != null, correction.scope() != null,
+                correction.trigger() != null, correction.precondition() != null,
+                correction.postcondition() != null, touchedStepPositions, extensionsTouched,
+                removedMainStepPositions, current -> {
+            UseCase base = new UseCase(
+                    current.id(), current.code(),
+                    correction.title() != null ? correction.title() : current.title(),
+                    correction.goal() != null ? correction.goal() : current.goal(),
+                    correction.scope() != null ? correction.scope() : current.scope(),
+                    correction.trigger() != null ? correction.trigger() : current.trigger(),
+                    newPrimaryRole != null ? newPrimaryRole : current.primaryRole(),
+                    newSupportingRoles != null ? newSupportingRoles : current.supportingRoles(),
+                    correction.precondition() != null ? correction.precondition() : current.precondition(),
+                    correction.postcondition() != null ? correction.postcondition() : current.postcondition(),
+                    current.steps(),
+                    correction.extensions() != null ? List.copyOf(correction.extensions()) : current.extensions(),
+                    newUsesTerms != null ? newUsesTerms : current.usesTerms(), current.constrainedBy());
+            // Append, then correct, then remove (kogn-io/arknet#513, mirrors adr_update's own
+            // ordering): appends and corrections address the positions the caller saw via
+            // uc_get, and only the removal renumbers - so it must not run before anything that
+            // is addressed by position.
+            base = base.withAppendedMainSteps(newMainSteps);
+            base = correction.stepTextPatches() != null
+                    ? base.withStepTextPatches(projectId, correction.stepTextPatches())
+                    : base;
+            base = realisesByPosition != null ? base.withStepRealisesPatches(projectId, realisesByPosition) : base;
+            return base.withoutMainSteps(projectId, removedMainStepPositions);
+        });
+    }
+
+    private de.hauschel.arknet.uc.domain.NewMainStep toNewMainStep(ProjectId projectId, NewMainStep draft) {
+        List<RequirementRef> realises = draft.realises() == null
+                ? List.of()
+                : draft.realises().stream()
+                        .map(code -> new RequirementRef(requirementLookup.resolveByCode(projectId, code)))
+                        .toList();
+        return new de.hauschel.arknet.uc.domain.NewMainStep(draft.text(), realises);
+    }
+
+    @Override
+    public UseCase linkTerm(ProjectId projectId, UseCaseCode code, String termCode, String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(termCode, "termCode");
+        // Resolution does not depend on the use case's current state, so it happens once, outside
+        // the retry loop below - a lookup failure must propagate immediately and leave the use
+        // case untouched, exactly as RequirementService#linkTerm.
+        TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
+        // linkTerm() touches no language-tagged field, so it always passes a null WRITE-side
+        // language/defaultLanguage below - the same all-untouched call shape update() would use
+        // for a call that names nothing. It still passes its own defaultLanguage argument as the
+        // READ-side language (issue #468), so an untouched field is echoed back under the
+        // project's own language rather than the process default.
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false, false,
+                false, false, Set.of(), false, RemovedPositions.NONE, current -> {
+            if (current.usesTerms().contains(term)) {
+                return current;
+            }
+            List<TermRef> linked = new ArrayList<>(current.usesTerms());
+            linked.add(term);
+            return new UseCase(current.id(), current.code(), current.title(), current.goal(), current.scope(),
+                    current.trigger(), current.primaryRole(), current.supportingRoles(),
+                    current.precondition(), current.postcondition(), current.steps(), current.extensions(),
+                    linked, current.constrainedBy());
+        });
+    }
+
+    @Override
+    public UseCase linkConstraint(
+            ProjectId projectId, UseCaseCode code, String constraintCode, String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(constraintCode, "constraintCode");
+        // Resolution does not depend on the use case's current state, so it happens once, outside
+        // the retry loop below - mirrors linkTerm() exactly, except the lookup crosses into the
+        // neighbouring requirements bounded context via ConstraintLookup rather than a
+        // same-module repository (see the class-level note).
+        ConstraintRef ref = new ConstraintRef(constraintLookup.resolveByCode(projectId, constraintCode));
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false, false,
+                false, false, Set.of(), false, RemovedPositions.NONE, current -> {
+            if (current.constrainedBy().contains(ref)) {
+                return current;
+            }
+            List<ConstraintRef> linked = new ArrayList<>(current.constrainedBy());
+            linked.add(ref);
+            return new UseCase(current.id(), current.code(), current.title(), current.goal(), current.scope(),
+                    current.trigger(), current.primaryRole(), current.supportingRoles(),
+                    current.precondition(), current.postcondition(), current.steps(), current.extensions(),
+                    current.usesTerms(), linked);
+        });
+    }
+
+    @Override
+    public UseCase unlinkTerm(ProjectId projectId, UseCaseCode code, String termCode, String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(termCode, "termCode");
+        // Resolved once, outside the retry loop below, for the same reason linkTerm() does: an
+        // unknown term code must reject the call immediately and is not a retryable race.
+        TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false, false,
+                false, false, Set.of(), false, RemovedPositions.NONE, current -> {
+            if (!current.usesTerms().contains(term)) {
+                // Thrown from inside the mutation rather than checked before it: the state that
+                // decides is the one this very attempt read, and a check outside the loop would
+                // judge a snapshot the retry may already have replaced (mirrors bc's own
+                // UnlinkTerm).
+                throw new TermNotLinkedException(projectId, code, termCode);
+            }
+            List<TermRef> linked = new ArrayList<>(current.usesTerms());
+            linked.remove(term);
+            return new UseCase(current.id(), current.code(), current.title(), current.goal(), current.scope(),
+                    current.trigger(), current.primaryRole(), current.supportingRoles(),
+                    current.precondition(), current.postcondition(), current.steps(), current.extensions(),
+                    linked, current.constrainedBy());
+        });
+    }
+
+    @Override
+    public UseCase unlinkConstraint(
+            ProjectId projectId, UseCaseCode code, String constraintCode, String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(constraintCode, "constraintCode");
+        // Resolved once, outside the retry loop below - mirrors unlinkTerm() exactly, except the
+        // lookup crosses into the neighbouring requirements bounded context via ConstraintLookup.
+        ConstraintRef ref = new ConstraintRef(constraintLookup.resolveByCode(projectId, constraintCode));
+        return updateWithOptimisticRetry(projectId, code, null, null, defaultLanguage, false, false, false, false,
+                false, false, Set.of(), false, RemovedPositions.NONE, current -> {
+            if (!current.constrainedBy().contains(ref)) {
+                throw new ConstraintNotLinkedException(projectId, code, constraintCode);
+            }
+            List<ConstraintRef> linked = new ArrayList<>(current.constrainedBy());
+            linked.remove(ref);
+            return new UseCase(current.id(), current.code(), current.title(), current.goal(), current.scope(),
+                    current.trigger(), current.primaryRole(), current.supportingRoles(),
+                    current.precondition(), current.postcondition(), current.steps(), current.extensions(),
+                    current.usesTerms(), linked);
+        });
+    }
+
+    private Map<Integer, List<RequirementRef>> toRealisesByPosition(
+            ProjectId projectId, List<UpdateUseCase.StepRealisesPatch> patches) {
+        Map<Integer, List<RequirementRef>> byPosition = new LinkedHashMap<>();
+        for (UpdateUseCase.StepRealisesPatch patch : patches) {
+            List<RequirementRef> resolved = patch.realises() == null
+                    ? List.of()
+                    : patch.realises().stream()
+                            .map(code -> new RequirementRef(requirementLookup.resolveByCode(projectId, code)))
+                            .toList();
+            byPosition.put(patch.position(), resolved);
+        }
+        return byPosition;
+    }
+
+    /**
+     * Read-modify-write helper backing {@link #update}: reads the current use case and its
+     * concurrency token together via {@link UseCaseRepository#findCurrentByCode}, derives the
+     * next state via {@code mutation}, and writes it back via
+     * {@link UseCaseRepository#compareAndUpdate} - retrying with a fresh read whenever a
+     * concurrent writer commits a change in between. Mirrors
+     * {@code RequirementService#updateWithOptimisticRetry}.
+     *
+     * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as
+     * a no-op and skips the write entirely.</p>
+     *
+     * @throws UseCaseNotFoundException              if no use case with {@code code} exists
+     * @throws UseCaseConcurrentlyModifiedException if the write keeps losing the race across
+     *                                                every retry attempt
+     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code titleTouched},
+     *                                                {@code goalTouched}, {@code scopeTouched},
+     *                                                {@code triggerTouched},
+     *                                                {@code preconditionTouched},
+     *                                                {@code postconditionTouched},
+     *                                                {@code touchedStepPositions} or
+     *                                                {@code extensionsTouched} marks a field, step
+     *                                                or extension as this call's own and neither
+     *                                                {@code language} nor {@code defaultLanguage}
+     *                                                is given
+     */
+    private UseCase updateWithOptimisticRetry(ProjectId projectId, UseCaseCode code, String language,
+            String defaultLanguage, String readDefaultLanguage, boolean titleTouched, boolean goalTouched,
+            boolean scopeTouched, boolean triggerTouched, boolean preconditionTouched,
+            boolean postconditionTouched, Set<Integer> touchedStepPositions, boolean extensionsTouched,
+            RemovedPositions removedMainStepPositions, UnaryOperator<UseCase> mutation) {
+        UseCaseConcurrentlyModifiedException lastConflict = null;
+        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+            // The project's own default language, not the reading process's, decides which
+            // language variant this read-modify-write round trip sees (issue #456, extended to
+            // linkTerm/linkConstraint by issue #468): its values are what an untouched field is
+            // echoed back as and compared against, its tags what such a field is written back
+            // under. `readDefaultLanguage` is what the caller's resolved project actually
+            // configured, whether or not this call touches a language-tagged field itself -
+            // linkTerm/linkConstraint still pass it here even though they always pass a null
+            // WRITE-side `defaultLanguage` below (they never resolve a fresh write language and
+            // must not sweep an untagged sibling literal on a call that changes no text, issue
+            // #258's sweep stays scoped to update()).
+            UseCaseRepository.CurrentUseCase current =
+                    repository.findCurrentByCode(projectId, code, readDefaultLanguage)
+                            .orElseThrow(() -> new UseCaseNotFoundException(projectId, code));
+            UseCase updated = mutation.apply(current.value());
+            // title/goal/scope/trigger/precondition/postcondition/each step's text/each
+            // extension's text each get their own language: a field, step or extension this call
+            // itself did not name (the boolean/Set parameters above - see update()) round-trips
+            // under the exact tag it was read under (a scoped no-op), never under `language`/
+            // `defaultLanguage`. A named field/step/extension only resolves a fresh write language
+            // when the caller also supplied `language` explicitly or the text it supplies actually
+            // differs from what is stored (issue #271, mirrors RequirementService's identical fix,
+            // and its regression - a named field whose text happens to equal what is stored and
+            // whose caller did not name a language is still a no-op, exactly like an unnamed one,
+            // so that resending a field's already-current text as part of a full-state round trip
+            // never demands a `defaultLanguage` the project may not have; see
+            // resolveTouchedLanguage/resolveTouchedPositionLanguage below). Resolving here, lazily,
+            // rather than eagerly in update(), means a malformed/missing language argument only
+            // ever throws when this call actually touches a language-tagged field, step or
+            // extension (issue #258).
+            String titleLanguage = resolveTouchedLanguage(titleTouched, current.value().title(), updated.title(),
+                    current.titleLanguage(), language, defaultLanguage);
+            String goalLanguage = resolveTouchedLanguage(goalTouched, current.value().goal(), updated.goal(),
+                    current.goalLanguage(), language, defaultLanguage);
+            String scopeLanguage = resolveTouchedLanguage(scopeTouched, current.value().scope(), updated.scope(),
+                    current.scopeLanguage(), language, defaultLanguage);
+            String triggerLanguage = resolveTouchedLanguage(triggerTouched, current.value().trigger(),
+                    updated.trigger(), current.triggerLanguage(), language, defaultLanguage);
+            String preconditionLanguage = resolveTouchedLanguage(preconditionTouched,
+                    current.value().precondition(), updated.precondition(), current.preconditionLanguage(),
+                    language, defaultLanguage);
+            String postconditionLanguage = resolveTouchedLanguage(postconditionTouched,
+                    current.value().postcondition(), updated.postcondition(), current.postconditionLanguage(),
+                    language, defaultLanguage);
+            // Keyed by the post-removal position (kogn-io/arknet#513, mirrors
+            // RequirementService#acceptanceCriteriaLanguageByPosition): every position current
+            // carries that removedMainStepPositions does not take out is re-keyed via
+            // RemovedPositions#survivingPositionOf before it is looked up in updatedTextByPosition
+            // - a step's position can now shift, so a plain same-number lookup would compare the
+            // wrong pair of texts. Whatever position updated carries beyond what survived is a
+            // freshly appended one and always resolves fresh.
+            Map<Integer, String> updatedStepTextByPosition = new HashMap<>();
+            for (Step updatedStep : updated.steps()) {
+                updatedStepTextByPosition.put(updatedStep.position(), updatedStep.text());
+            }
+            Map<Integer, String> stepTextLanguageByPosition = new LinkedHashMap<>();
+            for (Step currentStep : current.value().steps()) {
+                OptionalInt survivingPosition = removedMainStepPositions.survivingPositionOf(currentStep.position());
+                if (survivingPosition.isEmpty()) {
+                    continue;
+                }
+                int newPosition = survivingPosition.getAsInt();
+                String stepLanguage = resolveTouchedLanguage(touchedStepPositions.contains(currentStep.position()),
+                        currentStep.text(), updatedStepTextByPosition.get(newPosition),
+                        current.stepTextLanguageByPosition().get(currentStep.position()), language, defaultLanguage);
+                stepTextLanguageByPosition.put(newPosition, stepLanguage);
+            }
+            for (Step updatedStep : updated.steps()) {
+                // Resolved lazily, not via a blind put: a lifecycle call passes no language at
+                // all and must not be asked for one on behalf of a position it merely carries
+                // through.
+                stepTextLanguageByPosition.computeIfAbsent(updatedStep.position(),
+                        position -> LanguageTag.resolveWriteLanguage(language, defaultLanguage));
+            }
+            Map<Integer, String> extensionTextLanguageByPosition = new LinkedHashMap<>();
+            List<String> currentExtensions = current.value().extensions();
+            List<String> updatedExtensions = updated.extensions();
+            for (int i = 0; i < updatedExtensions.size(); i++) {
+                int position = i + 1;
+                boolean isNewExtensionPosition = i >= currentExtensions.size();
+                String extensionLanguage = resolveTouchedPositionLanguage(isNewExtensionPosition, extensionsTouched,
+                        isNewExtensionPosition ? null : currentExtensions.get(i), updatedExtensions.get(i),
+                        current.extensionTextLanguageByPosition().get(position), language, defaultLanguage);
+                extensionTextLanguageByPosition.put(position, extensionLanguage);
+            }
+            // A true no-op needs both content and language to already match what is stored:
+            // content-only equality (the pre-#271 check) missed a named field/step/extension whose
+            // caller supplied a different language for text that happens to already match - see
+            // the block comment above.
+            if (updated.equals(current.value())
+                    && Objects.equals(titleLanguage, current.titleLanguage())
+                    && Objects.equals(goalLanguage, current.goalLanguage())
+                    && Objects.equals(scopeLanguage, current.scopeLanguage())
+                    && Objects.equals(triggerLanguage, current.triggerLanguage())
+                    && Objects.equals(preconditionLanguage, current.preconditionLanguage())
+                    && Objects.equals(postconditionLanguage, current.postconditionLanguage())
+                    && stepTextLanguageByPosition.equals(current.stepTextLanguageByPosition())
+                    && extensionTextLanguageByPosition.equals(current.extensionTextLanguageByPosition())) {
+                return current.value();
+            }
+            // A same-length extensions replace can only ever edit content in place - the model has
+            // no separate move/reorder operation, only a wholesale list replace - so every position
+            // keeps its identity regardless of how many of them changed text (issue #254/PR #267
+            // review: a prefix scan that stops at the first content mismatch wrongly starves every
+            // position after it, even ones a multi-position edit left byte-for-byte untouched).
+            // Only a length change is real evidence of an insert/remove: positions beyond the
+            // longest leading prefix the old and new lists still share no longer refer to "the
+            // same" extension on either side, so preservation there must be suspended - see
+            // compareAndUpdate's stableExtensionPrefixLength javadoc for why that distinction
+            // matters. A same-length reorder (a swap) is not distinguishable from an in-place edit
+            // by content alone and is accepted as a residual, undetected case - it is not a
+            // supported operation on this list today.
+            int stableExtensionPrefixLength;
+            if (currentExtensions.size() == updatedExtensions.size()) {
+                stableExtensionPrefixLength = updatedExtensions.size();
+            } else {
+                int commonExtensionPrefixLength = 0;
+                while (commonExtensionPrefixLength < currentExtensions.size()
+                        && commonExtensionPrefixLength < updatedExtensions.size()
+                        && currentExtensions.get(commonExtensionPrefixLength)
+                                .equals(updatedExtensions.get(commonExtensionPrefixLength))) {
+                    commonExtensionPrefixLength++;
+                }
+                stableExtensionPrefixLength = commonExtensionPrefixLength;
+            }
+            try {
+                repository.compareAndUpdate(projectId, current.head(), updated,
+                        titleLanguage, goalLanguage, scopeLanguage, triggerLanguage,
+                        preconditionLanguage, postconditionLanguage,
+                        stepTextLanguageByPosition, extensionTextLanguageByPosition, defaultLanguage,
+                        stableExtensionPrefixLength, removedMainStepPositions);
+                return updated;
+            } catch (UseCaseConcurrentlyModifiedException e) {
+                // A concurrent writer replaced the use case between our read and our write -
+                // retry against the now-current state instead of silently discarding that change.
+                lastConflict = e;
+            }
+        }
+        throw lastConflict;
+    }
+
+    /**
+     * The BCP-47 language tag a single scalar field ({@code title}/{@code goal}/{@code scope}/
+     * {@code trigger}/{@code precondition}/{@code postcondition}/a step's text) is written under:
+     * freshly resolved via {@link LanguageTag#resolveWriteLanguage} when {@code touched} and
+     * either the caller named {@code language} explicitly or {@code updatedText} actually differs
+     * from {@code currentText}; otherwise {@code currentLanguage} unchanged (a scoped no-op, not a
+     * retag). A field named by the caller but resent with its own already-current text and no
+     * {@code language} argument is therefore still a no-op (issue #271's regression - naming a
+     * field alone used to be enough to force a resolution that a project with no {@code
+     * defaultLanguage} could not satisfy). Mirrors {@code RequirementService}'s identical helper.
+     */
+    private static String resolveTouchedLanguage(boolean touched, String currentText, String updatedText,
+            String currentLanguage, String language, String defaultLanguage) {
+        boolean languageTouched = touched && (language != null || !Objects.equals(updatedText, currentText));
+        return languageTouched
+                ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
+                : currentLanguage;
+    }
+
+    /**
+     * {@link #resolveTouchedLanguage} extended with {@code isNewPosition}: a position with no
+     * prior text/tag at all (an extension beyond the current, shorter list) always resolves
+     * fresh, regardless of {@code touched} - there is nothing to compare its text against or fall
+     * back to.
+     */
+    private static String resolveTouchedPositionLanguage(boolean isNewPosition, boolean touched,
+            String currentText, String updatedText, String currentLanguage, String language,
+            String defaultLanguage) {
+        if (isNewPosition) {
+            return LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+        }
+        return resolveTouchedLanguage(touched, currentText, updatedText, currentLanguage, language, defaultLanguage);
+    }
+
+    @Override
+    public void delete(ProjectId projectId, UseCaseCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        // The reference check (does another use case still point at this one via
+        // arkreq:includesUseCase/arkreq:extendsUseCase?) is the out-adapter's business - it is the
+        // only side that can run it inside the very transaction that deletes. Mirrors
+        // ConstraintService#delete.
+        repository.delete(projectId, code);
+    }
+
+    /**
+     * Derives the next free business code in {@code projectId}: the highest running number the
+     * project has handed out, plus one (starting at 1).
+     *
+     * <p><strong>Ever used, not currently in use (kogn-io/arknet#566).</strong> The maximum runs
+     * over the living use cases <em>and</em> the codes {@link UseCaseRepository#findRetainedCodes}
+     * kept from deleted ones - mirrors {@code TermService#nextCode} exactly. Over the living ones
+     * alone, deleting the highest-numbered use case would let the maximum fall back and the next
+     * {@code uc_add} hand out that same number again - and a code that already appeared in a commit
+     * message or a note would then name something else entirely.</p>
+     *
+     * <p><strong>{@link UseCaseRepository#findAllCodes}, not {@link UseCaseRepository#findAll}
+     * (kogn-io/arknet#360).</strong> A use case that exists and holds its code can still be missing
+     * from {@link #list}/{@link UseCaseRepository#findAll}: the out-adapter skips store-first
+     * data it cannot turn into a {@link UseCase} - no title or no goal literal, an empty
+     * main flow, main-flow positions the domain type refuses - so that one broken record does not
+     * take the whole project's listing down with it. Counting over that listing would let such a
+     * use case's number be minted a second time the moment it is the project's highest, which the
+     * out-adapter's uniqueness guard then rejects; because the retry recomputes the identical
+     * number, {@link CodeAssignment#createRetryingOnCodeCollision} cannot work its way past it and
+     * {@code uc_add} stays dead for the project rather than merely losing one race.
+     * {@code findAllCodes} reads the codes raw, past every one of those skips.</p>
+     */
+    private UseCaseCode nextCode(ProjectId projectId) {
+        int highestLiving = CodeCounter.highestRunningNumber(CODE_PREFIX,
+                repository.findAllCodes(projectId), UseCaseCode::value);
+        int highestRetained = CodeCounter.highestRunningNumber(CODE_PREFIX,
+                repository.findRetainedCodes(projectId), UseCaseCode::value);
+        return new UseCaseCode(CODE_PREFIX + (Math.max(highestLiving, highestRetained) + 1));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Delegates straight to the driven {@link RequirementLookup}: rendering a realised
+     * requirement's code is a pure read of the neighbouring component's published language, with no
+     * policy of this component on top of it (ADR-49).</p>
+     */
+    @Override
+    public List<ResolvedRequirement> resolveRequirements(ProjectId projectId, ResourceId... ids) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(ids, "ids");
+        return requirementLookup.resolveCodes(projectId, ids).entrySet().stream()
+                .map(entry -> new ResolvedRequirement(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Mirrors {@link #resolveRequirements(ProjectId, ResourceId...)}, against the driven
+     * {@link ConstraintLookup}.</p>
+     */
+    @Override
+    public List<ResolvedConstraint> resolveConstraints(ProjectId projectId, ResourceId... ids) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(ids, "ids");
+        return constraintLookup.resolveCodes(projectId, ids).entrySet().stream()
+                .map(entry -> new ResolvedConstraint(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
+}

@@ -78,6 +78,14 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Regel 9: die Vokabularmodule der Kontexte. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-product-requirements-shared</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Regel 3: die technologieneutralen Hexagon-Inneren. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>

@@ -1,0 +1,336 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Fred Hauschel
+
+package de.hauschel.arknet.req.adapter.mcp;
+
+import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.blankToNull;
+import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.effectiveDisplayLocale;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.ai.mcp.annotation.McpToolParam;
+import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
+
+import io.modelcontextprotocol.common.McpTransportContext;
+
+import de.hauschel.arknet.kernel.LanguageTag;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.ToolParameterDescriptions;
+import de.hauschel.arknet.kernel.WriteResponse;
+import de.hauschel.arknet.req.application.port.in.AddConstraint;
+import de.hauschel.arknet.req.application.port.in.AddConstraint.NewConstraint;
+import de.hauschel.arknet.req.application.port.in.DeleteConstraint;
+import de.hauschel.arknet.req.application.port.in.DescribeConstraintDisplayFallback;
+import de.hauschel.arknet.req.application.port.in.GetConstraint;
+import de.hauschel.arknet.req.application.port.in.ListConstraints;
+import de.hauschel.arknet.req.application.port.in.UpdateConstraint;
+import de.hauschel.arknet.req.domain.Constraint;
+import de.hauschel.arknet.pr.shared.ConstraintCode;
+import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
+import de.hauschel.arknet.req.domain.ConstraintType;
+
+/**
+ * Driving (in) adapter of the requirements component's constraint side: exposes the constraint
+ * use-cases as MCP tools ({@code constraint_add}, {@code constraint_list}, {@code constraint_get},
+ * {@code constraint_update}, {@code constraint_delete}) and delegates each tool call to the
+ * corresponding in-port. A separate
+ * class from {@link RequirementMcpTools} - not merged into it - because a {@link Constraint} is a
+ * distinct resource type of this same hexagon (issue #223), not a facet of {@link
+ * de.hauschel.arknet.req.domain.Requirement}; {@code req_link_constraint} itself stays on
+ * {@link RequirementMcpTools} because it mutates the requirement, not the constraint.
+ *
+ * <p>Mirrors {@link RequirementMcpTools}'s conventions exactly: identity vs. code (every tool
+ * takes a plain {@code String} code, never the opaque {@link
+ * de.hauschel.arknet.req.domain.ConstraintId}), per-call project resolution via
+ * {@link ProjectResolver}, and a separate {@link ConstraintPresenter} for rendering. There is
+ * still no {@code constraint_set_status} tool - the ontology gives a constraint no status field -
+ * and {@code constraint_update} corrects a constraint's text only, never its type or code (see
+ * {@link UpdateConstraint}). {@code constraint_delete} (kogn-io/arknet#481) is the closing
+ * counterpart of {@code constraint_add} this resource type lacked until now, mirroring
+ * {@code ActorMcpTools#delete} exactly.</p>
+ *
+ * <p><strong>What a writing answer says (kogn-io/arknet#597).</strong> Every writing tool
+ * ({@code constraint_add}, {@code constraint_update}, {@code constraint_delete}) closes its answer
+ * with {@code project: <name>} via {@link WriteResponse}, so a call whose {@code projectAnchor} was
+ * forgotten shows which project it actually hit instead of landing silently in the session's one.
+ * A constraint carries no wholesale list field, so unlike {@code req_update} it needs no diff
+ * line.</p>
+ */
+public final class ConstraintMcpTools {
+
+    /**
+     * The prose markup this tool's free-text fields accept, appended to every writing tool's
+     * description (issue #388).
+     *
+     * <p>It belongs on the tool, not only in the module docs: the writing agent reads the tool
+     * schema and nothing else, which is exactly why the {@code white-space:pre-line} mechanism of
+     * issue #385 was never used by anyone. The same sentence is repeated in each bounded
+     * context's MCP adapter rather than shared, because these adapters deliberately have no
+     * common module - a shared string is not reason enough to create one.</p>
+     */
+    private static final String PROSE_MARKUP = " Free-text fields accept a narrow Markdown subset:"
+            + " **bold**, *italic*, `code`, lines starting with '- ' as a bullet list, and a blank line"
+            + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
+            + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
+
+    /**
+     * The stale-translation signal, announced on every update tool that writes a multilingual
+     * field (kogn-io/arknet#474). It belongs in the tool description for the same reason
+     * {@link #PROSE_MARKUP} does: the writing agent reads the tool schema and nothing else, and a
+     * signal it does not expect is a signal it does not act on.
+     */
+    private static final String STALE_TRANSLATION_NOTE = " If the project maintains several languages,"
+            + " the answer names the fields that still carry a maintained language this call did not"
+            + " write; repeat the call under each of those languages to keep the translations in step."
+            + " A field that did not carry the written language yet is being translated, not corrected,"
+            + " and is not reported.";
+
+    private static final String TITLE_FIELD = "title";
+    private static final String STATEMENT_FIELD = "constraintStatement";
+
+    /**
+     * The multilingual fields {@code constraint_update} can write, as {@code FieldLanguageLookup} keys - the
+     * local names of the predicates behind them, or of the edge owning a child resource's text.
+     * {@code arknet-architecture-tests} reads this list reflectively and holds it against the
+     * {@code sh:uniqueLang} properties the shipped shapes declare for this resource, so a typo or
+     * a renamed predicate fails a build instead of silently muting the signal for that field.
+     */
+    private static final List<String> MULTILINGUAL_FIELDS = List.of(TITLE_FIELD, STATEMENT_FIELD);
+
+    private final AddConstraint addConstraint;
+    private final ListConstraints listConstraints;
+    private final DescribeConstraintDisplayFallback describeConstraintDisplayFallback;
+    private final GetConstraint getConstraint;
+    private final UpdateConstraint updateConstraint;
+    private final DeleteConstraint deleteConstraint;
+    private final ProjectResolver projects;
+    private final ConstraintPresenter presenter = new ConstraintPresenter();
+    private final StaleTranslationHint staleTranslations;
+
+    /**
+     * Creates the adapter with its six driving in-ports and the resolver that maps each call's
+     * origin directory to a project.
+     *
+     * @param addConstraint    in-port backing {@code constraint_add}
+     * @param listConstraints  in-port backing {@code constraint_list}
+     * @param describeConstraintDisplayFallback in-port backing {@code constraint_list}'s
+     *                         fallback-visibility line (kogn-io/arknet#475)
+     * @param getConstraint    in-port backing {@code constraint_get}
+     * @param updateConstraint in-port backing {@code constraint_update}
+     * @param deleteConstraint in-port backing {@code constraint_delete}
+     * @param projects         resolves each call's target project from its origin directory
+     * @param staleTranslations renders {@code constraint_update}'s stale-translation signal
+     *                         (kogn-io/arknet#474)
+     */
+    public ConstraintMcpTools(
+            final AddConstraint addConstraint,
+            final ListConstraints listConstraints,
+            final DescribeConstraintDisplayFallback describeConstraintDisplayFallback,
+            final GetConstraint getConstraint,
+            final UpdateConstraint updateConstraint,
+            final DeleteConstraint deleteConstraint,
+            final ProjectResolver projects,
+            final StaleTranslationHint staleTranslations) {
+        this.addConstraint = Objects.requireNonNull(addConstraint, "addConstraint");
+        this.listConstraints = Objects.requireNonNull(listConstraints, "listConstraints");
+        this.describeConstraintDisplayFallback =
+                Objects.requireNonNull(describeConstraintDisplayFallback, "describeConstraintDisplayFallback");
+        this.getConstraint = Objects.requireNonNull(getConstraint, "getConstraint");
+        this.updateConstraint = Objects.requireNonNull(updateConstraint, "updateConstraint");
+        this.deleteConstraint = Objects.requireNonNull(deleteConstraint, "deleteConstraint");
+        this.projects = Objects.requireNonNull(projects, "projects");
+        this.staleTranslations = Objects.requireNonNull(staleTranslations, "staleTranslations");
+    }
+
+    /** {@code RequirementMcpTools#contextAnchor} - identical, duplicated per adapter class. */
+    private static String contextAnchor(final McpSyncRequestContext context) {
+        if (context == null) {
+            return null;
+        }
+        final McpTransportContext transport = context.transportContext();
+        final Object anchor = transport == null ? null : transport.get(ProjectResolver.ANCHOR_KEY);
+        return anchor == null ? null : anchor.toString();
+    }
+
+    /** {@code RequirementMcpTools#resolveProject} - identical, duplicated per adapter class. */
+    private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
+        final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
+        return projects.resolve(explicit != null ? explicit : contextAnchor(context));
+    }
+
+    // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
+
+    @McpTool(name = "constraint_add", description = "Register a new constraint (technical, business or "
+            + "regulatory): a boundary on the solution space that is imposed on the project from outside - by "
+            + "law, contract, a customer, a platform, a budget, the organisation - and that the project cannot "
+            + "change by itself (ISO 29148, IREB). Test before recording: could this project decide otherwise? "
+            + "If yes, it is not a constraint but a decision - record it with adr_add when it shapes the "
+            + "system, or with req_add when it states what the system must do; a self-chosen scope, "
+            + "convention or modelling rule is never a constraint. Name in the statement who or what imposes "
+            + "it." + PROSE_MARKUP)
+    public String add(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Short human-readable summary of the constraint") final String title,
+            @McpToolParam(description = "The constraint in one sentence, naming who or what imposes it, e.g. "
+                    + "'Must run on the JVM (customer platform standard)' or 'Personal data must stay in the "
+                    + "EU (GDPR)'") final String statement,
+            @McpToolParam(description = "Classification: TECHNICAL, BUSINESS or REGULATORY") final String type,
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
+            final String language,
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final Constraint created = addConstraint.add(project.id(),
+                new NewConstraint(title, statement, ConstraintType.valueOf(type), blankToNull(language)),
+                project.defaultLanguage());
+        return WriteResponse.withProject(presenter.format(created), project);
+    }
+
+    @McpTool(name = "constraint_list", description = "List all managed constraints. A constraint shown under "
+            + "a fallen-back language (its title/statement is missing in the requested/project-default "
+            + "language) carries an inline [fallback: ...] tag naming the language actually shown - see "
+            + "displayLocale.",
+            annotations = @McpTool.McpAnnotations(readOnlyHint = true))
+    public String list(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
+            final String displayLocale,
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        final List<Constraint> all = listConstraints.list(projectId, effective);
+        if (all.isEmpty()) {
+            return "(no constraints)";
+        }
+        final Map<ConstraintCode, ConstraintDisplayFallback> fallbacks =
+                describeConstraintDisplayFallback.describe(projectId, effective);
+        return all.stream()
+                .map(c -> presenter.format(c) + fallbackSuffix(fallbacks.get(c.code())))
+                .reduce((a, b) -> a + "\n" + b).orElse("(no constraints)");
+    }
+
+    @McpTool(name = "constraint_get",
+            description = "Fetch a single constraint by its identity (e.g. TCON-1, BCON-1, RCON-1).",
+            annotations = @McpTool.McpAnnotations(readOnlyHint = true))
+    public String get(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Constraint identity, e.g. TCON-1, BCON-1 or RCON-1") final String id,
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
+            final String displayLocale,
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ConstraintCode code = new ConstraintCode(id);
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        return getConstraint.get(project.id(), code, effective)
+                .map(presenter::format)
+                .orElse("Constraint not found: " + code.value());
+    }
+
+    @McpTool(name = "constraint_update",
+            description = "Correct an already-created constraint's title and/or statement, or state either "
+                    + "of them in a further language. Every text argument is optional - an omitted one leaves "
+                    + "that field unchanged. Cannot change the constraint's type or code (TCON-/BCON-/RCON-): "
+                    + "those are fixed at creation, and a retyped constraint would need a new code that "
+                    + "everything already referencing it would not follow. Correcting the text cannot turn a "
+                    + "decision into a constraint: if the record turns out to be something the project chose "
+                    + "itself, it is a decision (adr_add) and this record is a candidate for "
+                    + "constraint_delete." + PROSE_MARKUP + STALE_TRANSLATION_NOTE)
+    public String update(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Constraint identity, e.g. TCON-1, BCON-1 or RCON-1") final String id,
+            @McpToolParam(description = "New short human-readable summary (optional, unchanged if omitted)",
+                    required = false)
+            final String title,
+            @McpToolParam(description = "New one-sentence statement (optional, unchanged if omitted)",
+                    required = false)
+            final String statement,
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
+            final String language,
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ConstraintCode code = new ConstraintCode(id);
+        final String staleHint = staleTranslationHint(project, code, blankToNull(language), blankToNull(title),
+                blankToNull(statement));
+        final Constraint updated = updateConstraint.update(project.id(), code, blankToNull(title),
+                blankToNull(statement), blankToNull(language), project.defaultLanguage());
+        return WriteResponse.withProject(presenter.format(updated) + staleHint, project);
+    }
+
+    @McpTool(name = "constraint_delete",
+            description = "Delete an already-created constraint and every triple it carries - not just a "
+                    + "correction, the whole resource goes away. The typical case is a record that turned out "
+                    + "not to be a constraint at all: something the project decided itself belongs in adr_add "
+                    + "(or req_add), not here. Rejected if a requirement or use case still references it via "
+                    + "constrainedBy (req_link_constraint/uc_link_constraint). The code (TCON-/BCON-/RCON-N) "
+                    + "stays taken so it never names two different constraints.")
+    public String delete(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Constraint identity, e.g. TCON-1, BCON-1 or RCON-1") final String id,
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ConstraintCode code = new ConstraintCode(id);
+        deleteConstraint.delete(project.id(), code);
+        return WriteResponse.withProject("Deleted: " + code.value(), project);
+    }
+
+    /**
+     * The {@code [fallback: ...]} suffix {@code constraint_list} appends to a line whenever
+     * {@code fallback} names at least one field that had to degrade past the requested/
+     * project-default language (kogn-io/arknet#475) - empty string (no visible change) when
+     * {@code fallback} is {@code null} or carries no fallen-back field, matching the requirement
+     * that the normal case stays noise-free.
+     */
+    private static String fallbackSuffix(final ConstraintDisplayFallback fallback) {
+        if (fallback == null || fallback.isEmpty()) {
+            return "";
+        }
+        final List<String> parts = new ArrayList<>();
+        if (fallback.titleTag() != null) {
+            parts.add("title=" + displayTag(fallback.titleTag()));
+        }
+        if (fallback.statementTag() != null) {
+            parts.add("statement=" + displayTag(fallback.statementTag()));
+        }
+        return " [fallback: " + String.join(", ", parts) + "]";
+    }
+
+    private static String displayTag(final String tag) {
+        return tag.isEmpty() ? "untagged" : tag;
+    }
+
+    /**
+     * The stale-translation signal for a {@code constraint_update} (kogn-io/arknet#474): the
+     * multilingual fields this call is about to write, named as {@code store_check} names them.
+     * Asked before the write and appended after it, because only the state before tells a
+     * correction from a translation (see {@link StaleTranslationHint}).
+     */
+    private String staleTranslationHint(final ResolvedProject project, final ConstraintCode code,
+            final String language, final String title, final String statement) {
+        final List<String> fieldsWritten = new ArrayList<>();
+        if (title != null) {
+            fieldsWritten.add(TITLE_FIELD);
+        }
+        if (statement != null) {
+            fieldsWritten.add(STATEMENT_FIELD);
+        }
+        if (fieldsWritten.isEmpty()) {
+            return "";
+        }
+        return staleTranslations.forResource(project.id(), code.value(),
+                LanguageTag.writtenLanguage(language, project.defaultLanguage()),
+                project.maintainedLanguages(), fieldsWritten);
+    }
+
+}

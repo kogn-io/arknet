@@ -563,24 +563,26 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * {@code resolveRoles}/{@code resolveTerms}/{@code resolveRequirements}/{@code
-     * resolveConstraints} are the actor (role resource type), ubiquitous-language and
-     * requirements hexagons' own driving ports (implemented by their {@code RoleService}/
-     * {@code TermService}/{@code RequirementService}/{@code ConstraintService} beans) - borrowed
-     * here purely so {@code uc_get}/{@code uc_list} can render a referenced role's business code
-     * (ADR-37/kogn-io/arknet#405 Part C; the role register replaced the old actor register as the
-     * resolution source) / linked term's / requirement's business code / linked constraint's
-     * business code instead of a bare IRI. This wires an In-Adapter to <em>different</em>
-     * hexagons' In-Ports, not to those hexagons' cores - see the "kein *-core* haengt an einem
-     * anderen BC" precision in CLAUDE.md.
+     * {@code resolveRoles}/{@code resolveTerms} are the actor (role resource type) and
+     * ubiquitous-language hexagons' own driving ports (implemented by their {@code RoleService}/
+     * {@code TermService} beans) - borrowed here purely so {@code uc_get}/{@code uc_list} can
+     * render a referenced role's business code (ADR-37/kogn-io/arknet#405 Part C; the role
+     * register replaced the old actor register as the resolution source) or a linked term's
+     * business code instead of a bare IRI. This wires an In-Adapter to the In-Ports of
+     * <em>other</em> bounded contexts, not to their cores.
+     *
+     * <p>A referenced requirement's and a linked constraint's business codes come from the
+     * use-cases hexagon's <em>own</em> driving ports instead (the same {@code service} bean): both
+     * resources live in the sibling component of this very bounded context, and since ADR-49 a
+     * neighbour is read through its published language, by this component's own store adapter -
+     * so nothing here borrows the requirements component's ports any more.</p>
      */
     @Bean
     UseCaseMcpTools useCaseMcpTools(
             final UseCaseService service, final ResolveRoles resolveRoles, final ResolveTerms resolveTerms,
-            final ResolveRequirements resolveRequirements, final ConstraintService constraintService,
             final ProjectResolver projectResolver, final StaleTranslationHint staleTranslationHint) {
         return new UseCaseMcpTools(service, service, service, service, service, service, service, service,
-                service, service, resolveRoles, resolveTerms, resolveRequirements, constraintService,
+                service, service, resolveRoles, resolveTerms, service, service,
                 projectResolver, staleTranslationHint);
     }
 

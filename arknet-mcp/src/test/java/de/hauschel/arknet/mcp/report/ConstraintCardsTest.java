@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.domain.Constraint;
-import de.hauschel.arknet.req.domain.ConstraintCode;
+import de.hauschel.arknet.pr.shared.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintId;
 import de.hauschel.arknet.req.domain.ConstraintType;
 

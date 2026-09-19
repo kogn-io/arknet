@@ -16,7 +16,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
-import de.hauschel.arknet.req.domain.TermRef;
+import de.hauschel.arknet.pr.shared.TermRef;
 
 /**
  * Builds the report's requirement cards from the requirements context's read in-port.

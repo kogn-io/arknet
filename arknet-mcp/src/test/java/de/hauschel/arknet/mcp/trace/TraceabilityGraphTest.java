@@ -60,18 +60,18 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
 import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Constraint;
-import de.hauschel.arknet.req.domain.ConstraintCode;
+import de.hauschel.arknet.pr.shared.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintId;
 import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.ConstraintType;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
-import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
-import de.hauschel.arknet.req.domain.TermRef;
+import de.hauschel.arknet.pr.shared.TermRef;
 import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfUseCaseRepositoryFactory;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.RequirementRef;
@@ -202,7 +202,7 @@ class TraceabilityGraphTest {
                 List.of(new Step(1, "Customer enters credentials",
                         List.of(new RequirementRef(ResourceId.of(FR_1_IRI))))),
                 List.of(),
-                List.of(new de.hauschel.arknet.uc.domain.TermRef(ResourceId.of(TERM_5_IRI))),
+                List.of(new de.hauschel.arknet.pr.shared.TermRef(ResourceId.of(TERM_5_IRI))),
                 List.of(new de.hauschel.arknet.uc.domain.ConstraintRef(ResourceId.of(CON_3_IRI)))), null);
 
         // BC-1: links TERM-4 via ubiquitousLanguageTerm, its own vision text does not name it -
