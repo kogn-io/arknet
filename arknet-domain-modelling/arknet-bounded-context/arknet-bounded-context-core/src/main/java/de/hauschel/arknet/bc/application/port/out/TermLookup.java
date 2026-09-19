@@ -34,6 +34,15 @@ public interface TermLookup {
      * Resolves {@code termCode} to the identity of the glossary term it currently names within
      * {@code projectId}.
      *
+     * <p><strong>Takes the raw string, not {@link TermCode} - deliberately.</strong> This end of
+     * the port is fed straight from the tool boundary, where the code is whatever a human typed,
+     * and its whole job is to reject what does not resolve with a didactic message; a typed
+     * parameter would move the first rejection into a value object's constructor and answer a
+     * blank code with a different exception than an unknown one. It is also the shape every
+     * {@code *Lookup} out-port in this build shares, in all six contexts. The reverse direction
+     * returns {@link TermCode} because it does not take a caller's input: it hands a resolved
+     * code to an in-port result, where the context's vocabulary is the right type.</p>
+     *
      * @param projectId the project (architecture model) to resolve the code in
      * @param termCode    the term's human-readable business code, e.g. {@code TERM-1}
      * @return the resolved term's opaque subject identity
