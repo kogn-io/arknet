@@ -78,7 +78,7 @@ Context map as recorded in the store, against the code:
 
 ## 3. Building blocks
 
-As built: seven Components, three modules each (`core`, `adapter-kogniordf`,
+As built: eight Components, three modules each (`core`, `adapter-kogniordf`,
 `adapter-mcp`), no `api` module. The two Bounded Contexts with more than one Component
 are Maven parents of their own and carry a `<bc>-shared`; for every other context the
 Component is still the Maven parent and there is no `<bc>-shared`.
@@ -88,7 +88,8 @@ above them; no core is merged -- module schema, no record behind it. The two con
 with two Components get a `<bc>-shared` (typed codes, the context's one `TermRef`);
 Actor, Architecture & Decisions and Model Analysis hold one Component each and need
 none (ADR-57). No `api` module (ADR-58). Model Analysis is an eighth Component
-(ADR-54). Implementation: #439, #441, #560, #561.
+(ADR-54); Actor, Architecture & Decisions and Project Registry still have the
+Component itself as Maven parent.
 
 Built for Product & Requirements (#439): `arknet-product-requirements` is the Maven
 parent of the two Components and of the vocabulary module
