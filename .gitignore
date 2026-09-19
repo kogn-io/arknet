@@ -27,3 +27,7 @@ docs/generated/
 
 # Session-Arbeitsmaterial (Plaene, Review-Kontexte; nicht ins Repo)
 .prompts/
+
+# Lokale Compose-Ueberlagerung (pinnt den Daemon dieser Maschine auf ein Image;
+# bewusst maschinenlokal, siehe Kopfkommentar der Datei)
+docker-compose.override.yml

@@ -39,15 +39,17 @@ where the recorded relationships differ from the code.
 
 | Code | Bounded Context              | holds                                                         | Record |
 |------|------------------------------|---------------------------------------------------------------|--------|
-| BC-1 | Product & Requirements       | Requirement, Constraint, AcceptanceCriterion, UseCase, Steps  | ADR-52 (succeeds ADR-10) |
-| BC-2 | Domain Modelling             | Term (SKOS), BoundedContext, ContextRelationship              | ADR-52 (succeeds ADR-10) |
-| BC-3 | Architecture & Decisions     | ArchitectureDecisionRecord, Consequence, ConsideredOption     | ADR-52 (succeeds ADR-10) |
+| BC-1 | Product & Requirements       | Requirement, Constraint, AcceptanceCriterion, UseCase, Steps  | ADR-10                    |
+| BC-2 | Domain Modelling             | Term (SKOS), BoundedContext, ContextRelationship              | ADR-10                    |
+| BC-3 | Architecture & Decisions     | ArchitectureDecisionRecord, Consequence, ConsideredOption     | ADR-10                    |
 | BC-4 | Actor                        | Actor, Role                                                   | ADR-36, ADR-37 |
 | BC-5 | Project Registry             | Project, Anchor, language commitment -- supporting context outside the eight lifecycle contexts, upstream of every other | ADR-53 (succeeds ADR-13) |
 | BC-6 | Model Analysis               | no resource of its own; reads every other context: impact analysis, trace matrix, orphans, role/use-case matrix, term co-occurrence, `store_check`, `text_search`, the HTML report | ADR-54 |
 
 Three core contexts (BC-1..3) are the realised part of the eight-context lifecycle
-target cut (ADR-46); three supporting contexts (BC-4..6) sit outside it (ADR-52).
+target cut (ADR-46); three supporting contexts (BC-4..6) sit outside it, each resting
+on a record of its own -- ADR-10 states that its list of model contexts is not a closed
+catalogue and that a later context gets its own decision.
 
 Context map as recorded in the store, against the code:
 
