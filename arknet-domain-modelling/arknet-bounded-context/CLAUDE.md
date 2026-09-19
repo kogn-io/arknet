@@ -72,7 +72,7 @@ Ein fehlendes Tripel ist nie ein stiller No-op: `deleteByEdge` wirft `ContextRel
 `BoundedContextService#get` liest dafuer `ContextRelationshipRepository#findByContext` (eine Identitaet, beide Richtungen), `#list` liest einmal `#findAll` fuer alle Kontexte im Projekt und gruppiert im Speicher -- kein Read pro Kontext.
 Die MCP-Rendering-Form ist ein Klammer-Suffix pro Beziehung, gleich fuer `bc_get` und `bc_list`: `[upstream of: BC-1 (PUBLISHED_LANGUAGE)] [downstream of: BC-5 (CONFORMIST)]`.
 
-Die Antwortform der schreibenden Tools hat drei Bestandteile, alle gerendert von `WriteResponse` im Shared Kernel, damit jedes BC-Modul dieselbe Antwort liefert.
+Die Antwortform der schreibenden Tools hat drei Bestandteile, alle gerendert von `WriteResponse` in `arknet-mcp-support`, damit jedes BC-Modul dieselbe Antwort liefert.
 Jede schreibende Antwort endet mit `project: <name>` (kogn-io/arknet#597) -- der Name kommt aus `ResolvedProject#displayName()`, also aus derselben Registry-Aufloesung, die der Aufruf ohnehin fuer das Routing macht.
 `bc_link_term`/`bc_unlink_term`/`bc_link_context`/`bc_unlink_context` antworten mit einer Kantenzeile (`linked BC-1 -> TERM-7 (ubiquitousLanguageTerm)`) statt mit der ganzen Ressource (kogn-io/arknet#600); ihr Aufrufer haelt beide Enden bereits.
 `bc_update` liefert weiterhin die volle Ressource samt `StaleTranslationHint`, davor eine Diff-Zeile je Listenfeld, das sich geaendert hat (`ubiquitousLanguageTerm: removed TERM-22, added TERM-9`, kogn-io/arknet#598).
