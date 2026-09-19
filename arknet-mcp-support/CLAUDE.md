@@ -48,5 +48,5 @@ Liegt zentral und nicht je Adapter, aus demselben Grund wie `StaleTranslationHin
 
 **Tool-Parameter-Texte.**
 `ToolParameterDescriptions` traegt die kurzen `@McpToolParam`-Beschreibungstexte fuer `projectAnchor`, `language` und `displayLocale` -- der querschnittliche Teil des Tool-Schemas jedes `*-adapter-mcp`-Moduls.
-Sie sind bewusst kurz und sagen nur, *wann* ein Aufrufer den Parameter setzt; die ausfuehrliche Erklaerung (Fallback-Ketten, der `X-Arknet-Project-Anchor`-Header, wie eine Anzeigesprache gewaehlt wird) steht einmal in `arknet-mcp`s `spring.ai.mcp.server.instructions`.
+Sie sind bewusst kurz und sagen nur, *wann* ein Aufrufer den Parameter setzt; die ausfuehrliche Erklaerung (`projectAnchor` als Override des `X-Arknet-Project-Anchor`-Headers, der Projekt-Default als Rueckfall von `language` und `displayLocale`) steht einmal in `arknet-mcp`s `spring.ai.mcp.server.instructions`, die volle `displayLocale`-Fallback-Kette am `DisplayLocale#select` des Kernels.
 Der Grund fuer die eine Quelle ist Payload: Spring AI inlint jedes Parameter-Schema je Tool statt eines `$ref`, und die frueher je Adapter ausformulierte `projectAnchor`-Beschreibung machte allein 19,7 % der `tools/list`-Antwort des Servers aus.

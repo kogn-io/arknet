@@ -22,7 +22,8 @@ package de.hauschel.arknet.mcpsupport;
  * {@code X-Arknet-Project-Anchor} header, the project-default fallback both {@code language} and
  * {@code displayLocale} use) lives once in {@code arknet-mcp}'s
  * {@code spring.ai.mcp.server.instructions}, not repeated on every tool; the full
- * {@code displayLocale} fallback chain is documented on {@link DisplayLocale#select}.</p>
+ * {@code displayLocale} fallback chain is documented on
+ * {@link de.hauschel.arknet.kernel.DisplayLocale#select}.</p>
  */
 public final class ToolParameterDescriptions {
 
