@@ -78,9 +78,8 @@ public final class AdrCheckMcpTools {
             + "address and port literals, status prose ('today', 'currently', 'not yet') in the "
             + "decision or a consequence, and two decisions with near-identical titles. Reads only - "
             + "it changes nothing, sets no status and refuses nothing. What it cannot decide is named "
-            + "in its own output and stays with the reviewer: whether a record carries more than one "
-            + "decision, whether two records contradict one another, and whether a consequence says "
-            + "anything.", annotations = @McpTool.McpAnnotations(readOnlyHint = true))
+            + "in its own output and stays with the reviewer.",
+            annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String check(
             final McpSyncRequestContext context,
             @McpToolParam(description = "BCP-47 language tag choosing which candidate of a "

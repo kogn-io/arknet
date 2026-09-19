@@ -18,9 +18,11 @@ package de.hauschel.arknet.kernel;
  * tool-adapter support module alongside {@link ProjectResolver}.</p>
  *
  * <p>The texts are deliberately short - just enough to say <em>when</em> a caller sets the
- * parameter. The fuller explanation (fallback chains, the {@code X-Arknet-Project-Anchor} header,
- * how a display language is chosen) lives once in {@code arknet-mcp}'s
- * {@code spring.ai.mcp.server.instructions}, not repeated on every tool.</p>
+ * parameter. The fuller explanation ({@code projectAnchor} overriding the
+ * {@code X-Arknet-Project-Anchor} header, the project-default fallback both {@code language} and
+ * {@code displayLocale} use) lives once in {@code arknet-mcp}'s
+ * {@code spring.ai.mcp.server.instructions}, not repeated on every tool; the full
+ * {@code displayLocale} fallback chain is documented on {@link DisplayLocale#select}.</p>
  */
 public final class ToolParameterDescriptions {
 
