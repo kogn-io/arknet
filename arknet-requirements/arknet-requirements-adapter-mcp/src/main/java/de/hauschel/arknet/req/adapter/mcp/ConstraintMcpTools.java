@@ -22,6 +22,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.ToolParameterDescriptions;
 import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.req.application.port.in.AddConstraint;
 import de.hauschel.arknet.req.application.port.in.AddConstraint.NewConstraint;
@@ -181,19 +182,9 @@ public final class ConstraintMcpTools {
                     + "'Must run on the JVM (customer platform standard)' or 'Personal data must stay in the "
                     + "EU (GDPR)'") final String statement,
             @McpToolParam(description = "Classification: TECHNICAL, BUSINESS or REGULATORY") final String type,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the title and statement "
-                    + "are written in. Falls back to the project's configured default language "
-                    + "(project_update) if omitted; if the project has no default either, the call is "
-                    + "rejected rather than writing an untagged literal. To state the constraint in a "
-                    + "second language, call constraint_update afterwards with that language.",
-                    required = false)
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
             final String language,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final Constraint created = addConstraint.add(project.id(),
@@ -209,20 +200,9 @@ public final class ConstraintMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display every "
-                    + "constraint's title and statement in, overriding the project's own configured default "
-                    + "language for this one call (kogn-io/arknet#475). Falls back to the project default, "
-                    + "then to the server's own default, then to an untagged literal, then deterministically "
-                    + "to any literal a constraint carries - a constraint whose shown variant is not this "
-                    + "call's requested/project-default language is marked with an inline [fallback: ...] "
-                    + "tag.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
@@ -244,18 +224,9 @@ public final class ConstraintMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Constraint identity, e.g. TCON-1, BCON-1 or RCON-1") final String id,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display the title and "
-                    + "statement in, overriding the project's own configured default language for this one "
-                    + "call. Falls back to the project default, then to the server's own default, then to an "
-                    + "untagged literal, then deterministically to any literal the constraint carries.",
-                    required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ConstraintCode code = new ConstraintCode(id);
@@ -283,23 +254,9 @@ public final class ConstraintMcpTools {
             @McpToolParam(description = "New one-sentence statement (optional, unchanged if omitted)",
                     required = false)
             final String statement,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'en') a non-omitted title/"
-                    + "statement is written in. Falls back to the project's configured default language "
-                    + "(see constraint_add's same parameter) if omitted; if the project has no default "
-                    + "either, the call is rejected rather than writing an untagged literal. Only the "
-                    + "existing literal carrying the tag actually written is replaced - every other language "
-                    + "variant of a field being corrected survives untouched, except a stale untagged one "
-                    + "left over from before a language was ever supplied, which is swept away when the "
-                    + "resolved tag equals the project's default. This is the way to make an existing, "
-                    + "single-language constraint bilingual: restate its text under the second tag.",
-                    required = false)
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
             final String language,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ConstraintCode code = new ConstraintCode(id);
@@ -320,12 +277,7 @@ public final class ConstraintMcpTools {
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Constraint identity, e.g. TCON-1, BCON-1 or RCON-1") final String id,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ConstraintCode code = new ConstraintCode(id);

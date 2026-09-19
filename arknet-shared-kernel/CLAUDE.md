@@ -187,3 +187,12 @@ unveraendertes Feld liefert die leere Zeichenkette und kostet keine Zeile. Liegt
 nicht je Adapter, aus demselben Grund wie `StaleTranslationHint`: dreizehn In-Adapter bauen ihre
 Antwort selbst zusammen, und eine Form, die in jedem anders aussaehe, koennte ein Agent nicht
 einmal lernen. Reines JDK, keine neue Modulkante.
+
+`ToolParameterDescriptions` (kogn-io/arknet#522) traegt die kurzen `@McpToolParam`-Beschreibungstexte
+fuer `projectAnchor`, `language` und `displayLocale` -- der querschnittliche Teil des Tool-Schemas jedes
+`*-adapter-mcp`-Moduls, vorher in jeder Tool-Klasse einzeln (und uneinheitlich) ausformuliert. Liegt hier,
+weil dies das einzige Modul ist, von dem heute jedes `*-adapter-mcp`-Modul und `arknet-mcp` ohnehin abhaengen;
+kogn-io/arknet#561 zieht die Klasse spaeter zusammen mit `ProjectResolver` in ein eigenes Support-Modul der
+Tool-Adapter um. Die ausfuehrliche Erklaerung (Fallback-Ketten, der `X-Arknet-Project-Anchor`-Header, das
+Stale-Translation-Signal) steht nicht hier, sondern einmal in `arknet-mcp`s
+`spring.ai.mcp.server.instructions`.

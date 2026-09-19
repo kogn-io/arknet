@@ -21,6 +21,7 @@ import de.hauschel.arknet.adr.application.port.in.CheckAdrs.Finding;
 import de.hauschel.arknet.adr.application.port.in.CountSkippedAdrs;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.ToolParameterDescriptions;
 
 /**
  * Driving (in) adapter of the ADR component's reading check: exposes {@code adr_check}
@@ -82,12 +83,9 @@ public final class AdrCheckMcpTools {
             + "anything.", annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String check(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "BCP-47 language tag choosing which candidate of a "
-                    + "multilingual field is checked; falls back to the project's configured default "
-                    + "language. A pattern present only in a variant this run did not read is not "
-                    + "found - check the other language separately.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = AdrMcpTools.PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final CheckReport report = checkAdrs.check(project.id(), effectiveDisplayLocale(project, displayLocale));

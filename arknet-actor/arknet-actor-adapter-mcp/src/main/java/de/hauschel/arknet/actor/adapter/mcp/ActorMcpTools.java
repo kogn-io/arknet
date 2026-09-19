@@ -31,6 +31,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.ToolParameterDescriptions;
 import de.hauschel.arknet.kernel.WriteResponse;
 
 /**
@@ -217,18 +218,9 @@ public final class ActorMcpTools {
             final String name,
             @McpToolParam(description = "Free-text description of the actor (optional)", required = false)
             final String description,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the name and description "
-                    + "are written in. Falls back to the project's configured default language "
-                    + "(project_update) if omitted; if the project has no default either, the call is "
-                    + "rejected rather than writing an untagged literal. To state the actor in a second "
-                    + "language, call actor_update afterwards with that language.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
             final String language,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final Actor created = addActor.add(project.id(),
@@ -243,19 +235,9 @@ public final class ActorMcpTools {
             + "displayLocale.", annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display every actor's "
-                    + "name and description in, overriding the project's own configured default language for "
-                    + "this one call. Falls back to the project default, then to the server's own default, "
-                    + "then to an untagged literal, then deterministically to any literal an actor carries - "
-                    + "an actor whose shown variant is not this call's requested/project-default language is "
-                    + "marked with an inline [fallback: ...] tag.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
@@ -276,18 +258,9 @@ public final class ActorMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Actor identity, e.g. ACTOR-1") final String id,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display the name and "
-                    + "description in, overriding the project's own configured default language for this one "
-                    + "call. Falls back to the project default, then to the server's own default, then to an "
-                    + "untagged literal, then deterministically to any literal the actor carries.",
-                    required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ActorCode code = new ActorCode(id);
@@ -312,22 +285,9 @@ public final class ActorMcpTools {
             final String name,
             @McpToolParam(description = "New description (optional, unchanged if omitted)", required = false)
             final String description,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'en') a non-omitted name/"
-                    + "description is written in. Falls back to the project's configured default language "
-                    + "(see actor_add's same parameter) if omitted; if the project has no default either, "
-                    + "the call is rejected rather than writing an untagged literal. Only the existing "
-                    + "literal carrying the tag actually written is replaced - every other language variant "
-                    + "of a field being corrected survives untouched, except a stale untagged one left over "
-                    + "from before a language was ever supplied, which is swept away when the resolved tag "
-                    + "equals the project's default. This is the way to make an existing, single-language "
-                    + "actor bilingual: restate its text under the second tag.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
             final String language,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ActorCode code = new ActorCode(id);
@@ -347,12 +307,7 @@ public final class ActorMcpTools {
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Actor identity, e.g. ACTOR-1") final String id,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ActorCode code = new ActorCode(id);

@@ -14,6 +14,7 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.ToolParameterDescriptions;
 import de.hauschel.arknet.mcp.store.AnchorContext;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.StoreReader;
@@ -91,11 +92,7 @@ public final class StoreCheckMcpTools {
                     + "check - which is what most callers want, since the set is small and each is "
                     + "cheap.", required = false)
             final List<String> checks,
-            @McpToolParam(description = "Optional anchor identifying the project to check, used "
-                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
-                    + "Only needed for a client that cannot set that header - most callers should omit "
-                    + "this. Must be an anchor already registered for the project; project_list shows "
-                    + "what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project =
                 AnchorContext.resolveResolvedProject(context, projectAnchor, projects);

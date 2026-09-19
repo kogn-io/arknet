@@ -22,6 +22,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.ToolParameterDescriptions;
 import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
@@ -107,13 +108,6 @@ public final class UbiquitousLanguageMcpTools {
             + " write; repeat the call under each of those languages to keep the translations in step."
             + " A field that did not carry the written language yet is being translated, not corrected,"
             + " and is not reported.";
-
-    private static final String PROJECT_ANCHOR_DESCRIPTION = "Optional anchor identifying the project this call "
-            + "targets, used INSTEAD of the anchor your transport sends in the "
-            + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-            + "header - most callers should omit this and let their transport identify the "
-            + "project. Must be an anchor already registered for the project; project_list "
-            + "shows what is registered.";
 
     private final AddTerm addTerm;
     private final ListTerms listTerms;
@@ -277,12 +271,9 @@ public final class UbiquitousLanguageMcpTools {
                     + "symmetric: it shows on both terms, and naming it on either one is enough. Rejected if a "
                     + "code does not resolve to an existing term, or names this term itself", required = false)
             final List<String> related,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the label and definition "
-                    + "are written in. Falls back to the project's configured default language "
-                    + "(project_update) if omitted; if the project has no default either, the call is "
-                    + "rejected rather than writing an untagged literal.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
             final String language,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode broaderCode = blankToNull(broader) == null ? null : new TermCode(broader.trim());
@@ -298,15 +289,9 @@ public final class UbiquitousLanguageMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display every term's "
-                    + "label and definition in, overriding the project's own configured default language for "
-                    + "this one call (kogn-io/arknet#475). Falls back to the project default, then to the "
-                    + "server's own default, then to an untagged literal, then deterministically to any "
-                    + "literal a term carries - a term whose shown variant is not this call's requested/"
-                    + "project-default language is marked with an inline [fallback: ...] tag.",
-                    required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final String effective = effectiveDisplayLocale(project, displayLocale);
@@ -325,13 +310,9 @@ public final class UbiquitousLanguageMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display the label and "
-                    + "definition in, overriding the project's own configured default language for this one "
-                    + "call. Falls back to the project default, then to the server's own default, then to an "
-                    + "untagged literal, then deterministically to any literal the term carries.",
-                    required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
@@ -387,7 +368,7 @@ public final class UbiquitousLanguageMcpTools {
                     + "meanings above: omitted -> rename under every tag, given -> that one tag only.",
                     required = false)
             final String language,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
@@ -421,7 +402,7 @@ public final class UbiquitousLanguageMcpTools {
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
@@ -444,7 +425,7 @@ public final class UbiquitousLanguageMcpTools {
             @McpToolParam(description = "Peer term codes, e.g. ['TERM-1', 'TERM-2'] (each the term's business "
                     + "code, resolved against the glossary - not its skos:prefLabel or its store IRI)")
             final List<String> relatedIds,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
@@ -474,7 +455,7 @@ public final class UbiquitousLanguageMcpTools {
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
             @McpToolParam(description = "Peer term codes, e.g. ['TERM-1', 'TERM-2']")
             final List<String> relatedIds,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
