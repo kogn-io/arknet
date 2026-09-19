@@ -62,6 +62,7 @@ import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.ToolParameterDescriptions;
 import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
@@ -133,25 +134,6 @@ public final class AdrMcpTools {
             + " **bold**, *italic*, `code`, lines starting with '- ' as a bullet list, and a blank line"
             + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
             + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
-
-    /**
-     * Package-private rather than private: {@link AdrCheckMcpTools} declares the same argument on
-     * {@code adr_check} and must describe it in the same words - a caller reading two ADR tools
-     * should not have to work out whether two wordings mean two things.
-     */
-    static final String PROJECT_ANCHOR_DESCRIPTION =
-            "Optional anchor identifying the project this call targets, used INSTEAD of the anchor "
-                    + "your transport sends in the X-Arknet-Project-Anchor header. Only needed for a "
-                    + "client that cannot set that header - most callers should omit this and let "
-                    + "their transport identify the project. Must be an anchor already registered for "
-                    + "the project; project_list shows what is registered.";
-
-    private static final String LANGUAGE_DESCRIPTION =
-            "BCP-47 language tag every multilingual text this call writes (name, adrContext, "
-                    + "decision, and any consequence/considered-option text) is recorded under. "
-                    + "Optional - falls back to the target project's configured default language, "
-                    + "and is only required at all when this call actually writes a multilingual "
-                    + "field.";
 
     private final AddAdr addAdr;
     private final ListAdrs listAdrs;
@@ -420,7 +402,7 @@ public final class AdrMcpTools {
                     + "genuinely empty, say why in adrContext instead of inventing a rejected option.",
                     required = false)
             final List<NewConsideredOptionInput> consideredOptions,
-            @McpToolParam(description = LANGUAGE_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
             final String language,
             @McpToolParam(description = "Business codes of the requirements this decision addresses, "
                     + "e.g. [\"FR-1\", \"NFR-2\"]. Each must already exist (create it with req_add "
@@ -438,7 +420,7 @@ public final class AdrMcpTools {
                     + "('see also'), e.g. [\"ADR-3\"]. Each must already exist and must not be this "
                     + "decision itself. Optional.", required = false)
             final List<String> relatedTo,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrDetail created = addAdr.add(project.id(), new NewAdr(name, adrContext, decision,
@@ -457,11 +439,9 @@ public final class AdrMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "BCP-47 language tag overriding which candidate of a "
-                    + "multilingual field is shown; falls back to the project's configured default "
-                    + "language.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final String effective = effectiveDisplayLocale(project, displayLocale);
@@ -549,11 +529,9 @@ public final class AdrMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,
-            @McpToolParam(description = "BCP-47 language tag overriding which candidate of a "
-                    + "multilingual field is shown; falls back to the project's configured default "
-                    + "language.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrCode code = new AdrCode(id);
@@ -615,7 +593,7 @@ public final class AdrMcpTools {
                     + "considered options to remove; the ones after a removed position move up "
                     + "(optional; only while PROPOSED, never once ACCEPTED)", required = false)
             final List<Integer> removeConsideredOptionPositions,
-            @McpToolParam(description = LANGUAGE_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
             final String language,
             @McpToolParam(description = "Business codes of the requirements this decision should "
                     + "address going forward, replacing the existing ones wholesale. Pass an empty "
@@ -634,7 +612,7 @@ public final class AdrMcpTools {
                     + "to going forward, with the same tri-state again. Correctable in every "
                     + "status.", required = false)
             final List<String> relatedTo,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrCorrection correction = AdrCorrection.builder()
@@ -760,7 +738,7 @@ public final class AdrMcpTools {
                     + "retires one that was already made - its date stays as it was.",
                     required = false)
             final String decidedOn,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrCode code = new AdrCode(id);
@@ -817,7 +795,7 @@ public final class AdrMcpTools {
             final String id,
             @McpToolParam(description = "The superseded (older) ADR identity, e.g. ADR-1")
             final String supersededId,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         // Touches no language-tagged field on the superseded record itself, but the
@@ -843,7 +821,7 @@ public final class AdrMcpTools {
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1; must currently be SUPERSEDED")
             final String id,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         // Touches no language-tagged field itself, but the read-modify-write round trip behind it
@@ -877,7 +855,7 @@ public final class AdrMcpTools {
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,
-            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrCode code = new AdrCode(id);

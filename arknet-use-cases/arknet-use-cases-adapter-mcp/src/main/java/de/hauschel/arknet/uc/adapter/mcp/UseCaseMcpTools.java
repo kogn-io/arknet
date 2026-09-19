@@ -21,6 +21,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.ToolParameterDescriptions;
 import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
@@ -405,11 +406,7 @@ public final class UseCaseMcpTools {
             @McpToolParam(description = "Optional: alternative/exception flows as free-text lines, e.g. "
                     + "'2a. Payment declined -> use case ends in failure'", required = false)
             final List<String> extensions,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the title, goal, scope, "
-                    + "trigger, precondition, postcondition and every step's/extension's text are written in. "
-                    + "Falls back to the project's configured default language (project_update) if omitted; if "
-                    + "the project has no default either, the call is rejected rather than writing an untagged "
-                    + "literal.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
             final String language,
             @McpToolParam(description = "Optional: business codes of the glossary terms this use case uses "
                     + "from the start, e.g. ['TERM-1', 'TERM-2'] (resolved against the glossary, not "
@@ -417,12 +414,7 @@ public final class UseCaseMcpTools {
                     + "uc_link_term remains the way to add one afterwards without restating the rest "
                     + "(kogn-io/arknet#598).", required = false)
             final List<String> usesTermCodes,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final NewUseCase command = new NewUseCase(
@@ -449,23 +441,12 @@ public final class UseCaseMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display every use "
-                    + "case's title and goal in, overriding the project's own configured default language "
-                    + "for this one call (kogn-io/arknet#475). Falls back to the project default, then to "
-                    + "the server's own default, then to an untagged literal, then deterministically to any "
-                    + "literal a use case carries - a use case whose shown variant is not this call's "
-                    + "requested/project-default language is marked with an inline [fallback: ...] tag.",
-                    required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
             @McpToolParam(description = "Optional: also show each use case's numbered main-flow steps and "
                     + "extensions. Defaults to false, i.e. id/title/goal only.", required = false)
             final Boolean withSteps,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final String effective = effectiveDisplayLocale(project, displayLocale);
@@ -488,18 +469,9 @@ public final class UseCaseMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display the title/goal/"
-                    + "step texts in, overriding the project's own configured default language for this one "
-                    + "call. Falls back to the project default, then to the server's own default, then to an "
-                    + "untagged literal, then deterministically to any literal the use case carries.",
-                    required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final UseCaseCode code = new UseCaseCode(id);
@@ -598,24 +570,9 @@ public final class UseCaseMcpTools {
                     + "a term not named here is unlinked even if it was linked before (kogn-io/arknet#540).",
                     required = false)
             final List<String> usesTermCodes,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') every field this call "
-                    + "actually touches (a non-omitted title/goal/scope/trigger/precondition/postcondition, "
-                    + "each patched or newly appended step's text, and, if extensions is given, every entry "
-                    + "of it) is written "
-                    + "in. Falls back to the project's configured default language (see uc_add's same "
-                    + "parameter) if omitted; if the project has no default either, the call is rejected "
-                    + "rather than writing an untagged literal. Only the existing literal carrying the tag "
-                    + "actually written is replaced per field - every other language variant survives "
-                    + "untouched, except a stale untagged one left over from before a language was ever "
-                    + "supplied, which is swept away when the resolved tag equals the project's default.",
-                    required = false)
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
             final String language,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final UseCaseCode code = new UseCaseCode(id);
@@ -716,12 +673,7 @@ public final class UseCaseMcpTools {
             @McpToolParam(description = "Term codes, e.g. ['TERM-1', 'TERM-2'] (each the term's business "
                     + "code, resolved against the glossary - not its skos:prefLabel or its store IRI)")
             final List<String> termIds,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
@@ -747,12 +699,7 @@ public final class UseCaseMcpTools {
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
             @McpToolParam(description = "Term codes, e.g. ['TERM-1', 'TERM-2']") final List<String> termIds,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
@@ -778,12 +725,7 @@ public final class UseCaseMcpTools {
             @McpToolParam(description = "Constraint codes, e.g. ['TCON-1', 'BCON-1'] (each the constraint's "
                     + "business code, not its store IRI)")
             final List<String> constraintIds,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
@@ -810,12 +752,7 @@ public final class UseCaseMcpTools {
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
             @McpToolParam(description = "Constraint codes, e.g. ['TCON-1', 'BCON-1']")
             final List<String> constraintIds,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
@@ -844,12 +781,7 @@ public final class UseCaseMcpTools {
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final UseCaseCode code = new UseCaseCode(id);

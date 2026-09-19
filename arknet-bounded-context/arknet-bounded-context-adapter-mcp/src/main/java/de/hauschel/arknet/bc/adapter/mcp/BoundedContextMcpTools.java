@@ -42,6 +42,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.kernel.ToolParameterDescriptions;
 import de.hauschel.arknet.kernel.WriteResponse;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
@@ -269,18 +270,9 @@ public final class BoundedContextMcpTools {
             final String subdomain,
             @McpToolParam(description = "Owning team name (optional)", required = false)
             final String ownedBy,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the name and domain "
-                    + "vision are written in. Falls back to the project's configured default language "
-                    + "(project_update) if omitted; if the project has no default either, the call is "
-                    + "rejected rather than writing an untagged literal. To state the context in a second "
-                    + "language, call bc_update afterwards with that language.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
             final String language,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final Subdomain subdomainValue = blankToNull(subdomain) == null
@@ -302,20 +294,9 @@ public final class BoundedContextMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display every "
-                    + "context's name and domain vision in, overriding the project's own configured default "
-                    + "language for this one call. Falls back to the project default, then to the server's "
-                    + "own default, then to an untagged literal, then deterministically to any literal a "
-                    + "context carries - a context whose shown variant is not this call's requested/"
-                    + "project-default language is marked with an inline [fallback: ...] tag.",
-                    required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ProjectId projectId = project.id();
@@ -342,18 +323,9 @@ public final class BoundedContextMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Bounded-context identity, e.g. BC-1") final String id,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display the name and "
-                    + "domain vision in, overriding the project's own configured default language for this "
-                    + "one call. Falls back to the project default, then to the server's own default, then "
-                    + "to an untagged literal, then deterministically to any literal the context carries.",
-                    required = false)
+            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
             final String displayLocale,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final BoundedContextCode code = new BoundedContextCode(id);
@@ -390,22 +362,9 @@ public final class BoundedContextMcpTools {
                     + "replace the links wholesale - a term not named here is unlinked even if it was linked "
                     + "before (kogn-io/arknet#567).", required = false)
             final List<String> terms,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'en') a non-omitted name/"
-                    + "domainVision is written in. Falls back to the project's configured default language "
-                    + "(see bc_add's same parameter) if omitted; if the project has no default either, the "
-                    + "call is rejected rather than writing an untagged literal. Only the existing literal "
-                    + "carrying the tag actually written is replaced - every other language variant of a "
-                    + "field being corrected survives untouched, except a stale untagged one left over from "
-                    + "before a language was ever supplied, which is swept away when the resolved tag equals "
-                    + "the project's default. This is the way to make an existing, single-language context "
-                    + "bilingual: restate its text under the second tag.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.LANGUAGE_DESCRIPTION, required = false)
             final String language,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final BoundedContextCode code = new BoundedContextCode(id);
@@ -435,12 +394,7 @@ public final class BoundedContextMcpTools {
             @McpToolParam(description = "Term code, e.g. TERM-1 (the term's business code, resolved "
                     + "against the glossary - not its skos:prefLabel or its store IRI)")
             final String termId,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         linkTerm.linkTerm(project.id(), new BoundedContextCode(bcId), termId);
@@ -455,12 +409,7 @@ public final class BoundedContextMcpTools {
             final McpSyncRequestContext context,
             @McpToolParam(description = "Bounded-context identity, e.g. BC-1") final String bcId,
             @McpToolParam(description = "Term code, e.g. TERM-1") final String termId,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         unlinkTerm.unlinkTerm(project.id(), new BoundedContextCode(bcId), termId);
@@ -491,12 +440,7 @@ public final class BoundedContextMcpTools {
                     + "CUSTOMER_SUPPLIER, CONFORMIST, ANTICORRUPTION_LAYER, OPEN_HOST_SERVICE, "
                     + "PUBLISHED_LANGUAGE or SEPARATE_WAYS")
             final String relationshipType,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final RelationshipType type = parseRelationshipType(relationshipType);
@@ -523,12 +467,7 @@ public final class BoundedContextMcpTools {
                     + "CUSTOMER_SUPPLIER, CONFORMIST, ANTICORRUPTION_LAYER, OPEN_HOST_SERVICE, "
                     + "PUBLISHED_LANGUAGE or SEPARATE_WAYS")
             final String relationshipType,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final RelationshipType type = parseRelationshipType(relationshipType);
@@ -554,12 +493,7 @@ public final class BoundedContextMcpTools {
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Bounded-context identity, e.g. BC-1") final String id,
-            @McpToolParam(description = "Optional anchor identifying the project this call "
-                    + "targets, used INSTEAD of the anchor your transport sends in the "
-                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
-                    + "header - most callers should omit this and let their transport identify the "
-                    + "project. Must be an anchor already registered for the project; project_list "
-                    + "shows what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final BoundedContextCode code = new BoundedContextCode(id);
