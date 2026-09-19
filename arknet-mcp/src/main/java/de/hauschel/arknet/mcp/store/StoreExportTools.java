@@ -22,6 +22,7 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ToolParameterDescriptions;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.domain.Project;
@@ -132,13 +133,9 @@ public final class StoreExportTools {
                     + " instead of every registered project. Defaults to false, i.e. a full backup of all"
                     + " projects.", required = false)
             final Boolean projectOnly,
-            @McpToolParam(description = "Optional anchor identifying the project to export, used "
-                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
-                    + "Only needed for a client that cannot set that header - most callers should omit "
-                    + "this. Must be an anchor already registered for the project; project_list shows "
-                    + "what is registered. Requires projectOnly=true - a full export addresses no "
-                    + "single project, so this anchor is rejected rather than ignored if projectOnly "
-                    + "is not also true.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION
+                    + " Requires projectOnly=true - a full export addresses no single project, so this "
+                    + "anchor is rejected rather than ignored if projectOnly is not also true.", required = false)
             final String projectAnchor) {
         if (projectAnchor != null && !projectAnchor.isBlank() && !Boolean.TRUE.equals(projectOnly)) {
             throw new IllegalArgumentException(ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE);

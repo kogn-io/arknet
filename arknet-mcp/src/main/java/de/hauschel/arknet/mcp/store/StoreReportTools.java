@@ -23,6 +23,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.kernel.ToolParameterDescriptions;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
@@ -137,11 +138,7 @@ public final class StoreReportTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String storeOverview(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Optional anchor identifying the project to report on, used "
-                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
-                    + "Only needed for a client that cannot set that header - most callers should omit "
-                    + "this. Must be an anchor already registered for the project; project_list shows "
-                    + "what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject resolved = AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
         final RenderedReport report = renderReport(resolved);
@@ -198,11 +195,7 @@ public final class StoreReportTools {
             @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, bare id (FR-1), or a"
                     + " blank-node reference (_:...) exactly as shown by store_overview")
             final String id,
-            @McpToolParam(description = "Optional anchor identifying the project to read from, used "
-                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
-                    + "Only needed for a client that cannot set that header - most callers should omit "
-                    + "this. Must be an anchor already registered for the project; project_list shows "
-                    + "what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
         final String iri = handleResolver.resolve(projectId, id);
@@ -264,11 +257,7 @@ public final class StoreReportTools {
             @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, bare id (FR-1), or a"
                     + " blank-node reference (_:...) exactly as shown by store_overview")
             final String id,
-            @McpToolParam(description = "Optional anchor identifying the project to read from, used "
-                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
-                    + "Only needed for a client that cannot set that header - most callers should omit "
-                    + "this. Must be an anchor already registered for the project; project_list shows "
-                    + "what is registered.", required = false)
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
         final String iri = handleResolver.resolve(projectId, id);
