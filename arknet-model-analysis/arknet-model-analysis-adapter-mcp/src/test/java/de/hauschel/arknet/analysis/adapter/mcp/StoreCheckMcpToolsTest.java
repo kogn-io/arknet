@@ -49,7 +49,13 @@ class StoreCheckMcpToolsTest {
     void runsEveryDeclaredCheckWhenTheSelectorIsOmitted() {
         assertThat(StoreCheckMcpTools.select(null))
                 .containsExactly(StoreCheckKind.LANGUAGE, StoreCheckKind.ROLE_TERM_DUPLICATE,
-                        StoreCheckKind.STEP_ACCEPTANCE);
+                        StoreCheckKind.STEP_ACCEPTANCE, StoreCheckKind.ORPHAN);
+    }
+
+    /** kogn-io/arknet#473: ORPHAN is selectable like every other check. */
+    @Test
+    void acceptsOrphanAsASelector() {
+        assertThat(StoreCheckMcpTools.select(List.of("orphan"))).containsExactly(StoreCheckKind.ORPHAN);
     }
 
     /** A silently skipped rule is worse than a rejected call: nobody notices a check that did not run. */
@@ -60,7 +66,8 @@ class StoreCheckMcpToolsTest {
                 .hasMessageContaining("orphans")
                 .hasMessageContaining("LANGUAGE")
                 .hasMessageContaining("ROLE_TERM_DUPLICATE")
-                .hasMessageContaining("STEP_ACCEPTANCE");
+                .hasMessageContaining("STEP_ACCEPTANCE")
+                .hasMessageContaining("ORPHAN");
     }
 
     @Test
@@ -121,5 +128,23 @@ class StoreCheckMcpToolsTest {
                 .contains("arkreq:stepRealises")
                 .contains("does NOT see")
                 .contains("extension steps");
+    }
+
+    /**
+     * kogn-io/arknet#473: ORPHAN's own description names what it folds in from the former
+     * {@code orphan_check} tool, and that {@code orphan_check} is now a deprecated alias.
+     */
+    @Test
+    void namesOrphanAndPointsFromTheDeprecatedAliasInItsOwnDescription() {
+        McpTool tool = Arrays.stream(StoreCheckMcpTools.class.getDeclaredMethods())
+                .map(method -> method.getAnnotation(McpTool.class))
+                .filter(annotation -> annotation != null)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(tool.description())
+                .contains("ORPHAN")
+                .contains("requirement no use case realises")
+                .contains("orphan_check is a deprecated alias");
     }
 }

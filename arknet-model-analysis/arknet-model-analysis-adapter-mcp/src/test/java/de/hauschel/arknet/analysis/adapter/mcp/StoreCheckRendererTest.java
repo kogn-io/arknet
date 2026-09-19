@@ -10,6 +10,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.analysis.domain.LanguageGapCheck.Gap;
+import de.hauschel.arknet.analysis.domain.OrphanCheck;
+import de.hauschel.arknet.analysis.domain.OrphanCheck.MentionFinding;
+import de.hauschel.arknet.analysis.domain.OrphanCheck.ResourceFinding;
 import de.hauschel.arknet.analysis.domain.RoleTermDuplicateCheck.Finding;
 import de.hauschel.arknet.analysis.domain.StepAcceptanceCheck.Kind;
 import de.hauschel.arknet.analysis.domain.StepAcceptanceCheck;
@@ -143,5 +146,65 @@ class StoreCheckRendererTest {
         assertThat(renderer.stepAcceptanceSection(
                 List.of(new StepAcceptanceCheck.Finding(Kind.NO_REQUIREMENT, "UC-1", 1, List.of()))))
                 .contains(StoreCheckRenderer.STEP_BLIND_SPOT);
+    }
+
+    /** kogn-io/arknet#473: an empty ORPHAN result reports cleanly, with no table at all. */
+    @Test
+    void saysNoOrphansFoundWhenAllFourListsAreEmpty() {
+        String rendered = renderer.orphanSection(
+                new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of()));
+
+        assertThat(rendered)
+                .contains("ORPHAN")
+                .contains("no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
+                        + "constraints found.")
+                .doesNotContain("|");
+    }
+
+    /**
+     * Each of the four lists gets its own table, shown only when non-empty - the same discipline
+     * {@link #rendersTheTwoCasesInTwoTablesRatherThanOne} follows for STEP_ACCEPTANCE.
+     */
+    @Test
+    void rendersOnlyTheNonEmptyListsAsTheirOwnTable() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
+                List.of(),
+                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm")),
+                List.of()));
+
+        assertThat(rendered)
+                .contains("1 requirement without a realising use case")
+                .contains("0 terms never referenced")
+                .contains("1 unlinked mention")
+                .contains("0 constraints not attached")
+                .contains("Requirements without a realising use case:")
+                .contains("| Resource | Type | Label |")
+                .contains("| FR-2 | FunctionalRequirement | Logout |")
+                .contains("Mentioned in text but not linked:")
+                .contains("| Source | Term | Label | Missing edge |")
+                .contains("| FR-3 | TERM-9 | Kunde | usesTerm |")
+                .doesNotContain("Terms never referenced:")
+                .doesNotContain("Constraints not attached to any requirement or use case:");
+    }
+
+    /** A resource with no business code of its own is shown by its shortened IRI, not dropped. */
+    @Test
+    void fallsBackToTheShortenedIriForAnOrphanWithoutAHandle() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(new ResourceFinding(ID + "term-9", null, "Concept", null)),
+                List.of(), List.of()));
+
+        assertThat(rendered).contains("| " + ID + "term-9 | Concept | - |");
+    }
+
+    @Test
+    void alwaysNamesTheOrphanChecksBlindSpotWhetherItFoundSomethingOrNot() {
+        assertThat(renderer.orphanSection(new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of())))
+                .contains(StoreCheckRenderer.ORPHAN_BLIND_SPOT);
+        assertThat(renderer.orphanSection(new OrphanCheck.Result(
+                List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
+                List.of(), List.of(), List.of())))
+                .contains(StoreCheckRenderer.ORPHAN_BLIND_SPOT);
     }
 }

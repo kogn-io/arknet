@@ -163,16 +163,17 @@ class TraceabilityMcpToolsTest {
 
             String report = tools.orphanCheck(null, ANCHOR);
 
-            assertThat(report).contains("# Orphan check -- project " + project.value());
-            assertThat(report).contains("## Requirements without a realising use case (1)");
+            assertThat(report).startsWith("ORPHAN:");
+            assertThat(report).contains("1 requirement without a realising use case");
+            assertThat(report).contains("Requirements without a realising use case:");
             assertThat(report).contains(fr2.code().value());
-            String requirementsSection = report.substring(
-                    report.indexOf("Requirements without"), report.indexOf("## Terms never referenced"));
-            assertThat(requirementsSection).doesNotContain(fr1.code().value() + " ");
+            assertThat(report).doesNotContain("| " + fr1.code().value() + " |");
 
-            assertThat(report).contains("## Terms never referenced (1)");
+            assertThat(report).contains("Terms never referenced:");
             assertThat(report).contains("Passwort");
             assertThat(report).doesNotContain("Customer");
+
+            assertThat(report).contains("Deprecated: use store_check with checks=[ORPHAN]");
         });
     }
 
@@ -394,7 +395,8 @@ class TraceabilityMcpToolsTest {
 
             String report = tools.orphanCheck(null, ANCHOR);
 
-            assertThat(report).contains("mentions \"Business-Code\"").contains("-- no usesTerm edge");
+            assertThat(report).contains("Mentioned in text but not linked:");
+            assertThat(report).contains("| Business-Code | usesTerm |");
         });
     }
 }

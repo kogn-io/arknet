@@ -13,6 +13,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.analysis.application.port.in.ReadTraceabilityGraph;
 import de.hauschel.arknet.analysis.application.port.in.ResolveResourceHandle;
+import de.hauschel.arknet.analysis.domain.OrphanCheck;
 import de.hauschel.arknet.analysis.domain.TraceabilityGraph;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
@@ -21,8 +22,10 @@ import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
 import de.hauschel.arknet.persistence.Prefixes;
 
 /**
- * Read-only traceability reporting tools exposed over MCP: {@code trace_matrix}, {@code
- * orphan_check}, {@code impact_analysis}, {@code role_usecase_matrix} (ADR-37/kogn-io/arknet#405
+ * Read-only traceability reporting tools exposed over MCP: {@code trace_matrix}, the deprecated
+ * {@code orphan_check} alias (kogn-io/arknet#473 folded its check into {@code store_check
+ * ORPHAN}; this class keeps the alias, rendered through the very same {@link StoreCheckRenderer}),
+ * {@code impact_analysis}, {@code role_usecase_matrix} (ADR-37/kogn-io/arknet#405
  * Part C, formerly {@code actor_usecase_matrix}) and {@code
  * term_cooccurrence} (issue #108, raw strategic-design read tools - no bounded-context
  * clustering or verdict, just the data for a human or agent to draw that boundary).
@@ -41,6 +44,7 @@ public final class TraceabilityMcpTools {
     private final ReadTraceabilityGraph graphs;
     private final ResolveResourceHandle handles;
     private final TraceabilityRenderer renderer;
+    private final StoreCheckRenderer storeCheckRenderer;
     private final ProjectResolver projects;
     private final DisplayLocale displayLocale;
 
@@ -63,7 +67,9 @@ public final class TraceabilityMcpTools {
             final DisplayLocale displayLocale) {
         this.graphs = Objects.requireNonNull(graphs, "graphs");
         this.handles = Objects.requireNonNull(handles, "handles");
-        this.renderer = new TraceabilityRenderer(Objects.requireNonNull(prefixes, "prefixes"));
+        Objects.requireNonNull(prefixes, "prefixes");
+        this.renderer = new TraceabilityRenderer(prefixes);
+        this.storeCheckRenderer = new StoreCheckRenderer(prefixes);
         this.projects = Objects.requireNonNull(projects, "projects");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
     }
@@ -82,29 +88,26 @@ public final class TraceabilityMcpTools {
     }
 
     @McpTool(name = "orphan_check",
-            description = "Finds orphaned artifacts: requirements no use case realises, glossary terms never"
-                    + " referenced (neither used by a requirement, a use case or an architecture decision"
-                    + " (arkarch:usesTerm), a bounded context's ubiquitous language, nor another term's"
-                    + " skos:broader or skos:related),"
-                    + " mentions"
+            description = "Deprecated: use store_check with checks=[ORPHAN]. Kept as an alias so existing"
+                    + " callers keep working; will be removed in a future release. Finds orphaned artifacts:"
+                    + " requirements no use case realises, glossary terms never referenced (neither used by a"
+                    + " requirement, a use case or an architecture decision (arkarch:usesTerm), a bounded"
+                    + " context's ubiquitous language, nor another term's skos:broader or skos:related), mentions"
                     + " without a backing edge - a requirement's, use case's, bounded context's or architecture"
                     + " decision's text naming a term without the matching"
-                    + " usesTerm/primaryRole/supportingRole/ubiquitousLanguageTerm edge (a use case's goal,"
-                    + " scope, trigger, precondition, postcondition and every step/extension text count as its"
-                    + " text; an architecture decision's name, context, decision, every consequence's statement"
-                    + " and every considered option's name/rationale count as its text), or a term's own"
-                    + " skos:definition naming another term without a skos:broader or skos:related edge - and constraints no"
-                    + " requirement or use case is bound by via constrainedBy. Reported as four lists. The mention"
-                    + " match is literal and whole-word, not stem-based, so it also flags everyday words used in"
-                    + " their ordinary sense (e.g. \"Rolle\", \"Begriff\", \"Projekt\") - a hit in that list is a"
-                    + " reading hint for a human, not a finding that demands an edge.",
+                    + " usesTerm/primaryRole/supportingRole/ubiquitousLanguageTerm edge - and constraints no"
+                    + " requirement or use case is bound by via constrainedBy. Same answer store_check returns"
+                    + " for checks=[ORPHAN], plus this notice.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String orphanCheck(
             final McpSyncRequestContext context,
             @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        return renderer.orphanCheck(project.id(), readGraph(project));
+        final OrphanCheck.Result result = OrphanCheck.run(readGraph(project));
+        return storeCheckRenderer.orphanSection(result)
+                + "\n\nDeprecated: use store_check with checks=[ORPHAN] instead of orphan_check; this tool"
+                + " will be removed in a future release.";
     }
 
     @McpTool(name = "impact_analysis",

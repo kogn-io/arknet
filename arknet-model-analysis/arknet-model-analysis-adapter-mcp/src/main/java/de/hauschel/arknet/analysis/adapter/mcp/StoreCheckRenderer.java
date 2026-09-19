@@ -8,6 +8,9 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.analysis.domain.LanguageGapCheck.Gap;
+import de.hauschel.arknet.analysis.domain.OrphanCheck;
+import de.hauschel.arknet.analysis.domain.OrphanCheck.MentionFinding;
+import de.hauschel.arknet.analysis.domain.OrphanCheck.ResourceFinding;
 import de.hauschel.arknet.analysis.domain.RoleTermDuplicateCheck.Finding;
 import de.hauschel.arknet.analysis.domain.StepAcceptanceCheck.Kind;
 import de.hauschel.arknet.analysis.domain.StepAcceptanceCheck;
@@ -45,6 +48,17 @@ public final class StoreCheckRenderer {
                     + "edge; whether a criterion actually covers the step it is reached from, which is a "
                     + "reading and not a check; and a use case without a business code of its own, which "
                     + "is skipped rather than named by a guessed handle.";
+
+    /**
+     * The same discipline for {@code ORPHAN}: the mention match is literal and whole-word, not
+     * stem-based, so "Mentioned in text but not linked" also flags everyday words used in their
+     * ordinary sense - a hit there is a reading hint for a human, not a finding that demands an edge.
+     */
+    static final String ORPHAN_BLIND_SPOT =
+            "Not seen here: the text-mention match (\"Mentioned in text but not linked\") is literal "
+                    + "and whole-word, not stem-based, so it also flags everyday words used in their "
+                    + "ordinary sense (e.g. \"Rolle\", \"Begriff\", \"Projekt\") - a hit there is a "
+                    + "reading hint for a human, not a finding that demands an edge.";
 
     private final Prefixes prefixes;
 
@@ -171,6 +185,71 @@ public final class StoreCheckRenderer {
     }
 
     /**
+     * Renders the orphan section (kogn-io/arknet#473, folding the former {@code orphan_check} tool
+     * in here): four sub-tables, one per finding list, each shown only when it is non-empty - the
+     * same discipline {@link #stepAcceptanceSection} follows for its two cases.
+     *
+     * @param result the four findings lists, already computed by {@link OrphanCheck#run}
+     * @return the section text
+     */
+    public String orphanSection(final OrphanCheck.Result result) {
+        Objects.requireNonNull(result, "result");
+        if (result.total() == 0) {
+            return "ORPHAN: no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
+                    + "constraints found.\n\n" + ORPHAN_BLIND_SPOT;
+        }
+        final StringBuilder rendered = new StringBuilder("ORPHAN: ")
+                .append(result.orphanRequirements().size())
+                .append(result.orphanRequirements().size() == 1 ? " requirement without" : " requirements without")
+                .append(" a realising use case, ")
+                .append(result.orphanTerms().size())
+                .append(result.orphanTerms().size() == 1 ? " term" : " terms").append(" never referenced, ")
+                .append(result.unlinkedMentions().size())
+                .append(result.unlinkedMentions().size() == 1 ? " unlinked mention" : " unlinked mentions")
+                .append(", ").append(result.orphanConstraints().size())
+                .append(result.orphanConstraints().size() == 1 ? " constraint" : " constraints")
+                .append(" not attached to any requirement or use case.");
+        if (!result.orphanRequirements().isEmpty()) {
+            rendered.append("\n\nRequirements without a realising use case:\n\n");
+            appendResourceTable(rendered, result.orphanRequirements());
+        }
+        if (!result.orphanTerms().isEmpty()) {
+            rendered.append("\n\nTerms never referenced:\n\n");
+            appendResourceTable(rendered, result.orphanTerms());
+        }
+        if (!result.unlinkedMentions().isEmpty()) {
+            rendered.append("\n\nMentioned in text but not linked:\n\n");
+            appendMentionTable(rendered, result.unlinkedMentions());
+        }
+        if (!result.orphanConstraints().isEmpty()) {
+            rendered.append("\n\nConstraints not attached to any requirement or use case:\n\n");
+            appendResourceTable(rendered, result.orphanConstraints());
+        }
+        return rendered.append("\n\n").append(ORPHAN_BLIND_SPOT).toString();
+    }
+
+    private void appendResourceTable(final StringBuilder out, final List<ResourceFinding> findings) {
+        out.append("| Resource | Type | Label |\n| --- | --- | --- |");
+        for (final ResourceFinding finding : findings) {
+            out.append("\n| ").append(handleOf(finding.iri(), finding.handle()))
+                    .append(" | ").append(finding.typeLocalName() == null ? "-" : finding.typeLocalName())
+                    .append(" | ").append(finding.label() == null ? "-" : finding.label())
+                    .append(" |");
+        }
+    }
+
+    private void appendMentionTable(final StringBuilder out, final List<MentionFinding> mentions) {
+        out.append("| Source | Term | Label | Missing edge |\n| --- | --- | --- | --- |");
+        for (final MentionFinding mention : mentions) {
+            out.append("\n| ").append(handleOf(mention.sourceIri(), mention.sourceHandle()))
+                    .append(" | ").append(handleOf(mention.termIri(), mention.termHandle()))
+                    .append(" | ").append(mention.termLabel())
+                    .append(" | ").append(mention.edgeLocalName())
+                    .append(" |");
+        }
+    }
+
+    /**
      * Assembles the whole report from the sections that ran, so a caller selecting several checks
      * gets one document rather than a concatenation with no header.
      *
@@ -188,5 +267,10 @@ public final class StoreCheckRenderer {
     /** A resource's business handle, or its shortened IRI when it has none - never an invented one. */
     private String handleOf(final Gap gap) {
         return gap.handle() != null ? gap.handle() : prefixes.toCurie(gap.subjectIri());
+    }
+
+    /** Same fallback as {@link #handleOf(Gap)}, for a handle already extracted from an {@link OrphanCheck} finding. */
+    private String handleOf(final String iri, final String handle) {
+        return handle != null ? handle : prefixes.toCurie(iri);
     }
 }
