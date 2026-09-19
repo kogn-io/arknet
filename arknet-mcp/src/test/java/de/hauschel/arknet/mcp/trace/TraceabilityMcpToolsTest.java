@@ -16,8 +16,12 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import de.hauschel.arknet.actor.application.RoleService;
 import de.hauschel.arknet.actor.application.port.in.AddRole.NewRole;
 import de.hauschel.arknet.actor.application.port.in.RoleDetail;
+import de.hauschel.arknet.analysis.adapter.mcp.TraceabilityMcpTools;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.ArknetMcpConfiguration;
+import de.hauschel.arknet.prj.application.ProjectService;
+import de.hauschel.arknet.prj.domain.Anchor;
+import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.domain.Requirement;
@@ -25,9 +29,6 @@ import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.uc.application.UseCaseService;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
-import de.hauschel.arknet.prj.application.ProjectService;
-import de.hauschel.arknet.prj.domain.Anchor;
-import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.domain.Term;
@@ -263,8 +264,8 @@ class TraceabilityMcpToolsTest {
 
     /**
      * Unlike a bare id, a CURIE with a known prefix ({@code req:FR-999}) resolves syntactically
-     * via {@link de.hauschel.arknet.mcp.store.Prefixes#toIri} without ever checking the store, so
-     * {@link de.hauschel.arknet.mcp.store.HandleResolver} happily hands {@code impact_analysis} an
+     * via {@link de.hauschel.arknet.persistence.Prefixes#toIri} without ever checking the store, so
+     * {@link de.hauschel.arknet.persistence.HandleResolver} happily hands {@code impact_analysis} an
      * IRI for a requirement that was never written. Before issue #135 this rendered a fully formed
      * "Transitively affected (0)" report instead of surfacing the unknown handle - the false
      * "nothing depends on this" this test guards against.

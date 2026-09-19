@@ -17,6 +17,7 @@ import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
+import de.hauschel.arknet.analysis.domain.TraceabilityGraph;
 import de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepositoryFactory;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.domain.Adr;
@@ -39,8 +40,8 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.mcp.store.StoreReader;
-import de.hauschel.arknet.mcp.store.StoreSnapshot;
+import de.hauschel.arknet.persistence.StoreReader;
+import de.hauschel.arknet.persistence.StoreSnapshot;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;

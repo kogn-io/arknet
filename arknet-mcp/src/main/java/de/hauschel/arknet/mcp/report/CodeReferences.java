@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import de.hauschel.arknet.mcp.mention.LabelMentions;
+import de.hauschel.arknet.analysis.domain.LabelMentions;
 
 /**
  * Turns a business code written into someone's prose ("see ADR-3", "supersedes FR-12") into a

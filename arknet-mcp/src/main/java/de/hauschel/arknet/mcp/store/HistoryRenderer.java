@@ -6,6 +6,11 @@ package de.hauschel.arknet.mcp.store;
 import java.util.List;
 import java.util.Objects;
 
+import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.ResourceRenderer;
+import de.hauschel.arknet.persistence.Revision;
+import de.hauschel.arknet.persistence.StoreReader;
+
 /**
  * Renders a resource's change history for {@code resource_history} (issue #251): the PROV-O
  * revisions {@link StoreReader#history} read back, oldest first, as compact text - one line per

@@ -9,12 +9,12 @@ import java.util.Optional;
 import java.util.Set;
 
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.mcp.store.Prefixes;
-import de.hauschel.arknet.mcp.store.RdfNode;
+import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.RdfNode;
 import de.hauschel.arknet.mcp.store.ResourceHandles;
-import de.hauschel.arknet.mcp.store.StoreReader;
-import de.hauschel.arknet.mcp.store.StoreResource;
-import de.hauschel.arknet.mcp.store.Triple;
+import de.hauschel.arknet.persistence.StoreReader;
+import de.hauschel.arknet.persistence.StoreResource;
+import de.hauschel.arknet.persistence.Triple;
 
 /**
  * Resolves a raw {@link StoreReader#literalContaining} match onto a {@link SearchHit}: the

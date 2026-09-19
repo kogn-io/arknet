@@ -12,6 +12,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
+import de.hauschel.arknet.persistence.HandleResolver;
 
 /**
  * Resolves the project an MCP tool call targets from its anchor.
@@ -81,7 +82,7 @@ public final class AnchorContext {
      * Extracts the calling client's project anchor from the per-call transport context.
      * Null-tolerant on every hop; a {@code null} result is a caller error at
      * {@link ProjectResolver}, never a route to a default. Shared by {@link StoreReportTools} and
-     * {@code de.hauschel.arknet.mcp.trace.TraceabilityMcpTools} instead of each carrying its own
+     * {@code de.hauschel.arknet.analysis.adapter.mcp.TraceabilityMcpTools} instead of each carrying its own
      * copy, the same reasoning as {@link #resolveProject}.
      *
      * @param context the per-call request context, may itself be {@code null}

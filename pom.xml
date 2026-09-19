@@ -88,6 +88,7 @@
         <module>arknet-project</module>
         <module>arknet-adr</module>
         <module>arknet-actor</module>
+        <module>arknet-model-analysis</module>
         <module>arknet-architecture-tests</module>
     </modules>
 

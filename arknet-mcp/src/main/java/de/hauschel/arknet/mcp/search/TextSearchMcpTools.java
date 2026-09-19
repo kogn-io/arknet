@@ -15,10 +15,10 @@ import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
 import de.hauschel.arknet.mcp.store.AnchorContext;
-import de.hauschel.arknet.mcp.store.Prefixes;
-import de.hauschel.arknet.mcp.store.RdfNode;
-import de.hauschel.arknet.mcp.store.StoreReader;
-import de.hauschel.arknet.mcp.store.Triple;
+import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.RdfNode;
+import de.hauschel.arknet.persistence.StoreReader;
+import de.hauschel.arknet.persistence.Triple;
 
 /**
  * The free-text search tool of the composition root: {@code text_search} (kogn-io/arknet#594

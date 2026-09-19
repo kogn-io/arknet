@@ -10,6 +10,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import java.util.Set;
 
+import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
@@ -56,9 +57,11 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
  * invariant on purpose -- add a {@code private org.eclipse.rdf4j.model.Model x;} field to
  * {@code ShaclWriteGate} (rule 1), to a {@code KognioRdf*Repository} (rule 2), to a
  * {@code *-core} class (rule 3), to a {@code *-adapter-mcp} class (rule 4), to a
- * {@code de.hauschel.arknet.mcp} class such as {@code StoreReader} (rule 5), or to a
+ * {@code de.hauschel.arknet.mcp} class such as {@code StoreReportTools} (rule 5), or to a
  * {@code de.hauschel.arknet.kernel} class (rule 6) -- and confirm the rule fails before
- * trusting it. All six were confirmed to fail this way when introduced. Rule 12 is the one
+ * trusting it. All six were confirmed to fail this way when introduced. Rule 13 is broken the
+ * same way, by naming a neighbour's type in a {@code de.hauschel.arknet.analysis} class, and
+ * rule 14 by naming {@code WriteFunnel} there. Rule 12 is the one
  * rule that does not need the exercise: it turns red on any class in the kernel package whose
  * name is not on its list, which is the whole of what it claims.</p>
  *
@@ -103,7 +106,19 @@ class DependencyRulesTest {
             "DisplayLocale",
             "LocalizedLiteral");
 
-    /** The model bounded contexts, by their package abbreviation (see CLAUDE.md). */
+    /**
+     * The write half of {@code arknet-persistence-support}, by simple name -- everything in
+     * {@code de.hauschel.arknet.persistence} that serves a write rather than the type-independent
+     * read path (rule 14).
+     */
+    private static final Set<String> PERSISTENCE_WRITE_TYPES = Set.of(
+            "ShaclWriteGate",
+            "WriteFunnel",
+            "WriteConstraintViolationException",
+            "UnresolvedReferenceException",
+            "SparqlTerms");
+
+    /** The bounded contexts, by their package abbreviation (see CLAUDE.md). */
     private static final String[] BOUNDED_CONTEXT_PACKAGES = {
             "de.hauschel.arknet.req..",
             "de.hauschel.arknet.ul..",
@@ -111,7 +126,25 @@ class DependencyRulesTest {
             "de.hauschel.arknet.bc..",
             "de.hauschel.arknet.adr..",
             "de.hauschel.arknet.prj..",
-            "de.hauschel.arknet.actor.."
+            "de.hauschel.arknet.actor..",
+            "de.hauschel.arknet.analysis.."
+    };
+
+    /**
+     * The contexts that own a piece of the architecture model, and their vocabulary modules --
+     * everything model analysis reads but must not name (rule 13). Deliberately not
+     * {@link #BOUNDED_CONTEXT_PACKAGES}: that set contains model analysis itself, and a rule
+     * cannot ban a context from depending on its own packages.
+     */
+    private static final String[] MODEL_CONTEXT_PACKAGES = {
+            "de.hauschel.arknet.req..",
+            "de.hauschel.arknet.ul..",
+            "de.hauschel.arknet.uc..",
+            "de.hauschel.arknet.bc..",
+            "de.hauschel.arknet.adr..",
+            "de.hauschel.arknet.prj..",
+            "de.hauschel.arknet.actor..",
+            "de.hauschel.arknet.*.shared.."
     };
 
     /**
@@ -127,6 +160,7 @@ class DependencyRulesTest {
             "de.hauschel.arknet.adr..",
             "de.hauschel.arknet.prj..",
             "de.hauschel.arknet.actor..",
+            "de.hauschel.arknet.analysis..",
             "de.hauschel.arknet.*.shared.."
     };
 
@@ -218,8 +252,8 @@ class DependencyRulesTest {
      * {@code TraceabilityGraph}; #185).
      *
      * <p>Unlike rules 3 and 4, this does not ban {@code io.kogn} wholesale: the composition
-     * root's generic store-read path ({@code mcp/store}, {@code mcp/trace}) deliberately reads
-     * the technology-neutral kognio-rdf ports directly, so only {@link
+     * root's remaining generic store-read path ({@code mcp/store}, {@code mcp/search})
+     * deliberately reads the technology-neutral kognio-rdf ports directly, so only {@link
      * #RDF4J_PACKAGES} -- RDF4J itself and kognio-rdf's RDF4J-backed implementations -- is
      * checked here.</p>
      */
@@ -398,6 +432,67 @@ class DependencyRulesTest {
                     .should(beOneOfTheAdmittedSharedKernelTerms())
                     .because("ADR-56 makes admission to the shared kernel a decision per term; "
                             + "an unlisted type in the kernel is a decision nobody made");
+
+    /**
+     * Rule 13 -- model analysis names no module of the contexts it reads (ADR-54, ADR-49).
+     *
+     * <p>It is the one context that knows the metamodel of every other, and it knows it the only
+     * way a context may know a neighbour: as the published language in the store, read through
+     * its own out-port and addressed by the {@code Ark*Vocabulary} predicate constants. The
+     * moment a class here names a requirement, a term, a use case, a bounded context, a decision,
+     * an actor or a project -- or one of the vocabulary modules those contexts share -- the
+     * component has stopped reading a published language and started depending on its
+     * neighbours, which is the construction it was cut out of the composition root to end.</p>
+     *
+     * <p>The rule reads bytecode, not POMs, like every rule here: a dependency declared but never
+     * used stays green. Closing that half would need {@code maven-enforcer-plugin}
+     * ({@code bannedDependencies}), which this module has deliberately stayed out of; today no
+     * POM of the component names any of these modules, and the property breaks on use.</p>
+     */
+    @ArchTest
+    static final ArchRule model_analysis_names_no_module_of_the_contexts_it_reads =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.analysis..")
+                    .should().dependOnClassesThat().resideInAnyPackage(MODEL_CONTEXT_PACKAGES)
+                    .because("model analysis owns no resource and reads every context over its "
+                            + "published language in the store, never over one of its modules");
+
+    /**
+     * Rule 14 -- the one context that never writes stays off the write half of
+     * {@code arknet-persistence-support}.
+     *
+     * <p>Model analysis is the only bounded context whose core depends on that module: its subject
+     * is the published language itself, so it speaks the type-independent read model and the
+     * {@code Ark*Vocabulary} constants. The module carries more than that, and the same dependency
+     * hands a read-only context the SHACL write gate, the write funnel and the SPARQL term
+     * serialisation. Rule 3 does not catch it -- these are not {@code io.kogn} or RDF4J types --
+     * so the gap is the exact counterpart of what rule 11 closes for
+     * {@code arknet-mcp-support}.</p>
+     *
+     * <p>A list of names rather than a package, because the split runs through one package: today
+     * the structural fix (a module of its own for the read model, so Maven carries the rule) is
+     * not cut, and until it is, this rule is what stands in for it. A new write-side type in
+     * {@code de.hauschel.arknet.persistence} is not covered until it is named here -- the price of
+     * a deny list, and the reason the module split stays on the table.</p>
+     */
+    @ArchTest
+    static final ArchRule model_analysis_stays_off_the_write_half_of_the_persistence_support =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.analysis..")
+                    .should().dependOnClassesThat(theWriteHalfOfThePersistenceSupport())
+                    .because("a context that owns no resource and never writes has no business "
+                            + "with the write gate, the write funnel or the SPARQL term "
+                            + "serialisation it gets on its classpath along with the read path");
+
+    private static DescribedPredicate<JavaClass> theWriteHalfOfThePersistenceSupport() {
+        return new DescribedPredicate<>("the write half of arknet-persistence-support") {
+            @Override
+            public boolean test(final JavaClass input) {
+                return input.getPackageName().startsWith("de.hauschel.arknet.persistence")
+                        && PERSISTENCE_WRITE_TYPES.contains(topLevelSimpleName(input));
+            }
+        };
+    }
 
     private static ArchCondition<JavaClass> beOneOfTheAdmittedSharedKernelTerms() {
         return new ArchCondition<>("be one of the terms ADR-56 admits to the shared kernel") {

@@ -12,6 +12,11 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.HandleResolver;
+import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.RdfNode;
+import de.hauschel.arknet.persistence.StoreSnapshot;
+import de.hauschel.arknet.persistence.Triple;
 
 /**
  * Unit tests for the domain-agnostic digest rendering. Builds snapshots from hand-made

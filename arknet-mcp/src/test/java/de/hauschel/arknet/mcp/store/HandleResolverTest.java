@@ -17,22 +17,25 @@ import org.junit.jupiter.api.io.TempDir;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
+import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.persistence.HandleResolver;
+import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.StoreReader;
+import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
-import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.AcceptanceCriterion;
+import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
-import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**

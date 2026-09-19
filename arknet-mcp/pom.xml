@@ -148,6 +148,23 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Model-Analysis-Hexagon (BC-6, ADR-54): die rein lesende Komponente, die das Modell
+             kontextuebergreifend auswertet (trace_matrix, orphan_check, impact_analysis,
+             role_usecase_matrix, term_cooccurrence, store_check). Gleiche Verdrahtung wie die
+             uebrigen (In-Adapter mit @McpTool-Beans + Out-Adapter ueber den geteilten
+             Store-Lesepfad), nur ohne Schreibpfad und ohne eigene Ressource: sie liest jeden
+             anderen Kontext ueber dessen Published Language und haengt an keinem seiner Module. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-model-analysis-adapter-mcp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-model-analysis-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Persistence-Support: RDF4J-freie Technik-Bausteine. Der generische Store-Lesepfad
              nutzt SparqlTerms (IRIREF-Serialisierung), der Traceability-Lesepfad zusaetzlich
              ArkreqVocabulary (die geteilten arkreq:-Praedikat-IRIs, gemeinsame Quelle mit den

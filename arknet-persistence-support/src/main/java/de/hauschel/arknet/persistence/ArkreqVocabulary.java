@@ -11,7 +11,7 @@ package de.hauschel.arknet.persistence;
  * tests those edges' endpoints against, as Java {@code String} constants - the single source of
  * truth shared by the code that <em>writes</em> them (the {@code *-adapter-kogniordf}
  * out-adapters) and the code that <em>reads</em> them ({@code arknet-mcp}'s traceability read
- * path, {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph}, and its report renderer,
+ * path, {@code de.hauschel.arknet.analysis.domain.TraceabilityGraph}, and its report renderer,
  * {@code de.hauschel.arknet.mcp.report.HtmlReportRenderer}).
  *
  * <p><strong>Why here, and why this is technology, not domain vocabulary.</strong> These are RDF

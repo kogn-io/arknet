@@ -15,6 +15,7 @@ import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.StoreReader;
 
 /**
  * The backup read path into a project dataset: the complete dataset - default graph and every

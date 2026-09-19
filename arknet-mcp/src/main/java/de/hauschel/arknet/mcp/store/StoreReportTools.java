@@ -21,12 +21,20 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
+import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
-import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
-import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.HandleResolver;
+import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.ResourceRenderer;
+import de.hauschel.arknet.persistence.Revision;
+import de.hauschel.arknet.persistence.StoreReader;
+import de.hauschel.arknet.persistence.StoreResource;
+import de.hauschel.arknet.persistence.StoreSnapshot;
+import de.hauschel.arknet.persistence.Triple;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.domain.Project;
 

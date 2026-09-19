@@ -36,8 +36,10 @@ import de.hauschel.arknet.mcp.report.RoleCards;
 import de.hauschel.arknet.mcp.report.TermCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.mcp.store.ExportMetadata;
-import de.hauschel.arknet.mcp.check.StoreCheckMcpTools;
-import de.hauschel.arknet.mcp.store.Prefixes;
+import de.hauschel.arknet.analysis.adapter.kogniordf.KognioRdfModelSnapshots;
+import de.hauschel.arknet.analysis.adapter.kogniordf.KognioRdfResourceHandleLookup;
+import de.hauschel.arknet.analysis.adapter.mcp.StoreCheckMcpTools;
+import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.mcp.version.OntologyVersions;
 import de.hauschel.arknet.mcp.version.ServerVersion;
 import de.hauschel.arknet.mcp.version.ToolErrorVersionStamp;
@@ -74,11 +76,15 @@ import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.mcp.store.StoreExportTools;
 import de.hauschel.arknet.mcp.store.StoreExporter;
 import de.hauschel.arknet.mcp.store.StoreFieldLanguageLookup;
-import de.hauschel.arknet.mcp.store.StoreReader;
+import de.hauschel.arknet.persistence.HandleResolver;
+import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreReportController;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
 import de.hauschel.arknet.mcp.search.TextSearchMcpTools;
-import de.hauschel.arknet.mcp.trace.TraceabilityMcpTools;
+import de.hauschel.arknet.analysis.adapter.mcp.TraceabilityMcpTools;
+import de.hauschel.arknet.analysis.application.ModelAnalysisService;
+import de.hauschel.arknet.analysis.application.port.out.ModelSnapshots;
+import de.hauschel.arknet.analysis.application.port.out.ResourceHandleLookup;
 import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepositoryFactory;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
@@ -1115,32 +1121,54 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The five traceability reporting tools ({@code trace_matrix}, {@code orphan_check},
-     * {@code impact_analysis}, {@code role_usecase_matrix}, {@code term_cooccurrence}). Reuses
-     * the very same {@link #storeReader}/{@link #storeReportPrefixes} beans as
-     * {@link #storeReportTools} instead of building a second {@link StoreReader} - one generic
-     * read path, two presentations over it (a full-snapshot digest vs. a graph traversal).
-     */
-    /**
-     * The one checking tool ({@code store_check}, kogn-io/arknet#412). Wired here rather than into
-     * any hexagon for the same reason {@link #storeReportTools} and {@link #traceabilityMcpTools}
-     * are: it reads whatever the seven bounded contexts wrote, through the very same
-     * {@link #storeReader}/{@link #storeReportPrefixes} beans, and has no domain of its own. It
-     * takes no {@link DisplayLocale}: a language check that resolved each field to one display
-     * language would only ever see the language it resolved to, which is precisely the language it
-     * must not assume.
+     * The out-adapters of the model-analysis hexagon (ADR-54): both serve their out-port out of
+     * the very same {@link #storeReader}/{@link #storeReportPrefixes} beans the composition
+     * root's own type-agnostic tools use, rather than opening a second read path over the same
+     * dataset. That the component reads every other context over its published language and
+     * names no module of it is what makes it a bounded context of its own; the architecture
+     * rules pin it.
      */
     @Bean
-    StoreCheckMcpTools storeCheckMcpTools(
-            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projectResolver) {
-        return new StoreCheckMcpTools(storeReader, prefixes, projectResolver);
+    ModelSnapshots modelSnapshots(final StoreReader storeReader) {
+        return new KognioRdfModelSnapshots(storeReader);
     }
 
     @Bean
+    ResourceHandleLookup resourceHandleLookup(final StoreReader storeReader, final Prefixes prefixes) {
+        return new KognioRdfResourceHandleLookup(new HandleResolver(storeReader, prefixes));
+    }
+
+    /** The application service behind the five traceability tools and {@code store_check}. */
+    @Bean
+    ModelAnalysisService modelAnalysisService(
+            final ModelSnapshots modelSnapshots, final ResourceHandleLookup resourceHandleLookup) {
+        return new ModelAnalysisService(modelSnapshots, resourceHandleLookup);
+    }
+
+    /**
+     * The one checking tool ({@code store_check}, kogn-io/arknet#412), driving adapter of the
+     * model-analysis hexagon. It takes no {@link DisplayLocale}: a language check that resolved
+     * each field to one display language would only ever see the language it resolved to, which
+     * is precisely the language it must not assume.
+     */
+    @Bean
+    StoreCheckMcpTools storeCheckMcpTools(
+            final ModelAnalysisService modelAnalysisService, final Prefixes prefixes,
+            final ProjectResolver projectResolver) {
+        return new StoreCheckMcpTools(modelAnalysisService, prefixes, projectResolver);
+    }
+
+    /**
+     * The five traceability reporting tools ({@code trace_matrix}, {@code orphan_check},
+     * {@code impact_analysis}, {@code role_usecase_matrix}, {@code term_cooccurrence}), driving
+     * adapter of the same hexagon: one graph read per call, five questions asked of it.
+     */
+    @Bean
     TraceabilityMcpTools traceabilityMcpTools(
-            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projectResolver,
-            final DisplayLocale displayLocale) {
-        return new TraceabilityMcpTools(storeReader, prefixes, projectResolver, displayLocale);
+            final ModelAnalysisService modelAnalysisService, final Prefixes prefixes,
+            final ProjectResolver projectResolver, final DisplayLocale displayLocale) {
+        return new TraceabilityMcpTools(modelAnalysisService, modelAnalysisService, prefixes,
+                projectResolver, displayLocale);
     }
 
     /**
