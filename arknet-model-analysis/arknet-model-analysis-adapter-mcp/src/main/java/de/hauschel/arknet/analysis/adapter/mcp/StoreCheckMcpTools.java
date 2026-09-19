@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -127,16 +128,16 @@ public final class StoreCheckMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final List<StoreCheckKind> selected = select(checks);
-        final StoreSnapshot snapshot = needsSnapshot(selected) ? snapshots.read(project.id()) : null;
+        final Supplier<StoreSnapshot> snapshot = memoize(() -> snapshots.read(project.id()));
         final List<String> sections = new ArrayList<>(selected.size());
         for (final StoreCheckKind kind : selected) {
             sections.add(switch (kind) {
                 case LANGUAGE -> renderer.languageSection(project.maintainedLanguages(),
-                        LanguageGapCheck.run(snapshot, project.maintainedLanguages()));
+                        LanguageGapCheck.run(snapshot.get(), project.maintainedLanguages()));
                 case ROLE_TERM_DUPLICATE ->
-                        renderer.roleTermDuplicateSection(RoleTermDuplicateCheck.run(snapshot));
+                        renderer.roleTermDuplicateSection(RoleTermDuplicateCheck.run(snapshot.get()));
                 case STEP_ACCEPTANCE ->
-                        renderer.stepAcceptanceSection(StepAcceptanceCheck.run(snapshot));
+                        renderer.stepAcceptanceSection(StepAcceptanceCheck.run(snapshot.get()));
                 case ORPHAN -> renderer.orphanSection(OrphanCheck.run(readGraph(project)));
             });
         }
@@ -156,13 +157,31 @@ public final class StoreCheckMcpTools {
     }
 
     /**
-     * @return whether {@code selected} contains a check that reads the raw {@link StoreSnapshot} -
-     *     LANGUAGE, ROLE_TERM_DUPLICATE or STEP_ACCEPTANCE (see the {@link #graphs} parameter
-     *     Javadoc). A selection of ORPHAN alone must not pay for a snapshot read it never uses.
+     * Wraps {@code delegate} so it runs at most once: the first {@link Supplier#get()} call
+     * computes and caches the value, every later call returns the cached one. Used to defer the
+     * raw {@link StoreSnapshot} read until a check actually needs it (see the {@link #graphs}
+     * parameter Javadoc) without duplicating, in a second place, which {@link StoreCheckKind}
+     * branch of {@link #storeCheck} that is - a selection of ORPHAN alone must not pay for a
+     * snapshot read it never uses, and a future branch that starts reading the snapshot cannot
+     * forget to say so, because there is nowhere else left to say it. Not thread-safe by design:
+     * each call to {@link #storeCheck} builds and consumes its own instance sequentially, on one
+     * thread.
      */
-    private static boolean needsSnapshot(final List<StoreCheckKind> selected) {
-        return selected.contains(StoreCheckKind.LANGUAGE) || selected.contains(StoreCheckKind.ROLE_TERM_DUPLICATE)
-                || selected.contains(StoreCheckKind.STEP_ACCEPTANCE);
+    private static <T> Supplier<T> memoize(final Supplier<T> delegate) {
+        return new Supplier<>() {
+
+            private T value;
+            private boolean computed;
+
+            @Override
+            public T get() {
+                if (!computed) {
+                    value = delegate.get();
+                    computed = true;
+                }
+                return value;
+            }
+        };
     }
 
     /**

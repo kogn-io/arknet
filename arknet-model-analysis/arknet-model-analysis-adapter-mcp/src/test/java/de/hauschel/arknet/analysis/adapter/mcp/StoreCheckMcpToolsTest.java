@@ -9,8 +9,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.analysis.application.port.in.ReadModelSnapshot;
@@ -100,6 +103,56 @@ class StoreCheckMcpToolsTest {
         tools.storeCheck(null, List.of("ORPHAN"), "sample-project");
 
         assertThat(snapshotRead).isFalse();
+    }
+
+    /**
+     * PR #645 review, P2: {@code StoreCheckMcpTools#storeCheck} now hands every check a
+     * memoizing {@code Supplier<StoreSnapshot>} instead of a precomputed field, so a check that
+     * needs the snapshot can never see it as {@code null} - the parametrization over every
+     * declared {@link StoreCheckKind} means a future kind is exercised here automatically,
+     * without a second, hand-maintained list of "which kinds need the snapshot" to keep in sync
+     * with the {@code switch} in {@link StoreCheckMcpTools#storeCheck}.
+     */
+    @ParameterizedTest
+    @EnumSource(StoreCheckKind.class)
+    void readsTheSnapshotAtMostOnceWhenExactlyOneCheckIsSelected(final StoreCheckKind kind) {
+        final AtomicInteger snapshotReads = new AtomicInteger();
+        final ReadModelSnapshot snapshots = projectId -> {
+            snapshotReads.incrementAndGet();
+            return StoreSnapshot.of(List.of());
+        };
+        final ReadTraceabilityGraph graphs =
+                (projectId, locale) -> TraceabilityGraph.of(StoreSnapshot.of(List.of()), locale);
+        final StoreCheckMcpTools tools = new StoreCheckMcpTools(snapshots, graphs, Prefixes.defaults(),
+                anchor -> new ResolvedProject(new ProjectId("sample-project"), null, List.of()),
+                DisplayLocale.DEFAULT);
+
+        tools.storeCheck(null, List.of(kind.name()), "sample-project");
+
+        assertThat(snapshotReads.get()).isLessThanOrEqualTo(1);
+    }
+
+    /**
+     * PR #645 review, P2: proves the memoization actually caches, not merely defers - with every
+     * check selected together, LANGUAGE, ROLE_TERM_DUPLICATE and STEP_ACCEPTANCE all read the
+     * same {@code Supplier<StoreSnapshot>}, so the store is read exactly once, not three times.
+     */
+    @Test
+    void readsTheSnapshotExactlyOnceWhenEveryCheckIsSelectedTogether() {
+        final AtomicInteger snapshotReads = new AtomicInteger();
+        final ReadModelSnapshot snapshots = projectId -> {
+            snapshotReads.incrementAndGet();
+            return StoreSnapshot.of(List.of());
+        };
+        final ReadTraceabilityGraph graphs =
+                (projectId, locale) -> TraceabilityGraph.of(StoreSnapshot.of(List.of()), locale);
+        final StoreCheckMcpTools tools = new StoreCheckMcpTools(snapshots, graphs, Prefixes.defaults(),
+                anchor -> new ResolvedProject(new ProjectId("sample-project"), null, List.of()),
+                DisplayLocale.DEFAULT);
+
+        tools.storeCheck(null, null, "sample-project");
+
+        assertThat(snapshotReads.get()).isEqualTo(1);
     }
 
     @Test
