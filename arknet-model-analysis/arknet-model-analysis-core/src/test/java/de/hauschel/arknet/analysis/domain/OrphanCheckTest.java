@@ -122,6 +122,28 @@ class OrphanCheckTest {
     }
 
     /**
+     * Mirrors {@link #reportsATextMentionOfATermWithoutTheBackingEdge()} for the second mention
+     * source a bounded context's {@code arkddd:domainVision} - the only fixture, before
+     * kogn-io/arknet#473, that pinned {@code edgeLocalName = "ubiquitousLanguageTerm"}.
+     */
+    @Test
+    void reportsABoundedContextDomainVisionMentionOfATermWithoutTheBackingEdge() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(ID + "bc-2", RDF_TYPE, ARKDDD + "BoundedContext"),
+                lit(ID + "bc-2", IDENTIFIER, "BC-2"),
+                lit(ID + "bc-2", DOMAIN_VISION, "Wir verwalten die Bestellung."),
+
+                iri(ID + "term-8", RDF_TYPE, SKOS + "Concept"),
+                lit(ID + "term-8", PREF_LABEL, "Bestellung"),
+                lit(ID + "term-8", IDENTIFIER, "TERM-8")));
+
+        OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
+
+        assertThat(result.unlinkedMentions()).containsExactly(
+                new MentionFinding(ID + "bc-2", "BC-2", ID + "term-8", "TERM-8", "Bestellung", "ubiquitousLanguageTerm"));
+    }
+
+    /**
      * CON-2 is a constraint no requirement or use case is bound by via {@code
      * oslc_rm:constrainedBy}; CON-1 is bound by FR-1 and must not appear.
      */
