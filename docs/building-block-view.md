@@ -88,8 +88,7 @@ above them; no core is merged -- module schema, no record behind it. The two con
 with two Components get a `<bc>-shared` (typed codes, the context's one `TermRef`);
 Actor, Architecture & Decisions and Model Analysis hold one Component each and need
 none (ADR-57). No `api` module (ADR-58). Model Analysis is an eighth Component
-(ADR-54); Actor, Architecture & Decisions and Project Registry still have the
-Component itself as Maven parent.
+(ADR-54).
 
 Built for Product & Requirements (#439): `arknet-product-requirements` is the Maven
 parent of the two Components and of the vocabulary module
@@ -102,8 +101,10 @@ two Components and of the vocabulary module `arknet-domain-modelling-shared`, wh
 holds `TermCode`; the bounded-context Component gave up its own `TermRef` and its
 borrowed in-port. Everywhere else the Component is still the Maven parent.
 
-Built for Model Analysis (#560): `arknet-model-analysis` is the Maven parent of the
-one read-only Component. Its core holds the traced graph and the three store checks,
+Built for Model Analysis (#560): `arknet-model-analysis` is the one read-only
+Component, Maven parent of its own `core`/`adapter-kogniordf`/`adapter-mcp` directly
+under `arknet-parent`, the same shape as Actor, Architecture & Decisions and Project
+Registry. Its core holds the traced graph and the three store checks,
 its `-adapter-kogniordf` serves the two out-ports (`ModelSnapshots`,
 `ResourceHandleLookup`) out of the shared store read path, and its `-adapter-mcp`
 carries the five evaluation tools and `store_check`. The generic read model those
@@ -175,7 +176,7 @@ its own core only; no module of a Component depends on a module of another.
 
 | Mandatory per schema                          | arknet as built                                     |
 |-----------------------------------------------|-----------------------------------------------------|
-| Bounded Context as Maven parent               | built for Product & Requirements (#439), Domain Modelling (#441) and Model Analysis (#560); for the three contexts with one Component each the parent is still the Component |
+| Bounded Context as Maven parent               | built for Product & Requirements (#439) and Domain Modelling (#441); for the other four contexts (Actor, Architecture & Decisions, Project Registry, Model Analysis) the parent is still the Component |
 | `api` per Component                           | not required: extension stage, no foreign in-port caller in arknet (ADR-58) |
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
