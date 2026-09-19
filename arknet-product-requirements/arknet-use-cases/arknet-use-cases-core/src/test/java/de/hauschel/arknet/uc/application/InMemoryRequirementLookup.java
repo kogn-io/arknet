@@ -3,7 +3,9 @@
 
 package de.hauschel.arknet.uc.application;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -49,7 +51,7 @@ final class InMemoryRequirementLookup implements RequirementLookup {
      */
     @Override
     public Map<ResourceId, RequirementCode> resolveCodes(ProjectId projectId, ResourceId... ids) {
-        Set<ResourceId> wanted = Set.of(ids);
+        Set<ResourceId> wanted = new HashSet<>(Arrays.asList(ids));
         Map<ResourceId, RequirementCode> resolved = new LinkedHashMap<>();
         knownRequirements.forEach((code, id) -> {
             if (wanted.contains(id)) {

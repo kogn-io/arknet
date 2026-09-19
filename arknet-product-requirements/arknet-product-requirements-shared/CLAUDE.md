@@ -11,4 +11,4 @@ Aufnahmeregel: jeder Typ hier beantwortet die Frage "welches Aggregat besitzt di
 Nicht hier: `RequirementId`/`ConstraintId`/`UseCaseId` und die Aggregate selbst (die haben einen Besitzer und liegen in dessen Core), `ConstraintRef` von `arknet-requirements-core` (zeigt auf ein Aggregat desselben Cores), `RequirementRef`/`ConstraintRef`/`RoleRef` von `arknet-use-cases-core` (Verweise, die der Use-Case als Teil seines Zustands haelt).
 
 Das Modul haengt an genau einem anderen: `arknet-shared-kernel`, dessen `ResourceId` der `TermRef` umschliesst.
-Die ArchUnit-Regel `context_vocabulary_modules_hang_on_nothing_but_the_shared_kernel` haelt das fest und ist ueber das Paketmuster `de.hauschel.arknet..shared..` formuliert, damit das Vokabularmodul eines zweiten Kontexts ihr unterliegt, sobald es existiert.
+`DependencyRulesTest` (Regel 7) haelt das fest und ist ueber das Paketmuster `de.hauschel.arknet.*.shared..` formuliert, damit das Vokabularmodul eines zweiten Kontexts ihr unterliegt, sobald es existiert.
