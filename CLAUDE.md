@@ -169,7 +169,7 @@ das geschriebene Feld noch traegt, ohne dass dieser Aufruf sie geschrieben haett
 vorher nicht trug, wird uebersetzt, nicht korrigiert, und bekommt keinen
 Hinweis; darum wird der Bestand vor dem Schreiben nachgeschlagen. Der
 Mechanismus dahinter (`StaleTranslationHint`
-+ `FieldLanguageLookup` im Shared Kernel, im Composition Root ueber den
++ `FieldLanguageLookup` in arknet-mcp-support, im Composition Root ueber den
 generischen Store-Lesepfad bedient) ist einer fuer alle neun Tools; er blockt
 nie und behauptet keine Revision je Sprachvariante -- der WriteFunnel fuehrt
 Revisionen je Ressource, nicht je Literal. Das Gegenstueck dazu ist

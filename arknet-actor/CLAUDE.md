@@ -98,11 +98,11 @@ Umgekehrt bereits real erreichbar: `KognioRdfActorRepository.REFERENCING_PREDICA
 `arkreq:primaryRole`/`supportingRole` referenzieren den `ROLE-N`-Code (aufgeloest ueber `RoleLookup` in `arknet-use-cases`, fuer die Anzeige ueber `ResolveRoles` dieses Hexagons), nicht den Namen -- der Name ist mehrsprachig und daher keine stabile Referenzgrundlage.
 
 **Hinweis auf veraltete Uebersetzungen (kogn-io/arknet#474, seit kogn-io/arknet#520 auch fuer Actor).**
-`role_update` und `actor_update` haengen an ihre Antwort, welche der vom Projekt gefuehrten Sprachen `name`/`description` noch tragen, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus dem Shared Kernel, blockt nie, fuer beide Ressourcentypen dieses Hexagons identisch verdrahtet.
+`role_update` und `actor_update` haengen an ihre Antwort, welche der vom Projekt gefuehrten Sprachen `name`/`description` noch tragen, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus `arknet-mcp-support`, blockt nie, fuer beide Ressourcentypen dieses Hexagons identisch verdrahtet.
 Vor kogn-io/arknet#520 bekam `actor_update` kein solches Signal, weil `name`/`description` noch ungetaggt waren; das war die damalige Trennlinie zwischen den beiden Ressourcentypen. Die verbliebene Trennlinie ist nicht mehr Sprache, sondern die FR-10-Frage: ein Actor-Name ist ein Eigenname (kein Gleichwort-Zwang), ein Rollenname eine uebersetzte Funktionsbezeichnung (ebenfalls kein Gleichwort-Zwang) -- beide also frei pro Sprache, aus je eigener Begruendung.
 
 **Antwortform schreibender Tools (kogn-io/arknet#597/#598).**
-`actor_add`/`actor_update`/`actor_delete`/`role_add`/`role_update`/`role_delete` schliessen ihre Antwort mit der Zeile `project: <name>`, gerendert vom geteilten `WriteResponse` aus dem Shared Kernel.
+`actor_add`/`actor_update`/`actor_delete`/`role_add`/`role_update`/`role_delete` schliessen ihre Antwort mit der Zeile `project: <name>`, gerendert vom geteilten `WriteResponse` aus `arknet-mcp-support`.
 `role_update` stellt zusaetzlich eine Diff-Zeile `filledBy: removed ACTOR-N, added ACTOR-M` voran, sobald die Besetzung nach dem Write eine andere ist als davor -- berechnet aus dem vor und nach dem Write gelesenen Zustand, nie aus dem Request, weil ein wholesale ersetztes `filledBy` verliert, was der Aufrufer zu wiederholen vergass.
 `actor_update` traegt keine Diff-Zeile: `name`/`description` sind skalar, dieses Hexagon hat kein Listenfeld auf der Actor-Seite.
 Weder Actor noch Role tragen ein `*_link_*`/`*_unlink_*`-Tool -- `filledBy` ist ein Parameter an `role_add`/`role_update`, kein eigenes Tool, darum gibt es hier keine Kurzbestaetigungszeile.

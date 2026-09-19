@@ -77,10 +77,10 @@ Der Mismatch-Guard sitzt bewusst in `attemptUpdate`, gegen genau denselben Read,
 Es gibt keinen Altbestands-Migrator: ein store-first Term, der noch zwei verschiedene Woerter unter zwei Tags traegt, wird durch eine gewoehnliche Umbenennung (`label` ohne `language`) korrigiert, nicht automatisch bereinigt.
 
 **Hinweis auf veraltete Uebersetzungen (kogn-io/arknet#474).**
-`term_update` haengt an seine Antwort, welche der vom Projekt gefuehrten Sprachen die korrigierte `definition` noch traegt, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus dem Shared Kernel, blockt nie.
+`term_update` haengt an seine Antwort, welche der vom Projekt gefuehrten Sprachen die korrigierte `definition` noch traegt, ohne dass dieser Aufruf sie geschrieben haette -- gerendert vom geteilten `StaleTranslationHint` aus `arknet-mcp-support`, blockt nie.
 Am Signal beteiligt ist allein die Definition, nicht das `prefLabel`: ein Glossarbegriff traegt unter jeder Sprache dasselbe Wort (FR-10), also benennt ein `label` ohne `language` alle Tags gleichzeitig um, und ein `label` unter explizitem `language` muss dem vorhandenen entsprechen -- in beiden Faellen bleibt nichts Aelteres stehen.
 
-**Antwortform schreibender Tools (kogn-io/arknet#597/#598/#600), gerendert vom geteilten `WriteResponse` aus dem Shared Kernel.**
+**Antwortform schreibender Tools (kogn-io/arknet#597/#598/#600), gerendert vom geteilten `WriteResponse` aus `arknet-mcp-support`.**
 Jede schreibende Antwort (`term_add`/`term_update`/`term_delete`/`term_link_related`/`term_unlink_related`) endet mit einer Projektzeile `project: <name>`, damit ein vergessener `projectAnchor` sichtbar wird, statt still ins Anker-Projekt der Sitzung zu schreiben.
 `term_link_related`/`term_unlink_related` antworten je Kante nur mit der Kurzbestaetigung (`linked TERM-1 -> TERM-2 (related)` bzw. `unlinked ...`), nicht mit der ganzen Ressource -- der Aufrufer haelt beide Enden bereits.
 `term_update` liest den Vorher-Zustand von `broader`/`related` vor dem Write (ueber `GetTerm`, denselben Mechanismus, den auch `StaleTranslationHint` nutzt) und stellt bei Aenderung je eine Diff-Zeile voran (`broader: removed TERM-5`, `related: removed TERM-22, added TERM-9`) -- unveraendert bleibt stumm, kein leerer Feldname wird gemeldet.
