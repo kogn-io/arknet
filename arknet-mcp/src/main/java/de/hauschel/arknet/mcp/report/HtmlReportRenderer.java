@@ -21,11 +21,11 @@ import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.mcp.store.Prefixes;
-import de.hauschel.arknet.mcp.store.RdfNode;
-import de.hauschel.arknet.mcp.store.StoreResource;
-import de.hauschel.arknet.mcp.store.StoreSnapshot;
-import de.hauschel.arknet.mcp.store.Triple;
+import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.RdfNode;
+import de.hauschel.arknet.persistence.StoreResource;
+import de.hauschel.arknet.persistence.StoreSnapshot;
+import de.hauschel.arknet.persistence.Triple;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
@@ -63,7 +63,7 @@ public final class HtmlReportRenderer {
     // predicates carrying those sub-resources' text and position, come from the single shared
     // source of truth (arknet-persistence-support) - the very same constants the requirements and
     // use-cases out-adapters serialize them with, and the same ones the traceability read path
-    // (de.hauschel.arknet.mcp.trace.TraceabilityGraph) traverses. A rename in
+    // (de.hauschel.arknet.analysis.domain.TraceabilityGraph) traverses. A rename in
     // arknet-requirements.ttl therefore cannot leave this renderer compiling while the language
     // switch silently disappears from the report.
 

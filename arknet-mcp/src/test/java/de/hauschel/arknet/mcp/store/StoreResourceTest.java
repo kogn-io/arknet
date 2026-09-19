@@ -9,6 +9,10 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.persistence.RdfNode;
+import de.hauschel.arknet.persistence.StoreResource;
+import de.hauschel.arknet.persistence.Triple;
+
 /**
  * Unit tests for the generic per-subject view - focused on {@link StoreResource#types()},
  * whose ordering guarantee changed with issue #150.

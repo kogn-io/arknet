@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-model-analysis</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-model-analysis-adapter-kogniordf</artifactId>
+    <description>Out-adapter: serves the ModelSnapshots and ResourceHandleLookup out-ports by reading the published language of every context out of the project dataset through the shared kognio-rdf read path.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-model-analysis-core</artifactId>
+        </dependency>
+        <!-- The shared read path (StoreReader, HandleResolver) and the vocabulary constants. No
+             RDF4J anywhere in this module: the store read path speaks only the technology-neutral
+             kognio-rdf ports, and the persistent lifecycle bean is built elsewhere. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-persistence-support</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

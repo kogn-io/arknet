@@ -10,7 +10,7 @@ package de.hauschel.arknet.persistence;
  * {@code de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository}/
  * {@code KognioRdfContextRelationshipRepository}, and its factory) and the code that
  * <em>reads</em> them - {@code arknet-mcp}'s traceability read path,
- * {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph}, which scans {@link #DOMAIN_VISION} for
+ * {@code de.hauschel.arknet.analysis.domain.TraceabilityGraph}, which scans {@link #DOMAIN_VISION} for
  * unlinked glossary mentions and traverses {@link #UPSTREAM}/{@link #DOWNSTREAM} for
  * {@code impact_analysis} (issue #293), {@link #BOUNDED_CONTEXT_TYPE} for its own type-listing
  * and {@link #UBIQUITOUS_LANGUAGE_TERM} for {@code isReferencedTerm}/{@code linkedTerms} - plus

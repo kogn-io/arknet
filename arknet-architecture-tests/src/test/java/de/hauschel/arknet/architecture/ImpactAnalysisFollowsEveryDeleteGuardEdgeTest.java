@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepository;
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfRoleRepository;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository;
-import de.hauschel.arknet.mcp.trace.TraceabilityGraph;
+import de.hauschel.arknet.analysis.domain.TraceabilityGraph;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepository;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepository;
 import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfUseCaseRepository;

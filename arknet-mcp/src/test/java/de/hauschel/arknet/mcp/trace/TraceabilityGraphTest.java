@@ -27,6 +27,7 @@ import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 
+import de.hauschel.arknet.analysis.domain.TraceabilityGraph;
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepositoryFactory;
 import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfRoleRepositoryFactory;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
@@ -52,8 +53,8 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.mcp.store.StoreReader;
-import de.hauschel.arknet.mcp.store.StoreSnapshot;
+import de.hauschel.arknet.persistence.StoreReader;
+import de.hauschel.arknet.persistence.StoreSnapshot;
 import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepositoryFactory;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
@@ -721,7 +722,7 @@ class TraceabilityGraphTest {
         /**
          * Regression test for issue #141: a term with several language-tagged {@code skos:prefLabel}s
          * (SKOS textbook) used to resolve to whichever literal {@link
-         * de.hauschel.arknet.mcp.store.StoreResource#label(de.hauschel.arknet.kernel.DisplayLocale)}'s
+         * de.hauschel.arknet.persistence.StoreResource#label(de.hauschel.arknet.kernel.DisplayLocale)}'s
          * predecessor happened to read first - independent of the {@code displayLocale} the caller
          * asked for, and disagreeing with the HTML report, which resolves the very same multi-language
          * term through {@code report.Glossary}'s {@code DisplayLocale}-selected {@code Term::prefLabel}.

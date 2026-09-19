@@ -24,9 +24,11 @@ the skill's generic methodology.
   "stays free of RDF4J" Javadoc claim. Before trusting this module's silence on a given package as
   "verified clean", check its `pom.xml` actually depends on that package's module.
 - `arknet-mcp` is the composition root and additionally carries three cross-cutting,
-  BC-spanning read paths (`mcp/store`, `mcp/report`, `mcp/trace`) — a contract hole there
-  distorts all six hexagons at once. Weight it above the individual BC modules.
-- Within `arknet-mcp`, `StoreReader` (`mcp/store/StoreReader.java`) is the single highest
+  BC-spanning read paths (`mcp/store`, `mcp/report`, and the model-analysis component) — a
+  contract hole there distorts all six hexagons at once. Weight it above the individual BC
+  modules.
+- `StoreReader` (`arknet-persistence-support/.../persistence/StoreReader.java`, until #560 in
+  `arknet-mcp`'s `mcp/store`) is the single highest
   priority file: all five generic tools (`store_overview`, `resource_get`, `trace_matrix`,
   `orphan_check`, `impact_analysis`) and the HTML report read through the same
   `readSnapshot`/`outgoing`/`incoming` snapshot. A filtering bug there (see #136, blank-node
@@ -279,8 +281,8 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
 - Write funnel, revision as concurrency token — relevant whenever a review
   touches a write path's transaction/concurrency behavior (Phase 2).
 - Generic store read path / Borrowed In-Port pattern —
-  relevant whenever a review touches `arknet-mcp`'s `mcp/store`/`mcp/report`/`mcp/trace`, since
-  those packages exist entirely because of these two decisions.
+  relevant whenever a review touches `arknet-mcp`'s `mcp/store`/`mcp/report` or the
+  model-analysis component, since those packages exist entirely because of these two decisions.
 
 ## Calibration log
 

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-model-analysis</artifactId>
+    <packaging>pom</packaging>
+    <description>Model Analysis bounded context (BC-6): the read-only component that evaluates the model across context boundaries - impact, traceability, orphans, the role/use-case matrix, term co-occurrence and the store checks. Owns no resource; reads every context over its published language.</description>
+
+    <modules>
+        <module>arknet-model-analysis-core</module>
+        <module>arknet-model-analysis-adapter-kogniordf</module>
+        <module>arknet-model-analysis-adapter-mcp</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-model-analysis-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-model-analysis-adapter-mcp</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

@@ -9,6 +9,10 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.persistence.RdfNode;
+import de.hauschel.arknet.persistence.StoreSnapshot;
+import de.hauschel.arknet.persistence.Triple;
+
 /**
  * Unit tests for the domain-agnostic snapshot aggregation: grouping, counts, primary-type
  * selection and dangling-reference detection.

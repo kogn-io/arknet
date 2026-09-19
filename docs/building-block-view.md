@@ -44,7 +44,7 @@ where the recorded relationships differ from the code.
 | BC-3 | Architecture & Decisions     | ArchitectureDecisionRecord, Consequence, ConsideredOption     | ADR-10                    |
 | BC-4 | Actor                        | Actor, Role                                                   | ADR-36, ADR-37 |
 | BC-5 | Project Registry             | Project, Anchor, language commitment -- supporting context outside the eight lifecycle contexts, upstream of every other | ADR-53 (succeeds ADR-13) |
-| BC-6 | Model Analysis               | no resource of its own; reads every other context: impact analysis, trace matrix, orphans, role/use-case matrix, term co-occurrence, `store_check`, `text_search`, the HTML report | ADR-54 |
+| BC-6 | Model Analysis               | no resource of its own; reads every other context: impact analysis, trace matrix, orphans, role/use-case matrix, term co-occurrence, `store_check`; the HTML report is its target too and still sits in the composition root | ADR-54 |
 
 Three core contexts (BC-1..3) are the realised part of the eight-context lifecycle
 target cut (ADR-46); three supporting contexts (BC-4..6) sit outside it, each resting
@@ -58,9 +58,10 @@ Context map as recorded in the store, against the code:
   Modelling upstream of Architecture & Decisions; every other context upstream of
   Model Analysis. The four edges among the core contexts and Actor are as built: the
   out-adapter reads the neighbour's named graph (the ontology as schema). The five
-  into Model Analysis describe the target (ADR-54), not the build: those evaluations
-  still live in the composition root, and `store_check` takes the maintained
-  languages from `ResolvedProject`, not from the registry's graph.
+  into Model Analysis are as built since #560: `KognioRdfModelSnapshots` reads one
+  snapshot of every context's published language per call and the component names no
+  module of any of them (`DependencyRulesTest` rule 13). `store_check` still takes the
+  maintained languages from `ResolvedProject`, not from the registry's graph.
 - `CONFORMIST`, four relationships: the project registry upstream of the four model
   contexts. As built, no context reads the registry's graph. The contexts take
   `ProjectId` and the language commitments as they are, through the Shared Kernel
@@ -86,7 +87,7 @@ Target: the Components stay as they are and the Bounded Contexts become Maven pa
 above them; no core is merged -- module schema, no record behind it. The two contexts
 with two Components get a `<bc>-shared` (typed codes, the context's one `TermRef`);
 Actor, Architecture & Decisions and Model Analysis hold one Component each and need
-none (ADR-57). No `api` module (ADR-58). Model Analysis becomes an eighth Component
+none (ADR-57). No `api` module (ADR-58). Model Analysis is an eighth Component
 (ADR-54). Implementation: #439, #441, #560, #561.
 
 Built for Product & Requirements (#439): `arknet-product-requirements` is the Maven
@@ -100,6 +101,17 @@ two Components and of the vocabulary module `arknet-domain-modelling-shared`, wh
 holds `TermCode`; the bounded-context Component gave up its own `TermRef` and its
 borrowed in-port. Everywhere else the Component is still the Maven parent.
 
+Built for Model Analysis (#560): `arknet-model-analysis` is the Maven parent of the
+one read-only Component. Its core holds the traced graph and the three store checks,
+its `-adapter-kogniordf` serves the two out-ports (`ModelSnapshots`,
+`ResourceHandleLookup`) out of the shared store read path, and its `-adapter-mcp`
+carries the five evaluation tools and `store_check`. The generic read model those
+tools read (`StoreReader`, `StoreSnapshot`, `StoreResource`, `Triple`, `RdfNode`,
+`Prefixes`, `HandleResolver`, `ResourceRenderer`, `Revision`) moved with them out of
+the composition root into `arknet-persistence-support`, where the vocabulary constants
+already are: it is the mechanism by which any published language is read, and both the
+component and the root's type-independent exception speak it.
+
 | Target Bounded Context       | Component (today = Maven parent) | Modules                                   |
 |------------------------------|----------------------------------|-------------------------------------------|
 | Product & Requirements       | arknet-requirements              | -core, -adapter-kogniordf, -adapter-mcp   |
@@ -111,15 +123,15 @@ borrowed in-port. Everywhere else the Component is still the Maven parent.
 | Architecture & Decisions     | arknet-adr                       | -core, -adapter-kogniordf, -adapter-mcp   |
 | Actor                        | arknet-actor                     | -core, -adapter-kogniordf, -adapter-mcp   |
 | Project Registry             | arknet-project                   | -core, -adapter-kogniordf, -adapter-mcp   |
-| Model Analysis               | arknet-model-analysis (target)   | -core, -adapter-kogniordf, -adapter-mcp, -adapter-html |
+| Model Analysis               | arknet-model-analysis            | -core, -adapter-kogniordf, -adapter-mcp (an -adapter-html follows with the report, #560 step 2) |
 
 Outside every Bounded Context:
 
 | Role in the schema                 | Module                          | Note |
 |------------------------------------|---------------------------------|------|
-| Application (composition root)     | arknet-mcp                      | Spring Boot daemon; additionally carries the generic store read path, the type-independent exception (ADR-55: `store_overview`, `resource_get`). The five cross-context evaluations, `store_check`, `text_search` and the HTML report still live here; their target is Model Analysis (ADR-54, #560) |
+| Application (composition root)     | arknet-mcp                      | Spring Boot daemon; carries the type-independent exception (ADR-55: `store_overview`, `resource_get`, `resource_history`, `project_export`) and `text_search`, which reads literals without knowing a type. The HTML report still lives here and still composes the in-ports of every context; its target is Model Analysis (ADR-54, #560 step 2) |
 | Shared Kernel                      | arknet-shared-kernel            | ADR-56: ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale, LocalizedLiteral. `DependencyRulesTest` rule 12 lists the admitted terms, so a new type in the package turns a test red |
-| Technical library                  | arknet-persistence-support      | SHACL gate, WriteFunnel, vocabulary constants -- no model term, hence neither Shared Kernel nor vocabulary |
+| Technical library                  | arknet-persistence-support      | SHACL gate, WriteFunnel, vocabulary constants and, since #560, the type-independent read path over a project's dataset (StoreReader, the triple read model, Prefixes, HandleResolver, ResourceRenderer) -- no model term, hence neither Shared Kernel nor vocabulary |
 | Technical library                  | arknet-mcp-support              | Support of the driving MCP adapters and the composition root: ProjectResolver/ResolvedProject, StaleTranslationHint/FieldLanguageLookup, WriteResponse, ToolParameterDescriptions. No core and no vocabulary module depends on it (rule 11) |
 | Technical library (test scope)     | arknet-persistence-test-support | Guarded* decorators |
 | Published Language (schema)        | arknet-ontology                 | .ttl ontologies and shapes |
@@ -132,8 +144,8 @@ As built (from the POMs):
 - Every `-core` depends only on `arknet-shared-kernel`, plus its own context's
   vocabulary module where one exists (`arknet-product-requirements-shared`,
   `arknet-domain-modelling-shared`). No core depends on a neighbouring core.
-- Every `-adapter-kogniordf` depends on its own core, `arknet-ontology` and
-  `arknet-persistence-support`; on no neighbouring module. It resolves neighbour codes
+- Every `-adapter-kogniordf` depends on its own core and `arknet-persistence-support`,
+  the writing ones additionally on `arknet-ontology`; on no neighbouring module. It resolves neighbour codes
   by SPARQL in the neighbour's graph (Published Language).
 - Every `-adapter-mcp` and `arknet-mcp` depend on `arknet-mcp-support`; it is not
   reachable transitively, because no core depends on it.
@@ -144,7 +156,7 @@ As built (from the POMs):
   - bounded-context-mcp: none since #441 -- it asks its own `ResolveLinkedTerms`
     in-port, served by `TermLookup#codesById` over the glossary's Published Language
   - adr-mcp -> requirements-core, ubiquitous-language-core, bounded-context-core
-  - actor-mcp, project-mcp, ubiquitous-language-mcp: none
+  - actor-mcp, project-mcp, ubiquitous-language-mcp, model-analysis-mcp: none
 
 Target (ADR-49): one mechanism for every edge, inside and across context boundaries.
 The core defines its own out-port for whatever it needs from a neighbour; the
@@ -157,13 +169,13 @@ its own core only; no module of a Component depends on a module of another.
 
 | Mandatory per schema                          | arknet as built                                     |
 |-----------------------------------------------|-----------------------------------------------------|
-| Bounded Context as Maven parent               | built for Product & Requirements (#439) and Domain Modelling (#441); elsewhere the parent is still the Component (#560) |
+| Bounded Context as Maven parent               | built for Product & Requirements (#439), Domain Modelling (#441) and Model Analysis (#560); for the three contexts with one Component each the parent is still the Component |
 | `api` per Component                           | not required: extension stage, no foreign in-port caller in arknet (ADR-58) |
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
 | `<bc>-shared` once ownerless identities exist | built for both contexts that need one: `arknet-product-requirements-shared` (RequirementCode, ConstraintCode, TermRef; #439) and `arknet-domain-modelling-shared` (TermCode; #441) |
-| Application outside every Bounded Context     | present (arknet-mcp)                                 |
-| dependency rules as a checker                 | partial: ArchUnit carries the rule that no module of a Component depends on a module of another for Product & Requirements (#439) and Domain Modelling (#441), plus that a driving adapter sees only in-ports and domain types, that a `<bc>-shared` hangs on nothing but the Shared Kernel, that no core or vocabulary module reaches into `arknet-mcp-support`, and that the Shared Kernel holds exactly the terms ADR-56 admits (#561); the other contexts still borrow in-ports (ADR-49; #560) |
+| Application outside every Bounded Context     | present (arknet-mcp); it holds no evaluation any more, only wiring, the type-independent exception and the HTML report still to move |
+| dependency rules as a checker                 | partial: ArchUnit carries the rule that no module of a Component depends on a module of another for Product & Requirements (#439) and Domain Modelling (#441), plus that a driving adapter sees only in-ports and domain types, that a `<bc>-shared` hangs on nothing but the Shared Kernel, that no core or vocabulary module reaches into `arknet-mcp-support`, and that the Shared Kernel holds exactly the terms ADR-56 admits (#561), and that Model Analysis names no module of the contexts it reads (#560); the other contexts still borrow in-ports (ADR-49) |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |
 
 ## 6. Cross-cutting concepts (pointers only)
@@ -179,9 +191,10 @@ its own core only; no module of a Component depends on a module of another.
 
 ## 7. What moves this file
 
-- Part B of the context cut (#560): Model Analysis as a Component, and the in-ports
-  still borrowed across the remaining contexts (ADR-49). Sections 3 to 5 then describe
-  one shape instead of two.
+- The rest of #560: the HTML report leaves the composition root into an
+  `-adapter-html` of Model Analysis, with its read model separated from its rendering,
+  which is what ends the report's borrowed in-ports into every context (ADR-49,
+  ADR-55). Sections 3 to 5 then describe one shape instead of two.
 - #77: the building-block view moves into the store; this file goes away. Before
   that, a successor of ADR-46 (components move from "outside" to "not yet built"),
   see the comment on #77.

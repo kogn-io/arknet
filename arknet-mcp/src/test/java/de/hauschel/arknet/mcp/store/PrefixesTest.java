@@ -9,6 +9,8 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.persistence.Prefixes;
+
 /**
  * Unit tests for the domain-agnostic CURIE / IRI resolution.
  */

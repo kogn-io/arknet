@@ -15,7 +15,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.mcp.mention.LabelMentions;
+import de.hauschel.arknet.analysis.domain.LabelMentions;
 import de.hauschel.arknet.ul.domain.Term;
 
 /**

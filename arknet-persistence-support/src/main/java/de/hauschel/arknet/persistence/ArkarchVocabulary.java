@@ -9,7 +9,7 @@ package de.hauschel.arknet.persistence;
  * them (the ADR out-adapter,
  * {@code de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepository}) and the code that
  * <em>reads</em> them ({@code arknet-mcp}'s traceability read path,
- * {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph}, which traverses
+ * {@code de.hauschel.arknet.analysis.domain.TraceabilityGraph}, which traverses
  * {@code addressesRequirement}/{@code affectsContext} backwards and, since kogn-io/arknet#357,
  * {@code supersededBy} forwards for {@code impact_analysis} (the pre-#357
  * {@code supersedes} shape, where store-first data still carries it, stays in the backward set

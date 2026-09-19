@@ -15,6 +15,12 @@ import java.util.Set;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.HandleResolver;
+import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.RdfNode;
+import de.hauschel.arknet.persistence.StoreResource;
+import de.hauschel.arknet.persistence.StoreSnapshot;
+import de.hauschel.arknet.persistence.Triple;
 
 /**
  * Renders the compact, token-cheap text digest an agent gets back from {@code

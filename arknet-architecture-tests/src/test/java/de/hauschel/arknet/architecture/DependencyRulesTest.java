@@ -56,9 +56,10 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
  * invariant on purpose -- add a {@code private org.eclipse.rdf4j.model.Model x;} field to
  * {@code ShaclWriteGate} (rule 1), to a {@code KognioRdf*Repository} (rule 2), to a
  * {@code *-core} class (rule 3), to a {@code *-adapter-mcp} class (rule 4), to a
- * {@code de.hauschel.arknet.mcp} class such as {@code StoreReader} (rule 5), or to a
+ * {@code de.hauschel.arknet.mcp} class such as {@code StoreReportTools} (rule 5), or to a
  * {@code de.hauschel.arknet.kernel} class (rule 6) -- and confirm the rule fails before
- * trusting it. All six were confirmed to fail this way when introduced. Rule 12 is the one
+ * trusting it. All six were confirmed to fail this way when introduced. Rule 13 is broken the
+ * same way, by naming a neighbour's type in a {@code de.hauschel.arknet.analysis} class. Rule 12 is the one
  * rule that does not need the exercise: it turns red on any class in the kernel package whose
  * name is not on its list, which is the whole of what it claims.</p>
  *
@@ -103,7 +104,7 @@ class DependencyRulesTest {
             "DisplayLocale",
             "LocalizedLiteral");
 
-    /** The model bounded contexts, by their package abbreviation (see CLAUDE.md). */
+    /** The bounded contexts, by their package abbreviation (see CLAUDE.md). */
     private static final String[] BOUNDED_CONTEXT_PACKAGES = {
             "de.hauschel.arknet.req..",
             "de.hauschel.arknet.ul..",
@@ -111,7 +112,25 @@ class DependencyRulesTest {
             "de.hauschel.arknet.bc..",
             "de.hauschel.arknet.adr..",
             "de.hauschel.arknet.prj..",
-            "de.hauschel.arknet.actor.."
+            "de.hauschel.arknet.actor..",
+            "de.hauschel.arknet.analysis.."
+    };
+
+    /**
+     * The contexts that own a piece of the architecture model, and their vocabulary modules --
+     * everything model analysis reads but must not name (rule 13). Deliberately not
+     * {@link #BOUNDED_CONTEXT_PACKAGES}: that set contains model analysis itself, and a rule
+     * cannot ban a context from depending on its own packages.
+     */
+    private static final String[] MODEL_CONTEXT_PACKAGES = {
+            "de.hauschel.arknet.req..",
+            "de.hauschel.arknet.ul..",
+            "de.hauschel.arknet.uc..",
+            "de.hauschel.arknet.bc..",
+            "de.hauschel.arknet.adr..",
+            "de.hauschel.arknet.prj..",
+            "de.hauschel.arknet.actor..",
+            "de.hauschel.arknet.*.shared.."
     };
 
     /**
@@ -127,6 +146,7 @@ class DependencyRulesTest {
             "de.hauschel.arknet.adr..",
             "de.hauschel.arknet.prj..",
             "de.hauschel.arknet.actor..",
+            "de.hauschel.arknet.analysis..",
             "de.hauschel.arknet.*.shared.."
     };
 
@@ -218,8 +238,8 @@ class DependencyRulesTest {
      * {@code TraceabilityGraph}; #185).
      *
      * <p>Unlike rules 3 and 4, this does not ban {@code io.kogn} wholesale: the composition
-     * root's generic store-read path ({@code mcp/store}, {@code mcp/trace}) deliberately reads
-     * the technology-neutral kognio-rdf ports directly, so only {@link
+     * root's remaining generic store-read path ({@code mcp/store}, {@code mcp/search})
+     * deliberately reads the technology-neutral kognio-rdf ports directly, so only {@link
      * #RDF4J_PACKAGES} -- RDF4J itself and kognio-rdf's RDF4J-backed implementations -- is
      * checked here.</p>
      */
@@ -398,6 +418,30 @@ class DependencyRulesTest {
                     .should(beOneOfTheAdmittedSharedKernelTerms())
                     .because("ADR-56 makes admission to the shared kernel a decision per term; "
                             + "an unlisted type in the kernel is a decision nobody made");
+
+    /**
+     * Rule 13 -- model analysis names no module of the contexts it reads (ADR-54, ADR-49).
+     *
+     * <p>It is the one context that knows the metamodel of every other, and it knows it the only
+     * way a context may know a neighbour: as the published language in the store, read through
+     * its own out-port and addressed by the {@code Ark*Vocabulary} predicate constants. The
+     * moment a class here names a requirement, a term, a use case, a bounded context, a decision,
+     * an actor or a project -- or one of the vocabulary modules those contexts share -- the
+     * component has stopped reading a published language and started depending on its
+     * neighbours, which is the construction it was cut out of the composition root to end.</p>
+     *
+     * <p>The rule reads bytecode, not POMs, like every rule here: a dependency declared but never
+     * used stays green. Closing that half would need {@code maven-enforcer-plugin}
+     * ({@code bannedDependencies}), which this module has deliberately stayed out of; today no
+     * POM of the component names any of these modules, and the property breaks on use.</p>
+     */
+    @ArchTest
+    static final ArchRule model_analysis_names_no_module_of_the_contexts_it_reads =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.analysis..")
+                    .should().dependOnClassesThat().resideInAnyPackage(MODEL_CONTEXT_PACKAGES)
+                    .because("model analysis owns no resource and reads every context over its "
+                            + "published language in the store, never over one of its modules");
 
     private static ArchCondition<JavaClass> beOneOfTheAdmittedSharedKernelTerms() {
         return new ArchCondition<>("be one of the terms ADR-56 admits to the shared kernel") {

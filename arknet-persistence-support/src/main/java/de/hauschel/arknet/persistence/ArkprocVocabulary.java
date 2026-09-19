@@ -8,7 +8,7 @@ package de.hauschel.arknet.persistence;
  * the single source of truth shared by the code that <em>writes</em> them (the actor out-adapter,
  * {@code de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepository}) and the code that
  * <em>reads</em> them: {@code arknet-mcp}'s traceability read path
- * ({@code de.hauschel.arknet.mcp.trace.TraceabilityGraph#actorIris()}) and the architecture tests
+ * ({@code de.hauschel.arknet.analysis.domain.TraceabilityGraph#actorIris()}) and the architecture tests
  * that hold the Actor taxonomy and its {@code arkproc:filledBy} delete-guard against the shipped
  * ontology ({@code ActorVocabularyMatchesOntologyTest},
  * {@code ReferenceGuardsCoverEveryOntologyEdgeTest}).

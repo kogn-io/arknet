@@ -17,10 +17,10 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.mcp.store.Prefixes;
-import de.hauschel.arknet.mcp.store.RdfNode;
-import de.hauschel.arknet.mcp.store.StoreSnapshot;
-import de.hauschel.arknet.mcp.store.Triple;
+import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.RdfNode;
+import de.hauschel.arknet.persistence.StoreSnapshot;
+import de.hauschel.arknet.persistence.Triple;
 
 /**
  * The report renders the model the way it was authored, and still cannot lose anything the

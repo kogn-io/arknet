@@ -7,6 +7,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.ResourceRenderer;
+
 /**
  * The display/drill-down handle for a resource, shared by {@link DigestRenderer} (every listed
  * resource of {@code store_overview}) and {@link StoreReportTools} (an incoming neighbour shown
