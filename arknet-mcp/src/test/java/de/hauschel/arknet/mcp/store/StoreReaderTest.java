@@ -38,7 +38,7 @@ import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
-import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;

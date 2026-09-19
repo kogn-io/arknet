@@ -1,0 +1,1329 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Fred Hauschel
+
+package de.hauschel.arknet.req.adapter.mcp;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.ai.mcp.annotation.provider.tool.SyncMcpToolProvider;
+
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
+import de.hauschel.arknet.req.application.port.in.AddRequirement;
+import de.hauschel.arknet.req.application.port.in.DeleteRequirement;
+import de.hauschel.arknet.req.application.port.in.DescribeRequirementDisplayFallback;
+import de.hauschel.arknet.req.application.port.in.GetRequirement;
+import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
+import de.hauschel.arknet.req.application.port.in.LinkConstraint;
+import de.hauschel.arknet.req.application.port.in.LinkTerm;
+import de.hauschel.arknet.req.application.port.in.ListRequirements;
+import de.hauschel.arknet.req.application.port.in.ProposeRequirement;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints.ResolvedConstraint;
+import de.hauschel.arknet.req.application.port.in.UnlinkConstraint;
+import de.hauschel.arknet.req.application.port.in.UnlinkTerm;
+import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
+import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
+import de.hauschel.arknet.pr.shared.ConstraintCode;
+import de.hauschel.arknet.req.domain.ConstraintNotLinkedException;
+import de.hauschel.arknet.req.domain.ConstraintRef;
+import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.RemovedPositions;
+import de.hauschel.arknet.req.domain.Requirement;
+import de.hauschel.arknet.pr.shared.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementDisplayFallback;
+import de.hauschel.arknet.req.domain.RequirementId;
+import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
+import de.hauschel.arknet.req.domain.RequirementStatus;
+import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.req.domain.TermNotLinkedException;
+import de.hauschel.arknet.pr.shared.TermRef;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
+import de.hauschel.arknet.dm.shared.TermCode;
+import de.hauschel.arknet.kernel.FieldLanguageLookup;
+import de.hauschel.arknet.kernel.StaleTranslationHint;
+
+/**
+ * Scaffold-level check that the adapter declares exactly the eleven requirement
+ * tools and guards its in-port dependencies, plus the term-display-resolution
+ * contract ({@link ResolveTerms}): renders the resolved
+ * business code, falls back to the bare IRI for an id it cannot resolve, and never
+ * issues more than one batch call per rendering.
+ */
+class RequirementMcpToolsTest {
+
+    /**
+     * The stale-translation signal over an empty store (kogn-io/arknet#474): every test that sets
+     * up no language inventory keeps the answer it always had, because a field that carries no
+     * other language has nothing to report.
+     */
+    private static final StaleTranslationHint NO_TRANSLATIONS = hints(Map.of());
+
+    /** A lookup answering the same field-to-tags inventory for every resource. */
+    private static StaleTranslationHint hints(Map<String, Set<String>> byField) {
+        return new StaleTranslationHint(new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                return byField;
+            }
+        });
+    }
+
+    private static final RequirementId ID =
+            new RequirementId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
+
+    private static final String RATIONALE =
+            "so that support stops resetting passwords by hand for every locked-out user";
+
+    /** Fake resolver: every call routes to the same fixed project, ignoring the origin. */
+    private static final ProjectId PROJECT = new ProjectId("test-project");
+
+    /** Stands in for the registry lookup: every anchor this test sends resolves to {@link #PROJECT}. */
+    private static final ProjectResolver PROJECTS = anchor -> new ResolvedProject(PROJECT, null);
+
+    private final Stub stub = new Stub();
+    private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
+    private final RecordingResolveConstraints resolveConstraints = new RecordingResolveConstraints();
+    private final RequirementMcpTools adapter = new RequirementMcpTools(
+            stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+            resolveConstraints, PROJECTS, NO_TRANSLATIONS);
+
+    @Test
+    void declaresTheElevenRequirementTools() {
+        List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
+                .map(m -> m.getAnnotation(McpTool.class))
+                .filter(a -> a != null)
+                .map(McpTool::name)
+                .toList();
+
+        assertEquals(11, names.size());
+        assertTrue(names.containsAll(List.of(
+                "req_add", "req_list", "req_get", "req_set_status", "req_link_term", "req_unlink_term",
+                "req_link_constraint", "req_unlink_constraint", "req_update", "req_delete", "req_schema")));
+    }
+
+    @Test
+    void rejectsNullInPort() {
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        null, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, null, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, null, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, null, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, null, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, null, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, null, stub, stub, stub, stub, stub, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, null, stub, stub, stub, stub, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, null, stub, stub, stub, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, null, stub, stub, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null, stub, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null, stub, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null, resolveTerms,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null,
+                        resolveConstraints, PROJECTS, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                        null, PROJECTS, NO_TRANSLATIONS));
+    }
+
+    @Test
+    void rejectsNullProjectResolver() {
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                        resolveConstraints, null, NO_TRANSLATIONS));
+    }
+
+    /**
+     * The per-call {@link org.springframework.ai.mcp.annotation.context.McpSyncRequestContext}
+     * parameter is a framework type, not a caller-facing tool argument: Spring AI
+     * must exclude it from the generated tool input schema. Proven against the real annotation
+     * scanner ({@link SyncMcpToolProvider}), not just asserted - {@code req_add}'s schema carries
+     * its documented business inputs and no {@code context} property.
+     */
+    @Test
+    void perCallContextParameterIsExcludedFromTheGeneratedToolSchema() {
+        Map<String, Object> addSchema = new SyncMcpToolProvider(List.of(adapter)).getToolSpecifications().stream()
+                .filter(s -> s.tool().name().equals("req_add"))
+                .findFirst().orElseThrow()
+                .tool().inputSchema();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> properties = (Map<String, Object>) addSchema.get("properties");
+        assertTrue(properties.containsKey("title"), properties::toString);
+        assertTrue(properties.containsKey("acceptanceCriteria"), properties::toString);
+        assertFalse(properties.containsKey("context"), properties::toString);
+    }
+
+    /** {@code req_schema} delegates to {@link GetRequirementSchema} and renders every term. */
+    @Test
+    void schemaRendersEveryTermFromTheInPort() {
+        String rendered = adapter.schema();
+
+        assertTrue(rendered.contains("Priority: Priorisierung nach MoSCoW. "
+                + "(values: MUST_HAVE, SHOULD_HAVE, COULD_HAVE, WONT_HAVE)"), rendered);
+    }
+
+    /** The mandatory acceptance criteria reach {@link AddRequirement} and are rendered. */
+    @Test
+    void addPassesAcceptanceCriteriaThroughAndRendersThem() {
+        List<String> criteria = List.of("Login succeeds with valid credentials", "Login is rate-limited");
+
+        String rendered = adapter.add(null, "t", "d", null, "FUNCTIONAL", criteria, null, null, null, null, null);
+
+        assertEquals(criteria, stub.lastAddCommand.acceptanceCriteria());
+        assertTrue(rendered.contains("[done when: Login succeeds with valid credentials; Login is rate-limited]"),
+                rendered);
+    }
+
+    /**
+     * {@code req_get}/{@code req_list} must render a requirement's normative statement, not just
+     * its title - the actual bug behind issue #249. Mirrors {@link ConstraintPresenter}'s
+     * {@code title: statement} rendering.
+     */
+    @Test
+    void addRendersTheNormativeDescriptionAlongsideTheTitle() {
+        String rendered = adapter.add(null, "Login", "The system shall authenticate users via OAuth2", null,
+                "FUNCTIONAL", List.of("Done when it works"), null, null, null, null, null);
+
+        assertTrue(rendered.contains("The system shall authenticate users via OAuth2"), rendered);
+    }
+
+    /**
+     * {@code acceptanceCriteria} carries no {@code required = false} - a missing value is
+     * caught by the domain's {@code sh:minCount 1} invariant ({@link Requirement}'s compact
+     * constructor), not silently normalised away here.
+     */
+    @Test
+    void addWithoutAcceptanceCriteriaIsRejectedByTheDomainInvariant() {
+        assertThrows(IllegalArgumentException.class,
+                () -> adapter.add(null, "t", "d", null, "FUNCTIONAL", null, null, null, null, null, null));
+    }
+
+    // --- rationale (issue #321) --------------------------------------------------------------
+
+    /** {@code req_add}'s optional rationale reaches {@link AddRequirement} and is rendered. */
+    @Test
+    void addPassesTheRationaleThroughAndRendersIt() {
+        String rendered = adapter.add(null, "t", "d", RATIONALE, "FUNCTIONAL", List.of("Done when it works"),
+                null, null, null, null, null);
+
+        assertEquals(RATIONALE, stub.lastAddCommand.rationale());
+        assertTrue(rendered.contains("[why: " + RATIONALE + "]"), rendered);
+    }
+
+    /** A requirement without a recorded reason renders no {@code [why: ]} block at all. */
+    @Test
+    void addWithoutARationaleRendersNoWhyBlock() {
+        String rendered = adapter.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"),
+                null, null, null, null, null);
+
+        assertNull(stub.lastAddCommand.rationale());
+        assertFalse(rendered.contains("[why:"), rendered);
+    }
+
+    /** A blank rationale is treated as omitted, mirroring every other optional string field. */
+    @Test
+    void addTreatsABlankRationaleAsOmitted() {
+        adapter.add(null, "t", "d", "   ", "FUNCTIONAL", List.of("Done when it works"), null, null, null, null,
+                null);
+
+        assertNull(stub.lastAddCommand.rationale());
+    }
+
+    /** {@code req_update} carries the rationale down to {@link UpdateRequirement}. */
+    @Test
+    void updatePassesTheRationaleThrough() {
+        adapter.update(null, "FR-1", null, null, RATIONALE, null, null, null, null, null, null, null);
+
+        assertEquals(RATIONALE, stub.lastUpdateRationale);
+    }
+
+    /** An omitted rationale reaches the port as {@code null} - "leave it alone", never "remove it". */
+    @Test
+    void updateWithoutARationalePassesNullThrough() {
+        adapter.update(null, "FR-1", "New title", null, null, null, null, null, null, null, null, null);
+
+        assertNull(stub.lastUpdateRationale);
+    }
+
+    /**
+     * {@code req_add}'s explicit {@code language} argument reaches {@link
+     * AddRequirement.NewRequirement} unchanged - this adapter never merges it with the project's
+     * configured default language itself (unlike {@code displayLocale}'s {@code
+     * effectiveDisplayLocale} merge); the explicit-wins-otherwise-fall-back-to-default resolution
+     * (issue #258) happens one layer down, in {@link AddRequirement#add}, via {@code
+     * LanguageTag#resolveWriteLanguage}.
+     */
+    @Test
+    void addPassesTheLanguageThrough() {
+        adapter.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"), null, null, "de", null, null);
+
+        assertEquals("de", stub.lastAddCommand.language());
+    }
+
+    /** A blank {@code language} is treated as omitted (untagged), mirroring every other optional field. */
+    @Test
+    void addTreatsABlankLanguageAsOmitted() {
+        adapter.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"), null, null, "  ", null, null);
+
+        assertEquals(null, stub.lastAddCommand.language());
+    }
+
+    /** An explicit {@code req_get} {@code displayLocale} wins over the project's own default. */
+    @Test
+    void getPassesAnExplicitDisplayLocaleThrough() {
+        RequirementMcpTools adapterWithDefault = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
+
+        adapterWithDefault.get(null, "FR-1", "en", null);
+
+        assertEquals("en", stub.lastGetDisplayLocale);
+    }
+
+    /** An omitted {@code req_get} {@code displayLocale} falls back to the project's own default. */
+    @Test
+    void getFallsBackToTheProjectsDefaultLanguageWhenDisplayLocaleIsOmitted() {
+        RequirementMcpTools adapterWithDefault = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
+
+        adapterWithDefault.get(null, "FR-1", null, null);
+
+        assertEquals("de", stub.lastGetDisplayLocale);
+    }
+
+    /**
+     * {@code req_list} falls back to the resolved project's own configured default language
+     * automatically when its own {@code displayLocale} argument is omitted (issue #281) - the
+     * same value {@code req_add}/{@code req_update} already pass to their in-ports. Before issue
+     * #281's fix, {@code RequirementMcpTools#list} called {@code listRequirements.list(projectId)}
+     * without any locale at all, so every listed requirement's title/description was read under
+     * whichever language the process-wide, per-daemon default happened to be - never the calling
+     * project's own, even for a project (like this test's) whose configured default differs from
+     * it.
+     */
+    @Test
+    void listPassesTheProjectsDefaultLanguageThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
+
+        adapterWithGermanDefault.list(null, null, null);
+
+        assertEquals("de", stub.lastListDisplayLocale);
+    }
+
+    /**
+     * {@code req_list}'s own explicit {@code displayLocale} argument wins over the project's
+     * configured default (kogn-io/arknet#475).
+     */
+    @Test
+    void listPassesAnExplicitDisplayLocaleArgumentThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
+
+        adapterWithGermanDefault.list(null, "fr", null);
+
+        assertEquals("fr", stub.lastListDisplayLocale);
+    }
+
+    /**
+     * The core of issue #475: a requirement shown under a fallen-back language (its gegensprache
+     * is missing) carries a visible {@code [fallback: ...]} tag naming the language actually
+     * shown.
+     */
+    @Test
+    void listMarksARequirementWhoseDisplayedLanguageFellBack() {
+        Requirement requirement = new Requirement(ID, new RequirementCode("FR-1"), "t", "d", null,
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, List.of(),
+                DEFAULT_CRITERIA, List.of());
+        stub.allRequirements = List.of(requirement);
+        stub.fallbacksForList = Map.of(requirement.code(), new RequirementDisplayFallback("en", null));
+
+        String rendered = adapter.list(null, null, null);
+
+        assertTrue(rendered.contains("[fallback: title=en]"), rendered);
+    }
+
+    /**
+     * The counterpart to {@link #listMarksARequirementWhoseDisplayedLanguageFellBack}: a
+     * requirement whose gegensprache is present carries no fallback tag at all - the normal case
+     * stays free of noise.
+     */
+    @Test
+    void listLeavesARequirementWithNoFallbackUnmarked() {
+        Requirement requirement = new Requirement(ID, new RequirementCode("FR-1"), "t", "d", null,
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, List.of(),
+                DEFAULT_CRITERIA, List.of());
+        stub.allRequirements = List.of(requirement);
+        stub.fallbacksForList = Map.of();
+
+        String rendered = adapter.list(null, "de", null);
+
+        assertFalse(rendered.contains("[fallback:"), rendered);
+    }
+
+    /** One of the two legal transitions: {@code ACCEPTED} reaches {@link AcceptRequirement}. */
+    @Test
+    void setStatusAcceptsARequirementWhenTargetStatusIsAccepted() {
+        String rendered = adapter.accept(null, "FR-1", "ACCEPTED", null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastAcceptedRequirement);
+        assertTrue(rendered.contains("FR-1"), rendered);
+    }
+
+    /**
+     * The other legal transition (issue #291; an acceptance criterion of FR-5 in arknet's own
+     * store): {@code PROPOSED} reaches {@link ProposeRequirement}, resetting an accepted
+     * requirement rather than being rejected as a dead-end target - the defect this fix closes.
+     */
+    @Test
+    void setStatusProposesARequirementWhenTargetStatusIsProposed() {
+        String rendered = adapter.accept(null, "FR-1", "PROPOSED", null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastProposedRequirement);
+        assertTrue(rendered.contains("FR-1"), rendered);
+    }
+
+    /**
+     * An unknown/unsupported status string must reject with this method's own didactic
+     * message, not the JDK's raw {@code IllegalArgumentException("No enum constant ...")}
+     * from {@link RequirementStatus#valueOf} - the same guard {@code AdrMcpTools.setStatus}
+     * already applies.
+     */
+    @Test
+    void setStatusRejectsAnUnknownStatusWithADidacticMessageInsteadOfARawEnumFailure() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> adapter.accept(null, "FR-1", "DOES_NOT_EXIST", null));
+
+        assertTrue(exception.getMessage().contains("req_set_status"), exception.getMessage());
+        assertTrue(exception.getMessage().contains("DOES_NOT_EXIST"), exception.getMessage());
+    }
+
+    @Test
+    void linkTermPassesTheRawTermCodeThroughToTheInPort() {
+        String rendered = adapter.linkTerm(null, "FR-1", List.of("TERM-1"), null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastLinkedRequirement);
+        assertEquals("TERM-1", stub.lastLinkedTermCode);
+        assertEquals("linked FR-1 -> TERM-1 (usesTerm)\n\nproject: " + PROJECT.value(), rendered);
+    }
+
+    /** {@code req_link_term} draws several edges in one call, one short confirmation line each. */
+    @Test
+    void linkTermLinksEveryCodeInTheListAndAnswersOneLineEach() {
+        String rendered = adapter.linkTerm(null, "FR-1", List.of("TERM-1", "TERM-2"), null);
+
+        assertEquals("TERM-2", stub.lastLinkedTermCode);
+        assertTrue(rendered.contains("linked FR-1 -> TERM-1 (usesTerm)"), rendered);
+        assertTrue(rendered.contains("linked FR-1 -> TERM-2 (usesTerm)"), rendered);
+    }
+
+    @Test
+    void linkConstraintPassesTheRawConstraintCodeThroughToTheInPort() {
+        String rendered = adapter.linkConstraint(null, "FR-1", List.of("TCON-1"), null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastLinkedConstraintRequirement);
+        assertEquals("TCON-1", stub.lastLinkedConstraintCode);
+        assertEquals("linked FR-1 -> TCON-1 (constrainedBy)\n\nproject: " + PROJECT.value(), rendered);
+    }
+
+    /** {@code req_link_constraint} draws several edges in one call, one short confirmation line each. */
+    @Test
+    void linkConstraintLinksEveryCodeInTheListAndAnswersOneLineEach() {
+        String rendered = adapter.linkConstraint(null, "FR-1", List.of("TCON-1", "BCON-1"), null);
+
+        assertEquals("BCON-1", stub.lastLinkedConstraintCode);
+        assertTrue(rendered.contains("linked FR-1 -> TCON-1 (constrainedBy)"), rendered);
+        assertTrue(rendered.contains("linked FR-1 -> BCON-1 (constrainedBy)"), rendered);
+    }
+
+    // --- req_unlink_term / req_unlink_constraint (kogn-io/arknet#598) -------------------------
+
+    @Test
+    void unlinkTermPassesTheRawTermCodeThroughToTheInPort() {
+        String rendered = adapter.unlinkTerm(null, "FR-1", List.of("TERM-1"), null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastUnlinkedTermRequirement);
+        assertEquals("TERM-1", stub.lastUnlinkedTermCode);
+        assertEquals("unlinked FR-1 -> TERM-1 (usesTerm)\n\nproject: " + PROJECT.value(), rendered);
+    }
+
+    /** {@code req_unlink_term} removes several edges in one call, one short confirmation line each. */
+    @Test
+    void unlinkTermUnlinksEveryCodeInTheListAndAnswersOneLineEach() {
+        String rendered = adapter.unlinkTerm(null, "FR-1", List.of("TERM-1", "TERM-2"), null);
+
+        assertEquals("TERM-2", stub.lastUnlinkedTermCode);
+        assertTrue(rendered.contains("unlinked FR-1 -> TERM-1 (usesTerm)"), rendered);
+        assertTrue(rendered.contains("unlinked FR-1 -> TERM-2 (usesTerm)"), rendered);
+    }
+
+    /** Never a silent no-op: the in-port's rejection reaches the caller unchanged. */
+    @Test
+    void unlinkTermPropagatesTheRejectionOfATermThatIsNotLinked() {
+        stub.unlinkTermRejects = true;
+
+        TermNotLinkedException ex = assertThrows(TermNotLinkedException.class,
+                () -> adapter.unlinkTerm(null, "FR-1", List.of("TERM-1"), null));
+
+        assertEquals("TERM-1", ex.termCode());
+    }
+
+    @Test
+    void unlinkConstraintPassesTheRawConstraintCodeThroughToTheInPort() {
+        String rendered = adapter.unlinkConstraint(null, "FR-1", List.of("TCON-1"), null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastUnlinkedConstraintRequirement);
+        assertEquals("TCON-1", stub.lastUnlinkedConstraintCode);
+        assertEquals("unlinked FR-1 -> TCON-1 (constrainedBy)\n\nproject: " + PROJECT.value(), rendered);
+    }
+
+    /** {@code req_unlink_constraint} removes several edges in one call, one short confirmation line each. */
+    @Test
+    void unlinkConstraintUnlinksEveryCodeInTheListAndAnswersOneLineEach() {
+        String rendered = adapter.unlinkConstraint(null, "FR-1", List.of("TCON-1", "BCON-1"), null);
+
+        assertEquals("BCON-1", stub.lastUnlinkedConstraintCode);
+        assertTrue(rendered.contains("unlinked FR-1 -> TCON-1 (constrainedBy)"), rendered);
+        assertTrue(rendered.contains("unlinked FR-1 -> BCON-1 (constrainedBy)"), rendered);
+    }
+
+    /** Never a silent no-op, mirroring {@link #unlinkTermPropagatesTheRejectionOfATermThatIsNotLinked}. */
+    @Test
+    void unlinkConstraintPropagatesTheRejectionOfAConstraintThatIsNotLinked() {
+        stub.unlinkConstraintRejects = true;
+
+        ConstraintNotLinkedException ex = assertThrows(ConstraintNotLinkedException.class,
+                () -> adapter.unlinkConstraint(null, "FR-1", List.of("TCON-1"), null));
+
+        assertEquals("TCON-1", ex.constraintCode());
+    }
+
+    /**
+     * Issue #468: {@code req_set_status}, {@code req_link_term} and {@code req_link_constraint}
+     * share {@code req_update}'s read-modify-write round trip, but - unlike {@code req_update}
+     * since issue #456 - used to always pass a {@code null} {@code defaultLanguage} to their
+     * in-ports regardless of the resolved project's own configured default. A project with
+     * {@code defaultLanguage: de} could therefore get the English title back from
+     * {@code req_set_status}/{@code req_link_term}/{@code req_link_constraint} and the German one
+     * from a directly following {@code req_get}. This pins that the adapter now passes
+     * {@link ResolvedProject#defaultLanguage()} through at every one of these call sites, exactly
+     * as it already does for {@code req_update}.
+     */
+    @Test
+    void acceptPassesTheProjectsDefaultLanguageThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
+
+        adapterWithGermanDefault.accept(null, "FR-1", "ACCEPTED", null);
+
+        assertEquals("de", stub.lastAcceptDefaultLanguage);
+    }
+
+    @Test
+    void proposePassesTheProjectsDefaultLanguageThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
+
+        adapterWithGermanDefault.accept(null, "FR-1", "PROPOSED", null);
+
+        assertEquals("de", stub.lastProposeDefaultLanguage);
+    }
+
+    @Test
+    void linkTermPassesTheProjectsDefaultLanguageThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
+
+        adapterWithGermanDefault.linkTerm(null, "FR-1", List.of("TERM-1"), null);
+
+        assertEquals("de", stub.lastLinkTermDefaultLanguage);
+    }
+
+    @Test
+    void linkConstraintPassesTheProjectsDefaultLanguageThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"), NO_TRANSLATIONS);
+
+        adapterWithGermanDefault.linkConstraint(null, "FR-1", List.of("TCON-1"), null);
+
+        assertEquals("de", stub.lastLinkConstraintDefaultLanguage);
+    }
+
+    /**
+     * Hard invariant, mirroring the term case: an unresolvable constraint falls back to its bare
+     * IRI. Rehung onto {@code req_get} (kogn-io/arknet#598/#600): {@code req_link_constraint} no
+     * longer echoes the whole resource, only {@code req_get}/{@code req_list} still render it.
+     */
+    @Test
+    void formatFallsBackToTheBareIriWhenResolveConstraintsCannotResolveIt() {
+        ResourceId unresolvable = ResourceId.of("https://w3id.org/arknet/id/unknown-constraint");
+        stub.nextGetConstraintIds = List.of(unresolvable);
+        // Deliberately not registered with resolveConstraints - simulates a missing/deleted constraint.
+
+        String rendered = adapter.get(null, "FR-1", null, null);
+
+        assertTrue(rendered.contains("[constraints: https://w3id.org/arknet/id/unknown-constraint]"), rendered);
+    }
+
+    /** {@code req_update} passes every given field through to the in-port. */
+    @Test
+    void updatePassesAllGivenFieldsThroughToTheInPort() {
+        List<String> criteria = List.of("Bundesueberweisung braucht eine Kopfzahl");
+
+        String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", null, criteria, null, null,
+                "SHOULD_HAVE", null, null, null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
+        assertEquals("Neuer Titel", stub.lastUpdateTitle);
+        assertEquals("Neue Beschreibung", stub.lastUpdateDescription);
+        assertEquals(criteria, stub.lastUpdateNewAcceptanceCriteria);
+        assertEquals(Priority.SHOULD_HAVE, stub.lastUpdatePriority);
+        assertTrue(rendered.contains("Neuer Titel"), rendered);
+    }
+
+    /** {@code req_update}'s {@code acceptanceCriteriaTextPatches} reach {@link UpdateRequirement} unchanged. */
+    @Test
+    void updatePassesAcceptanceCriteriaTextPatchesThroughToTheInPort() {
+        adapter.update(null, "FR-1", null, null, null, null,
+                List.of(new RequirementMcpTools.AcceptanceCriterionPatchInput(1, "Korrigierter Text")), null, null, null, null,
+                null);
+
+        assertEquals(List.of(new AcceptanceCriterionTextPatch(1, "Korrigierter Text")),
+                stub.lastUpdateAcceptanceCriteriaTextPatches);
+    }
+
+    /**
+     * {@code req_update}'s {@code removeAcceptanceCriterionPositions} reaches {@link UpdateRequirement}
+     * as a {@link RemovedPositions} (kogn-io/arknet#513).
+     */
+    @Test
+    void updatePassesRemoveAcceptanceCriterionPositionsThroughToTheInPort() {
+        // The stub's fixture requirement carries a single criterion (position 1); appending one
+        // first keeps the removal from emptying the list, which the domain refuses.
+        adapter.update(null, "FR-1", null, null, null, List.of("New criterion"), null, List.of(2), null, null, null, null);
+
+        assertEquals(new RemovedPositions(java.util.Set.of(2)),
+                stub.lastUpdateRemovedAcceptanceCriterionPositions);
+    }
+
+    /**
+     * An omitted field must reach {@link UpdateRequirement} as {@code null} - so the port (not
+     * this adapter) decides that "unchanged" means "leave the existing value" rather than the
+     * adapter silently substituting a blank or empty value.
+     */
+    @Test
+    void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
+        adapter.update(null, "FR-1", null, null, null, null, null, null, null, null, null, null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
+        assertEquals(null, stub.lastUpdateTitle);
+        assertEquals(null, stub.lastUpdateDescription);
+        assertEquals(null, stub.lastUpdateNewAcceptanceCriteria);
+        assertEquals(null, stub.lastUpdateAcceptanceCriteriaTextPatches);
+        assertEquals(null, stub.lastUpdatePriority);
+        assertEquals(null, stub.lastUpdateUsesTermCodes);
+    }
+
+    /**
+     * {@code req_update}'s {@code usesTermCodes} reaches {@link UpdateRequirement} unchanged
+     * (kogn-io/arknet#540) - an empty list is the explicit signal to remove every link, distinct
+     * from the omitted ({@code null}) case above.
+     */
+    @Test
+    void updatePassesUsesTermCodesThroughToTheInPort() {
+        adapter.update(null, "FR-1", null, null, null, null, null, null, null, List.of("TERM-1", "TERM-2"), null,
+                null);
+
+        assertEquals(List.of("TERM-1", "TERM-2"), stub.lastUpdateUsesTermCodes);
+    }
+
+    /** An empty {@code usesTermCodes} list reaches the in-port as an empty list, not {@code null}. */
+    @Test
+    void updatePassesAnEmptyUsesTermCodesListThroughDistinctFromOmitted() {
+        adapter.update(null, "FR-1", null, null, null, null, null, null, null, List.of(), null, null);
+
+        assertEquals(List.of(), stub.lastUpdateUsesTermCodes);
+    }
+
+    /**
+     * The concrete case behind the priority parameter - correcting a requirement
+     * mis-prioritised as {@code MUST_HAVE} down to {@code SHOULD_HAVE} without restating any
+     * other field, and without the round trip through {@code req_add} that would mint a new code
+     * and orphan every reference into the old one.
+     */
+    @Test
+    void updateCanCorrectOnlyThePriority() {
+        String rendered = adapter.update(null, "FR-1", null, null, null, null, null, null, "SHOULD_HAVE", null, null, null);
+
+        assertEquals(Priority.SHOULD_HAVE, stub.lastUpdatePriority);
+        assertEquals(null, stub.lastUpdateTitle);
+        assertEquals(null, stub.lastUpdateDescription);
+        assertEquals(null, stub.lastUpdateNewAcceptanceCriteria);
+        assertTrue(rendered.contains("SHOULD_HAVE"), rendered);
+    }
+
+    /**
+     * A blank priority is an omitted one, not a parse attempt: MCP clients that send "" for an
+     * unfilled optional string must not trip {@link Priority#valueOf} - the same tolerance
+     * {@code req_add} already applies.
+     */
+    @Test
+    void updateTreatsABlankPriorityAsOmitted() {
+        adapter.update(null, "FR-1", null, null, null, null, null, null, "  ", null, null, null);
+
+        assertEquals(null, stub.lastUpdatePriority);
+    }
+
+    /** An unknown priority is rejected loudly rather than silently dropped. */
+    @Test
+    void updateRejectsAnUnknownPriority() {
+        assertThrows(IllegalArgumentException.class,
+                () -> adapter.update(null, "FR-1", null, null, null, null, null, null, "NICE_TO_HAVE", null, null, null));
+    }
+
+    /** {@code req_update}'s {@code language} argument reaches {@link UpdateRequirement} unchanged. */
+    @Test
+    void updatePassesTheLanguageThrough() {
+        adapter.update(null, "FR-1", "Neuer Titel", null, null, null, null, null, null, null, "de", null);
+
+        assertEquals("de", stub.lastUpdateLanguage);
+    }
+
+    /**
+     * The resolvable case: a linked term shows its business code, not the raw IRI. Rehung onto
+     * {@code req_get} (kogn-io/arknet#598/#600): {@code req_link_term} no longer echoes the whole
+     * resource, only {@code req_get}/{@code req_list} still render it.
+     */
+    @Test
+    void formatRendersTheResolvedTermCodeInsteadOfTheBareIri() {
+        ResourceId termResourceId = ResourceId.of("https://w3id.org/arknet/id/some-term");
+        resolveTerms.register(termResourceId, new TermCode("TERM-7"));
+        stub.nextGetTermIds = List.of(termResourceId);
+
+        String rendered = adapter.get(null, "FR-1", null, null);
+
+        assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
+    }
+
+    /**
+     * Hard invariant: an id {@link ResolveTerms} cannot resolve must never be dropped from the
+     * rendering and must never make {@code format} throw - it falls back to the bare IRI.
+     */
+    @Test
+    void formatFallsBackToTheBareIriWhenResolveTermsCannotResolveIt() {
+        ResourceId unresolvable = ResourceId.of("https://w3id.org/arknet/id/unknown-term");
+        stub.nextGetTermIds = List.of(unresolvable);
+        // Deliberately not registered with resolveTerms - simulates a missing/deleted term.
+
+        String rendered = adapter.get(null, "FR-1", null, null);
+
+        assertTrue(rendered.contains("[terms: https://w3id.org/arknet/id/unknown-term]"), rendered);
+    }
+
+    /**
+     * A store-first term with several {@code dcterms:identifier}
+     * triples is shape-legal (no {@code sh:maxCount}) and makes
+     * {@code KognioRdfTermRepository#findByIds} return more than one {@link ResolvedTerm} for the
+     * same identity - see that class for the source-level fix. This pins the structural,
+     * implementation-independent backstop in {@link RequirementMcpTools}: even if a
+     * {@link ResolveTerms} implementation returned duplicate entries for one id, {@code format}
+     * must still not throw. A naive {@code Collectors.toMap(t -> t.id(), t -> t)} throws
+     * {@code IllegalStateException} on exactly this input.
+     */
+    @Test
+    void formatNeverThrowsWhenResolveTermsReturnsDuplicateEntriesForTheSameIdentity() {
+        ResourceId duplicated = ResourceId.of("https://w3id.org/arknet/id/duplicated-term");
+        resolveTerms.register(duplicated, new TermCode("TERM-7"));
+        resolveTerms.register(duplicated, new TermCode("TERM-7"));
+        stub.nextGetTermIds = List.of(duplicated);
+
+        String rendered = adapter.get(null, "FR-1", null, null);
+
+        assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
+    }
+
+    /** {@code format} for a single requirement issues exactly one batch call, not one per term. */
+    @Test
+    void formatOfASingleRequirementCallsResolveTermsExactlyOnce() {
+        ResourceId first = ResourceId.of("https://w3id.org/arknet/id/term-a");
+        ResourceId second = ResourceId.of("https://w3id.org/arknet/id/term-b");
+        resolveTerms.register(first, new TermCode("TERM-1"));
+        resolveTerms.register(second, new TermCode("TERM-2"));
+        stub.nextGetTermIds = List.of(first, second);
+
+        adapter.get(null, "FR-1", null, null);
+
+        assertEquals(1, resolveTerms.callCount());
+    }
+
+    /**
+     * {@code req_list} must not issue one {@link ResolveTerms} call per requirement - a single
+     * batch across every listed requirement's linked terms.
+     */
+    @Test
+    void listResolvesTermsOfAllRequirementsInExactlyOneBatchCall() {
+        ResourceId termA = ResourceId.of("https://w3id.org/arknet/id/term-a");
+        ResourceId termB = ResourceId.of("https://w3id.org/arknet/id/term-b");
+        resolveTerms.register(termA, new TermCode("TERM-1"));
+        resolveTerms.register(termB, new TermCode("TERM-2"));
+        stub.allRequirements = List.of(
+                requirementWithTerms("FR-1", termA),
+                requirementWithTerms("FR-2", termB));
+
+        String rendered = adapter.list(null, null, null);
+
+        assertEquals(1, resolveTerms.callCount());
+        assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
+        assertTrue(rendered.contains("[terms: TERM-2]"), rendered);
+    }
+
+    @Test
+    void listOfRequirementsWithoutAnyLinkedTermsDoesNotCallResolveTerms() {
+        stub.allRequirements = List.of(requirementWithTerms("FR-1"));
+
+        adapter.list(null, null, null);
+
+        assertEquals(0, resolveTerms.callCount());
+    }
+
+    // --- Answer shapes: project line, short link confirmation, list-field diff ---------------
+
+    /**
+     * kogn-io/arknet#597: a call whose {@code projectAnchor} was forgotten writes into the
+     * session's project, silently. Every writing answer therefore ends by naming the project it
+     * hit - here for each of the requirements tools, so none of them can lose the line on its own.
+     */
+    @Test
+    void everyWritingToolClosesItsAnswerWithTheProject() {
+        RequirementMcpTools named = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "en", List.of(), "arknet"),
+                NO_TRANSLATIONS);
+        String trailer = "\n\nproject: arknet";
+
+        assertTrue(named.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"), null, null, null,
+                null, null).endsWith(trailer));
+        assertTrue(named.accept(null, "FR-1", "ACCEPTED", null).endsWith(trailer));
+        assertTrue(named.linkTerm(null, "FR-1", List.of("TERM-1"), null).endsWith(trailer));
+        assertTrue(named.unlinkTerm(null, "FR-1", List.of("TERM-1"), null).endsWith(trailer));
+        assertTrue(named.linkConstraint(null, "FR-1", List.of("TCON-1"), null).endsWith(trailer));
+        assertTrue(named.unlinkConstraint(null, "FR-1", List.of("TCON-1"), null).endsWith(trailer));
+        assertTrue(named.update(null, "FR-1", "Neu", null, null, null, null, null, null, null, null, null)
+                .endsWith(trailer));
+    }
+
+    /** A read tool carries no project line - the signal is about writes (kogn-io/arknet#597). */
+    @Test
+    void readingToolsCarryNoProjectLine() {
+        assertTrue(!adapter.get(null, "FR-1", null, null).contains("project:"), "req_get");
+        stub.allRequirements = List.of(requirementWithTerms("FR-1"));
+        assertTrue(!adapter.list(null, null, null).contains("project:"), "req_list");
+    }
+
+    /**
+     * kogn-io/arknet#600: an edge tool answers with the edge, not with the whole resource - its
+     * caller already holds both ends.
+     */
+    @Test
+    void linkToolsAnswerWithTheEdgeRatherThanTheWholeResource() {
+        String linkedTerm = adapter.linkTerm(null, "FR-1", List.of("TERM-1"), null);
+        String unlinkedTerm = adapter.unlinkTerm(null, "FR-1", List.of("TERM-1"), null);
+
+        assertTrue(linkedTerm.startsWith("linked FR-1 -> TERM-1 (usesTerm)"), linkedTerm);
+        assertTrue(unlinkedTerm.startsWith("unlinked FR-1 -> TERM-1 (usesTerm)"), unlinkedTerm);
+        assertTrue(!linkedTerm.contains("[terms:"), linkedTerm);
+        assertTrue(!linkedTerm.contains(" [done when:"), linkedTerm);
+    }
+
+    /**
+     * kogn-io/arknet#598: {@code usesTermCodes} replaces the set wholesale, so a caller restating
+     * it from memory unlinks whatever it forgot. The diff is computed from the field before and
+     * after the write - the request cannot show what fell out of it.
+     */
+    @Test
+    void updateNamesWhatLeftAndWhatJoinedTheTermLinks() {
+        // Stub#update() mints a fresh TermRef from the literal code, so registering the code's own
+        // deterministic IRI is what makes it render back as TERM-9 rather than the bare IRI.
+        resolveTerms.register(ResourceId.of("https://w3id.org/arknet/id/term-before"), new TermCode("TERM-22"));
+        resolveTerms.register(ResourceId.of("https://w3id.org/arknet/id/TERM-9"), new TermCode("TERM-9"));
+        stub.nextGetTermIds = List.of(ResourceId.of("https://w3id.org/arknet/id/term-before"));
+
+        String rendered = adapter.update(null, "FR-1", null, null, null, null, null, null, null,
+                List.of("TERM-9"), null, null);
+
+        assertTrue(rendered.contains("usesTerm: removed TERM-22, added TERM-9"), rendered);
+    }
+
+    /** A {@code req_update} that leaves the term links alone costs no {@code usesTerm} diff line. */
+    @Test
+    void updateStaysSilentWhenTheTermLinksDidNotChange() {
+        stub.nextGetTermIds = List.of();
+
+        String rendered = adapter.update(null, "FR-1", "Neuer Titel", null, null, null, null, null, null, null,
+                null, null);
+
+        assertTrue(!rendered.contains("usesTerm:"), rendered);
+    }
+
+    /**
+     * kogn-io/arknet#598: the acceptance-criterion diff reports only how many criteria left and
+     * joined, never their text (a text list carries no stable code a caller could recognise across
+     * calls).
+     */
+    @Test
+    void updateReportsOnlyTheCountOfAcceptanceCriteriaThatChanged() {
+        String rendered = adapter.update(null, "FR-1", null, null, null, List.of("A brand new criterion"), null,
+                null, null, null, null, null);
+        String diffLine = rendered.substring(0, rendered.indexOf('\n'));
+
+        assertEquals("acceptanceCriterion: added 1", diffLine);
+    }
+
+    private static final List<AcceptanceCriterion> DEFAULT_CRITERIA =
+            List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials"));
+
+    private static Requirement requirementWithTerms(String code, ResourceId... termIds) {
+        List<TermRef> terms = Arrays.stream(termIds).map(TermRef::new).toList();
+        return new Requirement(ID, new RequirementCode(code), "t", "d", null, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, terms, DEFAULT_CRITERIA, List.of());
+    }
+
+
+    // --- stale-translation signal (kogn-io/arknet#474) ------------------------
+
+    /**
+     * Correcting a requirement in German names every field whose English variant this call left
+     * standing - including the acceptance criteria, whose text lives on child resources and is
+     * therefore reported under the edge that owns them.
+     */
+    @Test
+    void updateReportsTheOtherMaintainedLanguageTheCorrectedFieldsStillCarry() {
+        RequirementMcpTools bilingual = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
+                hints(Map.of("title", Set.of("de", "en"), "description", Set.of("de"),
+                        "acceptanceCriterion", Set.of("de", "en"))));
+
+        String rendered = bilingual.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", null,
+                List.of("Fertig, wenn es geht"), null, null, null, null, "de", null);
+
+        assertTrue(rendered.contains("en: title, acceptanceCriterion"), rendered);
+    }
+
+    /**
+     * A call that adds a criterion and takes another one out in the same breath says nothing
+     * about the acceptance-criterion edge. The tags the lookup reports for that edge are pooled
+     * over every criterion hanging off it, so the removed one may have been the only carrier of
+     * English - naming it would describe a state the answer next to the hint no longer has. The
+     * fields the call really corrected are reported as usual (kogn-io/arknet#537 review). This
+     * call also appends and removes a criterion in the same breath, so the diff line legitimately
+     * names {@code acceptanceCriterion} too (kogn-io/arknet#598) - the assertion below checks the
+     * stale-translation hint's own "en: ..." shape specifically, not the bare word.
+     */
+    @Test
+    void updateStaysSilentAboutAnEdgeTheSameCallAlsoRemovesFrom() {
+        RequirementMcpTools bilingual = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
+                hints(Map.of("title", Set.of("de", "en"), "acceptanceCriterion", Set.of("de", "en"))));
+
+        String rendered = bilingual.update(null, "FR-1", "Neuer Titel", null, null,
+                List.of("Fertig, wenn es geht"), null, List.of(1), null, null, "de", null);
+
+        assertTrue(rendered.contains("en: title"), rendered);
+        assertFalse(rendered.contains("en: title, acceptanceCriterion"), rendered);
+        assertFalse(rendered.contains("en: acceptanceCriterion"), rendered);
+    }
+
+    /**
+     * The second call of a two-language workflow - the field so far carries only the other
+     * language, and this call adds the written one - is a translation, not a correction: the
+     * variant already there is its source, and nothing is stale. The lookup must therefore see
+     * the state before the write.
+     */
+    @Test
+    void updateStaysSilentWhenTheCallAddsATranslation() {
+        RequirementMcpTools bilingual = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
+                new StaleTranslationHint(lookupBeforeTheWrite(Map.of("title", Set.of("de"),
+                        "acceptanceCriterion", Set.of("de")))));
+
+        String rendered = bilingual.update(null, "FR-1", "New title", null, null, List.of("Done when it works"),
+                null, null, null, null, "en", null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    /** A project maintaining a single language has no other language to warn about. */
+    @Test
+    void updateStaysSilentForASingleLanguageProject() {
+        RequirementMcpTools monolingual = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de", List.of("de")),
+                hints(Map.of("title", Set.of("de", "en"))));
+
+        String rendered = monolingual.update(null, "FR-1", "Neuer Titel", null, null, null, null, null, null, null,
+                "de", null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    /** A call that writes no multilingual field at all leaves no translation behind. */
+    @Test
+    void updateStaysSilentWhenOnlyThePriorityChanged() {
+        RequirementMcpTools bilingual = new RequirementMcpTools(
+                stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms,
+                resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de", List.of("de", "en")),
+                hints(Map.of("title", Set.of("de", "en"))));
+
+        String rendered = bilingual.update(null, "FR-1", null, null, null, null, null, null, "MUST_HAVE", null,
+                null, null);
+
+        assertFalse(rendered.contains("stale"), rendered);
+    }
+
+    /**
+     * A lookup answering {@code byField} as the state <em>before</em> the write - and failing the
+     * test if the write has already happened when it is asked, because only that state tells a
+     * correction from a translation (kogn-io/arknet#474).
+     */
+    private FieldLanguageLookup lookupBeforeTheWrite(Map<String, Set<String>> byField) {
+        return new FieldLanguageLookup() {
+            @Override
+            public Map<String, Set<String>> ofResource(ProjectId projectId, String code) {
+                assertNull(stub.lastUpdatedRequirement, "the lookup must run before the write");
+                return byField;
+            }
+
+            @Override
+            public Map<String, Set<String>> ofProjectRegistration(String projectLabel) {
+                assertNull(stub.lastUpdatedRequirement, "the lookup must run before the write");
+                return byField;
+            }
+        };
+    }
+
+    /** Structural stub implementing the ten driving in-ports. */
+    /** {@code req_delete} passes the parsed code straight through to the in-port. */
+    @Test
+    void deletePassesTheCodeThrough() {
+        String rendered = adapter.delete(null, "FR-1", null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastDeleteCode);
+        assertEquals("Deleted: FR-1\n\nproject: test-project", rendered);
+    }
+
+    private static final class Stub
+            implements AddRequirement, ListRequirements, DescribeRequirementDisplayFallback, GetRequirement,
+            AcceptRequirement, ProposeRequirement, LinkTerm, UnlinkTerm, LinkConstraint, UnlinkConstraint,
+            UpdateRequirement, DeleteRequirement, GetRequirementSchema {
+
+        private RequirementCode lastAcceptedRequirement;
+        private RequirementCode lastProposedRequirement;
+        private RequirementCode lastLinkedRequirement;
+        private String lastLinkedTermCode;
+        private RequirementCode lastUnlinkedTermRequirement;
+        private String lastUnlinkedTermCode;
+        private String lastUnlinkTermDefaultLanguage;
+        private boolean unlinkTermRejects;
+        private RequirementCode lastLinkedConstraintRequirement;
+        private String lastLinkedConstraintCode;
+        private RequirementCode lastUnlinkedConstraintRequirement;
+        private String lastUnlinkedConstraintCode;
+        private String lastUnlinkConstraintDefaultLanguage;
+        private boolean unlinkConstraintRejects;
+        private List<ResourceId> nextGetTermIds = List.of();
+        private List<ResourceId> nextGetConstraintIds = List.of();
+        private List<Requirement> allRequirements = List.of();
+        private Map<RequirementCode, RequirementDisplayFallback> fallbacksForList = Map.of();
+        private NewRequirement lastAddCommand;
+        private RequirementCode lastUpdatedRequirement;
+        private RequirementCode lastDeleteCode;
+        private String lastUpdateTitle;
+        private String lastUpdateDescription;
+        private String lastUpdateRationale;
+        private List<String> lastUpdateNewAcceptanceCriteria;
+        private List<AcceptanceCriterionTextPatch> lastUpdateAcceptanceCriteriaTextPatches;
+        private RemovedPositions lastUpdateRemovedAcceptanceCriterionPositions;
+        private Priority lastUpdatePriority;
+        private List<String> lastUpdateUsesTermCodes;
+        private String lastUpdateLanguage;
+        private String lastListDisplayLocale;
+        private String lastAcceptDefaultLanguage;
+        private String lastProposeDefaultLanguage;
+        private String lastLinkTermDefaultLanguage;
+        private String lastLinkConstraintDefaultLanguage;
+
+        @Override
+        public Requirement add(ProjectId projectId, NewRequirement command, String defaultLanguage) {
+            lastAddCommand = command;
+            return new Requirement(ID, new RequirementCode("FR-1"), command.title(), command.description(),
+                    command.rationale(),
+                    command.type(), RequirementStatus.PROPOSED, command.priority(),
+                    command.qualityCategory(), List.of(), toCriteria(command.acceptanceCriteria()), List.of());
+        }
+
+        @Override
+        public List<Requirement> list(ProjectId projectId, String displayLocale) {
+            lastListDisplayLocale = displayLocale;
+            return allRequirements;
+        }
+
+        @Override
+        public Map<RequirementCode, RequirementDisplayFallback> describe(ProjectId projectId, String displayLocale) {
+            return fallbacksForList;
+        }
+
+        private String lastGetDisplayLocale;
+
+        @Override
+        public Optional<Requirement> get(ProjectId projectId, RequirementCode code, String displayLocale) {
+            lastGetDisplayLocale = displayLocale;
+            List<TermRef> terms = nextGetTermIds.stream().map(TermRef::new).toList();
+            List<ConstraintRef> constraints = nextGetConstraintIds.stream().map(ConstraintRef::new).toList();
+            return Optional.of(new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL,
+                    RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, terms, DEFAULT_CRITERIA,
+                    constraints));
+        }
+
+        @Override
+        public Requirement accept(ProjectId projectId, RequirementCode code, String defaultLanguage) {
+            lastAcceptedRequirement = code;
+            lastAcceptDefaultLanguage = defaultLanguage;
+            return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
+                    Priority.MUST_HAVE, null, List.of(), DEFAULT_CRITERIA, List.of());
+        }
+
+        @Override
+        public Requirement propose(ProjectId projectId, RequirementCode code, String defaultLanguage) {
+            lastProposedRequirement = code;
+            lastProposeDefaultLanguage = defaultLanguage;
+            return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                    Priority.MUST_HAVE, null, List.of(), DEFAULT_CRITERIA, List.of());
+        }
+
+        @Override
+        public Requirement linkTerm(
+                ProjectId projectId, RequirementCode code, String termCode, String defaultLanguage) {
+            lastLinkedRequirement = code;
+            lastLinkedTermCode = termCode;
+            lastLinkTermDefaultLanguage = defaultLanguage;
+            List<TermRef> terms = List.of(new TermRef(ResourceId.of("https://w3id.org/arknet/id/" + termCode)));
+            return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                    Priority.MUST_HAVE, null, terms, DEFAULT_CRITERIA, List.of());
+        }
+
+        @Override
+        public Requirement linkConstraint(
+                ProjectId projectId, RequirementCode code, String constraintCode, String defaultLanguage) {
+            lastLinkedConstraintRequirement = code;
+            lastLinkedConstraintCode = constraintCode;
+            lastLinkConstraintDefaultLanguage = defaultLanguage;
+            ResourceId id = ResourceId.of("https://w3id.org/arknet/id/" + constraintCode);
+            return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                    Priority.MUST_HAVE, null, List.of(), DEFAULT_CRITERIA, List.of(new ConstraintRef(id)));
+        }
+
+        @Override
+        public Requirement unlinkTerm(
+                ProjectId projectId, RequirementCode code, String termCode, String defaultLanguage) {
+            lastUnlinkedTermRequirement = code;
+            lastUnlinkedTermCode = termCode;
+            lastUnlinkTermDefaultLanguage = defaultLanguage;
+            if (unlinkTermRejects) {
+                throw new TermNotLinkedException(projectId, code, termCode);
+            }
+            return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                    Priority.MUST_HAVE, null, List.of(), DEFAULT_CRITERIA, List.of());
+        }
+
+        @Override
+        public Requirement unlinkConstraint(
+                ProjectId projectId, RequirementCode code, String constraintCode, String defaultLanguage) {
+            lastUnlinkedConstraintRequirement = code;
+            lastUnlinkedConstraintCode = constraintCode;
+            lastUnlinkConstraintDefaultLanguage = defaultLanguage;
+            if (unlinkConstraintRejects) {
+                throw new ConstraintNotLinkedException(projectId, code, constraintCode);
+            }
+            return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                    Priority.MUST_HAVE, null, List.of(), DEFAULT_CRITERIA, List.of());
+        }
+
+        @Override
+        public List<RequirementSchemaTerm> schema() {
+            return List.of(new RequirementSchemaTerm("Priority", "Priorisierung nach MoSCoW.",
+                    List.of("MUST_HAVE", "SHOULD_HAVE", "COULD_HAVE", "WONT_HAVE")));
+        }
+
+        @Override
+        public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
+                String rationale, List<String> newAcceptanceCriteria,
+                List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
+                RemovedPositions removeAcceptanceCriterionPositions,
+                Priority priority, List<String> usesTermCodes, String language, String defaultLanguage) {
+            lastUpdatedRequirement = code;
+            lastUpdateTitle = title;
+            lastUpdateDescription = description;
+            lastUpdateRationale = rationale;
+            lastUpdateNewAcceptanceCriteria = newAcceptanceCriteria;
+            lastUpdateAcceptanceCriteriaTextPatches = acceptanceCriteriaTextPatches;
+            lastUpdateRemovedAcceptanceCriterionPositions = removeAcceptanceCriterionPositions;
+            lastUpdatePriority = priority;
+            lastUpdateUsesTermCodes = usesTermCodes;
+            lastUpdateLanguage = language;
+            List<TermRef> terms = usesTermCodes == null
+                    ? List.of()
+                    : usesTermCodes.stream()
+                            .map(termCode -> new TermRef(ResourceId.of("https://w3id.org/arknet/id/" + termCode)))
+                            .toList();
+            Requirement base = new Requirement(ID, code, title != null ? title : "t",
+                    description != null ? description : "d", rationale, RequirementType.FUNCTIONAL,
+                    RequirementStatus.PROPOSED,
+                    priority != null ? priority : Priority.MUST_HAVE, null, terms, DEFAULT_CRITERIA,
+                    List.of());
+            base = base.withAppendedAcceptanceCriteria(newAcceptanceCriteria);
+            base = acceptanceCriteriaTextPatches != null
+                    ? base.withAcceptanceCriteriaTextPatches(projectId, acceptanceCriteriaTextPatches)
+                    : base;
+            return removeAcceptanceCriterionPositions != null
+                    ? base.withoutAcceptanceCriteria(projectId, removeAcceptanceCriterionPositions)
+                    : base;
+        }
+
+        @Override
+        public void delete(ProjectId projectId, RequirementCode code) {
+            lastDeleteCode = code;
+        }
+
+        private static List<AcceptanceCriterion> toCriteria(List<String> texts) {
+            List<AcceptanceCriterion> criteria = new ArrayList<>();
+            int position = 1;
+            for (String text : texts) {
+                criteria.add(new AcceptanceCriterion(position++, text));
+            }
+            return criteria;
+        }
+    }
+
+    /**
+     * Fake {@link ResolveTerms}: resolves only what was {@link #register} registered, counts its
+     * own invocations so tests can pin the "at most one batch call" invariant, and - like the
+     * real port - never throws for an id it cannot resolve.
+     */
+    private static final class RecordingResolveTerms implements ResolveTerms {
+
+        private final List<ResolvedTerm> known = new ArrayList<>();
+        private int calls;
+
+        void register(ResourceId id, TermCode code) {
+            known.add(new ResolvedTerm(id, code));
+        }
+
+        int callCount() {
+            return calls;
+        }
+
+        @Override
+        public List<ResolvedTerm> resolve(ProjectId projectId, ResourceId... ids) {
+            calls++;
+            List<ResourceId> wanted = Arrays.asList(ids);
+            return known.stream().filter(t -> wanted.contains(t.id())).toList();
+        }
+    }
+
+    /** {@link RecordingResolveTerms}, for {@link ResolveConstraints}. */
+    private static final class RecordingResolveConstraints implements ResolveConstraints {
+
+        private final List<ResolvedConstraint> known = new ArrayList<>();
+        private int calls;
+
+        void register(ResourceId id, ConstraintCode code) {
+            known.add(new ResolvedConstraint(id, code));
+        }
+
+        int callCount() {
+            return calls;
+        }
+
+        @Override
+        public List<ResolvedConstraint> resolveExisting(ProjectId projectId, ResourceId... ids) {
+            calls++;
+            List<ResourceId> wanted = Arrays.asList(ids);
+            return known.stream().filter(c -> wanted.contains(c.id())).toList();
+        }
+    }
+}

@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Fred Hauschel
+
+package de.hauschel.arknet.uc.application.port.out;
+
+import java.util.Map;
+
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.pr.shared.RequirementCode;
+
+/**
+ * Driven port: resolves a requirement's human-typed business code to its opaque subject identity
+ * in the shared project store.
+ *
+ * <p>This is the strict cross-BC reference resolution the use-cases component needs for
+ * {@code arkreq:stepRealises}, the use-cases analogue of requirements' own equivalent: the
+ * use-cases component must not depend on {@code arknet-requirements-core}, so it cannot look a
+ * requirement up as a domain object - it can only ask the shared store, through this port, which
+ * resource a code currently names. Resolution goes via the requirement's
+ * {@code dcterms:identifier}, so a link survives relabelling the requirement.</p>
+ *
+ * <p>Called once, at the moment a use-case step is written - not on every subsequent read.
+ * An implementation rejects an unknown or ambiguous code with a runtime exception rather than
+ * returning an empty or default result; callers are meant to let that exception propagate as a
+ * didactic rejection of the write, not to handle a missing requirement as a normal case.</p>
+ */
+public interface RequirementLookup {
+
+    /**
+     * Resolves {@code requirementCode} to the identity of the requirement it currently names
+     * within {@code projectId}.
+     *
+     * @param projectId      the project (architecture model) to resolve the code in
+     * @param requirementCode  the requirement's human-readable business code, e.g. {@code FR-5}
+     * @return the resolved requirement's opaque subject identity
+     * @throws RuntimeException if {@code requirementCode} is unknown or ambiguous within
+     *                          {@code projectId}. The concrete signal type is deliberately not
+     *                          fixed by this port: a real implementation's {@code
+     *                          UnresolvedReferenceException} lives in {@code
+     *                          arknet-persistence-support}, a module {@code arknet-use-cases-core}
+     *                          must not depend on.
+     */
+    ResourceId resolveByCode(ProjectId projectId, String requirementCode);
+
+    /**
+     * Resolves {@code ids} back to the business codes the requirements they name currently carry within
+     * {@code projectId}, in a single batch (one store round-trip, not one per id).
+     *
+     * <p>The reverse direction of {@link #resolveByCode}, and the reason this component needs no
+     * port of the requirements component to render a requirement reference: what a stored identity is
+     * called is read from the neighbour's published language by the same adapter that resolves a
+     * code on write (ADR-49).</p>
+     *
+     * <p><strong>Never rejects.</strong> Unlike {@link #resolveByCode}, called once at write time
+     * against a code a human typed, this is a display-time lookup by identity with no error case:
+     * an id that names nothing in the project is simply absent from the result.</p>
+     *
+     * @param projectId the project (architecture model) to resolve the identities in
+     * @param ids       the opaque subject identities to resolve; may be empty
+     * @return the code of every id that currently names a requirement in {@code projectId}, keyed by
+     *         that id; never {@code null}
+     */
+    Map<ResourceId, RequirementCode> resolveCodes(ProjectId projectId, ResourceId... ids);
+}

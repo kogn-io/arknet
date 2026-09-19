@@ -26,7 +26,7 @@ import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
-import de.hauschel.arknet.req.domain.TermRef;
+import de.hauschel.arknet.pr.shared.TermRef;
 import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools;
 import de.hauschel.arknet.uc.application.UseCaseService;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;

@@ -260,8 +260,7 @@ class DependencyRulesTest {
      * the same mechanism it would use across a context boundary. Before ADR-49 the
      * bounded-context MCP adapter borrowed the glossary's own in-port for display; the rule below
      * is what keeps that from creeping back, on either side and in any module, not just in the
-     * core. The equivalent rule for the components of Product &amp; Requirements comes with their
-     * own context parent.</p>
+     * core. Rule 10 says the same for the components of Product &amp; Requirements.</p>
      */
     @ArchTest
     static final ArchRule bounded_context_component_stays_off_the_glossary_component =
@@ -277,6 +276,36 @@ class DependencyRulesTest {
             noClasses()
                     .that().resideInAPackage("de.hauschel.arknet.ul..")
                     .should().dependOnClassesThat().resideInAPackage("de.hauschel.arknet.bc..")
+                    .because("a component reads its neighbour through its own out-port over the "
+                            + "published language, never through one of its modules");
+
+    /**
+     * Rule 10 -- no module of the requirements component depends on a module of the use-cases
+     * component, or the other way round (ADR-49).
+     *
+     * <p>The same invariant as rule 9, for the two components of the Product &amp; Requirements
+     * context, and written the same way on purpose: two directed rules rather than one clever
+     * symmetric one, so a violation names the direction it came from. Before ADR-49 the use-cases
+     * MCP adapter borrowed the requirements component's own in-ports to display a realised
+     * requirement's and a linked constraint's business code; since then the use-cases core asks
+     * its own {@code RequirementLookup}/{@code ConstraintLookup} out-ports, served over the
+     * neighbour's published language. Their shared Maven parent is aggregation, not
+     * permission.</p>
+     */
+    @ArchTest
+    static final ArchRule use_cases_component_stays_off_the_requirements_component =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.uc..")
+                    .should().dependOnClassesThat().resideInAPackage("de.hauschel.arknet.req..")
+                    .because("a component reads its neighbour through its own out-port over the "
+                            + "published language, never through one of its modules");
+
+    /** Rule 10, the other direction: the requirements component knows nothing of its neighbour. */
+    @ArchTest
+    static final ArchRule requirements_component_stays_off_the_use_cases_component =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.req..")
+                    .should().dependOnClassesThat().resideInAPackage("de.hauschel.arknet.uc..")
                     .because("a component reads its neighbour through its own out-port over the "
                             + "published language, never through one of its modules");
 }

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-use-cases</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-use-cases-adapter-mcp</artifactId>
+    <description>In-adapter (driving): translates MCP tool calls (uc_add/uc_list/uc_get) into the arknet-use-cases-core in-ports via Spring AI @McpTool. A composition root (arknet-mcp) collects the tools by bean auto-detection.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-use-cases-core</artifactId>
+        </dependency>
+        <!-- In-Adapter -> In-Port eines FREMDEN Kontexts: der In-Adapter ist das Tor zum
+             use-cases-Hexagon, nicht dessen Core - die Invariante "kein *-core haengt an einem
+             fremden Kontext" (arknet-architecture-tests) bleibt gewahrt. Genutzt nur fuer die
+             read-only Anzeige-Aufloesung ResourceId -> ROLE-N/TERM-N in
+             UseCaseMcpTools#formatFull; uc_add selbst bleibt entkoppelt (RoleLookup/TermLookup).
+             Innerhalb des eigenen Kontexts gibt es diese Leihe nicht mehr (ADR-49): Requirement-
+             und Constraint-Codes loest der eigene Core ueber ResolveRequirements/
+             ResolveConstraints auf. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-actor-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-ubiquitous-language-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-mcp-annotations</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

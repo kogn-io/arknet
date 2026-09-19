@@ -74,7 +74,7 @@ import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
-import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.dm.shared.TermCode;

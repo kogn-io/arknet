@@ -1,0 +1,1503 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Fred Hauschel
+
+package de.hauschel.arknet.req.application;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import de.hauschel.arknet.kernel.MissingDefaultLanguageException;
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.ResourceIdFactory;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.req.application.port.in.AddConstraint.NewConstraint;
+import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
+import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
+import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
+import de.hauschel.arknet.req.domain.Constraint;
+import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
+import de.hauschel.arknet.req.domain.ConstraintRef;
+import de.hauschel.arknet.req.domain.ConstraintType;
+import de.hauschel.arknet.req.domain.MissingAcceptanceCriteriaException;
+import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.RemovedPositions;
+import de.hauschel.arknet.req.domain.Requirement;
+import de.hauschel.arknet.pr.shared.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementId;
+import de.hauschel.arknet.req.domain.RequirementNotFoundException;
+import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
+import de.hauschel.arknet.req.domain.RequirementStatus;
+import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.pr.shared.TermRef;
+
+/**
+ * Policy tests for {@link RequirementService}: identity minting, code assignment, listing,
+ * lookup, status-transition and term-linking rules, exercised against an in-memory fake
+ * repository and a deterministic fake {@link ResourceIdFactory}.
+ */
+class RequirementServiceTest {
+
+    private static final ProjectId WS = new ProjectId("test-project");
+    /**
+     * A project default language for tests that do not themselves exercise issue #258's
+     * language-resolution policy - passed explicitly so a {@code null} {@code language} argument
+     * in a fixture (e.g. {@link #newFunctionalRequirement()}) still resolves instead of throwing.
+     */
+    private static final String DEFAULT_LANGUAGE = "en";
+    private static final String RATIONALE =
+            "so that support no longer has to reset a password by hand for every locked-out user";
+    private static final ResourceId TERM_1 =
+            ResourceId.of("https://w3id.org/arknet/id/term-1");
+    private static final ResourceId TERM_2 =
+            ResourceId.of("https://w3id.org/arknet/id/term-2");
+
+    private InMemoryRequirementRepository repository;
+    private FakeResourceIdFactory resourceIdFactory;
+    private InMemoryTermLookup termLookup;
+    private InMemoryConstraintRepository constraintRepository;
+    private FakeRequirementSchemaSource schemaSource;
+    private RequirementService service;
+
+    @BeforeEach
+    void setUp() {
+        repository = new InMemoryRequirementRepository();
+        resourceIdFactory = new FakeResourceIdFactory();
+        termLookup = new InMemoryTermLookup();
+        termLookup.register("TERM-1", TERM_1);
+        termLookup.register("TERM-2", TERM_2);
+        constraintRepository = new InMemoryConstraintRepository();
+        schemaSource = new FakeRequirementSchemaSource();
+        service = new RequirementService(repository, resourceIdFactory, termLookup, constraintRepository, schemaSource);
+    }
+
+    private Constraint givenConstraint(String title, String statement, ConstraintType type) {
+        ConstraintService constraintService = new ConstraintService(constraintRepository, resourceIdFactory);
+        return constraintService.add(WS, new NewConstraint(title, statement, type, DEFAULT_LANGUAGE), null);
+    }
+
+    @Test
+    void addAssignsFirstFunctionalCode() {
+        Requirement added = service.add(WS, new NewRequirement("User can log in",
+                "The system shall let a registered user authenticate.", null, RequirementType.FUNCTIONAL,
+                null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+
+        assertEquals(new RequirementCode("FR-1"), added.code());
+    }
+
+    @Test
+    void addSetsProposedStatusByDefault() {
+        Requirement added = service.add(WS, new NewRequirement("User can log in",
+                "The system shall let a registered user authenticate.", null, RequirementType.FUNCTIONAL,
+                null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+
+        assertEquals(RequirementStatus.PROPOSED, added.status());
+    }
+
+    /**
+     * Every field {@code add} was given comes back unchanged on the returned {@link Requirement}
+     * and is what a subsequent read from the repository sees too - one fact (faithful roundtrip
+     * of the supplied fields), asserted from both ends.
+     */
+    @Test
+    void addPersistsAllSuppliedFields() {
+        Requirement added = service.add(WS, new NewRequirement("User can log in",
+                "The system shall let a registered user authenticate.", null, RequirementType.FUNCTIONAL,
+                null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+
+        assertEquals("User can log in", added.title());
+        assertEquals("The system shall let a registered user authenticate.", added.description());
+        assertEquals(RequirementType.FUNCTIONAL, added.type());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), added.acceptanceCriteria());
+        assertEquals(added, repository.findByCode(WS, added.code(), null).orElseThrow());
+    }
+
+    /**
+     * Issue #258, decision 2: a write without an explicit {@code language} falls back to the
+     * target project's configured {@code defaultLanguage} instead of writing an untagged literal.
+     */
+    @Test
+    void addWithoutLanguageFallsBackToTheProjectsDefaultLanguage() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), "de").code();
+
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code, null).orElseThrow();
+        assertEquals("de", current.titleLanguage());
+        assertEquals("de", current.descriptionLanguage());
+    }
+
+    /**
+     * Issue #258, decision 1: a write without an explicit {@code language}, targeting a project
+     * with no configured default either, is rejected instead of silently writing an untagged
+     * literal - and nothing is persisted.
+     */
+    @Test
+    void addWithoutLanguageAndWithoutAProjectDefaultIsRejected() {
+        assertThrows(MissingDefaultLanguageException.class,
+                () -> service.add(WS, newFunctionalRequirement(), null));
+
+        assertEquals(List.of(), service.list(WS, null));
+    }
+
+    /** Mirrors {@link #addWithoutLanguageFallsBackToTheProjectsDefaultLanguage}, for {@code update}. */
+    @Test
+    void updateWithoutLanguageFallsBackToTheProjectsDefaultLanguage() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        service.update(WS, code, "New title", null, null, null, null, null, null, null, null, "de");
+
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code, null).orElseThrow();
+        assertEquals("de", current.titleLanguage());
+    }
+
+    /** Mirrors {@link #addWithoutLanguageAndWithoutAProjectDefaultIsRejected}, for {@code update}. */
+    @Test
+    void updateWithoutLanguageAndWithoutAProjectDefaultIsRejected() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        assertThrows(MissingDefaultLanguageException.class,
+                () -> service.update(WS, code, "New title", null, null, null, null, null, null, null, null, null));
+
+        assertEquals("User can log in", service.get(WS, code, null).orElseThrow().title());
+    }
+
+    /**
+     * A field named by the caller ({@code title != null}) but resent with its own
+     * already-current text, no {@code language} argument, and no project default must still be a
+     * genuine no-op - naming a field alone (as opposed to actually changing it) must not force a
+     * write-language resolution the project cannot satisfy. Complements {@link
+     * #updateWithoutLanguageAndWithoutAProjectDefaultIsRejected}, which covers the same missing-
+     * language/-default combination for an actually-changed title.
+     */
+    @Test
+    void updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code, null).orElseThrow();
+
+        Requirement updated = service.update(WS, code, "User can log in", null, null, null, null, null, null, null, null, null);
+
+        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code, null).orElseThrow();
+        assertEquals(before.head(), after.head());
+        assertEquals("User can log in", updated.title());
+    }
+
+    /** Mirrors {@link #updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite}, for an acceptance-criterion patch. */
+    @Test
+    void updateResendingUnchangedAcceptanceCriterionTextWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code, null).orElseThrow();
+
+        service.update(WS, code, null, null, null, null,
+                List.of(new AcceptanceCriterionTextPatch(1, "Done when it works")), null, null, null, null, null);
+
+        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code, null).orElseThrow();
+        assertEquals(before.head(), after.head());
+    }
+
+    /**
+     * Regression for issue #271: a caller writing {@code title} under a language it does not yet
+     * carry must actually retag it, even when the supplied text is byte-for-byte identical to
+     * what is already stored - text equality alone is not "no change" once a language is
+     * explicitly named, since the whole point of the call is to tag (and let the out-adapter
+     * sweep) an untagged/mis-tagged literal.
+     */
+    @Test
+    void updateWithSameTitleTextButANewLanguageStillWritesUnderThatLanguage() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        service.update(WS, code, "User can log in", null, null, null, null, null, null, null, "de", null);
+
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code, null).orElseThrow();
+        assertEquals("de", current.titleLanguage());
+    }
+
+    /**
+     * The flip side of {@link #updateWithSameTitleTextButANewLanguageStillWritesUnderThatLanguage}:
+     * once text AND language both already match what is stored, the call is a genuine no-op and
+     * must not reach the repository at all - the revision token proves no write happened.
+     */
+    @Test
+    void updateWithIdenticalTitleTextAndLanguageIsATrueNoOpAndDoesNotWrite() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code, null).orElseThrow();
+
+        service.update(WS, code, "User can log in", null, null, null, null, null, null, null, DEFAULT_LANGUAGE, null);
+
+        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code, null).orElseThrow();
+        assertEquals(before.head(), after.head());
+    }
+
+    /** Mirrors {@link #updateWithSameTitleTextButANewLanguageStillWritesUnderThatLanguage}, for an acceptance-criterion patch. */
+    @Test
+    void updateAcceptanceCriteriaPatchWithSameTextButANewLanguageStillWritesUnderThatLanguage() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        service.update(WS, code, null, null, null, null,
+                List.of(new AcceptanceCriterionTextPatch(1, "Done when it works")), null, null, null, "de", null);
+
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code, null).orElseThrow();
+        assertEquals("de", current.acceptanceCriteriaLanguageByPosition().get(1));
+    }
+
+    @Test
+    void addMintsAFreshOpaqueIdentityViaTheFactory() {
+        Requirement first = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+        Requirement second = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertNotEquals(first.id(), second.id());
+        assertEquals(2, resourceIdFactory.mintedCount());
+    }
+
+    @Test
+    void addAssignsNfrPrefixForNonFunctional() {
+        Requirement added = service.add(WS, new NewRequirement("Page loads < 200ms",
+                "95% of page loads shall complete in under 200ms.", null, RequirementType.NON_FUNCTIONAL,
+                null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+
+        assertEquals(new RequirementCode("NFR-1"), added.code());
+    }
+
+    @Test
+    void addCarriesPriorityAndQualityCategoryThrough() {
+        Requirement added = service.add(WS, new NewRequirement("Page loads < 200ms",
+                "95% of page loads shall complete in under 200ms.", null, RequirementType.NON_FUNCTIONAL,
+                Priority.MUST_HAVE, "performance", List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+
+        assertEquals(Priority.MUST_HAVE, added.priority());
+        assertEquals("performance", added.qualityCategory());
+        assertEquals(added, repository.findByCode(WS, added.code(), null).orElseThrow());
+    }
+
+    @Test
+    void addNumbersRunPerTypeIndependently() {
+        RequirementCode fr1 = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+        RequirementCode nfr1 = service.add(WS,
+                new NewRequirement("b", "desc b", null, RequirementType.NON_FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+        RequirementCode fr2 = service.add(WS,
+                new NewRequirement("c", "desc c", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        assertEquals(new RequirementCode("FR-1"), fr1);
+        assertEquals(new RequirementCode("NFR-1"), nfr1);
+        assertEquals(new RequirementCode("FR-2"), fr2);
+    }
+
+    /**
+     * Mutation test for {@code nextCode} counting over {@link RequirementRepository#findAllCodes}
+     * instead of {@link RequirementRepository#findAll} (kogn-io/arknet#360): put the count back on
+     * {@code findAll} and this turns red. The seeded {@code FR-2} is what a store-first
+     * requirement with an unreadable title or description looks like from the service's side -
+     * absent from the listing, its code taken all the same - so a listing-based count would mint
+     * {@code FR-2} a second time and walk straight into the out-adapter's uniqueness guard, on this
+     * attempt and on every recomputed retry after it.
+     */
+    @Test
+    void addSkipsOverACodeThatIsAssignedButNotCurrentlyMaterialisable() {
+        service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+        repository.seedUnmaterialisableCode(WS, new RequirementCode("FR-2"));
+
+        Requirement third = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertEquals(new RequirementCode("FR-3"), third.code());
+    }
+
+    /**
+     * The other half of moving the type filter off {@code r.type()} and onto the code prefix
+     * (kogn-io/arknet#360): {@code FR-} and {@code NFR-} share one raw code list now, so the
+     * partition holds only as long as the prefix match is anchored at the start of the code.
+     * Search for {@code FR-} anywhere in the string instead - the obvious way to write it wrong -
+     * and the seeded {@code NFR-9} starts driving the functional counter, handing out {@code FR-10}
+     * where the project's only functional requirement is {@code FR-1}.
+     */
+    @Test
+    void addKeepsTheFunctionalCounterClearOfNonFunctionalCodes() {
+        service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+        repository.seedUnmaterialisableCode(WS, new RequirementCode("NFR-9"));
+
+        Requirement second = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertEquals(new RequirementCode("FR-2"), second.code());
+    }
+
+    @Test
+    void addIsScopedPerProject() {
+        ProjectId other = new ProjectId("other");
+        service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+
+        Requirement inOther = service.add(other,
+                new NewRequirement("b", "desc b", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+
+        assertEquals(new RequirementCode("FR-1"), inOther.code());
+        assertTrue(service.list(other, null).stream().allMatch(r -> r.title().equals("b")));
+        assertEquals(1, service.list(WS, null).size());
+    }
+
+    @Test
+    void listReturnsAllInInsertionOrder() {
+        service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+        service.add(WS, new NewRequirement("b", "desc b", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
+
+        List<Requirement> all = service.list(WS, null);
+
+        assertEquals(2, all.size());
+        assertEquals("a", all.get(0).title());
+        assertEquals("b", all.get(1).title());
+    }
+
+    @Test
+    void getReturnsPersistedRequirement() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        assertTrue(service.get(WS, code, null).isPresent());
+        assertEquals("a", service.get(WS, code, null).orElseThrow().title());
+    }
+
+    @Test
+    void getIsEmptyForUnknownCode() {
+        assertFalse(service.get(WS, new RequirementCode("FR-99"), null).isPresent());
+    }
+
+    @Test
+    void acceptTransitionsProposedToAccepted() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        assertEquals(RequirementStatus.ACCEPTED, accepted.status());
+        assertEquals("desc a", accepted.description());
+        assertEquals(RequirementStatus.ACCEPTED, repository.findByCode(WS, code, null).orElseThrow().status());
+    }
+
+    @Test
+    void acceptPreservesPriorityAndQualityCategory() {
+        RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.NON_FUNCTIONAL,
+                Priority.COULD_HAVE, "security", List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        assertEquals(Priority.COULD_HAVE, accepted.priority());
+        assertEquals("security", accepted.qualityCategory());
+    }
+
+    @Test
+    void acceptIsIdempotentWhenAlreadyAccepted() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+        service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        Requirement result = service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        assertEquals(RequirementStatus.ACCEPTED, result.status());
+    }
+
+    @Test
+    void acceptThrowsWhenRequirementUnknown() {
+        RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
+                () -> service.accept(WS, new RequirementCode("FR-42"), DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
+    }
+
+    /**
+     * Issue #468: {@link RequirementService#accept}/{@link RequirementService#propose}/
+     * {@link RequirementService#linkTerm}/{@link RequirementService#linkConstraint} share
+     * {@link RequirementService#update}'s read-modify-write round trip, but - unlike
+     * {@code update} since issue #456 - used to always pass a hardcoded {@code null}
+     * {@code defaultLanguage} to {@link RequirementRepository#findCurrentByCode} regardless of
+     * what their own {@code defaultLanguage} argument carried. The real out-adapter would then read
+     * every untouched field under the process-wide configured language instead of the calling
+     * project's own, so a project with {@code defaultLanguage: de} could get the English title back
+     * from {@code req_set_status}/{@code req_link_term}/{@code req_link_constraint} and the German
+     * one from a directly following {@code req_get}. This in-memory fake cannot select a different
+     * literal per language (see its own javadoc), so these tests instead pin the argument itself:
+     * the project's default language must reach {@code findCurrentByCode}, not {@code null}.
+     */
+    @Test
+    void acceptPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null,
+                        List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        service.accept(WS, code, "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
+    }
+
+    @Test
+    void proposePassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null,
+                        List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+        service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        service.propose(WS, code, "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
+    }
+
+    @Test
+    void linkTermPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null,
+                        List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        service.linkTerm(WS, code, "TERM-1", "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
+    }
+
+    @Test
+    void linkConstraintPassesTheProjectsDefaultLanguageToFindCurrentByCode() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null,
+                        List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+        Constraint constraint = givenConstraint("Titel", "Statement", ConstraintType.TECHNICAL);
+
+        service.linkConstraint(WS, code, constraint.code().value(), "de");
+
+        assertEquals("de", repository.lastFindCurrentByCodeDefaultLanguage);
+    }
+
+    /**
+     * Issue #291, an acceptance criterion of FR-5 in arknet's own store: the reverse transition.
+     * Before this fix, an accepted requirement could never be reset - the status was a one-way
+     * freeze rather than the unbinding maturity signal FR-5 requires.
+     */
+    @Test
+    void proposeTransitionsAcceptedToProposed() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+        service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        Requirement proposed = service.propose(WS, code, DEFAULT_LANGUAGE);
+
+        assertEquals(RequirementStatus.PROPOSED, proposed.status());
+        assertEquals("desc a", proposed.description());
+        assertEquals(RequirementStatus.PROPOSED, repository.findByCode(WS, code, null).orElseThrow().status());
+    }
+
+    @Test
+    void proposeIsIdempotentWhenAlreadyProposed() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        Requirement result = service.propose(WS, code, DEFAULT_LANGUAGE);
+
+        assertEquals(RequirementStatus.PROPOSED, result.status());
+    }
+
+    @Test
+    void proposeThrowsWhenRequirementUnknown() {
+        RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
+                () -> service.propose(WS, new RequirementCode("FR-42"), DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
+    }
+
+    /**
+     * Same replace-by-identity regression as {@link #acceptPreservesLinkedTerms}/
+     * {@link #acceptPreservesLinkedConstraints}/{@link #acceptPreservesAcceptanceCriteria}, for
+     * the reverse transition.
+     */
+    @Test
+    void proposePreservesLinkedTermsConstraintsAndAcceptanceCriteria() {
+        Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
+                ConstraintType.REGULATORY);
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkConstraint(WS, code, constraint.code().value(), DEFAULT_LANGUAGE);
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+        service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        Requirement proposed = service.propose(WS, code, DEFAULT_LANGUAGE);
+
+        assertEquals(RequirementStatus.PROPOSED, proposed.status());
+        assertEquals(List.of(new ConstraintRef(constraint.id().value())), proposed.constrainedBy());
+        assertEquals(List.of(new TermRef(TERM_1)), proposed.usesTerms());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), proposed.acceptanceCriteria());
+    }
+
+    @Test
+    void updateChangesTitleDescriptionAndAppendsANewAcceptanceCriterion() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        Requirement updated = service.update(WS, code, "New title", "New description", null,
+                List.of("New done-when criterion"), null, null, null, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals("New title", updated.title());
+        assertEquals("New description", updated.description());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works"),
+                new AcceptanceCriterion(2, "New done-when criterion")), updated.acceptanceCriteria());
+        assertEquals(updated, service.get(WS, code, null).orElseThrow());
+    }
+
+    /**
+     * {@code req_update} cannot restate/replace the whole acceptance-criteria list wholesale the
+     * way {@code title}/{@code description} can be corrected (issue #266) - it appends, in-place
+     * patches, and, since kogn-io/arknet#513, removes by position, but never a wholesale rewrite.
+     * Correcting an existing criterion's wording goes through {@code acceptanceCriteriaTextPatches}
+     * instead.
+     */
+    @Test
+    void updateCorrectsAnExistingAcceptanceCriterionByPosition() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        Requirement updated = service.update(WS, code, null, null, null, null,
+                List.of(new AcceptanceCriterionTextPatch(1, "Corrected done-when criterion")), null, null, null, null,
+                DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "Corrected done-when criterion")),
+                updated.acceptanceCriteria());
+        assertEquals(updated, service.get(WS, code, null).orElseThrow());
+    }
+
+    @Test
+    void updateAcceptanceCriteriaTextPatchRejectsAnUnknownPosition() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        assertThrows(de.hauschel.arknet.req.domain.AcceptanceCriterionPositionNotFoundException.class,
+                () -> service.update(WS, code, null, null, null, null,
+                        List.of(new AcceptanceCriterionTextPatch(9, "no such criterion")), null, null, null, null,
+                        DEFAULT_LANGUAGE));
+    }
+
+    /**
+     * kogn-io/arknet#513: an acceptance criterion recorded by mistake can leave without a fresh
+     * {@code req_add} and a new code - mirrors {@code adr_update}'s {@code
+     * removeConsequencePositions} (issue #483).
+     */
+    @Test
+    void updateRemovesAnAcceptanceCriterionByPosition() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.update(WS, code, null, null, null,
+                List.of("Second criterion", "Third criterion"), null, null, null, null, null, DEFAULT_LANGUAGE);
+
+        Requirement updated = service.update(WS, code, null, null, null, null, null,
+                new RemovedPositions(Set.of(3)), null, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works"),
+                new AcceptanceCriterion(2, "Second criterion")), updated.acceptanceCriteria());
+        assertEquals(updated, service.get(WS, code, null).orElseThrow());
+    }
+
+    /** The survivors after a removed position renumber consecutively from 1. */
+    @Test
+    void updateRemovingAnAcceptanceCriterionRenumbersTheSurvivors() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.update(WS, code, null, null, null,
+                List.of("Second criterion", "Third criterion"), null, null, null, null, null, DEFAULT_LANGUAGE);
+
+        Requirement updated = service.update(WS, code, null, null, null, null, null,
+                new RemovedPositions(Set.of(1)), null, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "Second criterion"),
+                new AcceptanceCriterion(2, "Third criterion")), updated.acceptanceCriteria());
+    }
+
+    @Test
+    void updateAcceptanceCriterionRemovalRejectsAnUnknownPosition() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        assertThrows(de.hauschel.arknet.req.domain.AcceptanceCriterionPositionNotFoundException.class,
+                () -> service.update(WS, code, null, null, null, null, null,
+                        new RemovedPositions(Set.of(9)), null, null, null, DEFAULT_LANGUAGE));
+    }
+
+    /** Removing the only remaining criterion is refused: {@code acceptanceCriteria} is mandatory. */
+    @Test
+    void updateRejectsRemovingTheOnlyAcceptanceCriterion() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.update(WS, code, null, null, null, null, null,
+                        new RemovedPositions(Set.of(1)), null, null, null, DEFAULT_LANGUAGE));
+    }
+
+    /**
+     * Correcting and removing the very same position in one call is a contradiction - rejected
+     * before anything is read or written, mirroring {@code AdrCorrection}'s own
+     * {@code rejectCorrectingARemovedPosition}.
+     */
+    @Test
+    void updateRejectsCorrectingAndRemovingTheSameAcceptanceCriterionPosition() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.update(WS, code, null, null, null, List.of("Second criterion"), null, null, null, null, null,
+                DEFAULT_LANGUAGE);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> service.update(WS, code, null, null, null, null,
+                        List.of(new AcceptanceCriterionTextPatch(1, "Corrected")),
+                        new RemovedPositions(Set.of(1)), null, null, null, DEFAULT_LANGUAGE));
+        assertTrue(exception.getMessage().contains("1"));
+    }
+
+    @Test
+    void updateWithNullFieldsLeavesThemUnchanged() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        Requirement updated =
+                service.update(WS, code, null, "New description", null, null, null, null, null, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals("User can log in", updated.title());
+        assertEquals("New description", updated.description());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), updated.acceptanceCriteria());
+    }
+
+    @Test
+    void updateWithAllNullFieldsIsANoOp() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        Requirement before = service.get(WS, code, null).orElseThrow();
+
+        Requirement result = service.update(WS, code, null, null, null, null, null, null, null, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals(before, result);
+    }
+
+    @Test
+    void updatePreservesStatusLinkedTermsAndOtherFields() {
+        RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.NON_FUNCTIONAL,
+                Priority.COULD_HAVE, "security",
+                List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+        service.accept(WS, code, DEFAULT_LANGUAGE);
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        Requirement updated =
+                service.update(WS, code, "New title", null, null, null, null, null, null, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals(RequirementStatus.ACCEPTED, updated.status());
+        assertEquals(List.of(new TermRef(TERM_1)), updated.usesTerms());
+        assertEquals(Priority.COULD_HAVE, updated.priority());
+        assertEquals("security", updated.qualityCategory());
+    }
+
+    /**
+     * The concrete case - a register audited as uniformly {@code MUST_HAVE} is
+     * corrected down to {@code SHOULD_HAVE}, keeping the requirement's code and thus every
+     * {@code usesTerm}/{@code realises} reference into it intact.
+     */
+    @Test
+    void updateChangesThePriorityWithoutTouchingAnyOtherField() {
+        RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL,
+                Priority.MUST_HAVE, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        Requirement updated =
+                service.update(WS, code, null, null, null, null, null, null, Priority.SHOULD_HAVE, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals(Priority.SHOULD_HAVE, updated.priority());
+        assertEquals("a", updated.title());
+        assertEquals("desc a", updated.description());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), updated.acceptanceCriteria());
+        assertEquals(updated, service.get(WS, code, null).orElseThrow());
+    }
+
+    /** A requirement added without a priority can have one set after the fact. */
+    @Test
+    void updateCanSetAPriorityThatWasNeverSet() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        assertNull(service.get(WS, code, null).orElseThrow().priority());
+
+        Requirement updated =
+                service.update(WS, code, null, null, null, null, null, null, Priority.COULD_HAVE, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals(Priority.COULD_HAVE, updated.priority());
+    }
+
+    /**
+     * {@code null} means "unchanged", not "remove": correcting only the title must not silently
+     * strip an already-set priority (removing one is deliberately out of this port's scope).
+     */
+    @Test
+    void updateWithANullPriorityDoesNotClearAnAlreadySetOne() {
+        RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", null, RequirementType.FUNCTIONAL,
+                Priority.MUST_HAVE, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        Requirement updated =
+                service.update(WS, code, "New title", null, null, null, null, null, null, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals(Priority.MUST_HAVE, updated.priority());
+    }
+
+    @Test
+    void updateRejectsABlankTitleViaTheDomainInvariant() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.update(WS, code, " ", null, null, null, null, null, null, null, null, DEFAULT_LANGUAGE));
+    }
+
+    @Test
+    void updateThrowsWhenRequirementUnknown() {
+        RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
+                () -> service.update(
+                        WS, new RequirementCode("FR-42"), "New title", null, null, null, null, null, null, null, null, DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
+    }
+
+    @Test
+    void addStartsWithoutLinkedTerms() {
+        Requirement added = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(), added.usesTerms());
+    }
+
+    /**
+     * {@code req_add}'s {@code usesTermCodes} resolves the same way {@code req_update}'s field of
+     * the same name does - a known code links the term straight away, sparing the caller the
+     * separate {@code req_link_term} round trip {@code newFunctionalRequirement()} above still
+     * needs (kogn-io/arknet#598).
+     */
+    @Test
+    void addWithUsesTermCodesLinksTheGivenTermsFromTheStart() {
+        Requirement added = service.add(WS,
+                new NewRequirement("User can log in", "The system shall let a registered user authenticate.", null,
+                        RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null,
+                        List.of("TERM-1", "TERM-2")),
+                DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new TermRef(TERM_1), new TermRef(TERM_2)), added.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1), new TermRef(TERM_2)),
+                service.get(WS, added.code(), null).orElseThrow().usesTerms());
+    }
+
+    /**
+     * An unknown term code in {@code usesTermCodes} is rejected before anything is written - the
+     * same didactic rejection {@code req_update}'s field of the same name raises (kogn-io/arknet#598).
+     */
+    @Test
+    void addWithAnUnknownUsesTermCodeIsRejectedAndCreatesNothing() {
+        assertThrows(NoSuchElementException.class, () -> service.add(WS,
+                new NewRequirement("User can log in", "The system shall let a registered user authenticate.", null,
+                        RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null,
+                        List.of("TERM-99")),
+                DEFAULT_LANGUAGE));
+
+        assertTrue(repository.findAll(WS, null).isEmpty());
+    }
+
+    @Test
+    void linkTermAddsTheTermToTheRequirement() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        Requirement linked = service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new TermRef(TERM_1)), linked.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    @Test
+    void linkTermAppendsToAlreadyLinkedTerms() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        Requirement linked = service.linkTerm(WS, code, "TERM-2", DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new TermRef(TERM_1), new TermRef(TERM_2)), linked.usesTerms());
+    }
+
+    @Test
+    void linkingTheSameTermTwiceIsANoOp() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        Requirement linked = service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new TermRef(TERM_1)), linked.usesTerms());
+    }
+
+    @Test
+    void linkTermThrowsWhenRequirementUnknown() {
+        RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
+                () -> service.linkTerm(WS, new RequirementCode("FR-42"), "TERM-1", DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
+    }
+
+    /**
+     * Resolution of the human-typed term code happens here, via {@link InMemoryTermLookup}
+     * - not in the out-adapter's write path any more. A lookup failure must
+     * propagate unchanged and leave the requirement untouched.
+     */
+    @Test
+    void linkTermPropagatesTheLookupFailureForAnUnknownTermCodeAndLinksNothing() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        assertThrows(NoSuchElementException.class, () -> service.linkTerm(WS, code, "TERM-99", DEFAULT_LANGUAGE));
+
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    /**
+     * kogn-io/arknet#540: a {@code null} {@code usesTermCodes} argument to {@code update} leaves
+     * the existing {@code arkreq:usesTerm} edges untouched - the "unchanged" leg of the tri-state,
+     * mirroring every other optional field of this port.
+     */
+    @Test
+    void updateWithNullUsesTermCodesLeavesExistingLinksUntouched() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        Requirement updated = service.update(WS, code, null, null, null, null, null, null, null, null, null,
+                DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new TermRef(TERM_1)), updated.usesTerms());
+    }
+
+    /**
+     * kogn-io/arknet#540: an empty {@code usesTermCodes} list is the explicit, unambiguous signal
+     * to remove every {@code arkreq:usesTerm} edge - the gap this issue closes, since neither
+     * {@code req_link_term} (add-only) nor a prior {@code req_update} could ever do this.
+     */
+    @Test
+    void updateWithEmptyUsesTermCodesRemovesEveryLink() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+        service.linkTerm(WS, code, "TERM-2", DEFAULT_LANGUAGE);
+
+        Requirement updated = service.update(WS, code, null, null, null, null, null, null, null, List.of(), null,
+                DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(), updated.usesTerms());
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    /** A non-empty {@code usesTermCodes} list replaces the existing edges wholesale. */
+    @Test
+    void updateWithUsesTermCodesReplacesTheExistingLinksWholesale() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        Requirement updated = service.update(WS, code, null, null, null, null, null, null, null,
+                List.of("TERM-2"), null, DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new TermRef(TERM_2)), updated.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_2)), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    /**
+     * An unknown term code in {@code usesTermCodes} is rejected before anything is written - the
+     * same didactic rejection {@code req_link_term} raises, mirroring {@code AdrService#update}'s
+     * own resolution of {@code usesTermCodes}.
+     */
+    @Test
+    void updateWithAnUnknownUsesTermCodeIsRejectedAndWritesNothing() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        assertThrows(NoSuchElementException.class, () -> service.update(WS, code, null, null, null, null, null,
+                null, null, List.of("TERM-99"), null, DEFAULT_LANGUAGE));
+
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    /**
+     * {@code usesTermCodes} is independent of every other field this port corrects - a call that
+     * touches both a text field and the term links applies both.
+     */
+    @Test
+    void updateChangesTheTitleAndReplacesTheUsesTermLinksInTheSameCall() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        Requirement updated = service.update(WS, code, "New title", null, null, null, null, null, null,
+                List.of("TERM-2"), null, DEFAULT_LANGUAGE);
+
+        assertEquals("New title", updated.title());
+        assertEquals(List.of(new TermRef(TERM_2)), updated.usesTerms());
+    }
+
+    @Test
+    void addStartsWithoutLinkedConstraints() {
+        Requirement added = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(), added.constrainedBy());
+    }
+
+    @Test
+    void linkConstraintAddsTheConstraintToTheRequirement() {
+        Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
+                ConstraintType.REGULATORY);
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        Requirement linked = service.linkConstraint(WS, code, constraint.code().value(), DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new ConstraintRef(constraint.id().value())), linked.constrainedBy());
+        assertEquals(List.of(new ConstraintRef(constraint.id().value())),
+                service.get(WS, code, null).orElseThrow().constrainedBy());
+    }
+
+    @Test
+    void linkingTheSameConstraintTwiceIsANoOp() {
+        Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
+                ConstraintType.REGULATORY);
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkConstraint(WS, code, constraint.code().value(), DEFAULT_LANGUAGE);
+
+        Requirement linked = service.linkConstraint(WS, code, constraint.code().value(), DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new ConstraintRef(constraint.id().value())), linked.constrainedBy());
+    }
+
+    @Test
+    void linkConstraintThrowsWhenRequirementUnknown() {
+        Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
+                ConstraintType.REGULATORY);
+
+        RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
+                () -> service.linkConstraint(WS, new RequirementCode("FR-42"), constraint.code().value(), DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
+    }
+
+    /**
+     * Resolution of the human-typed constraint code happens here, via
+     * {@link InMemoryConstraintRepository} - a lookup failure must propagate unchanged and leave
+     * the requirement untouched.
+     */
+    @Test
+    void linkConstraintThrowsWhenConstraintCodeUnknownAndLinksNothing() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        assertThrows(ConstraintNotFoundException.class, () -> service.linkConstraint(WS, code, "TCON-99", DEFAULT_LANGUAGE));
+
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().constrainedBy());
+    }
+
+    /**
+     * Regression guard for the replace-by-identity write path: the out-adapter persists a
+     * requirement by wiping and re-writing its triples, so a status change must carry the
+     * linked constraints along rather than silently dropping them.
+     */
+    @Test
+    void acceptPreservesLinkedConstraints() {
+        Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
+                ConstraintType.REGULATORY);
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkConstraint(WS, code, constraint.code().value(), DEFAULT_LANGUAGE);
+
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new ConstraintRef(constraint.id().value())), accepted.constrainedBy());
+    }
+
+    /**
+     * Regression guard for the replace-by-identity write path: the out-adapter persists a
+     * requirement by wiping and re-writing its triples, so a status change must carry the
+     * linked terms along rather than silently dropping them.
+     */
+    @Test
+    void acceptPreservesLinkedTerms() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        assertEquals(RequirementStatus.ACCEPTED, accepted.status());
+        assertEquals(List.of(new TermRef(TERM_1)), accepted.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    /**
+     * Same regression as {@link #acceptPreservesLinkedTerms}, for the mandatory
+     * acceptance criteria: accepting a requirement must not drop them either.
+     */
+    @Test
+    void acceptPreservesAcceptanceCriteria() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), accepted.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")),
+                service.get(WS, code, null).orElseThrow().acceptanceCriteria());
+    }
+
+    /**
+     * Same regression, exercised via {@code linkTerm}'s own replace-by-identity write.
+     */
+    @Test
+    void linkTermPreservesAcceptanceCriteria() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        Requirement linked = service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), linked.acceptanceCriteria());
+    }
+
+    /**
+     * Regression for issue #157: a requirement that predates the mandatory acceptance-criterion
+     * invariant reads back with the read-time legacy placeholder standing in for its
+     * {@code acceptanceCriteria} (see {@link
+     * de.hauschel.arknet.req.application.port.out.RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()}).
+     * {@code accept} never supplies a replacement, so writing it through must reject instead of
+     * turning that placeholder into a real, persisted literal - and must leave the requirement's
+     * status untouched, exactly as if the write had never been attempted.
+     */
+    @Test
+    void acceptRejectsALegacyRequirementInsteadOfPersistingThePlaceholder() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.accept(WS, code, DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
+        assertEquals(RequirementStatus.PROPOSED, service.get(WS, code, null).orElseThrow().status());
+    }
+
+    /**
+     * Same regression as {@link #acceptRejectsALegacyRequirementInsteadOfPersistingThePlaceholder},
+     * for the reverse transition: a legacy requirement accepted store-first (bypassing the
+     * mandatory acceptance-criterion invariant) must not silently persist the read-time
+     * placeholder when reset back to {@code PROPOSED} either.
+     */
+    @Test
+    void proposeRejectsALegacyRequirementInsteadOfPersistingThePlaceholder() {
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement legacyAccepted = new Requirement(
+                new RequirementId(resourceIdFactory.newId()), code, "legacy title",
+                "A requirement predating the acceptance-criterion invariant.", null, RequirementType.FUNCTIONAL,
+                RequirementStatus.ACCEPTED, null, null, List.of(),
+                List.of(new AcceptanceCriterion(1, "(legacy placeholder - no acceptance criterion on record)")),
+                List.of());
+        repository.createLegacy(WS, legacyAccepted);
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.propose(WS, code, DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
+        assertEquals(RequirementStatus.ACCEPTED, service.get(WS, code, null).orElseThrow().status());
+    }
+
+    /** Same regression as {@link #acceptRejectsALegacyRequirementInsteadOfPersistingThePlaceholder}, via {@code linkTerm}. */
+    @Test
+    void linkTermRejectsALegacyRequirementInsteadOfPersistingThePlaceholder() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    /**
+     * Same regression as {@link #acceptRejectsALegacyRequirementInsteadOfPersistingThePlaceholder},
+     * via {@code update} - but only when the caller leaves {@code acceptanceCriteria} {@code null}
+     * ("unchanged"), the same argument that used to carry the placeholder straight into the store.
+     */
+    @Test
+    void updateRejectsALegacyRequirementWhenAcceptanceCriteriaAreLeftUnchanged() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.update(WS, code, "New title", null, null, null, null, null, null, null, null, DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
+        assertEquals("legacy title", service.get(WS, code, null).orElseThrow().title());
+    }
+
+    /**
+     * Same regression as {@link #updateRejectsALegacyRequirementWhenAcceptanceCriteriaAreLeftUnchanged},
+     * but with no {@code defaultLanguage} at all: the acceptance-criteria guard must still take
+     * precedence over {@link de.hauschel.arknet.kernel.MissingDefaultLanguageException}, which
+     * {@code title}'s own language resolution would otherwise throw first.
+     */
+    @Test
+    void updateRejectsALegacyRequirementBeforeComplainingAboutAMissingDefaultLanguage() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.update(WS, code, "New title", null, null, null, null, null, null, null, null, null));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
+        assertEquals("legacy title", service.get(WS, code, null).orElseThrow().title());
+    }
+
+    /**
+     * The escape hatch: a caller closing the gap by patching the placeholder's own position (the
+     * only way {@code update} can touch an already-existing criterion, issue #266) with real text
+     * must succeed - the guard only blocks a write that would carry the placeholder forward
+     * unchanged, not one that explicitly overwrites it.
+     */
+    @Test
+    void updateAcceptsALegacyRequirementWhenThePlaceholderPositionIsPatchedWithRealText() {
+        RequirementCode code = givenLegacyRequirement();
+
+        Requirement updated = service.update(WS, code, null, null, null, null,
+                List.of(new AcceptanceCriterionTextPatch(1, "Real done-when criterion")), null, null, null, null,
+                DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")), updated.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")),
+                service.get(WS, code, null).orElseThrow().acceptanceCriteria());
+    }
+
+    /**
+     * Merely appending a new criterion after the placeholder does not close the gap: the
+     * placeholder itself would still be persisted at position 1, exactly the state the guard
+     * exists to prevent.
+     */
+    @Test
+    void updateStillRejectsALegacyRequirementWhenOnlyAppendingWithoutPatchingThePlaceholder() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.update(WS, code, null, null, null, List.of("A new, additional criterion"), null, null, null, null, null,
+                        DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
+    }
+
+    /**
+     * Once real acceptance criteria have been supplied, the requirement is no longer legacy: a
+     * subsequent {@code accept} (which supplies no replacement of its own) must succeed instead of
+     * throwing again.
+     */
+    @Test
+    void acceptSucceedsOnceALegacyRequirementsAcceptanceCriteriaHaveBeenSupplied() {
+        RequirementCode code = givenLegacyRequirement();
+        service.update(WS, code, null, null, null, null,
+                List.of(new AcceptanceCriterionTextPatch(1, "Real done-when criterion")), null, null, null, null,
+                DEFAULT_LANGUAGE);
+
+        Requirement accepted = service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        assertEquals(RequirementStatus.ACCEPTED, accepted.status());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")), accepted.acceptanceCriteria());
+    }
+
+    /**
+     * Stores a requirement the way {@code repository.createLegacy} models a pre-invariant
+     * requirement: some non-blank text stands in for {@code acceptanceCriteria} ({@link
+     * Requirement}'s constructor rejects an empty list unconditionally, so the domain object
+     * itself can never represent "no criteria at all"), but {@link
+     * InMemoryRequirementRepository#createLegacy} marks the identity so {@link
+     * RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()} reports
+     * {@code true} for it - mirroring the real adapter's structural signal.
+     */
+    private RequirementCode givenLegacyRequirement() {
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement legacy = new Requirement(
+                new RequirementId(resourceIdFactory.newId()), code, "legacy title",
+                "A requirement predating the acceptance-criterion invariant.", null, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, List.of(),
+                List.of(new AcceptanceCriterion(1, "(legacy placeholder - no acceptance criterion on record)")),
+                List.of());
+        repository.createLegacy(WS, legacy);
+        return code;
+    }
+
+    /**
+     * A sibling bounded context's driving adapter resolves opaque requirement
+     * identities back to their identity and business code (e.g. to render {@code FR-N} for
+     * display) - in one batch, not per-id.
+     */
+    @Test
+    void resolveExistingResolvesKnownIdentitiesInOneBatch() {
+        Requirement first = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+        Requirement second = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        List<ResolveRequirements.ResolvedRequirement> resolved =
+                service.resolveExisting(WS, first.id().value(), second.id().value());
+
+        assertEquals(2, resolved.size());
+        assertTrue(resolved.contains(new ResolveRequirements.ResolvedRequirement(first.id().value(), first.code())));
+        assertTrue(
+                resolved.contains(new ResolveRequirements.ResolvedRequirement(second.id().value(), second.code())));
+    }
+
+    /**
+     * The port never rejects an unresolvable id - it simply omits it from the result, so the
+     * caller (not this port) decides what "missing" means for its own display.
+     */
+    @Test
+    void resolveExistingSilentlyOmitsUnknownIdentities() {
+        Requirement known = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+        ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
+
+        List<ResolveRequirements.ResolvedRequirement> resolved =
+                service.resolveExisting(WS, known.id().value(), unknown);
+
+        assertEquals(List.of(new ResolveRequirements.ResolvedRequirement(known.id().value(), known.code())),
+                resolved);
+    }
+
+    @Test
+    void resolveExistingWithNoIdsReturnsAnEmptyList() {
+        assertEquals(List.of(), service.resolveExisting(WS));
+    }
+
+    @Test
+    void resolveExistingIsScopedPerProject() {
+        Requirement inWs = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+        ProjectId other = new ProjectId("other");
+
+        assertEquals(List.of(), service.resolveExisting(other, inWs.id().value()));
+    }
+
+    /**
+     * {@code schema()} is pure delegation to the {@link RequirementSchemaSource}
+     * driven port - the service adds no policy of its own, only the seam between the driving
+     * and driven port.
+     */
+    @Test
+    void schemaDelegatesToTheSchemaSource() {
+        List<RequirementSchemaTerm> result = service.schema();
+
+        assertEquals(schemaSource.terms(), result);
+        assertEquals(1, schemaSource.callCount());
+    }
+
+    // --- rationale (issue #321) --------------------------------------------------------------
+
+    /** {@code req_add}'s optional rationale reaches the store and comes back on the read. */
+    @Test
+    void addPersistsTheRationale() {
+        Requirement added = service.add(WS, newFunctionalRequirementWithRationale(), DEFAULT_LANGUAGE);
+
+        assertEquals(RATIONALE, added.rationale());
+        assertEquals(RATIONALE, repository.findByCode(WS, added.code(), null).orElseThrow().rationale());
+    }
+
+    /** Omitting it is legal - it carries no {@code sh:minCount}, deliberately (issue #321). */
+    @Test
+    void addWithoutARationaleLeavesItUnrecorded() {
+        Requirement added = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertNull(added.rationale());
+        assertNull(repository.findCurrentByCode(WS, added.code(), null).orElseThrow().rationaleLanguage());
+    }
+
+    /** {@code req_update} is how a requirement registered without a reason gets one afterwards. */
+    @Test
+    void updateRecordsARationaleOnARequirementCreatedWithoutOne() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        Requirement updated = service.update(WS, code, null, null, RATIONALE, null, null, null, null, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals(RATIONALE, updated.rationale());
+        assertEquals(DEFAULT_LANGUAGE, repository.findCurrentByCode(WS, code, null).orElseThrow().rationaleLanguage());
+    }
+
+    /**
+     * {@code null} means "leave it alone", never "remove the recorded reason" - the same rule
+     * {@code priority} follows, and the reason the out-adapter preserves every existing variant
+     * when nothing is written.
+     */
+    @Test
+    void updateWithoutARationaleLeavesAnAlreadyRecordedOneUntouched() {
+        RequirementCode code = service.add(WS, newFunctionalRequirementWithRationale(), DEFAULT_LANGUAGE).code();
+
+        Requirement updated = service.update(WS, code, "New title", null, null, null, null, null, null, null, null,
+                DEFAULT_LANGUAGE);
+
+        assertEquals(RATIONALE, updated.rationale());
+    }
+
+    /** {@code req_set_status}/{@code req_link_term} know nothing about it and must not drop it. */
+    @Test
+    void acceptAndLinkTermKeepTheRationale() {
+        RequirementCode code = service.add(WS, newFunctionalRequirementWithRationale(), DEFAULT_LANGUAGE).code();
+
+        assertEquals(RATIONALE, service.accept(WS, code, DEFAULT_LANGUAGE).rationale());
+        assertEquals(RATIONALE, service.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE).rationale());
+    }
+
+    /**
+     * Issue #258 applies to this field too: a rationale actually being changed and shipping no
+     * {@code language} needs a project default, rather than silently landing untagged.
+     */
+    @Test
+    void updateWithARationaleButNoLanguageOrProjectDefaultIsRejected() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        assertThrows(MissingDefaultLanguageException.class,
+                () -> service.update(WS, code, null, null, RATIONALE, null, null, null, null, null, null, null));
+
+        assertNull(service.get(WS, code, null).orElseThrow().rationale());
+    }
+
+    /**
+     * Mirrors {@link #updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite}
+     * for the rationale: naming a field without changing it, and without naming a language, stays
+     * a genuine no-op even on a project that has no default to fall back to.
+     */
+    @Test
+    void updateResendingUnchangedRationaleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
+        RequirementCode code = service.add(WS, newFunctionalRequirementWithRationale(), DEFAULT_LANGUAGE).code();
+        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code, null).orElseThrow();
+
+        Requirement updated = service.update(WS, code, null, null, RATIONALE, null, null, null, null, null, null, null);
+
+        assertEquals(before.head(), repository.findCurrentByCode(WS, code, null).orElseThrow().head());
+        assertEquals(RATIONALE, updated.rationale());
+    }
+
+    // --- req_delete (kogn-io/arknet#566) ---------------------------------------------
+
+    @Test
+    void deleteDelegatesToTheRepository() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        service.delete(WS, code);
+
+        assertFalse(service.get(WS, code, null).isPresent());
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(RequirementNotFoundException.class,
+                () -> service.delete(WS, new RequirementCode("FR-99")));
+    }
+
+    /**
+     * No status gates the deletion (Fred, 2026-09-18): a requirement is a promise that changes,
+     * not a decision that was taken, and the occasion for deleting one is usually an accepted
+     * duplicate. Build an {@code isDeletable()} onto {@link RequirementStatus} the way
+     * {@code AdrStatus} carries one and this goes red.
+     */
+    @Test
+    void deleteRemovesAnAcceptedRequirement() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.accept(WS, code, DEFAULT_LANGUAGE);
+
+        service.delete(WS, code);
+
+        assertFalse(service.get(WS, code, null).isPresent());
+    }
+
+    /**
+     * Mutation test for {@code nextCode} counting over
+     * {@link RequirementRepository#findRetainedCodes} in addition to
+     * {@link RequirementRepository#findAllCodes} (kogn-io/arknet#566): drop the
+     * {@code findRetainedCodes} term from {@code nextCode}'s maximum and this goes red - deleting
+     * the highest-numbered functional requirement would let the count fall back to the survivor
+     * and hand the deleted requirement's code out a second time.
+     */
+    @Test
+    void addDoesNotReissueAFunctionalCodeAfterItsHighestRequirementWasDeleted() {
+        service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+        RequirementCode second = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.delete(WS, second);
+
+        Requirement third = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertEquals(new RequirementCode("FR-3"), third.code());
+    }
+
+    /** The same for the second counter - the two are kept apart by prefix, not by type triple. */
+    @Test
+    void addDoesNotReissueANonFunctionalCodeAfterItsHighestRequirementWasDeleted() {
+        service.add(WS, newNonFunctionalRequirement(), DEFAULT_LANGUAGE);
+        RequirementCode second = service.add(WS, newNonFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.delete(WS, second);
+
+        Requirement third = service.add(WS, newNonFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertEquals(new RequirementCode("NFR-3"), third.code());
+    }
+
+    /**
+     * The prefix trap, from both sides: a retained {@code NFR-} code must not push the {@code FR-}
+     * counter along, and a retained {@code FR-} code must not push the {@code NFR-} counter -
+     * {@code CodeCounter} anchors its match at the start of the code, so neither prefix can see
+     * the other's numbers.
+     */
+    @Test
+    void aRetainedCodeOfOneTypeLeavesTheOtherTypesCounterAlone() {
+        RequirementCode functional = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        RequirementCode nonFunctional = service.add(WS, newNonFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.delete(WS, functional);
+        service.delete(WS, nonFunctional);
+
+        assertEquals(new RequirementCode("FR-2"), service.add(WS, newFunctionalRequirement(),
+                DEFAULT_LANGUAGE).code());
+        assertEquals(new RequirementCode("NFR-2"), service.add(WS, newNonFunctionalRequirement(),
+                DEFAULT_LANGUAGE).code());
+    }
+
+    /** {@link #newFunctionalRequirement()}'s non-functional sibling, for the second code counter. */
+    private static NewRequirement newNonFunctionalRequirement() {
+        return new NewRequirement("Login stays fast", "The system shall answer a login within a second.",
+                null, RequirementType.NON_FUNCTIONAL, null, null, List.of("Done when it works"), null);
+    }
+
+    private static NewRequirement newFunctionalRequirement() {
+        return new NewRequirement("User can log in", "The system shall let a registered user authenticate.", null,
+                RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null);
+    }
+
+    /** {@link #newFunctionalRequirement()} carrying a rationale (issue #321). */
+    private static NewRequirement newFunctionalRequirementWithRationale() {
+        return new NewRequirement("User can log in", "The system shall let a registered user authenticate.",
+                RATIONALE, RequirementType.FUNCTIONAL, null, null, List.of("Done when it works"), null);
+    }
+
+    /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
+    private static final class FakeResourceIdFactory implements ResourceIdFactory {
+
+        private final AtomicInteger counter = new AtomicInteger();
+
+        @Override
+        public ResourceId newId() {
+            return ResourceId.of("https://w3id.org/arknet/id/fake-" + counter.incrementAndGet());
+        }
+
+        int mintedCount() {
+            return counter.get();
+        }
+    }
+
+    /**
+     * Fake {@link RequirementSchemaSource}: hands back a fixed, canned list of terms and counts
+     * its own invocations, so the test can pin "schema() is exactly one delegating call" without
+     * a mocking framework.
+     */
+    private static final class FakeRequirementSchemaSource implements RequirementSchemaSource {
+
+        private final List<RequirementSchemaTerm> terms =
+                List.of(new RequirementSchemaTerm("Priority", "Priorisierung nach MoSCoW.",
+                        List.of("MUST_HAVE", "SHOULD_HAVE", "COULD_HAVE", "WONT_HAVE")));
+        private int calls;
+
+        @Override
+        public List<RequirementSchemaTerm> schema() {
+            calls++;
+            return terms;
+        }
+
+        List<RequirementSchemaTerm> terms() {
+            return terms;
+        }
+
+        int callCount() {
+            return calls;
+        }
+    }
+}

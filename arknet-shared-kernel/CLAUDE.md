@@ -83,7 +83,7 @@ kanonisierten `defaultLanguage` raeumt ein noch bestehendes ungetaggtes Literal 
 Praedikats/Subjects mit auf, statt es als vermeintliche andere Sprachvariante zu bewahren) ist kein
 gemeinsamer Kernel-Mechanismus, sondern in jedem der drei Out-Adapter in dessen eigenem Stil
 nachgebaut (Java-Stream-Filter bei req/uc, SPARQL-`FILTER`-Erweiterung bei ul) -- Details je in
-`arknet-requirements/CLAUDE.md`, `arknet-domain-modelling/arknet-ubiquitous-language/CLAUDE.md`, `arknet-use-cases/CLAUDE.md`.
+`arknet-product-requirements/arknet-requirements/CLAUDE.md`, `arknet-domain-modelling/arknet-ubiquitous-language/CLAUDE.md`, `arknet-product-requirements/arknet-use-cases/CLAUDE.md`.
 
 Neben `CodeAssignment` (der Schreibhaelfte des Code-Zaehlers) liegt seit kogn-io/arknet#360 dessen
 Lesehaelfte `CodeCounter` (`runningNumber(codePrefix, code)`, `highestRunningNumber(codePrefix,

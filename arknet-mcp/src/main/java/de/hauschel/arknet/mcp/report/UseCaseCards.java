@@ -24,7 +24,7 @@ import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.Step;
-import de.hauschel.arknet.uc.domain.TermRef;
+import de.hauschel.arknet.pr.shared.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 
 /**

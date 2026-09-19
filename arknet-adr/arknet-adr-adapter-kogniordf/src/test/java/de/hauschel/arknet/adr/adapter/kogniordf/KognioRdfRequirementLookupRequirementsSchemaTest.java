@@ -29,7 +29,7 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
-import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
