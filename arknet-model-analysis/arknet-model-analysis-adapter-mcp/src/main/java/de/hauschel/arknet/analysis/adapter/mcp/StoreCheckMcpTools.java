@@ -127,7 +127,7 @@ public final class StoreCheckMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final List<StoreCheckKind> selected = select(checks);
-        final StoreSnapshot snapshot = snapshots.read(project.id());
+        final StoreSnapshot snapshot = needsSnapshot(selected) ? snapshots.read(project.id()) : null;
         final List<String> sections = new ArrayList<>(selected.size());
         for (final StoreCheckKind kind : selected) {
             sections.add(switch (kind) {
@@ -153,6 +153,16 @@ public final class StoreCheckMcpTools {
     private TraceabilityGraph readGraph(final ResolvedProject project) {
         final DisplayLocale effective = displayLocale.withRequestedOverride(project.defaultLanguage());
         return graphs.read(project.id(), effective);
+    }
+
+    /**
+     * @return whether {@code selected} contains a check that reads the raw {@link StoreSnapshot} -
+     *     LANGUAGE, ROLE_TERM_DUPLICATE or STEP_ACCEPTANCE (see the {@link #graphs} parameter
+     *     Javadoc). A selection of ORPHAN alone must not pay for a snapshot read it never uses.
+     */
+    private static boolean needsSnapshot(final List<StoreCheckKind> selected) {
+        return selected.contains(StoreCheckKind.LANGUAGE) || selected.contains(StoreCheckKind.ROLE_TERM_DUPLICATE)
+                || selected.contains(StoreCheckKind.STEP_ACCEPTANCE);
     }
 
     /**

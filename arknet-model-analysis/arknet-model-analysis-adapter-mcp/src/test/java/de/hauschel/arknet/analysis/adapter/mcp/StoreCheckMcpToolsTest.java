@@ -8,11 +8,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
 
+import de.hauschel.arknet.analysis.application.port.in.ReadModelSnapshot;
+import de.hauschel.arknet.analysis.application.port.in.ReadTraceabilityGraph;
 import de.hauschel.arknet.analysis.domain.StoreCheckKind;
+import de.hauschel.arknet.analysis.domain.TraceabilityGraph;
+import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
+import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.StoreSnapshot;
 
 /**
  * Unit tests for {@code store_check}'s tool surface: which checks a {@code checks} argument
@@ -68,6 +77,29 @@ class StoreCheckMcpToolsTest {
                 .hasMessageContaining("ROLE_TERM_DUPLICATE")
                 .hasMessageContaining("STEP_ACCEPTANCE")
                 .hasMessageContaining("ORPHAN");
+    }
+
+    /**
+     * PR #643 review, P2-2: a selection of ORPHAN alone must not read the raw snapshot -
+     * ORPHAN reads only the traceability graph (see {@link StoreCheckMcpTools} constructor
+     * Javadoc), and LANGUAGE/ROLE_TERM_DUPLICATE/STEP_ACCEPTANCE are the only checks that need it.
+     */
+    @Test
+    void doesNotReadTheRawSnapshotWhenOnlyOrphanIsSelected() {
+        final AtomicBoolean snapshotRead = new AtomicBoolean(false);
+        final ReadModelSnapshot snapshots = projectId -> {
+            snapshotRead.set(true);
+            return StoreSnapshot.of(List.of());
+        };
+        final ReadTraceabilityGraph graphs =
+                (projectId, locale) -> TraceabilityGraph.of(StoreSnapshot.of(List.of()), locale);
+        final StoreCheckMcpTools tools = new StoreCheckMcpTools(snapshots, graphs, Prefixes.defaults(),
+                anchor -> new ResolvedProject(new ProjectId("sample-project"), null, List.of()),
+                DisplayLocale.DEFAULT);
+
+        tools.storeCheck(null, List.of("ORPHAN"), "sample-project");
+
+        assertThat(snapshotRead).isFalse();
     }
 
     @Test
