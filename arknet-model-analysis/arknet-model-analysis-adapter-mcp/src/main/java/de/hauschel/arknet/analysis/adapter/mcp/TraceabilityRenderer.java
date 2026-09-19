@@ -21,10 +21,13 @@ import de.hauschel.arknet.persistence.ResourceRenderer;
 import de.hauschel.arknet.persistence.StoreResource;
 
 /**
- * Renders the compact, token-cheap text digests {@code trace_matrix}/{@code orphan_check}/
- * {@code impact_analysis}/{@code role_usecase_matrix} (ADR-37/kogn-io/arknet#405 Part C, formerly
- * {@code actor_usecase_matrix})/{@code term_cooccurrence} return, given a
- * {@link TraceabilityGraph} already built over one project's statements.
+ * Renders the compact, token-cheap text digests {@code trace_matrix}/{@code impact_analysis}/
+ * {@code role_usecase_matrix} (ADR-37/kogn-io/arknet#405 Part C, formerly {@code
+ * actor_usecase_matrix})/{@code term_cooccurrence} return, given a {@link TraceabilityGraph}
+ * already built over one project's statements. The orphan check moved out with kogn-io/arknet#473
+ * - {@code store_check ORPHAN}'s section (and the deprecated {@code orphan_check} alias that
+ * mirrors it) is rendered by {@link StoreCheckRenderer#orphanSection} instead, from an {@link
+ * de.hauschel.arknet.analysis.domain.OrphanCheck.Result} rather than a raw graph.
  *
  * <p>Pure: it consumes only a {@link TraceabilityGraph} plus a {@link Prefixes} resolver, so it
  * is unit-testable without any store I/O - the same split {@link
@@ -71,49 +74,6 @@ public final class TraceabilityRenderer {
             out.append("    realised by : ")
                     .append(codesOrNone(graph, graph.realisingUseCases(requirementIri))).append('\n');
         }
-        return out.toString();
-    }
-
-    /**
-     * Renders {@code orphan_check}: requirements no use case realises, glossary terms never
-     * used (neither via {@code arkreq:usesTerm} - a requirement's or a use case's,
-     * issue #329 - as a bounded context's ubiquitous language, nor via an architecture decision's
-     * {@code arkarch:usesTerm}, kogn-io/arknet#393, nor as another term's {@code skos:broader},
-     * issue #252, nor as another term's {@code skos:related} peer, kogn-io/arknet#420), terms a requirement's, use case's, bounded context's or architecture decision's
-     * prose names without the edge to back it up (issue #406), and constraints no requirement or
-     * use case is bound by (issue #223/#329).
-     *
-     * @param projectId the project the graph was read from
-     * @param graph       the traceability graph to report on
-     * @return the digest text
-     */
-    public String orphanCheck(ProjectId projectId, TraceabilityGraph graph) {
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(graph, "graph");
-
-        List<String> orphanRequirements = graph.requirementIris().stream()
-                .filter(iri -> graph.realisingUseCases(iri).isEmpty())
-                .toList();
-        List<String> orphanTerms = graph.termIris().stream()
-                .filter(iri -> !graph.isReferencedTerm(iri))
-                .toList();
-        List<TraceabilityGraph.UnlinkedMention> unlinkedMentions = graph.unlinkedMentions();
-        List<String> orphanConstraints = graph.constraintIris().stream()
-                .filter(iri -> !graph.isConstraintReferenced(iri))
-                .toList();
-
-        StringBuilder out = new StringBuilder();
-        out.append("# Orphan check -- project ").append(projectId.value()).append('\n');
-        out.append("\n## Requirements without a realising use case (")
-                .append(orphanRequirements.size()).append(")\n");
-        appendLines(out, graph, orphanRequirements);
-        out.append("\n## Terms never referenced (").append(orphanTerms.size()).append(")\n");
-        appendLines(out, graph, orphanTerms);
-        out.append("\n## Mentioned in text but not linked (").append(unlinkedMentions.size()).append(")\n");
-        appendUnlinkedMentions(out, graph, unlinkedMentions);
-        out.append("\n## Constraints not attached to any requirement or use case (")
-                .append(orphanConstraints.size()).append(")\n");
-        appendLines(out, graph, orphanConstraints);
         return out.toString();
     }
 
@@ -318,20 +278,6 @@ public final class TraceabilityRenderer {
         }
         for (String iri : iris) {
             out.append("- ").append(displayLine(graph, iri)).append('\n');
-        }
-    }
-
-    private void appendUnlinkedMentions(
-            StringBuilder out, TraceabilityGraph graph, List<TraceabilityGraph.UnlinkedMention> mentions) {
-        if (mentions.isEmpty()) {
-            out.append("- none\n");
-            return;
-        }
-        for (TraceabilityGraph.UnlinkedMention mention : mentions) {
-            out.append("- ").append(handle(graph, mention.sourceIri()))
-                    .append(" mentions \"").append(mention.termLabel()).append('"')
-                    .append(" (").append(handle(graph, mention.termIri())).append(')')
-                    .append(" -- no ").append(mention.edgeLocalName()).append(" edge\n");
         }
     }
 

@@ -1147,20 +1147,24 @@ public class ArknetMcpConfiguration {
 
     /**
      * The one checking tool ({@code store_check}, kogn-io/arknet#412), driving adapter of the
-     * model-analysis hexagon. It takes no {@link DisplayLocale}: a language check that resolved
-     * each field to one display language would only ever see the language it resolved to, which
-     * is precisely the language it must not assume.
+     * model-analysis hexagon. Takes a {@link DisplayLocale} only for ORPHAN (kogn-io/arknet#473):
+     * LANGUAGE, ROLE_TERM_DUPLICATE and STEP_ACCEPTANCE stay on the raw snapshot, since a language
+     * check that resolved each field to one display language would only ever see the language it
+     * resolved to, which is precisely the language it must not assume - but ORPHAN's text-mention
+     * matching needs the very same project-language merge {@code trace_matrix} already applies.
      */
     @Bean
     StoreCheckMcpTools storeCheckMcpTools(
             final ModelAnalysisService modelAnalysisService, final Prefixes prefixes,
-            final ProjectResolver projectResolver) {
-        return new StoreCheckMcpTools(modelAnalysisService, prefixes, projectResolver);
+            final ProjectResolver projectResolver, final DisplayLocale displayLocale) {
+        return new StoreCheckMcpTools(modelAnalysisService, modelAnalysisService, prefixes, projectResolver,
+                displayLocale);
     }
 
     /**
-     * The five traceability reporting tools ({@code trace_matrix}, {@code orphan_check},
-     * {@code impact_analysis}, {@code role_usecase_matrix}, {@code term_cooccurrence}), driving
+     * The five traceability reporting tools ({@code trace_matrix}, the deprecated {@code
+     * orphan_check} alias for {@code store_check ORPHAN} (kogn-io/arknet#473), {@code
+     * impact_analysis}, {@code role_usecase_matrix}, {@code term_cooccurrence}), driving
      * adapter of the same hexagon: one graph read per call, five questions asked of it.
      */
     @Bean

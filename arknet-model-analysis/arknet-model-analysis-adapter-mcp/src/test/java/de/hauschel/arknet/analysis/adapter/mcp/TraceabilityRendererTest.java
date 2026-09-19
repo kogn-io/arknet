@@ -43,21 +43,14 @@ class TraceabilityRendererTest {
     private static final String USE_CASE_GOAL = ARKREQ + "useCaseGoal";
     private static final String ACCEPTANCE_CRITERION = ARKREQ + "acceptanceCriterion";
     private static final String CRITERION_TEXT = ARKREQ + "criterionText";
-    private static final String DOMAIN_VISION = ARKDDD + "domainVision";
-    private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
     private static final String ROLE_TYPE = ARKPROC + "Role";
     private static final String HUMAN_ACTOR_TYPE = ARKPROC + "HumanActor";
     private static final String FILLED_BY = ARKPROC + "filledBy";
-    private static final String CONSTRAINED_BY = "http://open-services.net/ns/rm#constrainedBy";
 
     private static final String FR_1 = ID + "fr-1";
     private static final String FR_2 = ID + "fr-2";
-    private static final String FR_3 = ID + "fr-3";
     private static final String FR_10 = ID + "fr-10";
     private static final String TERM_1 = ID + "term-1";
-    private static final String TERM_8 = ID + "term-8";
-    private static final String TERM_9 = ID + "term-9";
-    private static final String TERM_10 = ID + "term-10";
     private static final String TERM_A = ID + "term-a";
     private static final String TERM_B = ID + "term-b";
     private static final String CRITERION_10 = ID + "criterion-10";
@@ -72,9 +65,6 @@ class TraceabilityRendererTest {
     private static final String ROLE_C = ID + "role-c";
     private static final String ACTOR_A = ID + "actor-a";
     private static final String ACTOR_B = ID + "actor-b";
-    private static final String BC_2 = ID + "bc-2";
-    private static final String CON_1 = ID + "con-1";
-    private static final String CON_2 = ID + "con-2";
 
     private final TraceabilityRenderer renderer = new TraceabilityRenderer(Prefixes.defaults());
     private static final ProjectId PROJECT = new ProjectId("sample-project");
@@ -94,109 +84,9 @@ class TraceabilityRendererTest {
         assertThat(matrix).contains("realised by : (none)");
     }
 
-    @Test
-    void orphanCheckListsFr2AsUnrealisedRequirement() {
-        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
-
-        String report = renderer.orphanCheck(PROJECT, graph);
-
-        assertThat(report).contains("# Orphan check -- project sample-project");
-        assertThat(report).contains("## Requirements without a realising use case (1)");
-        assertThat(report).contains("FR-2");
-        assertThat(report).contains("## Terms never referenced (0)");
-        assertThat(report).contains("- none");
-        assertThat(report).contains("## Mentioned in text but not linked (0)");
-        assertThat(report).contains("## Constraints not attached to any requirement or use case (0)");
-    }
-
-    /**
-     * CON-2 is a constraint (issue #223) no requirement is bound by via
-     * {@code oslc_rm:constrainedBy}; CON-1 is bound by FR-1 and must not appear.
-     */
-    @Test
-    void orphanCheckListsAnUnattachedConstraint() {
-        TraceabilityGraph graph = TraceabilityGraph.of(constraintFixtureSnapshot(), DisplayLocale.DEFAULT);
-
-        String report = renderer.orphanCheck(PROJECT, graph);
-
-        assertThat(report).contains("## Constraints not attached to any requirement or use case (1)");
-        assertThat(report).contains("CON-2");
-        assertThat(report).doesNotContain("CON-1");
-    }
-
-    private static StoreSnapshot constraintFixtureSnapshot() {
-        return StoreSnapshot.of(List.of(
-                iri(FR_1, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
-                lit(FR_1, TITLE, "Login"),
-                lit(FR_1, IDENTIFIER, "FR-1"),
-                iri(FR_1, CONSTRAINED_BY, CON_1),
-
-                iri(CON_1, RDF_TYPE, ARKREQ + "TechnicalConstraint"),
-                lit(CON_1, TITLE, "JVM only"),
-                lit(CON_1, IDENTIFIER, "CON-1"),
-
-                iri(CON_2, RDF_TYPE, ARKREQ + "TechnicalConstraint"),
-                lit(CON_2, TITLE, "PostgreSQL only"),
-                lit(CON_2, IDENTIFIER, "CON-2")));
-    }
-
-    /**
-     * FR-3's description names "Kunde" (TERM-9) without a {@code usesTerm} edge, and BC-2's
-     * domain vision names "Bestellung" (TERM-8) without a {@code ubiquitousLanguageTerm} edge -
-     * exactly the misleading gap this behaviour closes: today's two lists would call TERM-8/TERM-9
-     * orphaned even though the text is using them.
-     */
-    @Test
-    void orphanCheckListsMentionsThatNameATermWithoutTheEdgeToBackItUp() {
-        TraceabilityGraph graph = TraceabilityGraph.of(unlinkedMentionFixtureSnapshot(), DisplayLocale.DEFAULT);
-
-        String report = renderer.orphanCheck(PROJECT, graph);
-
-        assertThat(report).contains("## Mentioned in text but not linked (2)");
-        assertThat(report).contains("FR-3 mentions \"Kunde\" (TERM-9) -- no usesTerm edge");
-        assertThat(report).contains("BC-2 mentions \"Bestellung\" (TERM-8) -- no ubiquitousLanguageTerm edge");
-    }
-
-    /**
-     * A term linked only through a bounded context's ubiquitous language must not show up as
-     * "never referenced" - {@code arkddd:ubiquitousLanguageTerm} is as much a reference as
-     * {@code arkreq:usesTerm}.
-     */
-    @Test
-    void orphanCheckDoesNotCountATermLinkedOnlyViaTheBoundedContextAsOrphaned() {
-        TraceabilityGraph graph = TraceabilityGraph.of(unlinkedMentionFixtureSnapshot(), DisplayLocale.DEFAULT);
-
-        String report = renderer.orphanCheck(PROJECT, graph);
-
-        assertThat(report).doesNotContain("TERM-10");
-    }
-
-    private static StoreSnapshot unlinkedMentionFixtureSnapshot() {
-        return StoreSnapshot.of(List.of(
-                iri(FR_3, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
-                lit(FR_3, TITLE, "Bestandsdaten"),
-                lit(FR_3, IDENTIFIER, "FR-3"),
-                lit(FR_3, DESCRIPTION, "Der Kunde sieht seine Bestandsdaten ein."),
-
-                iri(TERM_9, RDF_TYPE, SKOS + "Concept"),
-                lit(TERM_9, PREF_LABEL, "Kunde"),
-                lit(TERM_9, IDENTIFIER, "TERM-9"),
-
-                iri(TERM_8, RDF_TYPE, SKOS + "Concept"),
-                lit(TERM_8, PREF_LABEL, "Bestellung"),
-                lit(TERM_8, IDENTIFIER, "TERM-8"),
-
-                // Linked via ubiquitousLanguageTerm but never named in the vision - must stay
-                // invisible to the unlinked-mention check and must not be reported as orphaned.
-                iri(TERM_10, RDF_TYPE, SKOS + "Concept"),
-                lit(TERM_10, PREF_LABEL, "Vertrag"),
-                lit(TERM_10, IDENTIFIER, "TERM-10"),
-
-                iri(BC_2, RDF_TYPE, ARKDDD + "BoundedContext"),
-                lit(BC_2, IDENTIFIER, "BC-2"),
-                lit(BC_2, DOMAIN_VISION, "Wir verwalten die Bestellung."),
-                iri(BC_2, UBIQUITOUS_LANGUAGE_TERM, TERM_10)));
-    }
+    // The orphan check itself moved to OrphanCheckTest (core module) with kogn-io/arknet#473;
+    // its rendering (now table-shaped, shared by store_check ORPHAN and the deprecated
+    // orphan_check alias) is tested in StoreCheckRendererTest.
 
     /**
      * The load-bearing assertion: {@code impact_analysis} on TERM-1 must reach FR-1 (direct
