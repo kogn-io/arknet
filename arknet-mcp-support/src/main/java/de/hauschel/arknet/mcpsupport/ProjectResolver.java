@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.kernel;
+package de.hauschel.arknet.mcpsupport;
 
 /**
- * Resolves which {@link ProjectId} a single tool call targets, from the opaque anchor the calling
- * client supplied.
+ * Resolves which {@link de.hauschel.arknet.kernel.ProjectId} a single tool call targets, from
+ * the opaque anchor the calling client supplied.
  *
  * <p>arknet-mcp runs as one shared server for every project on the machine: a single
- * process, a single port, no per-project daemon. There is therefore no single {@link ProjectId}
- * per process to inject as a singleton; instead every in-adapter resolves the project <em>per
- * call</em> from the anchor the request carries.</p>
+ * process, a single port, no per-project daemon. There is therefore no single
+ * {@link de.hauschel.arknet.kernel.ProjectId} per process to inject as a singleton; instead
+ * every in-adapter resolves the project <em>per call</em> from the anchor the request
+ * carries.</p>
  *
  * <p><strong>Looked up, never derived.</strong> An anchor is an opaque string a client
  * registered beforehand - the server matches it against the project registry and does not
@@ -28,12 +29,16 @@ package de.hauschel.arknet.kernel;
  * exactly the silent fallback this design removes, and a write whose project is unclear is the
  * very failure this closes off.</p>
  *
- * <p>This is a shared-kernel concept for the same reason {@link ProjectId} is: several bounded
- * contexts (requirements, ubiquitous-language, use-cases, bounded-context) all address the same
- * per-project dataset and therefore share one way of resolving it rather than each inventing its
- * own. The implementation - which registry answers the lookup - stays in the composition root; a
- * bounded context depends only on this neutral port, never on the transport and never on the
- * project component whose registry ultimately answers.</p>
+ * <p><strong>Why this module and not the shared kernel.</strong> Resolving an anchor is
+ * mechanics of the tool adapters, not a model concept: no {@code *-core} names it, only the
+ * driving MCP adapters of every bounded context and the composition root that implements it.
+ * The shared kernel takes a term only if at least two contexts' cores carry it (ADR-56), which
+ * this one does not - the thing the cores do carry is the
+ * {@link de.hauschel.arknet.kernel.ProjectId} this port yields. Every driving adapter resolves
+ * the project the same way rather than inventing its own, and the implementation - which
+ * registry answers the lookup - stays in the composition root; an adapter depends only on this
+ * neutral port, never on the transport and never on the project component whose registry
+ * ultimately answers.</p>
  */
 public interface ProjectResolver {
 

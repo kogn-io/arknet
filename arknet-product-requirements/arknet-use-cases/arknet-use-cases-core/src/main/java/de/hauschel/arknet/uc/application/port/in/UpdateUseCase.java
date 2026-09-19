@@ -117,7 +117,7 @@ public interface UpdateUseCase {
      * @param correction      the fields to correct, built via {@link UseCaseCorrection#builder()};
      *                        every field it leaves unset stays as it is
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - only consulted for a field/step
      *                        this call is actually changing and that ships no
      *                        {@link UseCaseCorrection#language()}

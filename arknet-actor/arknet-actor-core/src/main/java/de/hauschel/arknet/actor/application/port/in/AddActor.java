@@ -31,7 +31,7 @@ public interface AddActor {
      * @param projectId       the project (architecture model) to add the actor to
      * @param command         the data describing the actor to create
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - used only when
      *                        {@link NewActor#language()} is omitted
      * @return the persisted actor including its assigned identity and code

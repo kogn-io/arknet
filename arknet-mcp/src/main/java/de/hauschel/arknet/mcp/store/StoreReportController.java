@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import io.modelcontextprotocol.server.transport.ServerTransportSecurityException;
 import io.modelcontextprotocol.server.transport.ServerTransportSecurityValidator;
 
-import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
+import de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.mcp.LoopbackHostSecurity;
 
 /**
@@ -36,7 +36,7 @@ import de.hauschel.arknet.mcp.LoopbackHostSecurity;
  * ({@code AnchorHttpTransportConfiguration}), so this endpoint takes the project's anchor as a
  * query parameter instead - the same anchor a client registers via {@code project_add}/
  * {@code project_adopt}, resolved through the identical {@link
- * de.hauschel.arknet.kernel.ProjectResolver} every tool call uses. There is no transport-context
+ * de.hauschel.arknet.mcpsupport.ProjectResolver} every tool call uses. There is no transport-context
  * anchor to fall back to here, unlike the MCP tools' optional {@code projectAnchor} parameter.</p>
  *
  * <p><strong>Same loopback boundary as the MCP endpoint.</strong> Spring AI

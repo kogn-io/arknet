@@ -78,7 +78,7 @@ public interface UpdateTerm {
      *                        parameter); a rename ({@code prefLabel} without {@code language}) is
      *                        the one write that touches every tag of its field
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - only consulted when {@code
      *                        prefLabel}/{@code definition} is actually non-{@code null} here
      * @param broader         {@code null} to leave an already-set broader term untouched, {@link

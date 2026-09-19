@@ -49,7 +49,7 @@ public interface AcceptAdr {
      *                        was entered here; {@code null} stamps today's date, which is the
      *                        ordinary case
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - consulted only for the read this call
      *                        makes to echo an untouched field back, never for a write
      * @return the updated decision, or the unchanged decision if it was already {@code ACCEPTED} -

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.kernel;
+package de.hauschel.arknet.mcpsupport;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -17,8 +17,9 @@ import java.util.Set;
  * <p><strong>Why one place.</strong> Thirteen driving adapters compose their own answers inline,
  * and each of the three shapes has to read the same in all of them or an agent cannot learn it
  * once. This class is to the answer what {@link StaleTranslationHint} is to the translation
- * signal, and sits beside it for the same reason: a pure-JDK helper every bounded context's
- * in-adapter already depends on, with no new module edge anywhere.</p>
+ * signal, and sits beside it for the same reason: a helper of the driving adapters, which no
+ * {@code *-core} names and which therefore belongs in their support module rather than in the
+ * shared kernel.</p>
  *
  * <p><strong>The project line (kogn-io/arknet#597).</strong> A tool call whose
  * {@code projectAnchor} was forgotten falls back to the anchor the transport carried and writes

@@ -19,11 +19,11 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
-import de.hauschel.arknet.kernel.StaleTranslationHint;
-import de.hauschel.arknet.kernel.ToolParameterDescriptions;
-import de.hauschel.arknet.kernel.WriteResponse;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
+import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
+import de.hauschel.arknet.mcpsupport.WriteResponse;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.DeleteTerm;

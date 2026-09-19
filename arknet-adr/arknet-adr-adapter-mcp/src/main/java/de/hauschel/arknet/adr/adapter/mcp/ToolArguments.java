@@ -3,7 +3,7 @@
 
 package de.hauschel.arknet.adr.adapter.mcp;
 
-import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
 
 /**
  * Argument normalisation shared by {@link AdrMcpTools} - mirrors

@@ -36,7 +36,7 @@ public interface AcceptRequirement {
      * @param projectId       the project (architecture model) the requirement lives in
      * @param code            the requirement code, e.g. {@code FR-1}
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - consulted only for the read this call
      *                        makes to echo an untouched field back, never for a write
      * @return the updated requirement, or the unchanged requirement if it was already {@code

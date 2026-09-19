@@ -3,7 +3,7 @@
 
 package de.hauschel.arknet.req.adapter.mcp;
 
-import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
 
 /**
  * Argument normalisation shared by this MCP adapter's tool classes ({@link RequirementMcpTools},

@@ -21,9 +21,9 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
-import de.hauschel.arknet.kernel.ToolParameterDescriptions;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
@@ -159,7 +159,7 @@ public final class StoreReportTools {
      *
      * @param projectAnchor the anchor identifying the project to report on; must be a registered
      *                       anchor, the same requirement {@code store_overview}'s parameter carries
-     * @throws de.hauschel.arknet.kernel.UnresolvedProjectAnchorException if {@code projectAnchor}
+     * @throws de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException if {@code projectAnchor}
      *                                                                    is blank or unregistered
      */
     String htmlReport(final String projectAnchor) {

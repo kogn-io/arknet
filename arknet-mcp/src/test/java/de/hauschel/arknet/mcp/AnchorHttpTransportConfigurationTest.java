@@ -26,7 +26,7 @@ import org.springframework.ai.mcp.server.webmvc.transport.WebMvcStreamableServer
 
 import tools.jackson.databind.json.JsonMapper;
 
-import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
 
 /**
  * Pins the project-anchor transport wiring: the context extractor lifts the client's

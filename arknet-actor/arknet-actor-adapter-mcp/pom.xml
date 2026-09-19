@@ -18,6 +18,13 @@
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-actor-core</artifactId>
         </dependency>
+        <!-- Technischer Support der treibenden MCP-Adapter: Anker-Aufloesung, Uebersetzungs-
+             Signal, Antwortformen und Parameter-Texte. Nicht transitiv ueber den Kern zu
+             bekommen - kein *-core haengt daran (ADR-56). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-mcp-support</artifactId>
+        </dependency>
         <!-- No neighbour bounded context's in-port here, unlike the bc/adr/uc in-adapters: an
              Actor holds no cross-BC reference of its own in this scope, so there is nothing to
              resolve for display and no Borrowed In-Port to make. -->

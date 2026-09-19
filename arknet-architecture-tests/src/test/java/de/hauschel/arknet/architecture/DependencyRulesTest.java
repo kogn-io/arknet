@@ -8,10 +8,16 @@ import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPac
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import java.util.Set;
+
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 
 /**
  * Nails down the dependency invariants that the Maven module cut cannot express.
@@ -52,7 +58,9 @@ import com.tngtech.archunit.lang.ArchRule;
  * {@code *-core} class (rule 3), to a {@code *-adapter-mcp} class (rule 4), to a
  * {@code de.hauschel.arknet.mcp} class such as {@code StoreReader} (rule 5), or to a
  * {@code de.hauschel.arknet.kernel} class (rule 6) -- and confirm the rule fails before
- * trusting it. All six were confirmed to fail this way when introduced.</p>
+ * trusting it. All six were confirmed to fail this way when introduced. Rule 12 is the one
+ * rule that does not need the exercise: it turns red on any class in the kernel package whose
+ * name is not on its list, which is the whole of what it claims.</p>
  *
  * <p><strong>Why tests are excluded.</strong> The rules describe production code. Test code
  * legitimately reaches for concrete technology -- the {@code KognioRdf*RepositoryTest} classes
@@ -77,6 +85,24 @@ class DependencyRulesTest {
             "io.kogn.rdf.rdf4j.."
     };
 
+    /**
+     * The terms ADR-56 admits to the shared kernel, by simple name -- the whole content of
+     * {@code de.hauschel.arknet.kernel}, as a list rather than as a predicate (rule 12).
+     */
+    private static final Set<String> SHARED_KERNEL_TERMS = Set.of(
+            "ProjectId",
+            "ResourceId",
+            "ResourceIdFactory",
+            "DefaultResourceId",
+            "UuidResourceIdFactory",
+            "CodeCounter",
+            "CodeAssignment",
+            "LanguageTag",
+            "InvalidLanguageTagException",
+            "MissingDefaultLanguageException",
+            "DisplayLocale",
+            "LocalizedLiteral");
+
     /** The model bounded contexts, by their package abbreviation (see CLAUDE.md). */
     private static final String[] BOUNDED_CONTEXT_PACKAGES = {
             "de.hauschel.arknet.req..",
@@ -86,6 +112,22 @@ class DependencyRulesTest {
             "de.hauschel.arknet.adr..",
             "de.hauschel.arknet.prj..",
             "de.hauschel.arknet.actor.."
+    };
+
+    /**
+     * The hexagon interiors and the vocabulary modules together -- everything a bounded context
+     * holds apart from its adapters. Rule 11 binds this set; the {@code ..adapter..} exclusion
+     * there is what turns the context packages into the cores.
+     */
+    private static final String[] CORE_AND_VOCABULARY_PACKAGES = {
+            "de.hauschel.arknet.req..",
+            "de.hauschel.arknet.ul..",
+            "de.hauschel.arknet.uc..",
+            "de.hauschel.arknet.bc..",
+            "de.hauschel.arknet.adr..",
+            "de.hauschel.arknet.prj..",
+            "de.hauschel.arknet.actor..",
+            "de.hauschel.arknet.*.shared.."
     };
 
     /**
@@ -308,4 +350,74 @@ class DependencyRulesTest {
                     .should().dependOnClassesThat().resideInAPackage("de.hauschel.arknet.uc..")
                     .because("a component reads its neighbour through its own out-port over the "
                             + "published language, never through one of its modules");
+
+    /**
+     * Rule 11 -- no core and no vocabulary module depends on {@code arknet-mcp-support}
+     * (ADR-56).
+     *
+     * <p>The support module of the driving adapters holds what the shared kernel used to carry
+     * alongside its model terms: resolving a client anchor to a project, the stale-translation
+     * signal and the field-language lookup behind it, the shapes of a writing tool's answer, the
+     * shared tool parameter texts. None of it is a term any {@code *-core} speaks, and the split
+     * is only worth its module as long as it stays that way. Maven backs it today -- no
+     * {@code *-core} POM names the module -- but a one-line dependency would end it silently,
+     * and every driving adapter has the module on its classpath already, one step from the core
+     * it sits in front of.</p>
+     */
+    @ArchTest
+    static final ArchRule cores_and_vocabulary_modules_stay_off_the_tool_adapter_support =
+            noClasses()
+                    .that().resideInAnyPackage(CORE_AND_VOCABULARY_PACKAGES)
+                    .and().resideOutsideOfPackage("..adapter..")
+                    .should().dependOnClassesThat().resideInAPackage("de.hauschel.arknet.mcpsupport..")
+                    .because("anchor resolution, the translation signal and a tool's answer "
+                            + "format are mechanics of the driving adapters; a core that reaches "
+                            + "for them has taken the transport into the hexagon");
+
+    /**
+     * Rule 12 -- the shared kernel holds exactly the terms admitted to it (ADR-56).
+     *
+     * <p>ADR-56's admission rule -- a term enters only if at least two contexts carry it, and
+     * that two carry it is not by itself enough -- is a judgement per term, not a property of a
+     * class file. Two contexts using a type is the closest mechanical proxy, and it is the wrong
+     * one in both directions: it would pass any technical helper two adapters happen to share,
+     * and it would fail {@code MissingDefaultLanguageException}, which is thrown inside the
+     * kernel and named by the cores in prose rather than in bytecode.</p>
+     *
+     * <p>So the rule is a list instead of a predicate, and that is the point: adding a type to
+     * the kernel turns this test red, and the only way to green is to write the new name here.
+     * The check is the review it forces, not the condition it states -- the same shape a
+     * deletion-guard list or an ontology-constant comparison has elsewhere in this module.
+     * Renaming or removing a term turns it red too, which is the cheap half of the same
+     * bargain.</p>
+     */
+    @ArchTest
+    static final ArchRule shared_kernel_holds_only_the_terms_admitted_to_it =
+            classes()
+                    .that().resideInAPackage("de.hauschel.arknet.kernel..")
+                    .should(beOneOfTheAdmittedSharedKernelTerms())
+                    .because("ADR-56 makes admission to the shared kernel a decision per term; "
+                            + "an unlisted type in the kernel is a decision nobody made");
+
+    private static ArchCondition<JavaClass> beOneOfTheAdmittedSharedKernelTerms() {
+        return new ArchCondition<>("be one of the terms ADR-56 admits to the shared kernel") {
+            @Override
+            public void check(final JavaClass item, final ConditionEvents events) {
+                final String topLevelName = topLevelSimpleName(item);
+                events.add(new SimpleConditionEvent(item, SHARED_KERNEL_TERMS.contains(topLevelName),
+                        "%s is %sadmitted to the shared kernel".formatted(item.getName(),
+                                SHARED_KERNEL_TERMS.contains(topLevelName) ? "" : "not ")));
+            }
+        };
+    }
+
+    /**
+     * The simple name of the outermost class {@code item} belongs to, so that a nested record or
+     * interface counts as part of the term that encloses it rather than as a term of its own.
+     */
+    private static String topLevelSimpleName(final JavaClass item) {
+        final String simpleName = item.getName().substring(item.getName().lastIndexOf('.') + 1);
+        final int nested = simpleName.indexOf('$');
+        return nested < 0 ? simpleName : simpleName.substring(0, nested);
+    }
 }

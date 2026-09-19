@@ -25,7 +25,7 @@ public interface AddRequirement {
      * @param projectId       the project (architecture model) to add the requirement to
      * @param command         the data describing the requirement to create
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - the tag {@code title}/
      *                        {@code description}/{@code rationale} are written under when
      *                        {@code command.language()} is {@code null} (see

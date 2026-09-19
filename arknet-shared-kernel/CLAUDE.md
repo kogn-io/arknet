@@ -10,52 +10,6 @@ waehrend der Kernel das eine Modul ist, an dem jeder Core ohnehin haengt. Die Fo
 sonst unbeschraenkt (nur non-blank) -- neue Projekte minten eine UUID, aus der alten Slug-Ableitung
 gewachsene Ids wie `arknet` bleiben gueltige opake Werte und werden nie migriert.
 
-Dazu der Port `ProjectResolver` (`String anchor -> ResolvedProject`, Konstante `ANCHOR_KEY`):
-`ProjectId` ist **kein** Prozess-Singleton, sondern wird von jedem `@McpTool`-Adapter pro Aufruf aus
-dem Anker aufgeloest, den der Client mitschickt. Die Aufloesung ist ein Registry-Nachschlagen auf
-den ganzen, uninterpretierten Wert -- nichts wird abgeleitet, gekuerzt oder geraten. Die
-Composition-Root-Implementierung `RegisteredAnchorProjectResolver` in `arknet-mcp` adaptiert dafuer
-den `ResolveProject`-In-Port des `arknet-project`-BC; die Modell-BCs sehen nur diesen neutralen
-Port und haengen nie an jenem BC. Fehlender oder unbekannter Anker ist ein Fehler
-(`UnresolvedProjectAnchorException`, ebenfalls im Kernel, damit die Uebersetzung der
-BC-eigenen `UnknownAnchorException` an der Portgrenze stattfindet) -- es gibt keinen Default und
-keinen Rueckfall auf ein Server-Arbeitsverzeichnis, und bewusst auch keine
-`Optional`-Variante der Methode, die an der Aufrufstelle wieder zum Erfinden eines Fallbacks
-einladen wuerde. Shared-Kernel-Grund derselbe wie bei `ProjectId` selbst: mehrere BCs
-(requirements, ubiquitous-language, ...) adressieren dasselbe Projekt und teilen sich einen Weg,
-es aufzuloesen, statt jeder seinen eigenen zu erfinden.
-
-Das Ergebnis ist `ResolvedProject` (Record `id: ProjectId`/`defaultLanguage: String`, Letzteres
-nullable, dazu `maintainedLanguages: List<String>`, nie null aber moeglicherweise leer): der Port liefert seit der Mehrsprachigkeit von Term/Project (arknet-ubiquitous-language,
-arknet-project) nicht mehr nur die `ProjectId`, sondern buendelt das konfigurierte
-Standard-Anzeige-Language-Tag des aufgeloesten Projekts gleich mit -- derselbe Registry-Read, den
-jeder Tool-Aufruf ohnehin fuer das Routing macht, beantwortet die Sprachfrage "for free" mit,
-statt dass ein Bounded Context, der die Standardsprache braucht (heute nur
-ubiquitous-language, fuer `term_get`s Anzeige-Fallback), den Project-BC dafuer ein zweites Mal ueber
-einen eigenen Borrowed In-Port ansprechen muesste. Ein Aufrufer, der nur die `ProjectId` braucht, liest
-`resolve(anchor).id()`. `defaultLanguage` bedient seit Issue #258 zwei Rollen: lesend waehlt es,
-welche Sprachvariante ein Lesepfad ohne explizite Anfrage bevorzugt zeigt (unveraendert); schreibend
-ist es fuer requirements/ubiquitous-language/use-cases der Fallback, auf den `LanguageTag#resolveWriteLanguage`
-ein weggelassenes `language`-Argument aufloest -- ein Schreib-Tool ohne eigenes `language` schreibt
-also nicht mehr ungetaggt, sondern unter `defaultLanguage`; hat das Projekt keins konfiguriert UND
-der Aufrufer auch kein `language` mitgegeben, lehnt der Aufruf mit `MissingDefaultLanguageException`
-ab, statt still ungetaggt zu schreiben. `arknet-project`s eigener Beschreibungs-Schreibpfad
-(`project_add`/`project_update`) bleibt davon unberuehrt: er kanonisiert ein mitgegebenes `language`
-weiterhin nur mit `LanguageTag#canonicalize` und schreibt ohne eins ungetaggt, da ein Projekt kein
-Konzept einer eigenen Default-Sprache-fuer-sich-selbst hat (es *ist* die Quelle von `defaultLanguage`
-fuer die anderen BCs).
-
-`maintainedLanguages` traegt die zweite, andere Aussage desselben Registry-Reads (kogn-io/arknet#412):
-`defaultLanguage` ist ein **Rueckfall** (unter welcher Sprache ein Aufruf ohne eigene landet),
-`maintainedLanguages` eine **Zusage** (welche Sprachen das Projekt zu fuehren erklaert).
-Erst die Zusage macht Unvollstaendigkeit definierbar -- ein Feld mit nur einer Sprache ist gegen
-einen Rueckfall nicht falsch, nur unvollstaendig, und nichts konnte das vorher benennen.
-Einziger Leser ist heute `store_check` (arknet-mcp), das den Satz aus derselben Anker-Aufloesung
-mitnimmt, statt den Project-BC ein zweites Mal ueber einen eigenen Borrowed In-Port zu fragen --
-dieselbe Begruendung, aus der `defaultLanguage` hier liegt.
-Ein zweiter, nicht-kanonischer Konstruktor `(id, defaultLanguage)` setzt den Satz auf leer, damit
-Aufrufstellen ohne Interesse daran unveraendert bleiben.
-
 Der pure Helfer `LanguageTag` (`canonicalize(String)`) kanonisiert jeden von aussen kommenden
 `language`-Wert (Term/Project) auf seine normalisierte BCP-47-Form (`"DE"` -> `"de"`), bevor ein
 Out-Adapter ihn schreibt oder einen sprachscoped Delete-Filter damit baut -- der Grund liegt hier,
@@ -115,84 +69,15 @@ stattfinden darf, `writtenLanguage` benennt nur, unter welchem Tag es landet -- 
 abzulehnen liesse einen Hinweis den Aufruf ein zweites Mal absagen, vor dem Service, dem die
 Entscheidung gehoert.
 
-Dieselbe Zustaendigkeit hat das Paar `FieldLanguageLookup` (Port) und `StaleTranslationHint`
-(Mechanismus), das Signal aus kogn-io/arknet#474.
-`StaleTranslationHint` beantwortet fuer jedes `*_update`, das ein mehrsprachiges Feld schreibt, die
-Frage "welche vom Projekt gefuehrte Sprache traegt dieses Feld noch, die dieser Aufruf nicht
-schreibt" -- ein Hinweisblock an der Antwort, nie eine Ablehnung.
-Ein Hinweis entsteht nur, wenn alle vier Eingaben etwas sagen: der Aufruf schreibt eine Sprache, das
-Projekt fuehrt eine andere (`ResolvedProject#maintainedLanguages`), das Feld trug die geschriebene
-Sprache schon vorher, und es traegt die andere tatsaechlich.
-Traegt es die andere nicht, ist das eine **Luecke**, die `store_check LANGUAGE` meldet, und sie hier
-"veraltet" zu nennen waere dieselbe Aussage doppelt und einmal falsch.
-Trug es die geschriebene Sprache vorher nicht, wird **uebersetzt**, nicht korrigiert: die vorhandene
-Variante ist die Quelle der Uebersetzung, nichts ist veraltet -- der zweite Aufruf des eigenen
-Zwei-Aufrufe-Workflows endet ohne Hinweis, und bei einer ADR ausserhalb `PROPOSED` ist genau dieser
-Write der einzige, den die Textfelder noch annehmen (ein Hinweis dort empfoehle den Aufruf, den
-`Adr` ablehnt).
-Diese dritte Bedingung ist nur am Zustand **vor** dem Write entscheidbar -- danach traegt das Feld
-die Sprache so oder so.
-Darum fragt der In-Adapter den Hinweis vor dem Service-Aufruf ab und haengt ihn nach dessen Rueckkehr
-an: ein Store-Read mehr, wenn der Write scheitert, und ein Schnappschuss, den ein nebenlaeufiger
-Schreiber altern lassen kann -- beides traegt ein Hinweis.
-Die Feldschluessel jedes Adapters stehen in einer privaten `MULTILINGUAL_FIELDS`-Liste, die
-`arknet-architecture-tests` (`StaleTranslationFieldsMatchShapesTest`) reflektiv gegen die
-`sh:uniqueLang`-Properties der ausgelieferten Shapes haelt.
-Die Formulierung bleibt bewusst bei "dieser Aufruf hat sie nicht geschrieben": der WriteFunnel
-zeichnet je Write **eine** Revision pro Ressource auf, nie eine pro Literal, also gibt es keine
-Revision je Sprachvariante, an der sich "aelter" belegen liesse; belegbar ist allein, dass ein Write
-genau einen Tag je Feld setzt und jeder andere Tag folglich von frueher stammt.
-`FieldLanguageLookup` ist der Port fuer das eine, was ein In-Adapter selbst nicht weiss -- welche
-Tags ein Feld schon traegt.
-Er liegt hier und wird im Composition Root ueber den generischen Store-Lesepfad implementiert
-(`StoreFieldLanguageLookup` in `arknet-mcp`), dieselbe Richtung wie bei `ProjectResolver`: ein Port
-im Kernel, eine Implementierung im Composition Root, konsumiert von jedem BC-In-Adapter, ohne eine
-einzige neue Modulkante.
-Die Alternative -- je BC ein eigener Lookup-Port samt Out-Adapter-Methode nach dem Muster von
-`DescribeTermDisplayFallback` -- waere siebenmal dieselbe Frage in sieben Kopien.
-Feldschluessel sind Modell-Feldnamen, also die Local Names der dahinterliegenden Praedikate
-(`definition`, `title`, `useCaseGoal`, ...), dasselbe Vokabular, unter dem `store_check` seine
-Sprachluecken meldet; ein Feld, dessen Werte auf einer besessenen Kind-Ressource liegen
-(Akzeptanzkriterium, Use-Case-Schritt, ADR-Konsequenz), wird unter der **Kante** gefuehrt, die es
-besitzt (`acceptanceCriterion`, `mainStep`, `consequence`), weil der Aufrufer solche Listen
-geschlossen schreibt.
-Genau dieses Poolen ist die eine Stelle, an der die Vor-dem-Write-Momentaufnahme nicht traegt: ein
-Write laesst die Varianten anderer Sprachen eines **direkten** Literalfeldes stehen, aber derselbe
-`*_update` kann ein Kind anlegen und ein anderes entfernen, und mit dem entfernten faellt womoeglich
-der letzte Traeger einer Sprache weg, den die Momentaufnahme schon gezaehlt hat.
-Aufgeloest wird das beim Aufrufer, nicht im Mechanismus: ein Tool meldet eine Kind-Kante nur dann als
-geschrieben, wenn derselbe Aufruf unter ihr nichts entfernt (Review zu kogn-io/arknet#537).
-Der zweite Port-Methodenname `ofProjectRegistration(String projectLabel)` ist kein Sonderfall aus
-Bequemlichkeit: der Registry-Record eines Projekts liegt im reservierten System-Dataset, dessen Id
-`ProjectId` per Konstruktion nicht halten darf.
+**Aufnahmeregel (ADR-56).**
+Dies ist das einzige Modul, das die Kerne verschiedener Bounded Contexts teilen, und es haelt Werte und ihre Regeln, sonst nichts.
+Ein Begriff kommt nur hinein, wenn mindestens zwei Kontexte ihn tragen -- notwendig, nicht hinreichend: dass zwei ihn tragen, genuegt nicht, denn ein Begriff kann Sprache eines Kontexts bleiben, auch wenn ein anderer ihn ebenfalls fuehrt.
+Die Aufnahme ist je Begriff eine Entscheidung, und weil eine Entscheidung je Begriff kein Praedikat ueber Class-Files ist, steht sie als Liste im Test: `DependencyRulesTest` (arknet-architecture-tests, Regel 12) zaehlt die zwoelf zugelassenen Typen namentlich auf, sodass ein neuer Typ im Kernel-Package den Test rot faerbt und nur gruen wird, wenn jemand seinen Namen dort eintraegt.
+Regel 11 haelt die Gegenrichtung: kein `*-core` und kein Vokabularmodul haengt am Support-Modul der Werkzeugadapter.
 
-`ResolvedProject` traegt seit kogn-io/arknet#597 als vierten Wert das registrierte `label` des
-Projekts, gelesen ueber `displayName()` (Rueckfall auf den Id-Wert, wenn keins mitkam). Grund
-derselbe wie bei `defaultLanguage`/`maintainedLanguages`: die Registry-Aufloesung, die jeder
-Tool-Aufruf ohnehin fuer das Routing macht, haelt den Namen bereits -- ein eigener Lookup-Port
-haette je Schreib-Aufruf einen zweiten Store-Read gekostet, fuer eine Antwort, die dieser eine
-schon hatte. Der nicht-kanonische Drei-Argument-Konstruktor setzt `label` auf `null`, damit
-Aufrufstellen ohne Interesse daran unveraendert bleiben.
+Die Mechanik der Werkzeugadapter liegt nicht hier, sondern in `arknet-mcp-support` (ADR-56): Anker-Aufloesung (`ProjectResolver`/`ResolvedProject`/`UnresolvedProjectAnchorException`), das Uebersetzungs-Signal (`StaleTranslationHint`/`FieldLanguageLookup`), die Antwortformen der schreibenden Tools (`WriteResponse`) und die geteilten Tool-Parameter-Texte (`ToolParameterDescriptions`).
+Kein Kern nennt einen dieser Typen; ihre Aufrufer sind die treibenden MCP-Adapter und der Composition Root.
 
-`WriteResponse` ist der gemeinsame Renderer der drei Bestandteile jeder schreibenden
-Tool-Antwort: `withProject(body, project)` haengt die abschliessende Zeile `project: <name>` an
-(kogn-io/arknet#597 -- ein vergessener `projectAnchor` schreibt sonst unsichtbar ins Anker-Projekt
-der Sitzung), `linked(...)`/`unlinked(...)` rendern die Kurzbestaetigung einer Kantenoperation
-(`linked FR-3 -> TERM-7 (usesTerm)`, kogn-io/arknet#600 -- der Aufrufer haelt beide Enden schon),
-und `listFieldDiff(field, before, after)` die Diff-Zeile eines Wholesale-Listenfeldes
-(`usesTerm: removed TERM-22, added TERM-9`, kogn-io/arknet#598). Der Diff wird aus dem Zustand
-des Feldes vor und nach dem Write berechnet, nie aus dem Request: ein wholesale ersetztes Feld
-verliert, was der Aufrufer zu wiederholen vergass, und gerade das steht im Request nicht. Ein
-unveraendertes Feld liefert die leere Zeichenkette und kostet keine Zeile. Liegt im Kernel und
-nicht je Adapter, aus demselben Grund wie `StaleTranslationHint`: dreizehn In-Adapter bauen ihre
-Antwort selbst zusammen, und eine Form, die in jedem anders aussaehe, koennte ein Agent nicht
-einmal lernen. Reines JDK, keine neue Modulkante.
-
-`ToolParameterDescriptions` (kogn-io/arknet#522) traegt die kurzen `@McpToolParam`-Beschreibungstexte
-fuer `projectAnchor`, `language` und `displayLocale` -- der querschnittliche Teil des Tool-Schemas jedes
-`*-adapter-mcp`-Moduls, vorher in jeder Tool-Klasse einzeln (und uneinheitlich) ausformuliert. Liegt hier,
-weil dies das einzige Modul ist, von dem heute jedes `*-adapter-mcp`-Modul und `arknet-mcp` ohnehin abhaengen;
-kogn-io/arknet#561 zieht die Klasse spaeter zusammen mit `ProjectResolver` in ein eigenes Support-Modul der
-Tool-Adapter um. Die ausfuehrliche Erklaerung (Fallback-Ketten, der `X-Arknet-Project-Anchor`-Header, das
-Stale-Translation-Signal) steht nicht hier, sondern einmal in `arknet-mcp`s
-`spring.ai.mcp.server.instructions`.
+`LocalizedLiteral` bleibt dagegen hier, obwohl es nur von den kogniordf-Out-Adaptern gelesen und geschrieben wird: `DisplayLocale#select(Collection<LocalizedLiteral>)` fuehrt den Kandidatentyp in seiner eigenen Signatur, und `DisplayLocale` ist ein Kernel-Begriff (jeder `*-core` nimmt es als Parameter seiner Out-Ports entgegen).
+Ein Umzug nach `arknet-persistence-support` hiesse, dass der Kernel am Support haengt -- die Kante, die genau nicht existieren darf.
+`LocalizedLiteral` ist der Wert, auf dem die Regel von `DisplayLocale` arbeitet, und teilt deshalb dessen Ort.

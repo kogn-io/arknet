@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.kernel;
+package de.hauschel.arknet.mcpsupport;
 
 import java.util.List;
 import java.util.Objects;
+
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * The result of resolving a client-supplied anchor (see {@link ProjectResolver}): the

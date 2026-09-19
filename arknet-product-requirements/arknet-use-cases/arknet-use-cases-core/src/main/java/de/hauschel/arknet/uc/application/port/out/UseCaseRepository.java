@@ -131,7 +131,7 @@ public interface UseCaseRepository {
      *                      {@link CurrentUseCase#extensionTextLanguageByPosition()}'s own entry
      *                      for it
      * @param defaultLanguage the target project's configured default language (see
-     *                      {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                      {@code ResolvedProject#defaultLanguage()}),
      *                      or {@code null} if it has none. Used only to decide whether an existing
      *                      <em>untagged</em> literal on one of the scalar fields above, a step's
      *                      {@code text} or an extension's text should be swept away rather than

@@ -9,7 +9,7 @@ import java.util.Set;
 
 import io.kogn.rdf.dataset.hosting.DatasetId;
 
-import de.hauschel.arknet.kernel.FieldLanguageLookup;
+import de.hauschel.arknet.mcpsupport.FieldLanguageLookup;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**

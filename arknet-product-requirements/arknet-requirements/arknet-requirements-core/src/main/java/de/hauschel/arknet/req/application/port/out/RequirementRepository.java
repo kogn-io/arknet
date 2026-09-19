@@ -158,7 +158,7 @@ public interface RequirementRepository {
      *                      {@code removedConsequencePositions}. {@link RemovedPositions#NONE} for a
      *                      call that removes nothing
      * @param defaultLanguage the target project's configured default language (see
-     *                      {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                      {@code ResolvedProject#defaultLanguage()}),
      *                      or {@code null} if it has none. Used only to decide whether an
      *                      existing <em>untagged</em> literal on {@code title}/
      *                      {@code description}/{@code rationale} should be swept away rather than

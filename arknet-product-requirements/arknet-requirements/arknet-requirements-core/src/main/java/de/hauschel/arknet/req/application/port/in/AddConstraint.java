@@ -30,7 +30,7 @@ public interface AddConstraint {
      * @param projectId       the project (architecture model) to add the constraint to
      * @param command         the data describing the constraint to create
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - used only when
      *                        {@link NewConstraint#language()} is omitted
      * @return the persisted constraint including its assigned identity and code

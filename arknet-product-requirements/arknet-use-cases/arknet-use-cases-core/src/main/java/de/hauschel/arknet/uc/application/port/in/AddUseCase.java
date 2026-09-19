@@ -25,7 +25,7 @@ public interface AddUseCase {
      * @param projectId       the project (architecture model) to add the use case to
      * @param command         the data describing the use case to create
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - the tag {@code title}/{@code goal}/
      *                        {@code scope}/{@code trigger}/{@code precondition}/
      *                        {@code postcondition}/every step's/extension's {@code text} are
