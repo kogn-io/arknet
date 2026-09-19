@@ -70,7 +70,7 @@ import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**

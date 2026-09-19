@@ -21,7 +21,7 @@ import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**

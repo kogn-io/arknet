@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**

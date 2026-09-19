@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-domain-modelling</artifactId>
+    <packaging>pom</packaging>
+    <description>Domain Modelling bounded context: aggregation only, no code. Holds the vocabulary module of the context and its two components, the ubiquitous-language glossary and the bounded-context map.</description>
+
+    <modules>
+        <module>arknet-domain-modelling-shared</module>
+        <module>arknet-ubiquitous-language</module>
+        <module>arknet-bounded-context</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-domain-modelling-shared</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

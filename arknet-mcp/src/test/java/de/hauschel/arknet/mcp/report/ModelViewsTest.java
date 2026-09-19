@@ -43,7 +43,7 @@ import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**

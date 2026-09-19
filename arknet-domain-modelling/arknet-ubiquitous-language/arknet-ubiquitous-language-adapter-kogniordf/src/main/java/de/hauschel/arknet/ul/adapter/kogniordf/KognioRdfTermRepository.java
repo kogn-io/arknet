@@ -1,0 +1,1687 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Fred Hauschel
+
+package de.hauschel.arknet.ul.adapter.kogniordf;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.kogn.rdf.dataset.BindingSet;
+import io.kogn.rdf.dataset.DatasetTx;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.terms.Graph;
+import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
+import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.RDFTerm;
+import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.terms.vocab.VocabDct;
+import io.kogn.rdf.terms.vocab.VocabRdf;
+
+import de.hauschel.arknet.kernel.CodeCounter;
+import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.LanguageTag;
+import de.hauschel.arknet.kernel.LocalizedLiteral;
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkarchVocabulary;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
+import de.hauschel.arknet.persistence.SparqlTerms;
+import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.application.port.out.TermRepository;
+import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
+import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.dm.shared.TermCode;
+import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
+import de.hauschel.arknet.ul.domain.TermCycleException;
+import de.hauschel.arknet.ul.domain.TermDisplayFallback;
+import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermLabelMismatchException;
+import de.hauschel.arknet.ul.domain.TermNotFoundException;
+import de.hauschel.arknet.ul.domain.TermReferencedException;
+
+/**
+ * Out-adapter: {@link TermRepository} backed by the kognio-rdf substrate
+ * ({@code io.kogn.rdf}, embeddable RDF store).
+ *
+ * <p>Maps a {@link Term} to a W3C SKOS concept whose subject is its opaque {@link TermId}
+ * (minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the
+ * business code or the label), stored in one named graph shared by all terms of a project.
+ * Each term is typed {@code skos:Concept}, placed into a per-project glossary via
+ * {@code skos:inScheme}, and carries {@code skos:prefLabel} (the term) and
+ * {@code skos:definition} (its meaning); the human-readable running code
+ * ({@link TermCode}, {@code TERM-1}) is additionally kept as {@code dcterms:identifier} -
+ * identity and label are deliberately different triples on the same subject. This choice makes
+ * the model a native fit for kognio-rdf (SKOS concepts are its model) and for arknet's own
+ * dogfood glossary.</p>
+ *
+ * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} +
+ * {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J or any other
+ * backend-specific type. The backend ({@link DatasetLifecycle} implementation) is
+ * supplied by the composition root.</p>
+ *
+ * <p><strong>ProjectId (local, single-user).</strong> Each {@link ProjectId} is
+ * mapped 1:1 to a kognio-rdf {@link DatasetId}, so distinct projects are fully
+ * isolated datasets - and thus distinct glossaries. For the MVP there is exactly one
+ * {@code skos:ConceptScheme} per project ({@link #GLOSSARY_SCHEME}); a per-bounded-context
+ * scheme is a later refinement (tracked alongside the requirement-to-term linking).</p>
+ *
+ * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
+ * minted once, "insert or replace by identity" was never one coherent operation for
+ * {@link #create}. The transactional mechanics of that check - the in-transaction {@code contains}
+ * check, the SHACL gate, the commit-conflict translation - live in the shared {@link WriteFunnel},
+ * not here; {@link #create} only builds the candidate graph and rejects an existing
+ * subject with {@link ResourceAlreadyExistsException}.</p>
+ *
+ * <p><strong>Update is a targeted correction by code, not a replace by identity.</strong>
+ * {@link #update} used to take a full {@link Term} and wholesale-replace the
+ * subject's triples the same way {@link #create} inserts them - which meant every field the
+ * caller did not intend to touch had to be read back first and merged into that full replacement,
+ * destroying any triple the read could not faithfully round-trip (most severely a multi-valued
+ * {@code skos:prefLabel}/{@code skos:definition}, see the display-language and row-multiplication
+ * notes below). {@link #update} instead resolves the subject by its unchanged {@link TermCode}
+ * and deletes-and-reinserts only the predicate(s) whose new value the caller actually supplied -
+ * {@code null} means the predicate is never touched at all, at the triple level, not "read back
+ * and rewritten identically". A missing code throws {@link TermNotFoundException}.</p>
+ *
+ * <p><strong>Identity collision vs. code collision.</strong> {@link #create} runs a second
+ * {@code contains} check in the same transaction - by {@code dcterms:identifier}, not by subject - and
+ * rejects a match with {@link DuplicateTermCodeException}. This is deliberately a separate check
+ * and a separate exception from {@link ResourceAlreadyExistsException}: an opaque-identity
+ * collision is a programming error (identities are minted once and never reused), while a
+ * business-code collision (two terms both claiming {@code TERM-1}) is an expected, rejectable
+ * outcome a human can cause - and one a sibling bounded context relies on being unique, since
+ * {@code arkreq:usesTerm} resolves a term by its {@code dcterms:identifier}.
+ * {@link #update} needs no such check (now moot): it never rewrites
+ * {@code dcterms:identifier} at all, so it cannot itself introduce a code collision - a stronger,
+ * structural guarantee rather than a checked one.</p>
+ *
+ * <p><strong>Compare-and-set through the funnel, with retry.</strong> An earlier version
+ * ran its own transaction and translated a genuine {@code
+ * SERIALIZABLE} write conflict (the "second interleaving" scenario) on the caller's own patched
+ * predicate into {@link TermConcurrentlyModifiedException}. {@link #update} now retries {@link
+ * #attemptUpdate} (bounded by {@link #MAX_RETRY_ATTEMPTS}) against the shared {@link WriteFunnel}:
+ * each attempt reads the term's current state and {@code arkprov:head} together, then
+ * asks the funnel to apply the patch only if that head still matches - a head conflict, whether
+ * from a losing synchronous comparison or a losing commit under {@code SERIALIZABLE} isolation,
+ * surfaces identically and is retried transparently, exactly the CAS guard {@code
+ * RequirementRepository#compareAndUpdate} degenerated to for the same reason.</p>
+ *
+ * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate before the write transaction
+ * opens, {@link WriteConstraintViolationException} on a violation, nothing persisted - live in the
+ * shared {@link WriteFunnel}, for {@link #create} and {@link #update}
+ * alike: {@link #attemptUpdate} builds the same validation-only {@code assertedContext} an earlier
+ * version enforced itself (mirroring how the sibling requirements adapter asserts a referenced
+ * term's type) - a predicate {@link #update} is not touching is asserted there for validation
+ * only, from what was just read before the transaction, so {@code ulshapes:TermShape}'s
+ * {@code prefLabel} shape still sees the resulting state truthfully without this class ever
+ * persisting that assertion again.</p>
+ *
+ * <p><strong>Display language.</strong> A concept may carry {@code skos:prefLabel} and
+ * {@code skos:definition} in several languages ({@code "Kunde"@de}/{@code "Eine juristische..."@de},
+ * {@code "Customer"@en}/{@code "A legal..."@en}) - SKOS-legal and store-first reachable.
+ * {@link #findByCode}/{@link #findAll} therefore join both {@code prefLabel} and {@code definition}
+ * as <em>multi-valued</em> (but still mandatory) patterns, group the resulting rows per subject, and
+ * let the injected {@link DisplayLocale} pick both fields' displayed value through the very same
+ * fallback chain instance (requested language, system default, untagged, deterministic last resort)
+ * - so a card showing both fields for one concept never mixes two languages between them (issue
+ * #248). A concept is never dropped for lacking the requested language - only the shown language
+ * degrades. {@code findByIds} (the {@link ResolveTerms} batch) is deliberately untouched: it joins
+ * only {@code identifier}, never {@code prefLabel}/{@code definition}.</p>
+ *
+ * <p><strong>One word under every language (kogn-io/arknet#502, FR-10).</strong> Several
+ * {@code skos:prefLabel} literals are one word under several tags, never a translation - only the
+ * definition is translated. {@link #attemptUpdate} enforces that on the write path, where a
+ * supplied {@code prefLabel} means one of two things depending on whether the caller named a
+ * language: with an explicit tag it is a translation-scoped write that must equal every label the
+ * term already carries (else {@link TermLabelMismatchException}, naming them) and then merely
+ * adds or refreshes that one tag; without one it is a rename that replaces the label under every
+ * tag the term carries at once (plus the project default), so no tag keeps the old word. The
+ * comparison runs against the same read the compare-and-set is based on, so a rename committed
+ * concurrently moves the head, the retry re-reads the new word, and the stale translation write is
+ * rejected rather than silently reverting the rename - the reason this check is not a separate
+ * read in {@code TermService}. Existing data written before the rule holds is not migrated: a
+ * store-first term still carrying two words is corrected by a rename.</p>
+ *
+ * <p><strong>Blank-node subject guard.</strong> {@code ulshapes:TermShape} carries no
+ * {@code sh:nodeKind sh:IRI} constraint on the subject, so a store-first concept whose
+ * subject is a blank node (e.g. {@code [] a skos:Concept ; skos:prefLabel "X" ; ...}) is
+ * SHACL-legal, even though {@link #create} always mints an opaque IRI subject. {@code ?s} is
+ * the primary-entity subject here, not a reference-field target, but the same problem applies: the
+ * {@code IRI} cast in {@link #iriOf} throws on anything else. Unlike a reference field, though, a
+ * crashing primary subject takes the whole result list down with it - {@link #findByCode} and
+ * {@link #findAll} therefore add {@code FILTER(isIRI(?s))} (mirroring the {@code
+ * FILTER(isIRI(?target))} guard on cross-BC reference fields in the requirements/use-cases
+ * adapters) so such a concept is skipped rather than crashing every other term in the project.
+ * {@link #findByIds} needs no such filter: its subjects come from a {@code VALUES} clause bound to
+ * caller-supplied {@link ResourceId}s, which can never denote a blank node.</p>
+ *
+ * <p><strong>Row multiplication on {@code skos:definition}.</strong> Like
+ * {@code prefLabel}, {@code skos:definition} carries no {@code sh:maxCount} in {@code ulshapes} -
+ * a store-first concept with two definition literals (e.g. one per language) legally
+ * multiplies a subject into two SPARQL rows. {@code definition} shares the exact same
+ * {@link DisplayLocale} fallback chain as {@code prefLabel} (issue #248): a card that shows a
+ * concept's label and its definition side by side must resolve both against the very same
+ * {@link DisplayLocale}, or the two fields silently disagree on the displayed language for one
+ * and the same resource - which is precisely the bug an earlier, definition-only "first-seen"
+ * shortcut caused. {@link #findByCode}/{@link #findAll} therefore collect {@code definition}
+ * candidates exactly like {@code prefLabel} and let {@link TermAssembly#toTerm} select from both
+ * with one shared {@link DisplayLocale} instance.</p>
+ *
+ * <p><strong>No actor facet (since issue #336).</strong> A term used to be optionally
+ * double-typed as an {@code arkproc:Actor} subtype ({@code HumanActor}/{@code SystemActor}/
+ * {@code LegalActor}) with an optional {@code arkproc:actorRole} literal - that facet has been
+ * removed without replacement. Actors now live in {@code arknet-actor}'s own register, one
+ * ungoverned resource type in its own named graph; a glossary term is a {@code skos:Concept}
+ * and nothing more.</p>
+ */
+public class KognioRdfTermRepository implements TermRepository {
+
+    private static final Logger LOG = LoggerFactory.getLogger(KognioRdfTermRepository.class);
+
+    private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
+    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
+    private static final String GLOSSARY_SCHEME = "https://w3id.org/arknet/model/glossary";
+
+    private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
+    private static final String CONCEPT_SCHEME_TYPE = SKOS_NAMESPACE + "ConceptScheme";
+    private static final String IN_SCHEME_PROPERTY = SKOS_NAMESPACE + "inScheme";
+    private static final String PREF_LABEL_PROPERTY = SKOS_NAMESPACE + "prefLabel";
+    private static final String DEFINITION_PROPERTY = ArkreqVocabulary.DEFINITION;
+    private static final String BROADER_PROPERTY = ArkreqVocabulary.BROADER;
+    private static final String RELATED_PROPERTY = ArkreqVocabulary.RELATED;
+    private static final String IDENTIFIER_PROPERTY = VocabDct.NAMESPACE + "identifier";
+
+    /**
+     * The prefix every code this hexagon mints carries. Used only by {@link #findRetainedCodes} to
+     * tell a term's own retained code apart from a neighbouring bounded context's, since the
+     * provenance graph {@link WriteFunnel#findRetainedCodes} reads from is shared by all of them.
+     */
+    private static final String CODE_PREFIX = "TERM-";
+
+    /**
+     * Bound on {@link #update}'s CAS retry loop (same bound and rationale as {@code
+     * RequirementService#MAX_RETRY_ATTEMPTS}): a head conflict is resolved by a single retry in
+     * the overwhelming majority of cases, since each retry re-reads the now-current state and
+     * head before trying again; this bound only exists so a pathological, sustained storm of
+     * concurrent writers against the very same term fails loudly instead of looping forever.
+     */
+    private static final int MAX_RETRY_ATTEMPTS = 20;
+
+    private final DatasetLifecycle lifecycle;
+    private final DisplayLocale displayLocale;
+    private final WriteFunnel funnel;
+    private final RDF rdf = new SimpleRdf();
+
+    /**
+     * Creates the adapter.
+     *
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from (must not be
+     *                      {@code null})
+     * @param displayLocale the display-language preference selecting which {@code skos:prefLabel}
+     *                      the read paths surface for a multilingual concept (must not
+     *                      be {@code null})
+     * @param funnel        the shared write funnel every write runs through - both
+     *                      {@link #create} and {@link #update} (must not be {@code null})
+     */
+    KognioRdfTermRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {
+        this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
+        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
+        this.funnel = Objects.requireNonNull(funnel, "funnel");
+    }
+
+    @Override
+    public void create(ProjectId projectId, Term term, String language) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(term, "term");
+
+        DatasetId datasetId = new DatasetId(projectId.value());
+        // Built unconditionally (empty when term.broader() is null) - simpler than a nullable
+        // Graph, and attemptUpdate() already always builds one for the same reason.
+        Graph assertedContext = rdf.createGraph();
+        // Resolved before the graph is built: an unresolvable broader code must abort the whole
+        // create, not leave a half-written term behind. No cycle check is needed here - the
+        // identity below is minted fresh, so it can never already sit anywhere in an existing
+        // broader chain (see TermCycleException's javadoc).
+        String broaderTargetIri = resolveBroaderTargetIri(projectId, datasetId, term.broader(), assertedContext);
+        // Same reasoning for the related peers (kogn-io/arknet#420): resolved before the graph is
+        // built, so an unresolvable code aborts the whole create rather than leaving a half-written
+        // term behind. No cycle check - skos:related is symmetric and a cycle of two mutually
+        // related terms is exactly what the relation is for.
+        List<String> relatedTargetIris =
+                resolveRelatedTargetIris(projectId, datasetId, term.related(), assertedContext);
+
+        // ResourceId#of validates IRIREF-safety at construction, so term.id()'s
+        // wrapped IRI is already guaranteed safe to embed here - no separate check needed.
+        String subjectIriString = term.id().value().value();
+        IRI subjectIri = rdf.createIRI(subjectIriString);
+        IRI schemeIri = rdf.createIRI(GLOSSARY_SCHEME);
+
+        Graph graph = rdf.createGraph();
+        graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
+        graph.add(subjectIri, rdf.createIRI(IN_SCHEME_PROPERTY), schemeIri);
+        graph.add(subjectIri, rdf.createIRI(IDENTIFIER_PROPERTY), rdf.createLiteral(term.code().value()));
+        String tag = canonicalLanguageTag(language);
+        graph.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(term.prefLabel(), tag));
+        graph.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), literalOf(term.definition(), tag));
+        // The per-project glossary itself, typed once (idempotent - RDF set semantics).
+        graph.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
+
+        if (broaderTargetIri != null) {
+            graph.add(subjectIri, rdf.createIRI(BROADER_PROPERTY), rdf.createIRI(broaderTargetIri));
+        }
+        for (String relatedTargetIri : relatedTargetIris) {
+            graph.add(subjectIri, rdf.createIRI(RELATED_PROPERTY), rdf.createIRI(relatedTargetIri));
+        }
+
+        IRI graphIri = rdf.createIRI(TERMS_GRAPH);
+
+        funnel.create(datasetId, TERMS_GRAPH, subjectIriString, term.code().value(),
+                graph, assertedContext,
+                () -> new ResourceAlreadyExistsException(projectId, term.id().value()),
+                () -> new DuplicateTermCodeException(projectId, term.code()),
+                tx -> tx.add(graphIri, graph));
+    }
+
+    /**
+     * Resolves {@code broaderCode} to its subject IRI within {@code projectId}'s glossary and
+     * asserts just enough of the target's own already-persisted state into
+     * {@code assertedContext} for the gate to accept it as a shape-legal {@code skos:broader}
+     * target (see {@link #assertReferenceTargetShapeState}), or returns {@code null} without
+     * touching {@code assertedContext} if {@code broaderCode} itself is {@code null} (no broader
+     * term requested). Read outside any transaction, mirroring {@link #attemptUpdate}'s own
+     * pre-transaction resolution - both {@link #create} and {@link #update} need the target's
+     * identity before the SHACL-gated write, not inside it.
+     *
+     * @throws TermNotFoundException if {@code broaderCode} does not resolve to an existing term
+     */
+    private String resolveBroaderTargetIri(
+            ProjectId projectId, DatasetId datasetId, TermCode broaderCode, Graph assertedContext) {
+        if (broaderCode == null) {
+            return null;
+        }
+        try (DatasetHandle handle = lifecycle.acquire(datasetId)) {
+            Function<String, Stream<BindingSet>> selectFn = handle.sparqlQuery()::select;
+            String targetIri = resolveTermSubjectIri(selectFn, broaderCode)
+                    .orElseThrow(() -> new TermNotFoundException(projectId, broaderCode));
+            assertReferenceTargetShapeState(assertedContext, selectFn, targetIri);
+            return targetIri;
+        }
+    }
+
+    /**
+     * The {@code skos:related} counterpart of {@link #resolveBroaderTargetIri}
+     * (kogn-io/arknet#420): resolves every code in {@code relatedCodes} to its subject IRI within
+     * {@code projectId}'s glossary, asserting each target's shape-legal-reference state into
+     * {@code assertedContext} on the way, and returns the IRIs in the order given. An empty list in
+     * yields an empty list out without acquiring a handle at all.
+     *
+     * <p>The whole list is resolved before {@link #create} builds a single triple, so a call naming
+     * one unknown peer among five known ones writes nothing rather than a partial edge set.</p>
+     *
+     * @throws TermNotFoundException if any code does not resolve to an existing term
+     */
+    private List<String> resolveRelatedTargetIris(ProjectId projectId, DatasetId datasetId,
+            List<TermCode> relatedCodes, Graph assertedContext) {
+        if (relatedCodes.isEmpty()) {
+            return List.of();
+        }
+        try (DatasetHandle handle = lifecycle.acquire(datasetId)) {
+            Function<String, Stream<BindingSet>> selectFn = handle.sparqlQuery()::select;
+            List<String> targetIris = new ArrayList<>();
+            for (TermCode relatedCode : relatedCodes) {
+                String targetIri = resolveTermSubjectIri(selectFn, relatedCode)
+                        .orElseThrow(() -> new TermNotFoundException(projectId, relatedCode));
+                assertReferenceTargetShapeState(assertedContext, selectFn, targetIri);
+                targetIris.add(targetIri);
+            }
+            return List.copyOf(targetIris);
+        }
+    }
+
+    /**
+     * Asserts just enough of {@code targetIri}'s own already-persisted state into
+     * {@code assertedContext} for {@code ulshapes:TermShape} to accept it as a shape-legal
+     * reference target of {@code skos:broader} or {@code skos:related}: its type and one
+     * {@code skos:prefLabel} literal.
+     *
+     * <p><strong>Why a bare type assertion is not enough here.</strong> Unlike a cross-BC
+     * reference (e.g. the requirements adapter asserting a term's type for
+     * {@code arkreq:usesTerm}), the referenced node's own home shape - {@code
+     * ulshapes:TermShape} - is loaded in <em>this very adapter's own</em> {@link ShaclWriteGate},
+     * since both {@code skos:broader} and {@code skos:related} are self-referential (Term -&gt;
+     * Term). Asserting only {@code targetIri a skos:Concept} therefore does not just satisfy
+     * {@code ulshapes:Term-broader}/{@code ulshapes:Term-related}'s
+     * {@code sh:class} constraint on the referencing subject - it also makes {@code
+     * ulshapes:TermShape} itself target {@code targetIri}, whose real {@code skos:prefLabel} the
+     * gate's isolated candidate+assertedContext graph does not otherwise contain, which fails
+     * {@code Term-prefLabel}'s {@code sh:minCount 1}. Asserting one of the target's real {@code
+     * skos:prefLabel} literals closes that gap ({@code Term-definition} carries no
+     * {@code sh:minCount}, and {@code Term-inScheme} is {@code sh:Warning}-severity only, so
+     * neither needs the same treatment). Which literal is picked when the target legally carries
+     * several (a store-first, multi-language term) is deliberately unspecified - this exists only
+     * to keep the gate from re-rejecting a target whose full state already satisfies the shape,
+     * not to re-verify a shape this class's own {@link #create}/{@link #attemptUpdate} already
+     * enforced when that target was written.</p>
+     */
+    private void assertReferenceTargetShapeState(
+            Graph assertedContext, Function<String, Stream<BindingSet>> selectFn, String targetIri) {
+        IRI target = rdf.createIRI(targetIri);
+        assertedContext.add(target, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
+        String query = "SELECT ?prefLabel WHERE { GRAPH <" + TERMS_GRAPH + "> { " + SparqlTerms.iriRef(targetIri)
+                + " <" + PREF_LABEL_PROPERTY + "> ?prefLabel } } LIMIT 1";
+        selectFn.apply(query).findFirst()
+                .ifPresent(row -> assertedContext.add(target, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(row, "prefLabel")));
+    }
+
+    /**
+     * Resolves a term's business code to its subject IRI within {@code TERMS_GRAPH}, mirroring
+     * {@code KognioRdfTermLookup#resolveByCode} but scoped to this class's own graph (this is a
+     * same-BC, self-referential lookup - see {@link TermCycleException}'s javadoc - so it needs no
+     * cross-context lookup port). The first match wins if the store-first store legally
+     * holds more than one, mirroring every other code lookup in this class (e.g.
+     * {@link #readAssemblyByCode}); {@code dcterms:identifier} uniqueness going forward is
+     * {@link DuplicateTermCodeException}'s concern, not this method's.
+     */
+    private Optional<String> resolveTermSubjectIri(
+            Function<String, Stream<BindingSet>> selectFn, TermCode code) {
+        String query = "SELECT ?s WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+                + "?s a <" + CONCEPT_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value())
+                + "\" . FILTER(isIRI(?s)) } }";
+        return selectFn.apply(query).findFirst().map(row -> iriOf(row, "s").getIRIString());
+    }
+
+    /**
+     * Reads the single {@code skos:broader} target of {@code subjectIri}, if any - the one-hop
+     * primitive {@link #assertNoCycle} repeatedly calls to walk a candidate broader term's own
+     * chain.
+     */
+    private Optional<String> readBroaderSubjectIri(
+            Function<String, Stream<BindingSet>> selectFn, String subjectIri) {
+        String query = "SELECT ?broader WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+                + SparqlTerms.iriRef(subjectIri) + " <" + BROADER_PROPERTY + "> ?broader } } LIMIT 1";
+        return selectFn.apply(query).findFirst().map(row -> iriOf(row, "broader").getIRIString());
+    }
+
+    /**
+     * Rejects a candidate {@code skos:broader} target that would close a cycle: {@code
+     * candidateBroaderIri} itself, or anywhere transitively up {@code candidateBroaderIri}'s own
+     * existing broader chain, must not be {@code selfSubjectIri} (the term being corrected).
+     * Walking stops as soon as a subject repeats (a pre-existing cycle this call did not create -
+     * defensive only, {@link #attemptUpdate} never lets one arise going forward).
+     *
+     * <p>Only {@link #update} calls this - see {@link TermCycleException}'s javadoc for why
+     * {@link #create} structurally cannot trigger it. {@link #attemptUpdate} calls it twice per
+     * attempt: once before the write transaction (a fast, friendly rejection for the ordinary
+     * sequential case) and once more inside {@link WriteFunnel#compareAndUpdate}'s write body,
+     * against {@code tx::select} rather than the pre-transaction {@code selectFn} - the second call
+     * is what actually guards against two terms racing to close a cycle from opposite ends; see
+     * that call site.</p>
+     */
+    private void assertNoCycle(Function<String, Stream<BindingSet>> selectFn, ProjectId projectId, TermCode code,
+            String selfSubjectIri, TermCode candidateBroaderCode, String candidateBroaderIri) {
+        Set<String> visited = new HashSet<>();
+        String current = candidateBroaderIri;
+        while (current != null && visited.add(current)) {
+            if (current.equals(selfSubjectIri)) {
+                throw new TermCycleException(projectId, code, candidateBroaderCode);
+            }
+            current = readBroaderSubjectIri(selectFn, current).orElse(null);
+        }
+    }
+
+    /**
+     * Corrects specific fields of an existing term by business code,
+     * touching only the predicate(s) whose new value the caller actually supplied.
+     *
+     * <p><strong>No read-then-merge.</strong> An earlier version resolved the term via
+     * {@link #findByCode} (a plain read, outside any transaction), folded every omitted argument's
+     * value from that read into a freshly-built {@link Term}, and handed the whole thing to a
+     * replace-by-identity write - which silently destroyed every triple the read had to collapse
+     * away to fit {@link Term}'s single-{@code String} fields (a store-first term
+     * can legally carry several language-tagged {@code skos:prefLabel}s or several
+     * {@code skos:definition} literals). This method instead reads exactly what it needs to
+     * preserve, builds the candidate/context from that, and only ever deletes-and-reinserts the
+     * predicate(s) the caller is actually replacing - every other predicate, and every other value
+     * of a multi-valued predicate the caller does not touch, survives completely untouched at the
+     * triple level.</p>
+     *
+     * <p><strong>No code collision to guard against.</strong> {@code dcterms:identifier} is never
+     * among the fields this method can change - the code is how the subject is found, not
+     * something it rewrites - so unlike an earlier version there
+     * is no {@code askCodeExists} check here at all: it is structurally impossible for this method
+     * to introduce a duplicate code, not merely checked and rejected.</p>
+     *
+     * <p><strong>Read-modify-write through the funnel, with retry.</strong>
+     * The read of whatever is being preserved now happens <em>before</em> the write
+     * transaction, exactly like {@link #create} - the SHACL gate therefore runs before the
+     * transaction opens again, not inside it. What used to be a single in-adapter-transaction
+     * merge is now a compare-and-set on the {@link WriteFunnel}: {@link #attemptUpdate} reads the
+     * term's current state and {@code arkprov:head} together, then asks the funnel to patch it
+     * only if that head still matches. Two callers changing <em>different</em> fields at the same
+     * time now both succeed only if neither loses the race on the shared head - unlike the
+     * predicate-scoped conflict detection this replaces, a head conflict on either field now
+     * triggers a retry for both, resolved transparently by the loop in {@link #update} the same
+     * way {@code RequirementService}'s read-modify-write retry already worked:
+     * {@link #attemptUpdate} re-reads the now-current state and head on every attempt, so a
+     * losing caller's own change is never silently discarded. Only sustained, pathological
+     * contention on the very same term exhausts {@link #MAX_RETRY_ATTEMPTS} and surfaces {@link
+     * TermConcurrentlyModifiedException} to the caller.</p>
+     *
+     * <p><strong>No-op update.</strong> Every field the
+     * {@code term_update} MCP tool exposes is {@code required = false}, so a caller can invoke this
+     * method with every correctable argument ({@code prefLabel}, {@code definition},
+     * {@code broader}, {@code related}) {@code null}.
+     * Such a call never reaches the funnel: no write, no SHACL gate, no {@code arkprov:head}
+     * comparison. A revision documents a model change; recording one for an
+     * empty patch would grow the immutable provenance trail without cause and would move the head,
+     * handing a concurrent CAS writer a spurious conflict it did not actually have. The
+     * requirements BC guards the same case symmetrically in
+     * {@code RequirementService#updateWithOptimisticRetry}, comparing the mutated value against the
+     * one just read instead of comparing arguments, since its mutation is a whole-value transform
+     * rather than per-field patches.</p>
+     */
+    @Override
+    public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
+            String language, String defaultLanguage, Optional<TermCode> broader, List<TermCode> related) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+
+        // Checked here as well as in TermService, and before the retry loop rather than inside it:
+        // both faults are decidable from the arguments alone, and Term's own constructor would
+        // otherwise raise them while this method renders its result - after the store was written.
+        // A caller reaching this port directly must not be able to get there either.
+        if (related != null) {
+            if (related.contains(code)) {
+                throw new IllegalArgumentException("a term must not be related to itself: " + code.value());
+            }
+            if (new HashSet<>(related).size() != related.size()) {
+                throw new IllegalArgumentException("related must not name the same term twice: " + related);
+            }
+        }
+
+        String explicitTag = canonicalLanguageTag(language);
+        String defaultTag = canonicalLanguageTag(defaultLanguage);
+        TermConcurrentlyModifiedException lastConflict = null;
+        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+            try {
+                return attemptUpdate(projectId, code, prefLabel, definition, explicitTag, defaultTag, broader, related);
+            } catch (TermConcurrentlyModifiedException e) {
+                // A concurrent writer advanced the head between our read and our write - retry
+                // against the now-current state instead of surfacing a transient race.
+                lastConflict = e;
+            }
+        }
+        throw lastConflict;
+    }
+
+    /**
+     * Deletes the term identified by {@code code}, and every triple it carries in
+     * {@link #TERMS_GRAPH}, from the project (issue #335). Resolves the subject outside any
+     * transaction (mirroring {@link #attemptUpdate}'s own pre-transaction reads), then hands the
+     * whole check-and-delete to {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs
+     * first, inside the funnel's own write transaction (so a concurrent writer racing to add a
+     * reference is resolved by the store's {@code SERIALIZABLE} isolation rather than a window
+     * between a separate pre-check and this write), and only once it finds nothing pointing at the
+     * term does the body remove the subject's triples wholesale.
+     */
+    @Override
+    public void delete(ProjectId projectId, TermCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+
+        DatasetId dataset = new DatasetId(projectId.value());
+        String subjectIriString;
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            subjectIriString = resolveTermSubjectIri(handle.sparqlQuery()::select, code)
+                    .orElseThrow(() -> new TermNotFoundException(projectId, code));
+        }
+        String subject = SparqlTerms.iriRef(subjectIriString);
+
+        funnel.delete(dataset, TERMS_GRAPH, subjectIriString, code.value(),
+                () -> new TermNotFoundException(projectId, code),
+                tx -> {
+                    rejectIfReferenced(tx, subjectIriString, projectId, code);
+                    tx.update("DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " ?p ?o } }");
+                });
+    }
+
+    /**
+     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained (issue
+     * #350): the shared funnel keeps the number out of circulation, this hexagon only maps its raw
+     * strings to {@link TermCode}.
+     */
+    @Override
+    public List<TermCode> findRetainedCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        return funnel.findRetainedCodes(new DatasetId(projectId.value()), CODE_PREFIX).stream()
+                .map(TermCode::new)
+                .toList();
+    }
+
+    /**
+     * The predicates that, if found pointing at a term, block its deletion (issue #335): a
+     * requirement's or use case's {@code arkreq:usesTerm}, an architecture decision's
+     * {@code arkarch:usesTerm} (kogn-io/arknet#399), a bounded context's
+     * {@code arkddd:ubiquitousLanguageTerm}, another term's {@code skos:broader} or
+     * {@code skos:related} (kogn-io/arknet#420 - symmetric, but only one direction is asserted, so
+     * an incoming edge is cleared by a {@code term_update} on the term that asserts it). The former
+     * pre-#336 compatibility entry for a use case's {@code arkreq:primaryActor}/{@code
+     * supportingActor} - kept only because a store filled before issue #336 moved actor resolution
+     * off glossary terms could still carry such an edge - is gone with ADR-37/kogn-io/arknet#405
+     * Part C: those two properties were renamed to {@code arkreq:primaryRole}/{@code supportingRole}
+     * and now range over {@code arkproc:Role}, not {@code skos:Concept}, so no edge of theirs can
+     * ever point at a term again, compatibility or not. Keys
+     * are the absolute predicate IRIs this adapter and its siblings write; values are the
+     * human-readable shorthand {@link de.hauschel.arknet.ul.domain.TermReferencedException} names
+     * a caller by.
+     *
+     * <p><strong>Why the shorthands carry their namespace prefix.</strong> Two entries share the
+     * local name {@code usesTerm}: an ADR's edge lives in arknet's own {@code arkarch} namespace
+     * rather than extending the shared {@code arkreq:usesTerm} domain (kogn-io/arknet#393), so
+     * they are two different properties written by two different bounded contexts. A bare
+     * {@code "usesTerm"} in the rejection message would leave the caller guessing which edge to
+     * remove - and would send them to {@code req_update}/{@code uc_update} for an edge only
+     * {@code adr_update} can drop. Every shorthand is prefixed, not just the ambiguous pair: a
+     * half-prefixed list reads as if the bare names were a different kind of thing.</p>
+     *
+     * <p>Whether this map is complete is not left to reviewer attention: {@code
+     * ReferenceGuardsCoverEveryOntologyEdgeTest} in {@code arknet-architecture-tests} holds it
+     * against the shipped ontologies, so every property declared with {@code rdfs:range
+     * skos:Concept} has to appear here.</p>
+     */
+    private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
+            ArkreqVocabulary.USES_TERM, "arkreq:usesTerm",
+            ArkarchVocabulary.USES_TERM, "arkarch:usesTerm",
+            ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM, "arkddd:ubiquitousLanguageTerm");
+
+    /**
+     * Rejects the delete, without touching a single triple, if anything in the project still
+     * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} or the
+     * ubiquitous-language BC's own {@code skos:broader}/{@code skos:related} - searched across
+     * every named graph
+     * ({@code GRAPH ?g}), since a referencing edge lives in its own BC's model graph, not
+     * {@link #TERMS_GRAPH}. Runs inside the live write transaction {@link WriteFunnel#delete} hands
+     * its {@code body}, so the check and the eventual delete share one atomic snapshot.
+     */
+    private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, TermCode code) {
+        IRI target = rdf.createIRI(subjectIri);
+        List<String> referencing = new ArrayList<>();
+        REFERENCING_PREDICATES.forEach((predicateIri, shorthand) -> {
+            if (isReferencedVia(tx, target, predicateIri)) {
+                referencing.add(shorthand);
+            }
+        });
+        if (isReferencedVia(tx, target, BROADER_PROPERTY)) {
+            referencing.add("skos:broader");
+        }
+        if (isReferencedVia(tx, target, RELATED_PROPERTY)) {
+            referencing.add("skos:related");
+        }
+        if (!referencing.isEmpty()) {
+            throw new TermReferencedException(projectId, code, referencing);
+        }
+    }
+
+    /** {@code true} if any named graph holds a triple {@code ?s <predicateIri> target}. */
+    private boolean isReferencedVia(DatasetTx tx, IRI target, String predicateIri) {
+        String query = "ASK { GRAPH ?g { ?s <" + predicateIri + "> ?target } }";
+        return tx.ask(query, Map.of("target", target));
+    }
+
+    /**
+     * One attempt of {@link #update}'s CAS retry loop: reads the term's current state and head
+     * together, from a single query ({@link #readCurrentByCode}), outside any transaction, builds
+     * the same candidate/context {@code update} always built, and hands the granular patch to
+     * {@link WriteFunnel#compareAndUpdate} as the write body - the funnel checks the head again
+     * inside its own transaction and runs the body only if it still matches.
+     *
+     * <p><strong>Why one combined read, not two.</strong> An earlier
+     * version read the assembly via {@link #readAssemblyByCode} and the head via a separate,
+     * second {@code SparqlQuery#select} call. That port's contract only guarantees that each
+     * individual call is a self-contained read against the store's current committed state -
+     * nothing ties two separate calls to the same snapshot. A concurrent writer's commit landing
+     * exactly between the two calls therefore left the first call's assembly stale (read before
+     * the commit) while the second call's head was already fresh (read after it): the funnel's
+     * head comparison then wrongly succeeded against a state that was no longer current, and the
+     * retry loop never noticed - the caller ended up reporting a field value the store no longer
+     * held. Reading both from one query makes that impossible: the assembly and the head are
+     * always the same snapshot, so a concurrent commit either lands entirely before or entirely
+     * after this read, never in between it.</p>
+     *
+     * <p><strong>No-op short-circuit.</strong> Once {@code current}/{@code currentHead} are read,
+     * this method returns immediately (still throwing {@link TermNotFoundException} for an unknown
+     * code first) if all four field arguments ({@code prefLabel}, {@code definition}, {@code
+     * broader}, {@code related}) are {@code null} - see the class-level "No-op update" note on
+     * {@link #update}.</p>
+     *
+     * <p><strong>Broader (issue #252).</strong> A non-{@code null} {@code broader} is resolved and
+     * cycle-checked against this project's own glossary before anything is built for the gate -
+     * {@link #resolveTermSubjectIri}/{@link #assertNoCycle} run against the very same {@code
+     * DatasetHandle} this method already holds open for {@link #readCurrentByCode}, so both reads
+     * see one consistent snapshot. {@code broader.isPresent()} sets/replaces the triple;
+     * {@code broader.isEmpty()} (an explicit clear) removes it without asserting a replacement;
+     * {@code broader == null} (unchanged) re-asserts {@code current}'s own existing target for
+     * the gate, mirroring the {@code prefLabel} "untouched" branch below. This
+     * pre-transaction check alone only catches a concurrent change that had already fully
+     * committed by the time it ran; {@link #assertNoCycle} runs a second time, against {@code
+     * tx::select}, inside the write body handed to {@link WriteFunnel#compareAndUpdate} - see that
+     * call site for why two terms racing to close a cycle from opposite ends needs an in-transaction
+     * re-check, not just this one.</p>
+     *
+     * <p><strong>Related (kogn-io/arknet#420).</strong> Same three states as {@code broader}, spelt
+     * with the list itself rather than an {@link Optional} wrapper: a non-{@code null},
+     * non-empty {@code related} is resolved against the glossary (every code, before anything is
+     * built for the gate, so one unknown peer among several known ones writes nothing) and replaces
+     * the term's own forward edges wholesale; an empty list clears them; {@code null} (unchanged)
+     * re-asserts {@code current}'s own existing targets for the gate, mirroring the {@code broader}
+     * branch. No cycle check accompanies it - {@code skos:related} is symmetric, and two mutually
+     * related terms are the relation working as intended rather than a loop to break.</p>
+     *
+     * <p><strong>Label (kogn-io/arknet#502).</strong> {@code explicitTag} is the tag the caller
+     * named, {@code null} if none; {@code definition} is written under it, else under {@code
+     * defaultTag}, else untagged. A non-{@code null} {@code prefLabel} with an {@code explicitTag}
+     * is compared against every label {@code current} carries before anything is built for the
+     * gate ({@link #rejectLabelMismatch}) and then written under that one tag, scoped exactly like
+     * a definition; without an {@code explicitTag} it is a rename, written under every tag
+     * {@link #renameTags} derives from {@code current} - see the class-level note.</p>
+     */
+    private Term attemptUpdate(ProjectId projectId, TermCode code, String prefLabel, String definition,
+            String explicitTag, String defaultTag, Optional<TermCode> broader, List<TermCode> related) {
+        DatasetId dataset = new DatasetId(projectId.value());
+        CurrentTerm currentTerm;
+        String broaderTargetIri = null;
+        TermCode broaderCode = null;
+        List<String> relatedTargetIris = List.of();
+        // Collects the broader/related targets' shape-legal-reference state (see
+        // assertReferenceTargetShapeState) while the DatasetHandle below is still open - unlike
+        // every other assertedContext contribution further down, this one needs a live read
+        // against the store (a target's own type/prefLabel), not just values already known from
+        // currentTerm/broaderTargetIri.
+        Graph referenceTargetAssertedContext = rdf.createGraph();
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            Function<String, Stream<BindingSet>> selectFn = handle.sparqlQuery()::select;
+            currentTerm = readCurrentByCode(selectFn, code)
+                    .orElseThrow(() -> new TermNotFoundException(projectId, code));
+            if (broader != null && broader.isPresent()) {
+                TermCode resolvedBroaderCode = broader.get();
+                broaderCode = resolvedBroaderCode;
+                broaderTargetIri = resolveTermSubjectIri(selectFn, resolvedBroaderCode)
+                        .orElseThrow(() -> new TermNotFoundException(projectId, resolvedBroaderCode));
+                assertNoCycle(selectFn, projectId, code,
+                        currentTerm.assembly().id.value().value(), resolvedBroaderCode, broaderTargetIri);
+                assertReferenceTargetShapeState(referenceTargetAssertedContext, selectFn, broaderTargetIri);
+            } else if (broader == null && currentTerm.assembly().broaderSubjectIri != null) {
+                assertReferenceTargetShapeState(
+                        referenceTargetAssertedContext, selectFn, currentTerm.assembly().broaderSubjectIri);
+            }
+            List<String> relatedIrisToAssert;
+            if (related != null) {
+                List<String> resolved = new ArrayList<>();
+                for (TermCode relatedCode : related) {
+                    resolved.add(resolveTermSubjectIri(selectFn, relatedCode)
+                            .orElseThrow(() -> new TermNotFoundException(projectId, relatedCode)));
+                }
+                relatedTargetIris = List.copyOf(resolved);
+                relatedIrisToAssert = relatedTargetIris;
+            } else {
+                // Untouched: the existing targets are re-asserted for the gate only, exactly like
+                // the broader branch above.
+                relatedIrisToAssert = List.copyOf(currentTerm.assembly().relatedBySubject.keySet());
+            }
+            for (String relatedIri : relatedIrisToAssert) {
+                assertReferenceTargetShapeState(referenceTargetAssertedContext, selectFn, relatedIri);
+            }
+        }
+        TermAssembly current = currentTerm.assembly();
+        String currentHead = currentTerm.head();
+
+        if (prefLabel == null && definition == null && broader == null && related == null) {
+            // No field to patch - a true no-op: the funnel is never
+            // consulted, so no revision is recorded and the head does not move (see class-level
+            // "No-op update" note).
+            return resultingTerm(current, null, null, null, null, defaultTag);
+        }
+
+        String writeTag = explicitTag != null ? explicitTag : defaultTag;
+        if (prefLabel != null && explicitTag != null) {
+            rejectLabelMismatch(projectId, code, prefLabel, explicitTag, current.prefLabels);
+        }
+        List<String> renameTags = prefLabel != null && explicitTag == null
+                ? renameTags(current.prefLabels, defaultTag)
+                : List.of();
+
+        String subjectIriString = current.id.value().value();
+        IRI subjectIri = rdf.createIRI(subjectIriString);
+        String subject = SparqlTerms.iriRef(subjectIriString);
+        IRI graphIri = rdf.createIRI(TERMS_GRAPH);
+
+        // Only the predicate(s) actually being replaced go into the gate's candidate; an
+        // untouched-but-shape-relevant predicate (the type triple always, the caller's own
+        // existing prefLabel candidates when prefLabel is not being replaced) is asserted instead
+        // - validation-only, never written again, so the gate still sees the resulting state
+        // truthfully without this class ever rewriting a triple nobody asked to change (see
+        // class-level SHACL note).
+        Graph writeCandidate = rdf.createGraph();
+        Graph assertedContext = rdf.createGraph();
+        assertedContext.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
+        if (prefLabel != null && explicitTag != null) {
+            writeCandidate.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(prefLabel, explicitTag));
+        } else if (prefLabel != null) {
+            for (String tag : renameTags) {
+                writeCandidate.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(prefLabel, tag));
+            }
+        } else {
+            for (LocalizedLiteral existing : current.prefLabels) {
+                assertedContext.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), toLiteral(existing));
+            }
+        }
+        // skos:definition's shape carries sh:uniqueLang but no sh:minCount - nothing to assert
+        // for the gate to still pass when it is left untouched.
+        if (broader != null) {
+            if (broader.isPresent()) {
+                writeCandidate.add(subjectIri, rdf.createIRI(BROADER_PROPERTY), rdf.createIRI(broaderTargetIri));
+            }
+            // broader.isEmpty() (explicit clear): nothing to assert - ulshapes:Term-broader
+            // carries sh:minCount 0, so an absent skos:broader never fails the gate.
+        } else if (current.broaderSubjectIri != null) {
+            // Untouched: assert the existing target for the gate only, mirroring prefLabel above.
+            assertedContext.add(subjectIri, rdf.createIRI(BROADER_PROPERTY), rdf.createIRI(current.broaderSubjectIri));
+        }
+        if (related != null) {
+            for (String relatedTargetIri : relatedTargetIris) {
+                writeCandidate.add(subjectIri, rdf.createIRI(RELATED_PROPERTY), rdf.createIRI(relatedTargetIri));
+            }
+            // An empty list (explicit clear) asserts nothing - ulshapes:Term-related carries no
+            // sh:minCount, so an absent skos:related never fails the gate.
+        } else {
+            // Untouched: assert the existing targets for the gate only, mirroring broader above.
+            for (String relatedSubjectIri : current.relatedBySubject.keySet()) {
+                assertedContext.add(subjectIri, rdf.createIRI(RELATED_PROPERTY), rdf.createIRI(relatedSubjectIri));
+            }
+        }
+        // The targets' own shape-legal-reference state (type + one prefLabel, see
+        // assertReferenceTargetShapeState) was already collected above, while the DatasetHandle was
+        // still open - merged in here for both the "set/replace" and "untouched" cases.
+        referenceTargetAssertedContext.stream().forEach(assertedContext::add);
+
+        String finalBroaderTargetIri = broaderTargetIri;
+        TermCode finalBroaderCode = broaderCode;
+        List<String> finalRelatedTargetIris = relatedTargetIris;
+        funnel.compareAndUpdate(dataset, TERMS_GRAPH, subjectIriString, currentHead,
+                writeCandidate, assertedContext,
+                () -> new TermNotFoundException(projectId, code),
+                () -> new TermConcurrentlyModifiedException(projectId, code),
+                tx -> {
+                    if (broader != null && broader.isPresent()) {
+                        // Re-verify inside the very transaction the CAS head check also runs in
+                        // (issue #252 review, "two terms racing into a cycle together"). The
+                        // pre-transaction assertNoCycle above only ever sees a concurrent change
+                        // that fully committed before this method's own read - it is a fast,
+                        // friendly rejection for the ordinary sequential case, not the guard. Two
+                        // term_update calls that each give the other term a fresh, still-empty
+                        // broader chain to read can otherwise both pass that pre-transaction check
+                        // and each go on to write a different subject, so neither commit conflicts
+                        // on the surface - yet together they close a cycle no single check ever
+                        // saw. Reading the candidate's chain again here, from this transaction's
+                        // own snapshot via tx::select, gives the store's SERIALIZABLE isolation
+                        // something to actually overlap with a concurrent term_update racing to
+                        // close the same cycle from the other end: both transactions now read the
+                        // very chain state the other one is about to write, so one commit loses as
+                        // a genuine write conflict (translated to TermConcurrentlyModifiedException
+                        // below, absorbed by update()'s retry) instead of both succeeding blindly.
+                        // A retry's fresh pre-transaction check then sees the now-real cycle and
+                        // reports it as TermCycleException, exactly as a purely sequential caller
+                        // would have seen it from the start.
+                        assertNoCycle(tx::select, projectId, code, subjectIriString,
+                                finalBroaderCode, finalBroaderTargetIri);
+                    }
+                    if (prefLabel != null && explicitTag != null) {
+                        tx.update(deleteTriplesOfLanguage(subject, PREF_LABEL_PROPERTY, explicitTag, defaultTag));
+                        tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, literalOf(prefLabel, explicitTag)));
+                    } else if (prefLabel != null) {
+                        // Rename: the old word goes under every tag, the new one comes back under
+                        // every tag renameTags derived - the one write that is not language-scoped.
+                        tx.update(deleteAllTriplesOf(subject, PREF_LABEL_PROPERTY));
+                        for (String tag : renameTags) {
+                            tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, literalOf(prefLabel, tag)));
+                        }
+                    }
+                    if (definition != null) {
+                        tx.update(deleteTriplesOfLanguage(subject, DEFINITION_PROPERTY, writeTag, defaultTag));
+                        tx.add(graphIri, singleTriple(subjectIri, DEFINITION_PROPERTY, literalOf(definition, writeTag)));
+                    }
+                    if (broader != null) {
+                        // Both "set/replace" and "explicit clear" start by removing the existing
+                        // triple (if any); only "set/replace" reinserts one.
+                        tx.update(deleteAllTriplesOf(subject, BROADER_PROPERTY));
+                        if (broader.isPresent()) {
+                            tx.add(graphIri, singleTriple(subjectIri, BROADER_PROPERTY,
+                                    rdf.createIRI(finalBroaderTargetIri)));
+                        }
+                    }
+                    if (related != null) {
+                        // Wholesale replacement of this term's own forward edges: everything it
+                        // asserts goes, whatever the caller now names comes back. An edge another
+                        // term asserts towards this one lives on that term's subject and is
+                        // untouched here - it is that term's own term_update to drop.
+                        tx.update(deleteAllTriplesOf(subject, RELATED_PROPERTY));
+                        for (String relatedTargetIri : finalRelatedTargetIris) {
+                            tx.add(graphIri, singleTriple(subjectIri, RELATED_PROPERTY,
+                                    rdf.createIRI(relatedTargetIri)));
+                        }
+                    }
+                });
+
+        return resultingTerm(current, prefLabel, definition, broader, related, defaultTag);
+    }
+
+    /**
+     * Rejects a translation-scoped label write whose word differs from any label the term already
+     * carries (kogn-io/arknet#502, FR-10) - naming every distinct existing word, so a caller who
+     * meant to translate sees what the term is called, and a caller who meant to rename is told to
+     * drop the language. Runs against {@code existing} as read for this attempt's compare-and-set,
+     * see the class-level "One word under every language" note for why that is race-free.
+     */
+    private static void rejectLabelMismatch(ProjectId projectId, TermCode code, String prefLabel,
+            String explicitTag, List<LocalizedLiteral> existing) {
+        List<String> existingWords = existing.stream().map(LocalizedLiteral::value).distinct().toList();
+        if (existingWords.stream().anyMatch(word -> !word.equals(prefLabel))) {
+            throw new TermLabelMismatchException(projectId, code, prefLabel, explicitTag, existingWords);
+        }
+    }
+
+    /**
+     * The tags a rename writes the new word under: every tag {@code existing} carries (deduplicated
+     * case-insensitively, first spelling kept - a store-first {@code @DE} next to {@code @de} must
+     * not come back as two literals of one language) plus {@code defaultTag}, if the project has
+     * one. An untagged literal is not carried over once any tag remains: the word is the same under
+     * every tag, so the display fallback chain loses nothing, and the untagged slot was only ever a
+     * leftover from before a language was supplied (issue #258). Only when nothing would remain at
+     * all - no tagged label, no project default - is the rename written untagged, as a single
+     * {@code null} entry.
+     */
+    private static List<String> renameTags(List<LocalizedLiteral> existing, String defaultTag) {
+        Map<String, String> byLowerCase = new LinkedHashMap<>();
+        for (LocalizedLiteral literal : existing) {
+            if (literal.languageTag() != null) {
+                byLowerCase.putIfAbsent(literal.languageTag().toLowerCase(Locale.ROOT), literal.languageTag());
+            }
+        }
+        if (defaultTag != null) {
+            byLowerCase.putIfAbsent(defaultTag.toLowerCase(Locale.ROOT), defaultTag);
+        }
+        if (byLowerCase.isEmpty()) {
+            List<String> untagged = new ArrayList<>();
+            untagged.add(null);
+            return untagged;
+        }
+        return List.copyOf(new LinkedHashSet<>(byLowerCase.values()));
+    }
+
+    /** Deletes every existing triple of {@code subject} on {@code predicateIri} - a no-op if none exists. */
+    private static String deleteAllTriplesOf(String subject, String predicateIri) {
+        return "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } }";
+    }
+
+    /**
+     * Canonicalizes a BCP-47 tag (e.g. {@code "DE"} -&gt; {@code "de"}), or {@code null} unchanged
+     * - and rejects one that is not well-formed at all, via the shared kernel {@link LanguageTag}
+     * (see that class's javadoc for why {@link Locale#forLanguageTag} is the wrong tool here: it
+     * never throws, silently degrading a typo like {@code "de_DE"} to {@code "und"}).
+     *
+     * <p>{@link #deleteTriplesOfLanguage}'s {@code FILTER(lang(?o) = "tag")} compares the raw
+     * string RDF4J's {@code lang()} returns - the exact case a literal was written with - against
+     * this method's {@code tag} argument, so an un-normalized case mismatch between two calls
+     * (e.g. {@code term_add(..., language="de")} followed by {@code term_update(...,
+     * language="DE")}) leaves the existing {@code @de} literal undeleted and inserts a second
+     * {@code @DE} one instead of correcting it - two literals for one language, defeating
+     * {@code sh:uniqueLang} and the exact bug this scoped delete exists to fix, only triggered by
+     * case instead of missing scoping. Canonicalizing every tag through this method before both
+     * writing a literal ({@link #literalOf}) and building the delete filter keeps stored tags in
+     * one consistent case, so a later scoped delete always matches - the same guarantee
+     * {@code DisplayLocale#matching} already gives the read side by comparing tags
+     * case-insensitively.</p>
+     */
+    private static String canonicalLanguageTag(String language) {
+        return LanguageTag.canonicalize(language);
+    }
+
+    /**
+     * Deletes only the existing triple(s) of {@code subject} on {@code predicateIri} whose literal
+     * carries the same language tag as {@code language} - every other language-tagged (or
+     * untagged) variant of a multi-valued predicate such as {@code skos:prefLabel}/
+     * {@code skos:definition} survives untouched. A no-op if no literal with that tag exists.
+     *
+     * <p>This is the fix for the bug {@code term_update} used to have: an earlier version deleted
+     * <strong>every</strong> value of the predicate regardless of language before writing the one
+     * new literal, silently discarding every other language variant a store-first term
+     * legally carried. {@code lang(?o)} is {@code ""} for a plain, untagged literal, which is
+     * exactly what {@code language == null} maps {@code tag} to below - so an untagged correction
+     * scopes its delete to the untagged slot alone, the same way a tagged one scopes to its own
+     * tag.</p>
+     *
+     * <p><strong>Widening the filter for a default-language write (issue #258).</strong> {@code
+     * language} is normally never {@code null} by the time a real {@code term_update} call reaches
+     * here - {@link #attemptUpdate} already fell back to the project's {@code defaultLanguage}
+     * for a caller that named none, and {@code TermService#update} rejected a call that would
+     * resolve to no language at all - but this out-adapter's own port contract still permits a
+     * caller-supplied {@code null} without a project default (untagged write), so this method
+     * stays null-tolerant for that lower-level case. When {@code language} is non-{@code null} and
+     * (canonicalized) equals
+     * {@code defaultLanguage} (canonicalized), the literal about to be written <em>is</em>, by
+     * construction, what an omitted {@code language} argument would have resolved to - so an
+     * existing <em>untagged</em> literal on this predicate is no longer a genuine other-language
+     * variant, it is a stale duplicate of the value now being written under its proper tag. The
+     * filter widens from matching only {@code tag} to also matching the untagged slot ({@code
+     * lang(?o) = ""}) in exactly that case, sweeping the stale untagged literal away instead of
+     * leaving it stranded next to the newly-tagged one - a lazy, incremental normalisation
+     * triggered only by the next {@code term_update} that happens to touch this field, not a batch
+     * migration. {@code language == null} (an untagged write itself) never widens: the untagged
+     * slot is already exactly what is being replaced.</p>
+     *
+     * @param language        the BCP-47 tag of the literal being replaced, or {@code null} for
+     *                        untagged
+     * @param defaultLanguage the target project's configured default language, canonicalized, or
+     *                        {@code null} if it has none
+     */
+    private static String deleteTriplesOfLanguage(
+            String subject, String predicateIri, String language, String defaultLanguage) {
+        // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
+        // DELETE {...} WHERE {...} form is required to scope the delete by language.
+        String tag = language == null ? "" : SparqlTerms.escape(language);
+        String filter = "lang(?o) = \"" + tag + "\"";
+        if (language != null && language.equals(defaultLanguage)) {
+            filter += " || lang(?o) = \"\"";
+        }
+        return "DELETE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } } "
+                + "WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o . "
+                + "FILTER(" + filter + ") } }";
+    }
+
+    /** A one-triple graph, for the common "insert exactly one new value" case in {@link #update}. */
+    private Graph singleTriple(IRI subject, String predicateIri, RDFTerm object) {
+        Graph graph = rdf.createGraph();
+        graph.add(subject, rdf.createIRI(predicateIri), object);
+        return graph;
+    }
+
+    /** Converts a {@link LocalizedLiteral} back to the RDF {@link Literal} it was read from. */
+    private Literal toLiteral(LocalizedLiteral literal) {
+        return literal.languageTag() == null
+                ? rdf.createLiteral(literal.value())
+                : rdf.createLiteral(literal.value(), literal.languageTag());
+    }
+
+    /** Builds a language-tagged literal, or a plain untagged one when {@code language} is {@code null}. */
+    private Literal literalOf(String value, String language) {
+        return language == null ? rdf.createLiteral(value) : rdf.createLiteral(value, language);
+    }
+
+    /**
+     * Builds the {@link Term} {@link #update} returns: {@code newXxx} where the caller actually
+     * supplied one, otherwise {@code current}'s own already-selected/materialised value - so the
+     * caller sees exactly the state {@link #update} just wrote, without a second read.
+     *
+     * <p><strong>An untouched field is rendered the way {@link #findByCode} renders it</strong>
+     * (issue #404). {@code prefLabel} and {@code definition} are multilingual, so projecting
+     * {@code current} down to a single value is a display-language choice - and it used to be
+     * made against this repository's process-wide configured {@link #displayLocale} (English by
+     * default) while {@code term_get} makes the very same choice against the calling project's
+     * own default language. One and the same store state therefore answered {@code term_update}
+     * with the English label and a directly following {@code term_get} with the German one, for a
+     * term carrying both. {@code defaultLanguage} - already in hand here as the tag a write
+     * without an explicit {@code language} falls back to - is merged into the {@code requested}
+     * tier for this projection, which is exactly the value {@code UbiquitousLanguageMcpTools}
+     * hands {@link #findByCode} when {@code term_get} is called without a {@code displayLocale}
+     * argument. {@link #withRequestedOverride} is a no-op for a {@code null}/blank tag, so a
+     * project without a configured default language degrades exactly as before.</p>
+     *
+     * <p>A field the caller <em>did</em> supply is still echoed back verbatim rather than
+     * re-selected: {@code term_update} confirms the value it was asked to write, in the language
+     * it was asked to write it in. Only the fields this call left alone are a display choice at
+     * all, and only those are what issue #404 saw diverge.</p>
+     *
+     * @param defaultLanguage the target project's configured default language, canonicalized, or
+     *                        {@code null} if it has none
+     */
+    private Term resultingTerm(TermAssembly current, String newPrefLabel, String newDefinition,
+            Optional<TermCode> newBroader, List<TermCode> newRelated, String defaultLanguage) {
+        Term currentProjection = current.toTerm(withRequestedOverride(defaultLanguage));
+        String prefLabel = newPrefLabel != null ? newPrefLabel : currentProjection.prefLabel();
+        String definition = newDefinition != null ? newDefinition : currentProjection.definition();
+        TermCode broader = resultingBroader(current.broaderCode, newBroader);
+        // The forward direction alone, as this port promises - TermService merges the backward
+        // direction back in before a caller of term_update ever sees the result.
+        List<TermCode> related = newRelated != null ? newRelated : currentProjection.related();
+        return new Term(current.id, current.code, prefLabel, definition, broader, related);
+    }
+
+    /**
+     * Merges the caller's {@code newBroader} onto {@code current}: {@code null} leaves {@code
+     * current} untouched, {@link Optional#empty()} clears it, {@link Optional#of} replaces it -
+     * matching what {@link #attemptUpdate} actually persists.
+     */
+    private static TermCode resultingBroader(TermCode current, Optional<TermCode> newBroader) {
+        if (newBroader == null) {
+            return current;
+        }
+        return newBroader.orElse(null);
+    }
+
+    @Override
+    public Optional<Term> findByCode(ProjectId projectId, TermCode code, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+
+        DisplayLocale effective = withRequestedOverride(displayLocale);
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return readAssemblyByCode(handle.sparqlQuery()::select, code).map(assembly -> assembly.toTerm(effective));
+        }
+    }
+
+    /**
+     * Overrides this repository's own configured {@link #displayLocale}'s {@code requested} tier
+     * for one call - shared by {@link #findByCode}, {@link #findAll} and
+     * {@link #findAllDisplayFallback}, e.g. an explicit {@code term_get}/{@code term_list}
+     * {@code displayLocale} argument or a project's own default language merged in by the caller
+     * (the ubiquitous-language MCP adapter combines an explicit override with {@code
+     * ResolvedProject#defaultLanguage()} before any of the three ever sees it - issue #274, and
+     * since kogn-io/arknet#475 {@code term_list} merges its own explicit argument the same way
+     * {@code term_get} always has). The configured {@code systemDefault} tier -
+     * and the rest of {@link DisplayLocale#select}'s fallback chain - is unaffected, so an
+     * override that matches nothing still degrades exactly the way the process-wide default
+     * already does.
+     *
+     * @param requestedOverride a BCP-47 language tag, or {@code null}/blank to use the configured
+     *                          {@link #displayLocale} unchanged
+     */
+    private DisplayLocale withRequestedOverride(String requestedOverride) {
+        if (requestedOverride == null || requestedOverride.isBlank()) {
+            return displayLocale;
+        }
+        return new DisplayLocale(Locale.forLanguageTag(requestedOverride), displayLocale.systemDefault());
+    }
+
+    /**
+     * Builds the WHERE-clause body (inside {@code GRAPH <TERMS_GRAPH>}) shared by
+     * {@link #readAssemblyByCode} and {@link #readCurrentByCode}: the mandatory joins (type,
+     * identifier, prefLabel, definition) plus the blank-node subject guard, scoped to one
+     * {@code code}, plus the optional {@code skos:broader} join (issue #252): binding the target's raw subject
+     * ({@code ?broaderSubject}, needed to re-assert the untouched triple during
+     * {@link #attemptUpdate}'s gate check) in its own {@code OPTIONAL}, and its business code
+     * ({@code ?broaderCode}, needed to project {@link Term#broader()}) in a second, nested
+     * {@code OPTIONAL} scoped inside the first. A store-first broader target that itself
+     * carries no {@code dcterms:identifier} therefore still binds {@code ?broaderSubject} - the
+     * edge stays visible to {@link #attemptUpdate}'s gate check even though {@link Term#broader()}
+     * cannot name it by code; a single, non-nested {@code OPTIONAL} joining both variables together
+     * used to drop the whole edge (subject included) whenever the code binding failed. Extracted because both
+     * callers build a {@link TermAssembly} from the same row shape - drift between two
+     * near-identical read paths in this class was a real bug twice before, so
+     * this text now lives in one place. The caller supplies the surrounding
+     * {@code SELECT}/{@code GRAPH}/{@code WHERE} wrapping and, in {@link #readCurrentByCode}'s
+     * case, the additional provenance-graph join - only the WHERE body itself is common.
+     */
+    private static String termByCodeWhereClause(TermCode code) {
+        return "?s a <" + CONCEPT_TYPE + "> ; "
+                + "<" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" ; "
+                + "<" + PREF_LABEL_PROPERTY + "> ?prefLabel ; "
+                + "<" + DEFINITION_PROPERTY + "> ?definition . "
+                + "FILTER(isIRI(?s)) "
+                + "OPTIONAL { ?s <" + BROADER_PROPERTY + "> ?broaderSubject . FILTER(isIRI(?broaderSubject)) "
+                + "OPTIONAL { ?broaderSubject <" + IDENTIFIER_PROPERTY + "> ?broaderCode } } "
+                + relatedWhereClause();
+    }
+
+    /**
+     * The {@code skos:related} join both single-term read paths and {@link #findAll} share
+     * (kogn-io/arknet#420) - built exactly like the {@code skos:broader} one above: the target's raw
+     * subject ({@code ?relatedSubject}, needed to re-assert an untouched edge during
+     * {@link #attemptUpdate}'s gate check) in its own {@code OPTIONAL}, its business code
+     * ({@code ?relatedCode}, needed to project {@link Term#related()}) in a second {@code OPTIONAL}
+     * nested inside the first, so a store-first peer carrying no {@code dcterms:identifier} still
+     * keeps the edge visible to the gate.
+     *
+     * <p>Unlike {@code broader} this join is genuinely multi-valued, so it multiplies a subject into
+     * one row per peer on top of the {@code prefLabel}/{@code definition} multiplication that is
+     * already there - which is exactly why every caller groups its rows per subject and lets
+     * {@link TermAssembly} accumulate rather than reading a scalar off the first row.</p>
+     */
+    private static String relatedWhereClause() {
+        return "OPTIONAL { ?s <" + RELATED_PROPERTY + "> ?relatedSubject . FILTER(isIRI(?relatedSubject)) "
+                + "OPTIONAL { ?relatedSubject <" + IDENTIFIER_PROPERTY + "> ?relatedCode } } ";
+    }
+
+    /**
+     * Reads one term's full current state by business code - used by {@link #findByCode} (reads
+     * outside any transaction). A term missing either {@code skos:prefLabel} or
+     * {@code skos:definition} entirely is invisible, exactly as before.
+     */
+    private Optional<TermAssembly> readAssemblyByCode(
+            Function<String, Stream<BindingSet>> selectFn, TermCode code) {
+        String query = "SELECT ?s ?prefLabel ?definition "
+                + "?broaderSubject ?broaderCode ?relatedSubject ?relatedCode WHERE { GRAPH <"
+                + TERMS_GRAPH + "> { "
+                + termByCodeWhereClause(code)
+                + "} }";
+
+        Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
+        selectFn.apply(query).forEach(row -> {
+            TermAssembly assembly = assemblyFor(bySubject, row, code);
+            assembly.addPrefLabel(literalOf(row, "prefLabel"));
+            assembly.addDefinition(literalOf(row, "definition"));
+        });
+        return bySubject.values().stream().findFirst();
+    }
+
+    /**
+     * One term's current state ({@link TermAssembly}) together with its {@code arkprov:head}
+     * concurrency token, read from a single query - see {@link #readCurrentByCode}
+     * for why this must be one query, not two.
+     */
+    private record CurrentTerm(TermAssembly assembly, String head) {
+    }
+
+    /**
+     * Reads one term's full current state together with its {@code arkprov:head} concurrency
+     * token in a single query (mirroring
+     * {@code KognioRdfRequirementRepository#findCurrentByCode}) - used by {@link #attemptUpdate},
+     * whose compare-and-set write must know both the state to patch and the token to check.
+     * Shares {@link #termByCodeWhereClause} with {@link #readAssemblyByCode} so the two
+     * single-term read paths cannot drift apart field-by-field (already taught
+     * this lesson once).
+     *
+     * <p><strong>Why the state and the head must come from the same query.</strong>
+     * {@code SparqlQuery#select}'s port contract guarantees only that each individual call is a
+     * self-contained read against the store's current committed state - two separate calls are
+     * two independent snapshots, with no guarantee that nothing committed in between them. An
+     * earlier version read the assembly and the head via two separate calls; a concurrent
+     * writer's commit landing between them left the first call's assembly stale (pre-commit)
+     * paired with the second call's head, which was already fresh (post-commit) - the funnel's
+     * head comparison in {@link #attemptUpdate} then wrongly matched against a state that was no
+     * longer current, and the bounded retry loop in {@link #update} never got a chance to catch
+     * it. Joining {@code ?head} into this query instead makes the pairing atomic: both values
+     * always come from the same snapshot, so a concurrent commit either precedes or follows this
+     * whole read, never falls inside it.</p>
+     *
+     * <p>The head is single-valued and therefore identical on every row this query binds for one
+     * subject (the mandatory {@code prefLabel}/{@code definition} joins in
+     * {@link #termByCodeWhereClause} can still multiply a subject into several rows)
+     * - it is kept <em>per subject</em> and paired with the assembly this method
+     * actually returns, exactly as the row grouping into {@link TermAssembly} already does for
+     * the other per-subject fields. Keying it by subject rather than taking the first head seen
+     * matters because {@code dcterms:identifier} carries no {@code sh:maxCount}: a store-first
+     * store can hold two subjects under the same code, and the returned token must be
+     * the token of the subject whose state is returned with it - a head belonging to the other
+     * subject would make {@link #attemptUpdate}'s compare-and-set check a foreign resource's
+     * revision.</p>
+     */
+    private Optional<CurrentTerm> readCurrentByCode(
+            Function<String, Stream<BindingSet>> selectFn, TermCode code) {
+        String query = "SELECT ?s ?prefLabel ?definition "
+                + "?broaderSubject ?broaderCode ?relatedSubject ?relatedCode ?head WHERE { GRAPH <"
+                + TERMS_GRAPH + "> { "
+                + termByCodeWhereClause(code)
+                + "} "
+                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+
+        Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
+        Map<String, String> headBySubject = new LinkedHashMap<>();
+        selectFn.apply(query).forEach(row -> {
+            TermAssembly assembly = assemblyFor(bySubject, row, code);
+            assembly.addPrefLabel(literalOf(row, "prefLabel"));
+            assembly.addDefinition(literalOf(row, "definition"));
+            String head = headOf(row);
+            if (head != null) {
+                headBySubject.putIfAbsent(assembly.id.value().value(), head);
+            }
+        });
+        return bySubject.values().stream().findFirst()
+                .map(assembly -> new CurrentTerm(assembly, headBySubject.get(assembly.id.value().value())));
+    }
+
+    /** Extracts a row's {@code ?head} binding as an IRI string, or {@code null} if absent or not an IRI. */
+    private static String headOf(BindingSet row) {
+        return row.getValue("head")
+                .filter(IRI.class::isInstance)
+                .map(value -> ((IRI) value).getIRIString())
+                .orElse(null);
+    }
+
+    @Override
+    public List<Term> findAll(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        DisplayLocale effective = withRequestedOverride(displayLocale);
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return queryAllAssemblies(handle).values().stream().map(assembly -> assembly.toTerm(effective)).toList();
+        }
+    }
+
+    /**
+     * The query {@link #findAll} and {@link #findAllDisplayFallback} share, kept in one place so
+     * both read exactly the same candidate set - a term visible to one must be visible to the
+     * other, and a {@link TermDisplayFallback} must be computed from the very same {@code
+     * prefLabel}/{@code definition} candidates {@link #findAll} chose among.
+     */
+    private Map<String, TermAssembly> queryAllAssemblies(DatasetHandle handle) {
+        String query = "SELECT ?s ?identifier ?prefLabel ?definition "
+                + "?broaderSubject ?broaderCode ?relatedSubject ?relatedCode "
+                + "WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+                + "?s a <" + CONCEPT_TYPE + "> . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
+                + "?s <" + PREF_LABEL_PROPERTY + "> ?prefLabel . "
+                + "?s <" + DEFINITION_PROPERTY + "> ?definition . "
+                + "FILTER(isIRI(?s)) "
+                + "OPTIONAL { ?s <" + BROADER_PROPERTY + "> ?broaderSubject . FILTER(isIRI(?broaderSubject)) "
+                + "OPTIONAL { ?broaderSubject <" + IDENTIFIER_PROPERTY + "> ?broaderCode } } "
+                + relatedWhereClause() + "} }";
+
+        Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
+        handle.sparqlQuery().select(query).forEach(row -> {
+            TermAssembly assembly = assemblyFor(bySubject, row, null);
+            assembly.addPrefLabel(literalOf(row, "prefLabel"));
+            assembly.addDefinition(literalOf(row, "definition"));
+        });
+        return bySubject;
+    }
+
+    @Override
+    public Map<TermCode, TermDisplayFallback> findAllDisplayFallback(ProjectId projectId, String displayLocale) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        DisplayLocale effective = withRequestedOverride(displayLocale);
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            Map<TermCode, TermDisplayFallback> result = new LinkedHashMap<>();
+            for (TermAssembly assembly : queryAllAssemblies(handle).values()) {
+                TermDisplayFallback fallback = assembly.displayFallback(effective);
+                if (!fallback.isEmpty()) {
+                    result.put(assembly.code(), fallback);
+                }
+            }
+            return result;
+        }
+    }
+
+    /**
+     * The codes themselves, read without the two literals {@link #findAll} has to join
+     * (kogn-io/arknet#360): only the {@code skos:Concept} type triple and the
+     * {@code dcterms:identifier} carrying the code, so a store-first concept missing its
+     * {@code skos:prefLabel} or {@code skos:definition} - invisible to every read that materialises
+     * a {@link Term} - still reports the {@code TERM-N} it holds. See
+     * {@link TermRepository#findAllCodes} for why the code assignment must not lose it.
+     *
+     * <p>The type join doubles as the filter that keeps the glossary's own
+     * {@code skos:ConceptScheme} subject out of the result: it lives in the same named graph and
+     * carries no {@code dcterms:identifier}, but joining on {@code skos:Concept} means it is never
+     * a candidate in the first place. Deduplicated, because nothing stops a store-first concept from carrying two
+     * {@code dcterms:identifier} triples ({@code ulshapes:TermShape} constrains the property no
+     * further); the caller only wants the highest running number, so collapsing identical
+     * duplicates changes nothing about the result.</p>
+     *
+     * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
+     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
+     * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
+     * A counter that filtered blank nodes out would therefore be blind to a code the write path
+     * still refuses, which is this bug over again through a different skip. Counting one number too
+     * many costs a number; counting one too few costs the {@code add}.</p>
+     */
+    @Override
+    public List<TermCode> findAllCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+                + "?s a <" + CONCEPT_TYPE + "> . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .distinct()
+                    .map(TermCode::new)
+                    .toList();
+        }
+    }
+
+    /**
+     * Groups the (potentially several) rows of one concept - a mandatory but now
+     * <em>multi-valued</em> {@code skos:prefLabel}/{@code skos:definition} join multiplies a
+     * concept into one row per candidate value - into a single
+     * {@link TermAssembly}, keyed by subject IRI. The remaining scalar fields (identity, code)
+     * are read once from the first row of a subject; every row contributes its
+     * {@code prefLabel}/{@code definition} literal as a candidate via
+     * {@link TermAssembly#addPrefLabel}/{@link TermAssembly#addDefinition}, called by the two
+     * callers ({@link #findByCode}/{@link #findAll}) once per row.
+     *
+     * <p>{@code identifier} stays a single-valued read - it is already narrowed by the
+     * {@code knownCode}/query filter to the code being looked up. Keeping {@code prefLabel}
+     * a <em>required</em> (non-optional) join means a store-first concept carrying no
+     * {@code prefLabel} at all still binds nothing and is omitted exactly as before - it never
+     * reaches the {@link Term} constructor, whose non-blank {@code prefLabel} invariant stays
+     * strict.</p>
+     *
+     * @param knownCode the code when the caller already knows it ({@code findByCode}), else
+     *                  {@code null} to read it from the row's {@code identifier} ({@code findAll})
+     */
+    private static TermAssembly assemblyFor(Map<String, TermAssembly> bySubject, BindingSet row, TermCode knownCode) {
+        String subjectIri = iriOf(row, "s").getIRIString();
+        TermAssembly assembly = bySubject.computeIfAbsent(subjectIri, iri -> new TermAssembly(
+                new TermId(ResourceId.of(iri)),
+                knownCode != null ? knownCode : new TermCode(literalOf(row, "identifier").getLexicalForm()),
+                broaderSubjectIriOf(row), broaderCodeOf(row)));
+        // Multi-valued, unlike broader, so it is accumulated across the subject's rows rather than
+        // captured once at construction (kogn-io/arknet#420).
+        assembly.addRelated(relatedSubjectIriOf(row), relatedCodeOf(row));
+        return assembly;
+    }
+
+    /**
+     * Mutable per-subject accumulator collecting a concept's {@code skos:prefLabel} and
+     * {@code skos:definition} candidates across rows, then choosing one of each when the concept
+     * is finally materialised into a {@link Term}: {@code prefLabel} and {@code definition} both
+     * via the very same {@link DisplayLocale} fallback chain, applied to that one
+     * {@link DisplayLocale} instance passed into {@link #toTerm} - a card rendering both fields
+     * for one resource therefore always sees them resolved for the same language (issue #248).
+     */
+    private static final class TermAssembly {
+
+        private final TermId id;
+        private final TermCode code;
+        /**
+         * The subject's own {@code skos:broader} target, captured once at construction (issue
+         * #252's shape is {@code sh:maxCount 1}, so unlike {@code prefLabel}/{@code definition}
+         * there is nothing genuinely multi-valued to accumulate here). {@code broaderSubjectIri}
+         * is what {@link #attemptUpdate} needs to re-assert the untouched triple for the gate;
+         * {@code broaderCode} is what {@link #toTerm} projects into {@link Term#broader()}.
+         */
+        private final String broaderSubjectIri;
+        private final TermCode broaderCode;
+        /**
+         * The subject's own forward {@code skos:related} targets, keyed by subject IRI so a peer
+         * repeated across the rows the multi-valued {@code prefLabel}/{@code definition} joins
+         * multiply is collected once (kogn-io/arknet#420). The value is the peer's business code,
+         * or {@code null} for a store-first peer carrying no {@code dcterms:identifier} - the key
+         * is what {@link #attemptUpdate} re-asserts for the gate, the value what {@link #toTerm}
+         * projects into {@link Term#related()}, exactly the split
+         * {@code broaderSubjectIri}/{@code broaderCode} draws for the single-valued relation.
+         */
+        private final Map<String, TermCode> relatedBySubject = new LinkedHashMap<>();
+        private final List<LocalizedLiteral> prefLabels = new ArrayList<>();
+        private final List<LocalizedLiteral> definitions = new ArrayList<>();
+
+        private TermAssembly(TermId id, TermCode code, String broaderSubjectIri, TermCode broaderCode) {
+            this.id = id;
+            this.code = code;
+            this.broaderSubjectIri = broaderSubjectIri;
+            this.broaderCode = broaderCode;
+        }
+
+        /** Records one row's {@code skos:related} binding, if the row carries one. */
+        private void addRelated(String relatedSubjectIri, TermCode relatedCode) {
+            if (relatedSubjectIri == null) {
+                return;
+            }
+            if (relatedCode != null && relatedBySubject.get(relatedSubjectIri) == null) {
+                // A later row may bind the code for a peer an earlier row only bound the subject
+                // of; a code already bound wins, mirroring every other first-match-wins read here.
+                relatedBySubject.put(relatedSubjectIri, relatedCode);
+            } else {
+                relatedBySubject.putIfAbsent(relatedSubjectIri, null);
+            }
+        }
+
+        private void addPrefLabel(Literal literal) {
+            prefLabels.add(new LocalizedLiteral(literal.getLexicalForm(), literal.getLanguageTag().orElse(null)));
+        }
+
+        private void addDefinition(Literal literal) {
+            definitions.add(new LocalizedLiteral(literal.getLexicalForm(), literal.getLanguageTag().orElse(null)));
+        }
+
+        /**
+         * Materialises this accumulator into a {@link Term}, selecting {@code prefLabel} and
+         * {@code definition} from the very same {@code displayLocale} - the fix for issue #248:
+         * an earlier version resolved {@code definition} independently of {@code prefLabel} (a
+         * first-seen, store-row-order pick), so a term whose label and definition were not both
+         * available in the same language could show label and definition in two different
+         * languages on the very same card.
+         */
+        private Term toTerm(DisplayLocale displayLocale) {
+            String prefLabel = displayLocale.select(prefLabels)
+                    .map(LocalizedLiteral::value)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "prefLabel is a required join, so at least one candidate must exist"));
+            String definition = displayLocale.select(definitions)
+                    .map(LocalizedLiteral::value)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "definition is a required join, so at least one candidate must exist"));
+            return new Term(id, code, prefLabel, definition, broaderCode, relatedCodes());
+        }
+
+        private TermCode code() {
+            return code;
+        }
+
+        /**
+         * The {@link TermDisplayFallback} counterpart to {@link #toTerm}: same two candidate
+         * lists, same {@link DisplayLocale}, but reporting whether the chain had to fall back
+         * rather than the value it fell back to (kogn-io/arknet#475).
+         */
+        private TermDisplayFallback displayFallback(DisplayLocale displayLocale) {
+            return new TermDisplayFallback(
+                    fallbackTag(prefLabels, displayLocale),
+                    fallbackTag(definitions, displayLocale));
+        }
+
+        /**
+         * {@code null} if the candidate matching {@code displayLocale}'s requested language was
+         * shown (the requested tier of {@link DisplayLocale#select} succeeded, so nothing fell
+         * back); otherwise the tag of whatever was shown instead - a BCP-47 tag, or {@code ""} for
+         * an untagged literal.
+         */
+        private static String fallbackTag(List<LocalizedLiteral> candidates, DisplayLocale displayLocale) {
+            LocalizedLiteral selected = displayLocale.select(candidates)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "a required join, so at least one candidate must exist"));
+            String tag = selected.languageTag();
+            String requestedLanguage = displayLocale.requested().getLanguage();
+            boolean matchesRequested = tag != null
+                    && Locale.forLanguageTag(tag).getLanguage().equalsIgnoreCase(requestedLanguage);
+            if (matchesRequested) {
+                return null;
+            }
+            return tag == null ? "" : tag;
+        }
+
+        /**
+         * This term's own forward {@code skos:related} peers, by business code, ordered by running
+         * number so the projection does not depend on store row order. A peer whose subject carries
+         * no {@code dcterms:identifier} is skipped: the edge is still visible to
+         * {@link #attemptUpdate}'s gate check through {@link #relatedBySubject}, but there is no
+         * code to name it by. This term's own code is skipped too - {@link Term} rejects a
+         * self-relation, and a store-first triple asserting one must not make an otherwise readable
+         * term unreadable.
+         */
+        private List<TermCode> relatedCodes() {
+            return relatedBySubject.values().stream()
+                    .filter(Objects::nonNull)
+                    .filter(peer -> !peer.equals(code))
+                    .map(TermCode::value)
+                    .distinct()
+                    .sorted(Comparator.<String>comparingInt(peer -> CodeCounter.runningNumber(CODE_PREFIX, peer))
+                            .thenComparing(Comparator.naturalOrder()))
+                    .map(TermCode::new)
+                    .toList();
+        }
+    }
+
+    /**
+     * Batch variant of {@link #findByCode}, keyed by opaque identity instead of business code -
+     * backs {@link ResolveTerms}. One {@code VALUES}-bound query for the
+     * whole batch, not one query per id: the caller (a sibling bounded context's driving adapter,
+     * rendering several term references at once) must not pay an N+1 store round-trip.
+     *
+     * <p>Returns the slim {@link ResolveTerms.ResolvedTerm} projection, not the full {@link Term}
+     * aggregate: the query below therefore joins only {@code identifier}, not
+     * {@code prefLabel}/{@code definition} - fields {@link ResolveTerms} never reads. A store-first
+     * term that carries an identity and a code but happens to miss a {@code prefLabel} (which
+     * {@link #findByCode}/{@link #findAll} still require) is thus resolvable here.</p>
+     *
+     * <p><strong>Exactly one {@link ResolveTerms.ResolvedTerm} per resolved subject.</strong>
+     * {@code ulshapes:Term-prefLabel} carries {@code sh:minCount 1} but
+     * deliberately no {@code sh:maxCount}: SKOS allows - and this glossary intends to allow - one
+     * {@code skos:prefLabel} per language on the same concept, store-first legally so.
+     * Its own SHACL identifier constraint carries no {@code sh:maxCount} either, so the single
+     * mandatory join below (identifier) is not guaranteed to bind exactly one row per subject.
+     * Grouping by subject and keeping the first row's binding turns that cardinality back into
+     * "the terms" the port promises, not "one row per predicate combination" - which is what a
+     * naive per-row mapping would leak to every caller (a caller keying results by identity, e.g.
+     * via {@code Collectors.toMap}, would throw {@code IllegalStateException} on the duplicate
+     * key). Which identifier ends up chosen in that (pathological, store-first-only) case is
+     * deliberately unspecified.</p>
+     */
+    @Override
+    public List<ResolveTerms.ResolvedTerm> findByIds(ProjectId projectId, List<ResourceId> ids) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        // ResourceId#of validates IRIREF-safety at construction, so every id here is
+        // already guaranteed safe to embed - restores ResolveTerms#resolve's "never rejects"
+        // contract, which this used to violate by throwing on an impossible identity.
+        String values = ids.stream()
+                .map(id -> SparqlTerms.iriRef(id.value()))
+                .collect(Collectors.joining(" "));
+
+        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+                + "VALUES ?s { " + values + " } "
+                + "?s a <" + CONCEPT_TYPE + "> . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            Map<String, ResolveTerms.ResolvedTerm> bySubject = new LinkedHashMap<>();
+            handle.sparqlQuery().select(query).forEach(row -> {
+                String subjectIri = iriOf(row, "s").getIRIString();
+                // putIfAbsent, not put: the first row wins if a subject has several identifiers.
+                bySubject.putIfAbsent(subjectIri, new ResolveTerms.ResolvedTerm(
+                        ResourceId.of(subjectIri),
+                        new TermCode(literalOf(row, "identifier").getLexicalForm())));
+            });
+            return List.copyOf(bySubject.values());
+        }
+    }
+
+    /**
+     * The backward half of the symmetric {@code skos:related} relation (kogn-io/arknet#420): every
+     * term in the project whose own forward edge points at {@code id}, by business code. One
+     * reverse query, no traversal - a peer found here is not followed, so a mutual {@code A related
+     * B} / {@code B related A} pair (legal, unlike a {@code skos:broader} cycle) cannot loop.
+     *
+     * <p>{@code FILTER(isIRI(?s))} for the same reason every other read path carries it - a
+     * store-first blank-node concept must be skipped, not crash the whole read. A referring term
+     * without a {@code dcterms:identifier} binds nothing and is simply absent: this method answers
+     * "which codes point here", and a term that has no code cannot be one of them.</p>
+     */
+    @Override
+    public List<TermCode> findRelatedCodes(ProjectId projectId, TermId id) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(id, "id");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+                + "?s <" + RELATED_PROPERTY + "> " + SparqlTerms.iriRef(id.value().value()) + " ; "
+                + "<" + IDENTIFIER_PROPERTY + "> ?identifier . "
+                + "FILTER(isIRI(?s)) } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .distinct()
+                    .sorted(Comparator.<String>comparingInt(peer -> CodeCounter.runningNumber(CODE_PREFIX, peer))
+                            .thenComparing(Comparator.naturalOrder()))
+                    .map(TermCode::new)
+                    .toList();
+        }
+    }
+
+    private static IRI iriOf(BindingSet row, String name) {
+        return (IRI) row.getValue(name)
+                .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
+    }
+
+    private static Literal literalOf(BindingSet row, String name) {
+        return (Literal) row.getValue(name)
+                .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
+    }
+
+    /**
+     * Extracts a row's {@code ?broaderSubject} binding as an IRI string, or {@code null} if the
+     * subject carries no {@code skos:broader} (the join is {@code OPTIONAL}).
+     */
+    private static String broaderSubjectIriOf(BindingSet row) {
+        return row.getValue("broaderSubject")
+                .filter(IRI.class::isInstance)
+                .map(value -> ((IRI) value).getIRIString())
+                .orElse(null);
+    }
+
+    /**
+     * Extracts a row's {@code ?broaderCode} binding as a {@link TermCode}, or {@code null} if the
+     * subject carries no {@code skos:broader} (the join is {@code OPTIONAL}).
+     */
+    private static TermCode broaderCodeOf(BindingSet row) {
+        return row.getValue("broaderCode")
+                .filter(Literal.class::isInstance)
+                .map(value -> new TermCode(((Literal) value).getLexicalForm()))
+                .orElse(null);
+    }
+
+    /**
+     * Extracts a row's {@code ?relatedSubject} binding as an IRI string, or {@code null} if the row
+     * binds no {@code skos:related} peer (the join is {@code OPTIONAL}).
+     */
+    private static String relatedSubjectIriOf(BindingSet row) {
+        return row.getValue("relatedSubject")
+                .filter(IRI.class::isInstance)
+                .map(value -> ((IRI) value).getIRIString())
+                .orElse(null);
+    }
+
+    /**
+     * Extracts a row's {@code ?relatedCode} binding as a {@link TermCode}, or {@code null} if the
+     * row binds no peer or a peer without a {@code dcterms:identifier} (both joins are
+     * {@code OPTIONAL}).
+     */
+    private static TermCode relatedCodeOf(BindingSet row) {
+        return row.getValue("relatedCode")
+                .filter(Literal.class::isInstance)
+                .map(value -> new TermCode(((Literal) value).getLexicalForm()))
+                .orElse(null);
+    }
+}

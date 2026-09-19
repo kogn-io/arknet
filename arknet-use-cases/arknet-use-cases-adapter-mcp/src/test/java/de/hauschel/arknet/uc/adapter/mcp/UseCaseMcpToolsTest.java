@@ -59,7 +59,7 @@ import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
-import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.kernel.FieldLanguageLookup;
 import de.hauschel.arknet.kernel.StaleTranslationHint;
 

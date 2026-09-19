@@ -83,7 +83,7 @@ import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**
@@ -213,7 +213,7 @@ class TraceabilityGraphTest {
         boundedContexts.create(PROJECT, new BoundedContext(
                 new BoundedContextId(ResourceId.of(BC_1_IRI)), new BoundedContextCode("BC-1"), "Ordering",
                 "Wir verarbeiten Bestellungen.", null, null,
-                List.of(new de.hauschel.arknet.bc.domain.TermRef(ResourceId.of(TERM_4_IRI)))), "en");
+                List.of(ResourceId.of(TERM_4_IRI))), "en");
 
         StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
         return TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
@@ -1006,7 +1006,7 @@ class TraceabilityGraphTest {
             BoundedContextId id = new BoundedContextId(ResourceId.of(bc2Iri));
             boundedContexts.create(PROJECT, new BoundedContext(
                     id, new BoundedContextCode("BC-4"), "Fulfilment", "Wir versenden Bestellungen.", null, null,
-                    List.of(new de.hauschel.arknet.bc.domain.TermRef(ResourceId.of(termIri)))), "en");
+                    List.of(ResourceId.of(termIri))), "en");
 
             BoundedContextRepository.CurrentBoundedContext current =
                     boundedContexts.findCurrentByCode(PROJECT, new BoundedContextCode("BC-4"), null).orElseThrow();

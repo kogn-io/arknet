@@ -3,6 +3,9 @@
 
 package de.hauschel.arknet.architecture;
 
+import static com.tngtech.archunit.base.DescribedPredicate.not;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -22,7 +25,10 @@ import com.tngtech.archunit.lang.ArchRule;
  * its core, and may call a neighbour bounded context's driving port --
  * {@code arknet-requirements-adapter-mcp} depends on {@code arknet-ubiquitous-language-core}
  * for exactly that (rendering a linked term's business code instead of its bare IRI in
- * {@code req_get}/{@code req_list}; see CLAUDE.md). Maven still enforces the narrower,
+ * {@code req_get}/{@code req_list}; see CLAUDE.md). ADR-49 retires that pattern -- every read of
+ * a neighbour runs over the reader's own out-port against the neighbour's published language --
+ * and rule 9 below nails the result down for the two components of the Domain Modelling context,
+ * the first to be converted. Maven still enforces the narrower,
  * {@code *-core}-scoped claim without any help from this module: none of the {@code *-core}
  * POMs declares a dependency on a sibling bounded context. Every rule below guards a property
  * that lives <em>inside</em> a module or <em>across</em> a seam Maven cannot see, and that
@@ -203,4 +209,74 @@ class DependencyRulesTest {
                     .because("the shared kernel is depended on by every bounded context core and "
                             + "must stay technology-neutral for the same reason rule 3 binds the "
                             + "cores themselves");
+
+    /**
+     * Rule 7 -- a context's vocabulary module ({@code <context>-shared}) depends on nothing but
+     * the shared kernel (ADR-57).
+     *
+     * <p>It holds the typed business codes more than one component of the context speaks: values
+     * and their rules, no behaviour. Its whole value is that it is safe for two cores to share,
+     * and that is exactly what one added dependency would end -- a vocabulary module that reaches
+     * for a core, an adapter or a framework drags all of it into every core of the context. Maven
+     * states the current POM, not the rule; phrased over the package name so it covers every
+     * context's vocabulary module, present and future.</p>
+     */
+    @ArchTest
+    static final ArchRule vocabulary_modules_depend_on_nothing_but_the_shared_kernel =
+            classes()
+                    .that().resideInAPackage("de.hauschel.arknet.*.shared..")
+                    .should().onlyDependOnClassesThat().resideInAnyPackage(
+                            "java..", "de.hauschel.arknet.kernel..", "de.hauschel.arknet.*.shared..")
+                    .because("a vocabulary module is the language of its bounded context as code; "
+                            + "two cores can only share it while it carries no dependency of its own");
+
+    /**
+     * Rule 8 -- a driving (In-) adapter sees only the in-ports of its core, never its application
+     * services or out-ports (ADR-58).
+     *
+     * <p>Without an {@code api} module there is no Maven boundary between a component's in-port
+     * interfaces and the rest of its core: the adapter has the whole core on its classpath and
+     * could call the service class directly, or implement an out-port itself. That is the price
+     * ADR-58 names for not building the module, and this rule is what it is paid with. Domain
+     * types stay allowed -- an adapter renders a {@code BoundedContext}; it is the application
+     * layer past {@code port.in} that is off limits.</p>
+     */
+    @ArchTest
+    static final ArchRule driving_adapters_see_only_the_in_ports_of_their_core =
+            noClasses()
+                    .that().resideInAPackage("..adapter.mcp..")
+                    .should().dependOnClassesThat(resideInAPackage("..application..")
+                            .and(not(resideInAPackage("..application.port.in.."))))
+                    .because("a driving adapter is the gate to its hexagon's in-ports; without an "
+                            + "api module only this rule keeps it out of the rest of the core");
+
+    /**
+     * Rule 9 -- no module of the bounded-context component depends on a module of the
+     * ubiquitous-language component, or the other way round (ADR-49).
+     *
+     * <p>They are the two components of the Domain Modelling context, and they share a Maven
+     * parent -- which is aggregation, not permission. Everything either needs from the other it
+     * reads through its own out-port from the neighbour's published language in the shared store,
+     * the same mechanism it would use across a context boundary. Before ADR-49 the
+     * bounded-context MCP adapter borrowed the glossary's own in-port for display; the rule below
+     * is what keeps that from creeping back, on either side and in any module, not just in the
+     * core. The equivalent rule for the components of Product &amp; Requirements comes with their
+     * own context parent.</p>
+     */
+    @ArchTest
+    static final ArchRule bounded_context_component_stays_off_the_glossary_component =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.bc..")
+                    .should().dependOnClassesThat().resideInAPackage("de.hauschel.arknet.ul..")
+                    .because("a component reads its neighbour through its own out-port over the "
+                            + "published language, never through one of its modules");
+
+    /** Rule 9, the other direction: the glossary component knows nothing of its neighbour. */
+    @ArchTest
+    static final ArchRule glossary_component_stays_off_the_bounded_context_component =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.ul..")
+                    .should().dependOnClassesThat().resideInAPackage("de.hauschel.arknet.bc..")
+                    .because("a component reads its neighbour through its own out-port over the "
+                            + "published language, never through one of its modules");
 }

@@ -17,11 +17,10 @@ import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.ContextRelationshipId;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
-import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**
@@ -155,7 +154,7 @@ class BoundedContextCardsTest {
                 new BoundedContextId(ResourceId.of(ID + "bc-1")),
                 new BoundedContextCode("BC-1"), "Ordering", vision,
                 Subdomain.CORE_DOMAIN, null,
-                linked.stream().map(TermRef::new).toList());
+                List.copyOf(linked));
     }
 
     private static BoundedContext context(final String code, final String iri) {

@@ -88,7 +88,9 @@
         <!-- Bounded-Context-Hexagon: vierte hexagonale BC, gleiche Verdrahtung wie die uebrigen
              (In-Adapter mit @McpTool-Beans + Out-Adapter Repository) ueber den geteilten
              DatasetLifecycle. bc_link_term loest Term-Referenzen gegen denselben Workspace-Store
-             auf (Cross-BC-Lookup), die Anzeige-Rueckrichtung nutzt den ul-In-Port ResolveTerms. -->
+             auf (Published Language des Glossars), die Anzeige-Rueckrichtung laeuft seit
+             kogn-io/arknet#441 ueber denselben Out-Port (TermLookup#codesById), nicht mehr ueber
+             einen geborgten ul-In-Port. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-bounded-context-adapter-mcp</artifactId>
