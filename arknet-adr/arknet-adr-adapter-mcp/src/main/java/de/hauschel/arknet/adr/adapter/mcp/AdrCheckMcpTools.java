@@ -83,7 +83,10 @@ public final class AdrCheckMcpTools {
             + "anything.", annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String check(
             final McpSyncRequestContext context,
-            @McpToolParam(description = ToolParameterDescriptions.DISPLAY_LOCALE_DESCRIPTION, required = false)
+            @McpToolParam(description = "BCP-47 language tag choosing which candidate of a "
+                    + "multilingual field is checked; falls back to the project's configured default "
+                    + "language. A pattern present only in a variant this run did not read is not "
+                    + "found - check the other language separately.", required = false)
             final String displayLocale,
             @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {

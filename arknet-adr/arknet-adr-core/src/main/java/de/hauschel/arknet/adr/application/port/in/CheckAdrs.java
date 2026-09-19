@@ -46,7 +46,8 @@ public interface CheckAdrs {
     List<String> NOT_CHECKED = List.of(
             "whether a record carries more than one decision - the independence test",
             "whether two records contradict one another",
-            "whether a consequence is substantial or merely dutiful");
+            "whether a consequence is substantial or merely dutiful",
+            "whether the other language variant carries the same pattern - this run read one");
 
     /**
      * Checks every decision recorded in the given project and returns the findings, grouped by
