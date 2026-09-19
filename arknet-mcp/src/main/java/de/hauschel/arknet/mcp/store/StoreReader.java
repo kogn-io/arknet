@@ -285,7 +285,7 @@ public final class StoreReader {
      * The language tags each field of one resource carries - the store side of the
      * stale-translation signal every {@code *_update} tool appends after a single-language write
      * (kogn-io/arknet#474; contract and key vocabulary in {@link
-     * de.hauschel.arknet.kernel.FieldLanguageLookup}).
+     * de.hauschel.arknet.mcpsupport.FieldLanguageLookup}).
      *
      * <p><strong>Addressed by {@link DatasetId}, not by {@link ProjectId}</strong>, unlike every
      * other read here: {@code project_update} needs the very same answer for a project's registry

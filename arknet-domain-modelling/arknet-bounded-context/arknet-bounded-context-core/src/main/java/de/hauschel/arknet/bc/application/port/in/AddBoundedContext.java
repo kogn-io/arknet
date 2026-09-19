@@ -28,7 +28,7 @@ public interface AddBoundedContext {
      * @param projectId       the project (architecture model) to add the bounded context to
      * @param command         the data describing the bounded context to create
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - used only when
      *                        {@link NewBoundedContext#language()} is omitted
      * @return the persisted bounded context including its assigned identity and code

@@ -10,8 +10,8 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
 
 /**
  * Resolves the project an MCP tool call targets from its anchor.
@@ -48,7 +48,7 @@ public final class AnchorContext {
      * @param projectAnchor the raw tool argument, may be {@code null} or blank
      * @param projects      the resolver that maps an anchor to its project
      * @return the resolved project id
-     * @throws de.hauschel.arknet.kernel.UnresolvedProjectAnchorException if neither path yielded a
+     * @throws de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException if neither path yielded a
      *                                                                   registered anchor
      */
     public static ProjectId resolveProject(
@@ -67,7 +67,7 @@ public final class AnchorContext {
      * @param projectAnchor the raw tool argument, may be {@code null} or blank
      * @param projects      the resolver that maps an anchor to its project
      * @return the resolved project
-     * @throws de.hauschel.arknet.kernel.UnresolvedProjectAnchorException if neither path yielded a
+     * @throws de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException if neither path yielded a
      *                                                                   registered anchor
      */
     public static ResolvedProject resolveResolvedProject(

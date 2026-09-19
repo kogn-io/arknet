@@ -38,7 +38,7 @@ public interface UnsupersedeAdr {
      * @param code            the decision's code, e.g. {@code ADR-1}; must currently be
      *                        {@link de.hauschel.arknet.adr.domain.AdrStatus#SUPERSEDED}
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - consulted only for the read this call
      *                        makes to echo an untouched field back, never for a write
      * @return the restored decision

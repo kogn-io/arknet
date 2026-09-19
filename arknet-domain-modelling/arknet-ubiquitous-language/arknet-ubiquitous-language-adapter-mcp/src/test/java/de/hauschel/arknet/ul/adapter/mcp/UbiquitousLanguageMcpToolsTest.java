@@ -21,10 +21,10 @@ import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.FieldLanguageLookup;
-import de.hauschel.arknet.kernel.ResolvedProject;
-import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.FieldLanguageLookup;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
 import de.hauschel.arknet.ul.application.port.in.DescribeTermDisplayFallback;

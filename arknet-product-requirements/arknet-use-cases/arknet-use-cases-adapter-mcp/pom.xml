@@ -18,6 +18,13 @@
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-use-cases-core</artifactId>
         </dependency>
+        <!-- Technischer Support der treibenden MCP-Adapter: Anker-Aufloesung, Uebersetzungs-
+             Signal, Antwortformen und Parameter-Texte. Nicht transitiv ueber den Kern zu
+             bekommen - kein *-core haengt daran (ADR-56). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-mcp-support</artifactId>
+        </dependency>
         <!-- In-Adapter -> In-Port eines FREMDEN Kontexts: der In-Adapter ist das Tor zum
              use-cases-Hexagon, nicht dessen Core - die Invariante "kein *-core haengt an einem
              fremden Kontext" (arknet-architecture-tests) bleibt gewahrt. Genutzt nur fuer die

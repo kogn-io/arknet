@@ -24,6 +24,16 @@
     </description>
 
     <dependencies>
+        <!-- Regeln 11/12: das Support-Modul der Werkzeugadapter, von dem die Kerne und die
+             Vokabularmodule fernbleiben, und der Shared Kernel, dessen Inhalt Regel 12 auflistet
+             (der Kernel kommt transitiv ueber die Kerne, das Support-Modul nur hierueber). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-mcp-support</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Regel 1: das persistence-support-Modul, dessen RDF4J-Freiheit diese Regel prueft. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>

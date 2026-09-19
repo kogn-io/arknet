@@ -72,7 +72,7 @@ public final class LanguageTag {
     /**
      * Resolves the tag a write call actually writes a language-tagged field under: {@code
      * explicit}, canonicalized, if the caller named one; otherwise {@code projectDefaultLanguage}
-     * (the resolved project's {@link ResolvedProject#defaultLanguage()}), canonicalized, if the
+     * (the resolved project's {@code ResolvedProject#defaultLanguage()}), canonicalized, if the
      * project has one configured; otherwise rejects the call (issue #258).
      *
      * <p>Before this method existed, an omitted {@code language} argument always wrote a plain,

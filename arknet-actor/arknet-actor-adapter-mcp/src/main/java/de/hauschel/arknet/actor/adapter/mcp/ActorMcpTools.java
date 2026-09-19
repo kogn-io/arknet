@@ -28,11 +28,11 @@ import de.hauschel.arknet.actor.domain.ActorDisplayFallback;
 import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
-import de.hauschel.arknet.kernel.StaleTranslationHint;
-import de.hauschel.arknet.kernel.ToolParameterDescriptions;
-import de.hauschel.arknet.kernel.WriteResponse;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
+import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
+import de.hauschel.arknet.mcpsupport.WriteResponse;
 
 /**
  * Driving (in) adapter of the actor component: exposes the actor use-cases as MCP tools

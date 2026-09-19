@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.kernel;
+package de.hauschel.arknet.mcpsupport;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.SequencedMap;
 import java.util.Set;
+
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * The signal a single-language write leaves behind (kogn-io/arknet#474): every {@code *_update}
@@ -62,9 +64,9 @@ import java.util.Set;
  * records one PROV-O revision <em>per resource</em> per write, never one per literal, so there is
  * no revision to attribute an individual language variant to and no timestamp to call it older
  * by. What is certain is narrower and enough: a write resolves exactly one language tag per field
- * ({@link LanguageTag#resolveWriteLanguage}), so any other tag the field carries afterwards was
- * put there by an earlier write. The hint says that and no more - inventing a per-language
- * revision would be a claim the store cannot back.</p>
+ * ({@link de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}), so any other tag the
+ * field carries afterwards was put there by an earlier write. The hint says that and no more -
+ * inventing a per-language revision would be a claim the store cannot back.</p>
  *
  * <p>The one write that is not single-language is {@code term_update}'s rename (a {@code label}
  * without a {@code language} renames the term under every tag at once); its caller leaves {@code

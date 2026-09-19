@@ -118,8 +118,9 @@ Outside every Bounded Context:
 | Role in the schema                 | Module                          | Note |
 |------------------------------------|---------------------------------|------|
 | Application (composition root)     | arknet-mcp                      | Spring Boot daemon; additionally carries the generic store read path, the type-independent exception (ADR-55: `store_overview`, `resource_get`). The five cross-context evaluations, `store_check`, `text_search` and the HTML report still live here; their target is Model Analysis (ADR-54, #560) |
-| Shared Kernel                      | arknet-shared-kernel            | ADR-56: keeps ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale. As built it also carries LocalizedLiteral (target: persistence-support) and the anchor/translation mechanics ProjectResolver, StaleTranslationHint, FieldLanguageLookup (target: a support module of the tool adapters, #561) |
+| Shared Kernel                      | arknet-shared-kernel            | ADR-56: ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale, LocalizedLiteral. `DependencyRulesTest` rule 12 lists the admitted terms, so a new type in the package turns a test red |
 | Technical library                  | arknet-persistence-support      | SHACL gate, WriteFunnel, vocabulary constants -- no model term, hence neither Shared Kernel nor vocabulary |
+| Technical library                  | arknet-mcp-support              | Support of the driving MCP adapters and the composition root: ProjectResolver/ResolvedProject, StaleTranslationHint/FieldLanguageLookup, WriteResponse, ToolParameterDescriptions. No core and no vocabulary module depends on it (rule 11) |
 | Technical library (test scope)     | arknet-persistence-test-support | Guarded* decorators |
 | Published Language (schema)        | arknet-ontology                 | .ttl ontologies and shapes |
 | Checker                            | arknet-architecture-tests       | ArchUnit rules and ontology cross-checks |
@@ -134,6 +135,8 @@ As built (from the POMs):
 - Every `-adapter-kogniordf` depends on its own core, `arknet-ontology` and
   `arknet-persistence-support`; on no neighbouring module. It resolves neighbour codes
   by SPARQL in the neighbour's graph (Published Language).
+- Every `-adapter-mcp` and `arknet-mcp` depend on `arknet-mcp-support`; it is not
+  reachable transitively, because no core depends on it.
 - `-adapter-mcp` depends on neighbouring cores (Borrowed In-Port), except between the
   Components of one and the same Bounded Context, where the edge is gone (ADR-49):
   - requirements-mcp -> ubiquitous-language-core
@@ -160,7 +163,7 @@ its own core only; no module of a Component depends on a module of another.
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
 | `<bc>-shared` once ownerless identities exist | built for both contexts that need one: `arknet-product-requirements-shared` (RequirementCode, ConstraintCode, TermRef; #439) and `arknet-domain-modelling-shared` (TermCode; #441) |
 | Application outside every Bounded Context     | present (arknet-mcp)                                 |
-| dependency rules as a checker                 | partial: ArchUnit carries the rule that no module of a Component depends on a module of another for Product & Requirements (#439) and Domain Modelling (#441), plus that a driving adapter sees only in-ports and domain types and that a `<bc>-shared` hangs on nothing but the Shared Kernel; the other contexts still borrow in-ports (ADR-49; #560) |
+| dependency rules as a checker                 | partial: ArchUnit carries the rule that no module of a Component depends on a module of another for Product & Requirements (#439) and Domain Modelling (#441), plus that a driving adapter sees only in-ports and domain types, that a `<bc>-shared` hangs on nothing but the Shared Kernel, that no core or vocabulary module reaches into `arknet-mcp-support`, and that the Shared Kernel holds exactly the terms ADR-56 admits (#561); the other contexts still borrow in-ports (ADR-49; #560) |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |
 
 ## 6. Cross-cutting concepts (pointers only)
@@ -176,9 +179,9 @@ its own core only; no module of a Component depends on a module of another.
 
 ## 7. What moves this file
 
-- Part B of the context cut (#439, #441, #560, #561): Maven parents, `<bc>-shared`,
-  Model Analysis as a Component, the shared kernel slimmed, ArchUnit, module map in
-  `CLAUDE.md`. Sections 3 to 5 then describe one shape instead of two.
+- Part B of the context cut (#560): Model Analysis as a Component, and the in-ports
+  still borrowed across the remaining contexts (ADR-49). Sections 3 to 5 then describe
+  one shape instead of two.
 - #77: the building-block view moves into the store; this file goes away. Before
   that, a successor of ADR-46 (components move from "outside" to "not yet built"),
   see the comment on #77.

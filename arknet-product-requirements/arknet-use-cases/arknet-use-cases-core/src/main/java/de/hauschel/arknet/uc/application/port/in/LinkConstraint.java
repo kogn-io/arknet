@@ -38,7 +38,7 @@ public interface LinkConstraint {
      * @param code            the use-case code, e.g. {@code UC1}
      * @param constraintCode  the constraint's human-readable business code, e.g. {@code TCON-1}
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - consulted only for the read this call
      *                        makes to echo an untouched field back, never for a write
      * @return the use case including the link

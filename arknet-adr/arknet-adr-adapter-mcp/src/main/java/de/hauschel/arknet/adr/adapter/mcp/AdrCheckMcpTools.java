@@ -19,9 +19,9 @@ import de.hauschel.arknet.adr.application.port.in.CheckAdrs;
 import de.hauschel.arknet.adr.application.port.in.CheckAdrs.CheckReport;
 import de.hauschel.arknet.adr.application.port.in.CheckAdrs.Finding;
 import de.hauschel.arknet.adr.application.port.in.CountSkippedAdrs;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
-import de.hauschel.arknet.kernel.ToolParameterDescriptions;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
 
 /**
  * Driving (in) adapter of the ADR component's reading check: exposes {@code adr_check}

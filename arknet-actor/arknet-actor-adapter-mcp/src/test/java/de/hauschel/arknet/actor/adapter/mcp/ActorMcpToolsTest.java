@@ -30,12 +30,12 @@ import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorDisplayFallback;
 import de.hauschel.arknet.actor.domain.ActorId;
 import de.hauschel.arknet.actor.domain.ActorType;
-import de.hauschel.arknet.kernel.FieldLanguageLookup;
+import de.hauschel.arknet.mcpsupport.FieldLanguageLookup;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
 
 /**
  * Scaffold-level check that the adapter declares exactly the five actor tools and guards its

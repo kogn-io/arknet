@@ -77,7 +77,7 @@ public final class ArkprjVocabulary {
     /**
      * {@code arkprj:defaultLanguage} - a project's single, optional default display/write
      * language, as a BCP-47 tag (e.g. {@code "de"}). Used by other bounded contexts (via
-     * {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}) as the second-priority
+     * {@code ResolvedProject#defaultLanguage()}) as the second-priority
      * tier of a display-language fallback chain, after an explicit per-call override, and - since
      * issue #258 - as the write-time fallback a write that omits its own {@code language} argument
      * resolves to ({@code LanguageTag#resolveWriteLanguage}).

@@ -69,17 +69,17 @@ import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
+import de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.dm.shared.TermCode;
-import de.hauschel.arknet.kernel.FieldLanguageLookup;
-import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.mcpsupport.FieldLanguageLookup;
+import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
 
 /**
  * Scaffold-level check that the adapter declares exactly the eight ADR tools and guards its in-port

@@ -20,9 +20,9 @@ import de.hauschel.arknet.adr.application.port.in.CheckAdrs.Rule;
 import de.hauschel.arknet.adr.application.port.in.CountSkippedAdrs;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
-import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException;
 
 /**
  * Scaffold- and presentation-level tests for {@link AdrCheckMcpTools} (kogn-io/arknet#387): that it

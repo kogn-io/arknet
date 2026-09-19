@@ -140,7 +140,7 @@ public interface UpdateRequirement {
      *                            untagged one that a fallback to {@code defaultLanguage} sweeps
      *                            away (see class-level Language note)
      * @param defaultLanguage     the target project's configured default language (see
-     *                            {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                            {@code ResolvedProject#defaultLanguage()}),
      *                            or {@code null} if it has none - only consulted for a field/
      *                            criterion this call is actually changing and that ships no
      *                            {@code language}

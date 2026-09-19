@@ -18,7 +18,7 @@ import org.springframework.ai.mcp.server.webmvc.transport.WebMvcStreamableServer
 
 import tools.jackson.databind.json.JsonMapper;
 
-import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
 
 /**
  * Wires the calling client's project anchor into every MCP tool call.

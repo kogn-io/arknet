@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.kernel;
+package de.hauschel.arknet.mcpsupport;
 
 import java.util.Objects;
 
@@ -18,8 +18,8 @@ import java.util.Objects;
  * only in the remedy the message names.</p>
  *
  * <p>The message is supplied by the caller rather than composed here, because the useful remedy is
- * call-site-specific and names MCP tools - knowledge of the driving adapter, not of this kernel
- * type. The kernel states the failure; the adapter states what to do about it.</p>
+ * call-site-specific and names MCP tools - knowledge of the driving adapter, not of this
+ * type. This type states the failure; the adapter states what to do about it.</p>
  */
 public class UnresolvedProjectAnchorException extends RuntimeException {
 

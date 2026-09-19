@@ -23,6 +23,13 @@
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-requirements-core</artifactId>
         </dependency>
+        <!-- Technischer Support der treibenden MCP-Adapter: Anker-Aufloesung, Uebersetzungs-
+             Signal, Antwortformen und Parameter-Texte. Nicht transitiv ueber den Kern zu
+             bekommen - kein *-core haengt daran (ADR-56). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-mcp-support</artifactId>
+        </dependency>
         <!-- In-Adapter -> fremder In-Port (issue #77 Nachtrag): der In-Adapter ist das Tor zum
              requirements-BC, nicht dessen Core - eine Abhaengigkeit hierher auf einen anderen
              BCs In-Port verletzt die Invariante "kein *-core* haengt an einem anderen BC" nicht

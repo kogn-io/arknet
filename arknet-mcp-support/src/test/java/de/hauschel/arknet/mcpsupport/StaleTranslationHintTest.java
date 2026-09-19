@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.kernel;
+package de.hauschel.arknet.mcpsupport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
+
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Nails down the rules of the stale-translation signal (kogn-io/arknet#474): which combination of

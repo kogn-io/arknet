@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-mcp-support</artifactId>
+    <description>Technical support for the driving MCP adapters and the composition root: the per-call project resolution port and its result, the stale-translation signal and the field-language lookup behind it, the shapes of a writing tool's answer, and the shared tool parameter descriptions. Not a Shared Kernel - no bounded context core names any of it.</description>
+
+    <dependencies>
+        <!-- The support module speaks the shared kernel's model terms (ProjectId) but adds none:
+             the arrow points this way and never back, which is what keeps the kernel free of
+             tool-adapter mechanics. Deliberately no dependency on arknet-persistence-support -
+             nothing here touches a store. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-shared-kernel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

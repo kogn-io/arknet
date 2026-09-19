@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.kernel;
+package de.hauschel.arknet.mcpsupport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Pins the three answer shapes every writing tool composes from: the closing project line, the

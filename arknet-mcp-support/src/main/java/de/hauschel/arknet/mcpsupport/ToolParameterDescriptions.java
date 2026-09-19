@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.kernel;
+package de.hauschel.arknet.mcpsupport;
 
 /**
  * Short {@code @McpToolParam} description texts for the three parameters nearly every
@@ -13,9 +13,9 @@ package de.hauschel.arknet.kernel;
  * {@code "to search"} the project) - and the inlined {@code projectAnchor} description alone made
  * up 19.7% of the whole server's {@code tools/list} payload, because Spring AI inlines every
  * parameter schema per tool rather than sharing a {@code $ref}. Centralising the three texts here,
- * the one module every {@code *-adapter-mcp} module and {@code arknet-mcp} already depend on,
- * removes the duplication; kogn-io/arknet#561 is expected to move this class into a dedicated
- * tool-adapter support module alongside {@link ProjectResolver}.</p>
+ * in the support module every {@code *-adapter-mcp} module and {@code arknet-mcp} depend on,
+ * removes the duplication. They are tool wording, not model vocabulary, which is why they sit
+ * beside {@link ProjectResolver} rather than in the shared kernel.</p>
  *
  * <p>The texts are deliberately short - just enough to say <em>when</em> a caller sets the
  * parameter. The fuller explanation ({@code projectAnchor} overriding the

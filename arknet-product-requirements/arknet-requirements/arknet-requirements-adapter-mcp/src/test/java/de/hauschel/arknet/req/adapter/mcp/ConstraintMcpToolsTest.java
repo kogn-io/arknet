@@ -19,8 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.req.application.port.in.AddConstraint;
 import de.hauschel.arknet.req.application.port.in.AddConstraint.NewConstraint;
@@ -34,8 +34,8 @@ import de.hauschel.arknet.pr.shared.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
 import de.hauschel.arknet.req.domain.ConstraintId;
 import de.hauschel.arknet.req.domain.ConstraintType;
-import de.hauschel.arknet.kernel.FieldLanguageLookup;
-import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.mcpsupport.FieldLanguageLookup;
+import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
 
 /**
  * Scaffold-level check that the adapter declares exactly the five constraint tools and guards

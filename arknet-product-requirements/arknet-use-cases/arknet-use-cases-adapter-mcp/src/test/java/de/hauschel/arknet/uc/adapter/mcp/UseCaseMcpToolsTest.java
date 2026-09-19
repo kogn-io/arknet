@@ -24,8 +24,8 @@ import de.hauschel.arknet.actor.application.port.in.ResolveRoles.ResolvedRole;
 import de.hauschel.arknet.actor.domain.RoleCode;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.uc.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.uc.application.port.in.ResolveConstraints.ResolvedConstraint;
 import de.hauschel.arknet.uc.application.port.in.ResolveRequirements;
@@ -60,8 +60,8 @@ import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.dm.shared.TermCode;
-import de.hauschel.arknet.kernel.FieldLanguageLookup;
-import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.mcpsupport.FieldLanguageLookup;
+import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
 
 /**
  * Behaviour of the use-case MCP tools against an in-port fake: tool declaration, mapping of

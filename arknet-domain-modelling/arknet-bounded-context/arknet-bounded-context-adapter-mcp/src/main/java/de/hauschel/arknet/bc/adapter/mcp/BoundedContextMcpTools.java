@@ -40,12 +40,12 @@ import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.dm.shared.TermCode;
-import de.hauschel.arknet.kernel.StaleTranslationHint;
-import de.hauschel.arknet.kernel.ToolParameterDescriptions;
-import de.hauschel.arknet.kernel.WriteResponse;
+import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
+import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
+import de.hauschel.arknet.mcpsupport.WriteResponse;
 
 /**
  * Driving (in) adapter of the bounded-context component: exposes the bounded-context use-cases as

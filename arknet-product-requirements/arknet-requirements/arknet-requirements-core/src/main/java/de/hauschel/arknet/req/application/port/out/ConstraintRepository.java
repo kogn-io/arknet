@@ -105,7 +105,7 @@ public interface ConstraintRepository {
      *                     (see {@link CurrentConstraint#statementLanguage()} for the pass-through
      *                     case) - independent of {@code titleLanguage}
      * @param defaultLanguage the target project's configured default language (see
-     *                     {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                     {@code ResolvedProject#defaultLanguage()}),
      *                     or {@code null} if it has none. Used only to decide whether an existing
      *                     <em>untagged</em> literal on {@code title}/{@code statement} should be
      *                     swept away rather than preserved as an "other" language variant: when

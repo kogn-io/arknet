@@ -65,7 +65,7 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
 ## Known project-specific traps
 
 - **A port's implementation often lives in a different module than the port itself.** Several
-  shared-kernel ports (`ProjectResolver`) have their sole implementation in `arknet-mcp`'s
+  tool-adapter support ports (`ProjectResolver`) have their sole implementation in `arknet-mcp`'s
   composition root, not in a sibling `*-core`/`*-adapter-*` module. Grep the whole repo for
   `implements <PortName>` before concluding a port is unimplemented or before skipping Phase 1's
   interface-vs-implementation comparison — stopping at the port's own module directory misses the
@@ -89,7 +89,7 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   "intentional"/"deliberately limited" scope claim against `arknet-architecture-tests` before
   accepting it -- don't take a comment's word for it.
 - **Anchor/Project routing is the one recurring hot spot.** `ProjectId`,
-  `ProjectResolver`, `UnresolvedProjectAnchorException` (kernel) plus `RegisteredAnchorProjectResolver`
+  `ProjectResolver`, `UnresolvedProjectAnchorException` (mcp-support) plus `RegisteredAnchorProjectResolver`
   (`arknet-mcp`) together implement "no default, no fallback, registry lookup only". Any future
   change touching project routing should be re-checked against that invariant specifically: no
   default anchor, and no migration of legacy opaque ids onto it.

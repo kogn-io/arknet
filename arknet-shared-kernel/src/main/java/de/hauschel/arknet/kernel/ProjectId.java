@@ -28,7 +28,7 @@ import java.util.Objects;
  * <p><strong>Registered, not derived.</strong> Until the registered-anchor model this value was computed from the
  * calling client's directory name (the slugged git top-level), which made two identically named
  * directories in different places collapse onto one store. It is now minted once and
- * reached through the registered anchors a client presents, see {@link ProjectResolver}. Because
+ * reached through the registered anchors a client presents, see {@code ProjectResolver}. Because
  * it is opaque, its <em>form</em> is deliberately unconstrained beyond non-blankness: ids that
  * grew out of that old slug-based derivation (e.g. {@code "arknet"}) remain valid values and are
  * never migrated or reshaped - they simply gain the anchors they were always

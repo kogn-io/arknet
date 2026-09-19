@@ -21,8 +21,8 @@ import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ToolParameterDescriptions;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.domain.Project;
@@ -160,7 +160,7 @@ public final class StoreExportTools {
     /**
      * The {@code projectOnly=true} scope. Resolution is {@link AnchorContext}'s, unchanged, so a
      * missing or unregistered anchor throws
-     * {@link de.hauschel.arknet.kernel.UnresolvedProjectAnchorException} exactly as it does for
+     * {@link de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException} exactly as it does for
      * every read tool - narrowing the export to "this project" without knowing which project that
      * is has no defensible fall-back, least of all the full export the caller just opted out of.
      */

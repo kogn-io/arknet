@@ -24,7 +24,7 @@ public interface AddTerm {
      * @param projectId       the project (architecture model) to add the term to
      * @param command         the data describing the term to create
      * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        {@code ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - the tag {@code prefLabel}/
      *                        {@code definition} are written under when {@code command.language()}
      *                        is {@code null} (see

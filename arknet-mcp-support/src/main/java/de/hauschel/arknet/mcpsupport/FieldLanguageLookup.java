@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.kernel;
+package de.hauschel.arknet.mcpsupport;
 
 import java.util.Map;
 import java.util.Set;
+
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Out-port: which language tags a resource's fields already carry in the store, asked one
@@ -17,8 +19,9 @@ import java.util.Set;
  * backs {@code store_overview} and {@code store_check}'s language-gap check - the alternative,
  * a lookup port per bounded context, would be seven ports and seven out-adapter methods for one
  * question that is answered identically everywhere. The direction is the one {@link
- * ProjectResolver} already takes: a port in the shared kernel, implemented in the composition
- * root, consumed by each bounded context's driving adapter, adding no module edge.</p>
+ * ProjectResolver} already takes: a port in the tool-adapter support module, implemented in the
+ * composition root, consumed by each bounded context's driving adapter, adding no module edge
+ * beyond the one every driving adapter already has.</p>
  *
  * <p><strong>Field keys are model field names</strong>, which is to say the local names of the
  * RDF predicates behind them ({@code definition}, {@code title}, {@code useCaseGoal}, ...) -

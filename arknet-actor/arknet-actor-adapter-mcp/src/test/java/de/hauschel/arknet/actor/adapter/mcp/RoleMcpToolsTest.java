@@ -33,11 +33,11 @@ import de.hauschel.arknet.actor.domain.RoleCode;
 import de.hauschel.arknet.actor.domain.RoleDisplayFallback;
 import de.hauschel.arknet.actor.domain.RoleId;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.ProjectResolver;
-import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
+import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.FieldLanguageLookup;
-import de.hauschel.arknet.kernel.StaleTranslationHint;
+import de.hauschel.arknet.mcpsupport.FieldLanguageLookup;
+import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
 
 /**
  * Scaffold-level check that the adapter declares exactly the five role tools and guards its

@@ -6,7 +6,7 @@ package de.hauschel.arknet.kernel;
 /**
  * Raised by {@link LanguageTag#resolveWriteLanguage(String, String)} when a write call supplied
  * no explicit {@code language} argument <em>and</em> the project it targets has no configured
- * {@link ResolvedProject#defaultLanguage()} to fall back to.
+ * {@code ResolvedProject#defaultLanguage()} to fall back to.
  *
  * <p>Before this type existed, that combination silently wrote an untagged literal instead of
  * failing - the same untagged write a caller who explicitly wants an untagged literal has no way
@@ -15,7 +15,7 @@ package de.hauschel.arknet.kernel;
  * (issue #258). Rejecting the call here, before anything is persisted, forces the caller to either
  * name a language explicitly or set the project's default first ({@code project_update}) - there is
  * no third option, and deliberately no fallback to a hard-coded server default (mirrors
- * {@link UnresolvedProjectAnchorException}'s "no default, no guess" stance for an unresolvable
+ * {@code UnresolvedProjectAnchorException}'s "no default, no guess" stance for an unresolvable
  * anchor).</p>
  */
 public class MissingDefaultLanguageException extends RuntimeException {
