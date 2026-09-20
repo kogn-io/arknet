@@ -57,7 +57,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  * {@link McpTool}/{@link McpToolParam} on plain methods - the tool name, description and JSON
  * input schema are derived from the annotations and method signature, not hand-written. This
  * adapter does <strong>not</strong> bootstrap an MCP server or wire any transport; that
- * remains the concern of the composition root (arknet-mcp), which declares this class as a
+ * remains the concern of the composition root (arknet-app), which declares this class as a
  * bean so the Spring AI MCP annotation scanner discovers the {@code @McpTool} methods
  * automatically.</p>
  *
@@ -97,7 +97,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  * correction path, so it never needs a diff line there.</p>
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a
- * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
+ * {@link ProjectId} routing key. arknet-app runs as one shared server for every
  * project on the machine, so there is no single injected project any
  * more: each tool call resolves its own project from the request's anchor,
  * carried in the MCP transport context under {@link ProjectResolver#ANCHOR_KEY}.

@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
  * confidence. {@code project_export} therefore states them in its envelope, and this class is
  * where they come from.</p>
  *
- * <p><strong>Why a scan and not a parser.</strong> arknet-mcp is barred from RDF4J (see
+ * <p><strong>Why a scan and not a parser.</strong> arknet-app is barred from RDF4J (see
  * {@code DependencyRulesTest}'s composition-root rule) and the technology-neutral kognio-rdf ports
  * carry no RDF <em>parser</em> - only a serialiser. The one place allowed to name Rio is each
  * out-adapter's repository factory, and none of them owns "all ontology modules". Rather than

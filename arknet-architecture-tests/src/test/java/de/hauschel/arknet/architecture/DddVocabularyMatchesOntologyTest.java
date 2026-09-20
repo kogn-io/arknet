@@ -26,7 +26,7 @@ import de.hauschel.arknet.persistence.ArkdddVocabulary;
  *
  * <p>The same terms are written down twice, in two modules that do not depend on each other:
  * {@link ArkdddVocabulary} in {@code arknet-persistence-support} is what the bounded-context
- * out-adapters actually write into the store (and what {@code arknet-mcp}'s traceability read
+ * out-adapters actually write into the store (and what {@code arknet-app}'s traceability read
  * path traverses back out), {@code arknet-ddd.ttl} in {@code arknet-ontology} is what arknet ships
  * as the documented meaning of those statements. Nothing connects them.
  *

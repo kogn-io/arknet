@@ -17,7 +17,7 @@ import de.hauschel.arknet.uc.domain.UseCaseDisplayFallback;
  *
  * <p>Deliberately a separate, single-method port rather than a second method on {@link
  * ListUseCases}: {@code ListUseCases} is constructed inline as a lambda by several
- * report-building tests in {@code arknet-mcp}, and adding a second abstract method there would
+ * report-building tests in {@code arknet-app}, and adding a second abstract method there would
  * break every one of them - the same reason {@code CountSkippedAdrs} exists as its own port in
  * {@code arknet-adr} instead of a second method on {@code ListAdrs}.</p>
  */

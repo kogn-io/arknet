@@ -42,7 +42,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * {@link McpTool}/{@link McpToolParam} on plain methods - the tool name, description and JSON
  * input schema are derived from the annotations and method signature, not hand-written. This
  * adapter does <strong>not</strong> bootstrap an MCP server or wire any transport; that remains
- * the concern of the composition root (arknet-mcp).</p>
+ * the concern of the composition root (arknet-app).</p>
  *
  * <p><strong>No business code, unlike every other model bounded context.</strong> {@code BC-1},
  * {@code REQ-1}, {@code TERM-1} and {@code UC-1} are short, typeable, ratable addresses that work

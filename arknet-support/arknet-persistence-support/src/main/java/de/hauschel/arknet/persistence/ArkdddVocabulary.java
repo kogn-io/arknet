@@ -9,7 +9,7 @@ package de.hauschel.arknet.persistence;
  * bounded-context out-adapters,
  * {@code de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository}/
  * {@code KognioRdfContextRelationshipRepository}, and its factory) and the code that
- * <em>reads</em> them - {@code arknet-mcp}'s traceability read path,
+ * <em>reads</em> them - {@code arknet-app}'s traceability read path,
  * {@code de.hauschel.arknet.analysis.domain.TraceabilityGraph}, which scans {@link #DOMAIN_VISION} for
  * unlinked glossary mentions and traverses {@link #UPSTREAM}/{@link #DOWNSTREAM} for
  * {@code impact_analysis} (issue #293), {@link #BOUNDED_CONTEXT_TYPE} for its own type-listing
@@ -98,7 +98,7 @@ public final class ArkdddVocabulary {
 
     /**
      * {@code arkddd:BoundedContext} - an explicit semantic boundary within which a domain model
-     * holds consistently. Read by {@code arknet-mcp}'s traceability graph for its own
+     * holds consistently. Read by {@code arknet-app}'s traceability graph for its own
      * type-listing and, as validation-only asserted context, by the ADR out-adapter for
      * {@code arkarch:affectsContext}'s {@code sh:class} constraint; resolved by
      * {@code KognioRdfBoundedContextLookup} for an ADR's {@code BC-N} reference and asserted, as

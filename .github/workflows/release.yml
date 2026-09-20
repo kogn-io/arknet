@@ -70,7 +70,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: arknet-mcp/Dockerfile
+          file: arknet-app/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository }}:v${{ inputs.version }}
           build-args: ARKNET_VERSION=v${{ inputs.version }}

@@ -19,7 +19,7 @@
         Deliberately NO production code: the module has only src/test and nobody
         consumes it. It depends (test scope) on the modules it makes claims about.
         That is the price of its own module cut; the alternative would have been to
-        put the rules into arknet-mcp, which as the composition root depends broadly
+        put the rules into arknet-app, which as the composition root depends broadly
         anyway, but hosts wiring rather than architectural control.
     </description>
 
@@ -213,11 +213,11 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Regel 5: die Composition Root (arknet-mcp), die laut eigenem Javadoc frei von
+        <!-- Regel 5: die Composition Root (arknet-app), die laut eigenem Javadoc frei von
              direktem RDF4J bleibt, ohne dass ein Test das je geprueft haette (#185). -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-mcp</artifactId>
+            <artifactId>arknet-app</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

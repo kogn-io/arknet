@@ -39,11 +39,11 @@ import de.hauschel.arknet.ul.domain.TermId;
  * {@code UnresolvedReferenceException} at runtime for a term that demonstrably exists - is what
  * fails.</p>
  *
- * <p>Deliberately narrower than {@code CrossBoundedContextStoreWiringTest} in {@code arknet-mcp}:
+ * <p>Deliberately narrower than {@code CrossBoundedContextStoreWiringTest} in {@code arknet-app}:
  * that test proves the two contexts share a single {@code DatasetLifecycle} bean through Spring
  * wiring end to end, going through the application/service layer.
  * This test isolates the two out-adapters directly - no Spring context, no service layer, no
- * dependency on arknet-mcp - so it is the more precise place to catch a lookup/repository schema
+ * dependency on arknet-app - so it is the more precise place to catch a lookup/repository schema
  * mismatch between exactly the two classes the issue names.</p>
  */
 class KognioRdfTermLookupUbiquitousLanguageSchemaTest {

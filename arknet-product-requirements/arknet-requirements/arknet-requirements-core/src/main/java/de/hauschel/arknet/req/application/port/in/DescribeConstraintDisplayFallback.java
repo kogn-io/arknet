@@ -17,7 +17,7 @@ import de.hauschel.arknet.req.domain.ConstraintDisplayFallback;
  *
  * <p>Deliberately a separate, single-method port rather than a second method on {@link
  * ListConstraints}, for the same reason {@link DescribeRequirementDisplayFallback} is kept out of
- * {@link ListRequirements}: several report-building tests in {@code arknet-mcp} construct {@code
+ * {@link ListRequirements}: several report-building tests in {@code arknet-app} construct {@code
  * ListConstraints} inline as a lambda.</p>
  */
 public interface DescribeConstraintDisplayFallback {

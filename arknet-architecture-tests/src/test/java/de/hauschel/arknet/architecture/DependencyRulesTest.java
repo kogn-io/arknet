@@ -262,7 +262,7 @@ class DependencyRulesTest {
             noClasses()
                     .that().resideInAPackage("de.hauschel.arknet.mcp..")
                     .should().dependOnClassesThat().resideInAnyPackage(RDF4J_PACKAGES)
-                    .because("arknet-mcp wires the out-adapters but does not itself reach for "
+                    .because("arknet-app wires the out-adapters but does not itself reach for "
                             + "RDF4J-backed types; its generic read path uses only the "
                             + "technology-neutral kognio-rdf ports");
 

@@ -9,7 +9,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * Driving port: count how many recorded decisions {@link ListAdrs#list} could not include.
  *
  * <p>Split off {@link ListAdrs} rather than added to it as a second method (kogn-io/arknet#359):
- * several report-building tests in {@code arknet-mcp} construct a {@link ListAdrs} inline as a
+ * several report-building tests in {@code arknet-app} construct a {@link ListAdrs} inline as a
  * lambda, which a second abstract method would break at every one of those call sites for a concern
  * they have nothing to do with. Backs the note {@code adr_list} appends to its own output.</p>
  */

@@ -26,7 +26,7 @@ import de.hauschel.arknet.persistence.ArkprocVocabulary;
  *
  * <p>The same terms are written down twice, in two modules that do not depend on each other:
  * {@link ArkprocVocabulary} in {@code arknet-persistence-support} is what the actor out-adapter
- * actually writes into the store (and what {@code arknet-mcp}'s traceability read path and
+ * actually writes into the store (and what {@code arknet-app}'s traceability read path and
  * {@code arknet-use-cases}' cross-BC actor resolution traverse back out),
  * {@code arknet-actor.ttl} in {@code arknet-ontology} is what arknet ships as the documented
  * meaning of those statements. Nothing connects them.

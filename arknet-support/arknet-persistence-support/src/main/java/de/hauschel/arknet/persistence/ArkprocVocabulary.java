@@ -7,7 +7,7 @@ package de.hauschel.arknet.persistence;
  * The absolute IRIs of the {@code arkproc:} actor vocabulary as Java {@code String} constants -
  * the single source of truth shared by the code that <em>writes</em> them (the actor out-adapter,
  * {@code de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepository}) and the code that
- * <em>reads</em> them: {@code arknet-mcp}'s traceability read path
+ * <em>reads</em> them: {@code arknet-app}'s traceability read path
  * ({@code de.hauschel.arknet.analysis.domain.TraceabilityGraph#actorIris()}) and the architecture tests
  * that hold the Actor taxonomy and its {@code arkproc:filledBy} delete-guard against the shipped
  * ontology ({@code ActorVocabularyMatchesOntologyTest},

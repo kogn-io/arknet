@@ -10,7 +10,7 @@
         <version>${revision}</version>
     </parent>
 
-    <artifactId>arknet-mcp</artifactId>
+    <artifactId>arknet-app</artifactId>
     <description>Composition root: Spring Boot MCP server (Streamable HTTP, loopback) that bundles the tools of the hexagonal BCs (requirements, ubiquitous-language, use-cases) behind a shared DatasetLifecycle, plus the generic store read path (store_overview/resource_get)</description>
 
     <!-- Lokale Versions-Anhebungen fuer diese (einzige) Spring-Boot-Anwendung. Die rdf4j-BOM
@@ -43,7 +43,7 @@
 
     <dependencies>
         <!-- Requirements-Hexagon: In-Adapter (MCP-Tools) + Out-Adapter (Repository).
-             Als Composition Root verdrahtet arknet-mcp das komplette Hexagon zu Beans;
+             Als Composition Root verdrahtet arknet-app das komplette Hexagon zu Beans;
              die Spring-AI-Annotation-Scanner-AutoConfig sammelt die @McpTool-Methoden
              des In-Adapters automatisch ein (kein manuelles Tool-Provider-Bridging mehr). -->
         <dependency>
@@ -169,7 +169,7 @@
              nutzt SparqlTerms (IRIREF-Serialisierung), der Traceability-Lesepfad zusaetzlich
              ArkreqVocabulary (die geteilten arkreq:-Praedikat-IRIs, gemeinsame Quelle mit den
              Out-Adaptern). Bislang nur transitiv ueber die *-adapter-kogniordf gezogen; hier
-             explizit deklariert, weil arknet-mcp direkt dagegen compiliert. -->
+             explizit deklariert, weil arknet-app direkt dagegen compiliert. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-persistence-support</artifactId>
@@ -233,7 +233,7 @@
                     <mainClass>de.hauschel.arknet.mcp.ArknetMcpApplication</mainClass>
                     <!-- Keep the thin, regular jar as the main artifact (arknet-architecture-tests
                          resolves it as a test dependency, issue #237); the executable fat jar
-                         goes out under this classifier instead, see arknet-mcp/Dockerfile. -->
+                         goes out under this classifier instead, see arknet-app/Dockerfile. -->
                     <classifier>exec</classifier>
                 </configuration>
                 <executions>

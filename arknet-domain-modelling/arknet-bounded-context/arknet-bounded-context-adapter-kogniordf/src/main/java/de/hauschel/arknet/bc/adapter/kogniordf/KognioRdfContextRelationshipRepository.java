@@ -67,7 +67,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  *
  * <p><strong>Every {@code arkddd:} IRI here comes from {@link ArkdddVocabulary}
  * (kogn-io/arknet#148).</strong> {@code arkddd:upstream}/{@code downstream} were the first to move
- * there (issue #293), the same shared source {@code arknet-mcp}'s
+ * there (issue #293), the same shared source {@code arknet-app}'s
  * {@code de.hauschel.arknet.analysis.domain.TraceabilityGraph} traverses them from for
  * {@code impact_analysis}. {@code arkddd:ContextRelationship}, {@code arkddd:BoundedContext}
  * (this class's own validation-only assertion target, below), {@code relationshipType} and the

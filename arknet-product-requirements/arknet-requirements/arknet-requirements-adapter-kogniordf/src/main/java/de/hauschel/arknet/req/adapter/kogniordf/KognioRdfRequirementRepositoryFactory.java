@@ -50,7 +50,7 @@ import de.hauschel.arknet.req.domain.RequirementType;
  * requirements SHACL shapes and ontology axioms onto the classpath. It lets the
  * composition root wire an RDF-persisted requirement repository by handing over just a
  * storage directory, without itself depending on {@code io.kogn.rdf.rdf4j.*} - keeping
- * RDF4J out of arknet-mcp and preserving the port-neutrality of
+ * RDF4J out of arknet-app and preserving the port-neutrality of
  * {@link KognioRdfRequirementRepository} and {@link ShaclWriteGate}, which only know
  * technology-neutral kognio-rdf ports.</p>
  */
@@ -67,7 +67,7 @@ public final class KognioRdfRequirementRepositoryFactory {
      * RDF4J's {@code SailRepository#initializeInternal} translate its own
      * {@code SailLockedException} into {@link RepositoryLockedException} before it ever
      * reaches a caller, so this one type is the complete signal - no cause chain to walk.
-     * This is the predicate arknet-mcp's shared {@code DatasetLifecycle} bean wants; it is
+     * This is the predicate arknet-app's shared {@code DatasetLifecycle} bean wants; it is
      * offered as a default rather than hard-wired, because a different store behind
      * {@link DatasetLifecycle} may fail its lock conflicts differently, and this
      * factory - the one place allowed to name RDF4J - would then be the wrong place to
@@ -96,13 +96,13 @@ public final class KognioRdfRequirementRepositoryFactory {
      * {@link DatasetLifecycle} type.
      *
      * <p>This is the single place that constructs a persistent {@link DatasetLifecycleRdf4j}.
-     * The composition root (arknet-mcp) calls it once to obtain <em>one</em> shared lifecycle
+     * The composition root (arknet-app) calls it once to obtain <em>one</em> shared lifecycle
      * bean and hands that same instance to every consumer of the store - the requirements and
      * ubiquitous-language repositories (via their {@code over(DatasetLifecycle)} factories) and
      * the generic store report. Sharing a single lifecycle over one storage directory avoids
      * several {@link DatasetLifecycleRdf4j} instances competing for a lock on the same
      * {@code ~/.arknet/rdf} store. Because the return type is the neutral
-     * {@link DatasetLifecycle}, arknet-mcp obtains a working store without itself depending on
+     * {@link DatasetLifecycle}, arknet-app obtains a working store without itself depending on
      * {@code io.kogn.rdf.rdf4j.*} or RDF4J.</p>
      *
      * @param storageDir the directory the embedded RDF store persists into

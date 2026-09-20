@@ -10,7 +10,7 @@ package de.hauschel.arknet.persistence;
  * readers scan on the resource at its far end, plus the type IRIs the traceability traversal
  * tests those edges' endpoints against, as Java {@code String} constants - the single source of
  * truth shared by the code that <em>writes</em> them (the {@code *-adapter-kogniordf}
- * out-adapters) and the code that <em>reads</em> them ({@code arknet-mcp}'s traceability read
+ * out-adapters) and the code that <em>reads</em> them ({@code arknet-app}'s traceability read
  * path, {@code de.hauschel.arknet.analysis.domain.TraceabilityGraph}, and its report renderer,
  * {@code de.hauschel.arknet.mcp.report.HtmlReportRenderer}).
  *
@@ -23,7 +23,7 @@ package de.hauschel.arknet.persistence;
  * support in this module (alongside {@link SparqlTerms}, which serializes arbitrary IRIs), and
  * they are consumed by exactly the three modules that already depend on
  * {@code arknet-persistence-support}: the two out-adapters (for the SHACL write gate) and
- * {@code arknet-mcp} (for {@code SparqlTerms}). Being plain {@code String}s, they keep this
+ * {@code arknet-app} (for {@code SparqlTerms}). Being plain {@code String}s, they keep this
  * module RDF4J-free untouched.</p>
  *
  * <p>Before this class each of those places declared its own private copy of the same IRI
@@ -33,7 +33,7 @@ package de.hauschel.arknet.persistence;
  * "orphans"). Naming each IRI once here removes that failure mode - a rename now touches one Java
  * constant (plus the {@code .ttl}).</p>
  *
- * <p>Scope is deliberately narrow: only the predicates and type IRIs an {@code arknet-mcp} read
+ * <p>Scope is deliberately narrow: only the predicates and type IRIs an {@code arknet-app} read
  * path or an {@code arknet-architecture-tests} check traverses, reads or tests - whether
  * traversed as an edge or merely read as a literal - live here. Single-adapter predicates ({@code arkreq:status}, {@code arkreq:priority}, ...) are not
  * cross-module-duplicated in the same way and stay with their one owner.</p>
@@ -125,7 +125,7 @@ public final class ArkreqVocabulary {
 
     /**
      * {@code arkreq:criterionText} - AcceptanceCriterion -&gt; its testable "Done when ..." text
-     * (issue #266). Shared here because {@code arknet-mcp}'s traceability read path needs it too,
+     * (issue #266). Shared here because {@code arknet-app}'s traceability read path needs it too,
      * to scan a requirement's acceptance-criteria prose for unlinked glossary mentions - the same
      * reason {@link #ACCEPTANCE_CRITERION} itself is already shared.
      */
@@ -228,7 +228,7 @@ public final class ArkreqVocabulary {
      * the {@code sh:class} the {@code oslc_rm:constrainedBy} property shapes constrain their
      * target to (kogn-io/arknet#481), read by the delete-guard architecture test the same way it
      * already reads {@link #CONCEPT_TYPE}/{@link ArkprocVocabulary#ACTOR_TYPE} - only
-     * {@code arknet-architecture-tests} reads it, no {@code arknet-mcp} path does.
+     * {@code arknet-architecture-tests} reads it, no {@code arknet-app} path does.
      */
     public static final String CONSTRAINT_TYPE = NAMESPACE + "Constraint";
 

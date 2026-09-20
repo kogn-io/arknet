@@ -40,7 +40,7 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 /**
  * Dogfooding-shaped end-to-end test for issue #565's own "done" criterion: {@code bc_get BC-5}
  * shows four outgoing and one incoming context relationship - the exact shape arknet's own store
- * carries for its BC-5 (arknet-mcp) since #438, reproduced here against a throwaway, in-memory
+ * carries for its BC-5 (arknet-app) since #438, reproduced here against a throwaway, in-memory
  * fixture rather than the shared local daemon's real store (which still runs the pre-#565 jar and
  * must never receive a write call from a test).
  *
@@ -99,7 +99,7 @@ class BoundedContextContextRelationshipDogfoodingTest {
         BoundedContextCode bc5 = add("Mcp");
         BoundedContextCode bc6 = add("Adr");
 
-        // BC-5 is upstream of four sibling contexts (arknet-mcp is the composition root every other
+        // BC-5 is upstream of four sibling contexts (arknet-app is the composition root every other
         // hexagon's In-Port is wired into) ...
         service.linkContext(PROJECT, bc5, bc1, RelationshipType.CUSTOMER_SUPPLIER);
         service.linkContext(PROJECT, bc5, bc2, RelationshipType.CUSTOMER_SUPPLIER);

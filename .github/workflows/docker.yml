@@ -1,6 +1,6 @@
-name: Docker image (arknet-mcp)
+name: Docker image (arknet-app)
 
-# Continuously builds and publishes the arknet-mcp daemon image to GHCR as
+# Continuously builds and publishes the arknet-app daemon image to GHCR as
 # `:latest`/`:<sha>` on every push to main -- unversioned, always moving. The
 # immutable, SemVer-tagged `vX.Y.Z` image is a separate, manual publish; see
 # release.yml.
@@ -51,7 +51,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: arknet-mcp/Dockerfile
+          file: arknet-app/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:latest

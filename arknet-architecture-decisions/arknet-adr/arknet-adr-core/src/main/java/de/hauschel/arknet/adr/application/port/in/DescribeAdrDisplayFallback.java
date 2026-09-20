@@ -17,7 +17,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <p>Deliberately a separate, single-method port rather than a second method on {@link
  * ListAdrs} - the same reason {@link CountSkippedAdrs} is its own port: several report-building
- * tests in {@code arknet-mcp} construct {@code ListAdrs} inline as a lambda, and a second
+ * tests in {@code arknet-app} construct {@code ListAdrs} inline as a lambda, and a second
  * abstract method there would break every one of them.</p>
  */
 public interface DescribeAdrDisplayFallback {
