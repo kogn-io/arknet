@@ -337,6 +337,7 @@
                 </configuration>
                 <executions>
                     <execution>
+                        <?m2e execute onIncremental?>
                         <goals>
                             <goal>check</goal>
                         </goals>
