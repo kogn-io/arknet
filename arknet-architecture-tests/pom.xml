@@ -83,7 +83,7 @@
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-actor-adapter-kogniordf</artifactId>
+            <artifactId>arknet-actor-register-adapter-kogniordf</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
@@ -141,29 +141,29 @@
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-actor-core</artifactId>
+            <artifactId>arknet-actor-register-core</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
 
-        <!-- Regel 13 (und 3/11 fuer den Kern): die drei Module der Model-Analysis-Komponente.
+        <!-- Regel 13 (und 3/11 fuer den Kern): die drei Module der Model-Evaluation-Komponente.
              Ohne sie sieht ArchUnit keine Klasse in de.hauschel.arknet.analysis, und Regel 13
              faellt leer aus - was ArchUnit als Fehler meldet, nicht als gruenen Lauf. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-model-analysis-core</artifactId>
+            <artifactId>arknet-model-evaluation-core</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-model-analysis-adapter-kogniordf</artifactId>
+            <artifactId>arknet-model-evaluation-adapter-kogniordf</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-model-analysis-adapter-mcp</artifactId>
+            <artifactId>arknet-model-evaluation-adapter-mcp</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
@@ -208,7 +208,7 @@
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-actor-adapter-mcp</artifactId>
+            <artifactId>arknet-actor-register-adapter-mcp</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

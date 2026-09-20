@@ -99,12 +99,13 @@ its borrowed in-ports into the requirements Component.
 Built for Domain Modelling (#441): `arknet-domain-modelling` is the Maven parent of the
 two Components and of the vocabulary module `arknet-domain-modelling-shared`, which
 holds `TermCode`; the bounded-context Component gave up its own `TermRef` and its
-borrowed in-port. Everywhere else except Architecture & Decisions and Project Registry
-(built in Welle 1 of #656, below) the Component is still the Maven parent.
+borrowed in-port. Every context is now a Maven parent of its Component(s) (Welle 1 and
+Welle 2 of #656, below).
 
-Built for Model Analysis (#560): `arknet-model-analysis` is the one read-only
-Component, Maven parent of its own `core`/`adapter-kogniordf`/`adapter-mcp` directly
-under `arknet-parent`, the same shape as Actor. Its core holds the traced graph and the
+Built for Model Analysis (#560): the one read-only Component now called
+`arknet-model-evaluation` (renamed from `arknet-model-analysis` under its Maven parent
+of the same name in Welle 2 of #656, below) holds its own
+`core`/`adapter-kogniordf`/`adapter-mcp`. Its core holds the traced graph and the
 three store checks, its `-adapter-kogniordf` serves the two out-ports
 (`ModelSnapshots`, `ResourceHandleLookup`) out of the shared store read path, and its
 `-adapter-mcp` carries the five evaluation tools and `store_check`. The generic read
@@ -119,10 +120,14 @@ are now the Maven parents of their one Component each (`arknet-adr`, `arknet-pro
 neither carries a vocabulary module (ADR-57). The three technical-library modules that
 used to sit directly under `arknet-parent` (`arknet-persistence-support`,
 `arknet-mcp-support`, `arknet-persistence-test-support`) now sit under the new
-aggregator `arknet-support` instead. Actor and Model Analysis are unaffected; they
-still have their Component as the direct Maven parent, pending Welle 2 of #656.
+aggregator `arknet-support` instead.
 
-| Target Bounded Context       | Component (today = Maven parent) | Modules                                   |
+Built for Welle 2 of #656: `arknet-actor` and `arknet-model-analysis` are now the Maven
+parents of their one Component each, renamed in the same move to
+`arknet-actor-register` and `arknet-model-evaluation`; neither carries a vocabulary
+module (ADR-57). Every Bounded Context now has its own Maven parent.
+
+| Target Bounded Context       | Component                        | Modules                                   |
 |------------------------------|----------------------------------|-------------------------------------------|
 | Product & Requirements       | arknet-requirements              | -core, -adapter-kogniordf, -adapter-mcp   |
 | Product & Requirements       | arknet-use-cases                 | -core, -adapter-kogniordf, -adapter-mcp   |
@@ -131,9 +136,9 @@ still have their Component as the direct Maven parent, pending Welle 2 of #656.
 | Domain Modelling             | arknet-bounded-context           | -core, -adapter-kogniordf, -adapter-mcp   |
 | Domain Modelling             | (vocabulary module, no Component) | arknet-domain-modelling-shared           |
 | Architecture & Decisions     | arknet-adr (context parent since Welle 1 of #656: `arknet-architecture-decisions`) | -core, -adapter-kogniordf, -adapter-mcp |
-| Actor                        | arknet-actor                     | -core, -adapter-kogniordf, -adapter-mcp   |
+| Actor                        | arknet-actor-register (Maven parent: `arknet-actor`) | -core, -adapter-kogniordf, -adapter-mcp |
 | Project Registry             | arknet-project (context parent since Welle 1 of #656: `arknet-project-registry`) | -core, -adapter-kogniordf, -adapter-mcp |
-| Model Analysis               | arknet-model-analysis            | -core, -adapter-kogniordf, -adapter-mcp (an -adapter-html follows with the report, #560 step 2) |
+| Model Analysis               | arknet-model-evaluation (Maven parent: `arknet-model-analysis`) | -core, -adapter-kogniordf, -adapter-mcp (an -adapter-html follows with the report, #560 step 2) |
 
 Outside every Bounded Context:
 
@@ -154,7 +159,7 @@ As built (from the POMs):
 - Every `-core` depends only on `arknet-shared-kernel`, plus its own context's
   vocabulary module where one exists (`arknet-product-requirements-shared`,
   `arknet-domain-modelling-shared`). No core depends on a neighbouring core. One
-  exception, #560: `arknet-model-analysis-core` additionally names
+  exception, #560: `arknet-model-evaluation-core` additionally names
   `arknet-persistence-support`, because its subject is the published language itself --
   the type-independent read model and the `Ark*Vocabulary` constants are what a snapshot
   of that language is made of. It uses nothing of kognio-rdf (`DependencyRulesTest`
@@ -184,7 +189,7 @@ its own core only; no module of a Component depends on a module of another.
 
 | Mandatory per schema                          | arknet as built                                     |
 |-----------------------------------------------|-----------------------------------------------------|
-| Bounded Context as Maven parent               | built for Product & Requirements (#439) and Domain Modelling (#441); for the other four contexts (Actor, Architecture & Decisions, Project Registry, Model Analysis) the parent is still the Component |
+| Bounded Context as Maven parent               | built for all six contexts: Product & Requirements (#439), Domain Modelling (#441), Architecture & Decisions and Project Registry (Welle 1 of #656), Actor and Model Analysis (Welle 2 of #656) |
 | `api` per Component                           | not required: extension stage, no foreign in-port caller in arknet (ADR-58) |
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |

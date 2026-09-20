@@ -14,7 +14,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  *
  * <p><strong>Deliberately not a link to the actor bounded context.</strong> Roles are modelled
  * there, as their own resource type in {@code arknet-actor}'s register (ADR-37); the use-cases
- * component must not depend on {@code arknet-actor-core}. This value object therefore holds only
+ * component must not depend on {@code arknet-actor-register-core}. This value object therefore holds only
  * the shared-kernel {@link ResourceId}, never an {@code actor}-specific {@code RoleId} or
  * {@code RoleCode}. Resolving a human-typed role code (e.g. {@code ROLE-4}) to this identity - and
  * rejecting an unknown or ambiguous code - is the job of a driven lookup port against the shared

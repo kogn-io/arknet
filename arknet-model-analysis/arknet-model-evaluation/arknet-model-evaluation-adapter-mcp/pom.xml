@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-model-evaluation</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-model-evaluation-adapter-mcp</artifactId>
+    <description>Driving adapter: exposes the analyses as MCP tools (trace_matrix, orphan_check, impact_analysis, role_usecase_matrix, term_cooccurrence, store_check) and renders their read models as text.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-model-evaluation-core</artifactId>
+        </dependency>
+        <!-- Technischer Support der treibenden MCP-Adapter: Anker-Aufloesung, Antwortformen und
+             Parameter-Texte. Nicht transitiv ueber den Kern zu bekommen - kein *-core haengt
+             daran (ADR-56). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-mcp-support</artifactId>
+        </dependency>
+        <!-- Die CURIE-Bindungen und das Lesemodell, in dem die Renderer eine Ressource benennen;
+             transitiv ueber den Kern zu bekommen, hier explizit, weil dieses Modul direkt dagegen
+             compiliert. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-persistence-support</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-mcp-annotations</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

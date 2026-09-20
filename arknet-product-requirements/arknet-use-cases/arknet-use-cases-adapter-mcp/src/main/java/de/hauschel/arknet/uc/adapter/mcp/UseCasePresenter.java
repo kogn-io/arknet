@@ -41,7 +41,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * same class's former {@code ResolveActors} use, from before {@code arkreq:primaryRole}/{@code
  * supportingRole} repointed those edges at {@code arkproc:Role} instead of {@code arkproc:Actor} -
  * and {@link ResolveTerms}, owned by the domain-modelling context) to answer that purely for
- * display; the use-cases core itself still never depends on {@code arknet-actor-core}/{@code
+ * display; the use-cases core itself still never depends on {@code arknet-actor-register-core}/{@code
  * arknet-ubiquitous-language-core}, and {@code uc_add}'s own write path still resolves via the
  * decoupled {@code RoleLookup}/{@code TermLookup} out-ports.</p>
  *

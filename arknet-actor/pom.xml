@@ -12,26 +12,9 @@
 
     <artifactId>arknet-actor</artifactId>
     <packaging>pom</packaging>
-    <description>Actor component (hexagonal): arkproc:Actor mintable store-first (actor_add/actor_get/actor_list/actor_update) as its own hexagon, independent of the glossary-term facet</description>
+    <description>Actor bounded context (BC-4): aggregates the arknet-actor-register component, its only component</description>
 
     <modules>
-        <module>arknet-actor-core</module>
-        <module>arknet-actor-adapter-kogniordf</module>
-        <module>arknet-actor-adapter-mcp</module>
+        <module>arknet-actor-register</module>
     </modules>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>de.hauschel.arknet</groupId>
-                <artifactId>arknet-actor-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>de.hauschel.arknet</groupId>
-                <artifactId>arknet-actor-adapter-mcp</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 </project>

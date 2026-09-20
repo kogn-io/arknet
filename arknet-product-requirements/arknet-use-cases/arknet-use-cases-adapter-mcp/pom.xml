@@ -35,7 +35,7 @@
              ResolveConstraints auf. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-actor-core</artifactId>
+            <artifactId>arknet-actor-register-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

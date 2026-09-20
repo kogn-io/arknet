@@ -13,7 +13,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p>This is the strict cross-BC reference resolution the use-cases component needs for
  * {@code arkreq:primaryRole}/{@code arkreq:supportingRole} (ADR-37/kogn-io/arknet#405 Part C),
  * the use-cases analogue of requirements' own equivalent: the use-cases component must not
- * depend on {@code arknet-actor-core}, so it cannot look a role up as a domain object - it can
+ * depend on {@code arknet-actor-register-core}, so it cannot look a role up as a domain object - it can
  * only ask the shared store, through this port, which resource a code currently names.</p>
  *
  * <p><strong>Resolved by code, not by name - unlike this port's predecessor,
