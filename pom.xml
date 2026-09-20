@@ -337,7 +337,11 @@
                 </configuration>
                 <executions>
                     <execution>
-                        <?m2e execute onIncremental?>
+                        <!-- Header check is a verify gate for mvn and CI, not for the
+                             incremental Eclipse build: m2e's embedded Maven does not set
+                             ${maven.multiModuleProjectDirectory}, so spotless:check would
+                             fail to locate the header file on every build. -->
+                        <?m2e ignore?>
                         <goals>
                             <goal>check</goal>
                         </goals>
