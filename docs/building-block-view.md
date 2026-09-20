@@ -79,10 +79,9 @@ Context map as recorded in the store, against the code:
 ## 3. Building blocks
 
 Eight Components, three modules each (`core`, `adapter-kogniordf`, `adapter-mcp`), no
-`api` module: an extension stage, built only once a module outside the Component calls
-an in-port at compile time; arknet has no such caller (ADR-58). Every Bounded Context
-is a Maven parent above its Component(s) -- module schema, no record behind it
-(ADR-57). The two Bounded Contexts with more than one Component, Product &
+`api` module (see Component, section 1). Every Bounded Context is a Maven parent
+above its Component(s) -- module schema, no record behind it. The two Bounded
+Contexts with more than one Component, Product &
 Requirements and Domain Modelling, additionally carry a `<bc>-shared` vocabulary
 module (typed codes, the context's one `TermRef`); Architecture & Decisions, Actor,
 Project Registry and Model Analysis hold one Component each and need none (ADR-57).
@@ -97,13 +96,10 @@ and the context's one `TermRef`.
 (`arknet-ubiquitous-language`, `arknet-bounded-context`) and of the vocabulary module
 `arknet-domain-modelling-shared`, which holds `TermCode`.
 
-`arknet-architecture-decisions` and `arknet-project-registry` are the Maven parents of
-their one Component each (`arknet-adr`, `arknet-project`); neither carries a
-vocabulary module (ADR-57).
-
-`arknet-actor` and `arknet-model-analysis` are the Maven parents of their one
-Component each, `arknet-actor-register` and `arknet-model-evaluation`; neither
-carries a vocabulary module (ADR-57).
+`arknet-architecture-decisions`, `arknet-actor`, `arknet-project-registry` and
+`arknet-model-analysis` are the Maven parents of their one Component each --
+`arknet-adr`, `arknet-actor-register`, `arknet-project` and
+`arknet-model-evaluation`; none carries a vocabulary module (ADR-57).
 
 `arknet-model-evaluation`'s core holds the traced graph and the three store checks,
 its `-adapter-kogniordf` serves the two out-ports (`ModelSnapshots`,
@@ -181,12 +177,12 @@ its own core only; no module of a Component depends on a module of another.
 
 | Mandatory per schema                          | arknet's state                                       |
 |-----------------------------------------------|-----------------------------------------------------|
-| Bounded Context as Maven parent               | built for all six contexts (ADR-57)                  |
+| Bounded Context as Maven parent               | built for all six contexts                           |
 | `api` per Component                           | not required: extension stage, no foreign in-port caller in arknet (ADR-58) |
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
 | `<bc>-shared` once ownerless identities exist | built for both contexts that need one: `arknet-product-requirements-shared` (RequirementCode, ConstraintCode, TermRef) and `arknet-domain-modelling-shared` (TermCode) |
-| Application outside every Bounded Context     | present (arknet-app); it holds no evaluation any more, only wiring, the type-independent exception and the HTML report still to move |
+| Application outside every Bounded Context     | present (arknet-app); it holds no evaluation, only wiring, the type-independent exception and the HTML report still to move |
 | dependency rules as a checker                 | partial: ArchUnit carries the rule that no module of a Component depends on a module of another for Product & Requirements and Domain Modelling, plus that a driving adapter sees only in-ports and domain types, that a `<bc>-shared` hangs on nothing but the Shared Kernel, that no core or vocabulary module reaches into `arknet-mcp-support`, that the Shared Kernel holds exactly the terms ADR-56 admits, and that Model Analysis names no module of the contexts it reads; the other contexts still borrow in-ports (ADR-49) |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |
 
