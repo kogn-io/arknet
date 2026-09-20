@@ -120,7 +120,7 @@ neither carries a vocabulary module (ADR-57). The three technical-library module
 used to sit directly under `arknet-parent` (`arknet-persistence-support`,
 `arknet-mcp-support`, `arknet-persistence-test-support`) now sit under the new
 aggregator `arknet-support` instead. Actor and Model Analysis are unaffected; they
-still have their Component as the direct Maven parent, pending Welle 2/3 of #656.
+still have their Component as the direct Maven parent, pending Welle 2 of #656.
 
 | Target Bounded Context       | Component (today = Maven parent) | Modules                                   |
 |------------------------------|----------------------------------|-------------------------------------------|
@@ -130,9 +130,9 @@ still have their Component as the direct Maven parent, pending Welle 2/3 of #656
 | Domain Modelling             | arknet-ubiquitous-language       | -core, -adapter-kogniordf, -adapter-mcp   |
 | Domain Modelling             | arknet-bounded-context           | -core, -adapter-kogniordf, -adapter-mcp   |
 | Domain Modelling             | (vocabulary module, no Component) | arknet-domain-modelling-shared           |
-| Architecture & Decisions     | arknet-adr (Maven parent since Welle 1 of #656: `arknet-architecture-decisions`) | -core, -adapter-kogniordf, -adapter-mcp |
+| Architecture & Decisions     | arknet-adr (context parent since Welle 1 of #656: `arknet-architecture-decisions`) | -core, -adapter-kogniordf, -adapter-mcp |
 | Actor                        | arknet-actor                     | -core, -adapter-kogniordf, -adapter-mcp   |
-| Project Registry             | arknet-project (Maven parent since Welle 1 of #656: `arknet-project-registry`) | -core, -adapter-kogniordf, -adapter-mcp |
+| Project Registry             | arknet-project (context parent since Welle 1 of #656: `arknet-project-registry`) | -core, -adapter-kogniordf, -adapter-mcp |
 | Model Analysis               | arknet-model-analysis            | -core, -adapter-kogniordf, -adapter-mcp (an -adapter-html follows with the report, #560 step 2) |
 
 Outside every Bounded Context:
