@@ -62,7 +62,7 @@ public interface ActorRepository {
      *                          signal type is deliberately not fixed by this port: a real
      *                          implementation's {@code WriteConstraintViolationException} lives in
      *                          {@code arknet-persistence-support}, a module
-     *                          {@code arknet-actor-core} must not depend on.
+     *                          {@code arknet-actor-register-core} must not depend on.
      */
     void create(ProjectId projectId, Actor actor, String language);
 

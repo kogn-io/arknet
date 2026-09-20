@@ -63,7 +63,7 @@ import de.hauschel.arknet.uc.application.port.out.RoleLookup;
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} + {@code dataset}) -
  * it never imports RDF4J or any other backend-specific type, and it does not depend on
- * {@code arknet-actor-core}: the use-cases component must not depend on a neighbour BC's domain
+ * {@code arknet-actor-register-core}: the use-cases component must not depend on a neighbour BC's domain
  * module (see {@link RoleLookup}), so this remains a plain SPARQL read against the shared store,
  * scoped to the graph and predicates the role out-adapter is known to write. The backend
  * ({@link DatasetLifecycle} implementation) is supplied by the composition root, the same shared

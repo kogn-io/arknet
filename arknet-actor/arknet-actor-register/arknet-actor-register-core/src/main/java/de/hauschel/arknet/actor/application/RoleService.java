@@ -52,7 +52,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  *
  * <p><strong>No gateway to resolve {@code filledBy}.</strong> {@code filledByActorCodes} arrives as
  * human-typed {@code ACTOR-N} codes and must resolve to {@link ActorId}s before a {@link Role} can
- * be built. Since {@link Actor} lives in this very same bounded context ({@code arknet-actor-core}),
+ * be built. Since {@link Actor} lives in this very same bounded context ({@code arknet-actor-register-core}),
  * this service depends on {@link ActorRepository} directly rather than going through a
  * {@code ActorLookup}-style driven port: ADR-008's "no cross-context orchestration without a
  * gateway" binds Bounded Contexts, and Role and Actor are two resource types of one Bounded

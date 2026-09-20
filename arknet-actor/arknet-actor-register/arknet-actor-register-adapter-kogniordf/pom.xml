@@ -6,17 +6,17 @@
 
     <parent>
         <groupId>de.hauschel.arknet</groupId>
-        <artifactId>arknet-actor</artifactId>
+        <artifactId>arknet-actor-register</artifactId>
         <version>${revision}</version>
     </parent>
 
-    <artifactId>arknet-actor-adapter-kogniordf</artifactId>
+    <artifactId>arknet-actor-register-adapter-kogniordf</artifactId>
     <description>Out-adapter: implements ActorRepository on top of kognio-rdf (embeddable RDF substrate). Actors are persisted as arkproc:HumanActor/SystemActor/LegalActor/GroupActor.</description>
 
     <dependencies>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-actor-core</artifactId>
+            <artifactId>arknet-actor-register-core</artifactId>
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>

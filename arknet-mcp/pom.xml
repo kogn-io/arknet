@@ -139,12 +139,12 @@
              eines Nachbar-BC. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-actor-adapter-mcp</artifactId>
+            <artifactId>arknet-actor-register-adapter-mcp</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-actor-adapter-kogniordf</artifactId>
+            <artifactId>arknet-actor-register-adapter-kogniordf</artifactId>
             <version>${project.version}</version>
         </dependency>
 

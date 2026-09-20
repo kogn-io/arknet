@@ -40,7 +40,7 @@ import de.hauschel.arknet.mcpsupport.WriteResponse;
  * each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the actor hexagon (symmetric to the out-adapter
- * {@code arknet-actor-adapter-kogniordf}). Tools are declared Spring-AI-style via
+ * {@code arknet-actor-register-adapter-kogniordf}). Tools are declared Spring-AI-style via
  * {@link McpTool}/{@link McpToolParam} on plain methods - the tool name, description and JSON input
  * schema are derived from the annotations and method signature, not hand-written. This adapter does
  * <strong>not</strong> bootstrap an MCP server or wire any transport; that remains the concern of

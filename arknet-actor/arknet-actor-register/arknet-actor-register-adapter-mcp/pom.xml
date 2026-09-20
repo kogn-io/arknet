@@ -6,17 +6,17 @@
 
     <parent>
         <groupId>de.hauschel.arknet</groupId>
-        <artifactId>arknet-actor</artifactId>
+        <artifactId>arknet-actor-register</artifactId>
         <version>${revision}</version>
     </parent>
 
-    <artifactId>arknet-actor-adapter-mcp</artifactId>
-    <description>In-adapter (driving): translates MCP tool calls into the arknet-actor-core in-ports via Spring AI @McpTool. A composition root (arknet-mcp) collects the tools by bean auto-detection.</description>
+    <artifactId>arknet-actor-register-adapter-mcp</artifactId>
+    <description>In-adapter (driving): translates MCP tool calls into the arknet-actor-register-core in-ports via Spring AI @McpTool. A composition root (arknet-mcp) collects the tools by bean auto-detection.</description>
 
     <dependencies>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-actor-core</artifactId>
+            <artifactId>arknet-actor-register-core</artifactId>
         </dependency>
         <!-- Technischer Support der treibenden MCP-Adapter: Anker-Aufloesung, Uebersetzungs-
              Signal, Antwortformen und Parameter-Texte. Nicht transitiv ueber den Kern zu

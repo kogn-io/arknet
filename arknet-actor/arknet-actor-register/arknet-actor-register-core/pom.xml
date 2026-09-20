@@ -6,11 +6,11 @@
 
     <parent>
         <groupId>de.hauschel.arknet</groupId>
-        <artifactId>arknet-actor</artifactId>
+        <artifactId>arknet-actor-register</artifactId>
         <version>${revision}</version>
     </parent>
 
-    <artifactId>arknet-actor-core</artifactId>
+    <artifactId>arknet-actor-register-core</artifactId>
     <description>Pure hexagon interior: domain, use cases (in-ports), out-ports. Technology-neutral.</description>
 
     <dependencies>
