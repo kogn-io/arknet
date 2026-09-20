@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>de.hauschel.arknet</groupId>
-        <artifactId>arknet-parent</artifactId>
+        <artifactId>arknet-support</artifactId>
         <version>${revision}</version>
     </parent>
 
