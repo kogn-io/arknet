@@ -6,30 +6,30 @@
 
     <parent>
         <groupId>de.hauschel.arknet</groupId>
-        <artifactId>arknet-parent</artifactId>
+        <artifactId>arknet-architecture-decisions</artifactId>
         <version>${revision}</version>
     </parent>
 
-    <artifactId>arknet-project</artifactId>
+    <artifactId>arknet-adr</artifactId>
     <packaging>pom</packaging>
-    <description>Project component (hexagonal): registered project identity -- a client-sent, opaque typed anchor resolved to the project whose dataset holds its model (project_add/project_attach_anchor/project_rename/project_list)</description>
+    <description>Architecture decision record component (hexagonal): arkarch:ArchitectureDecisionRecord mintable store-first (adr_add/adr_list/adr_get/adr_set_status/adr_supersede) as its own hexagon</description>
 
     <modules>
-        <module>arknet-project-core</module>
-        <module>arknet-project-adapter-kogniordf</module>
-        <module>arknet-project-adapter-mcp</module>
+        <module>arknet-adr-core</module>
+        <module>arknet-adr-adapter-kogniordf</module>
+        <module>arknet-adr-adapter-mcp</module>
     </modules>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
-                <artifactId>arknet-project-core</artifactId>
+                <artifactId>arknet-adr-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
-                <artifactId>arknet-project-adapter-mcp</artifactId>
+                <artifactId>arknet-adr-adapter-mcp</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

@@ -489,7 +489,7 @@ class ProjectServiceTest {
      * The {@code update} counterpart of {@link #aStaleCompareAndUpdateOnTheFirstAttemptIsRetriedTransparently}:
      * {@link ProjectService#update} keeps its own retry loop around {@link
      * ProjectRegistry#updateAttributes} rather than reusing {@link
-     * ProjectService#updateWithOptimisticRetry} (see {@code arknet-project/CLAUDE.md}), and
+     * ProjectService#updateWithOptimisticRetry} (see {@code arknet-project-registry/arknet-project/CLAUDE.md}), and
      * nothing exercised that loop.
      */
     @Test

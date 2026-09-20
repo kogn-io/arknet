@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-support</artifactId>
+    <packaging>pom</packaging>
+    <description>Technical support libraries: aggregates arknet-mcp-support, arknet-persistence-support and arknet-persistence-test-support, none of which carries a bounded-context model</description>
+
+    <modules>
+        <module>arknet-persistence-support</module>
+        <module>arknet-mcp-support</module>
+        <module>arknet-persistence-test-support</module>
+    </modules>
+</project>

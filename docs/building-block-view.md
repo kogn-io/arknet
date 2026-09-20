@@ -99,20 +99,28 @@ its borrowed in-ports into the requirements Component.
 Built for Domain Modelling (#441): `arknet-domain-modelling` is the Maven parent of the
 two Components and of the vocabulary module `arknet-domain-modelling-shared`, which
 holds `TermCode`; the bounded-context Component gave up its own `TermRef` and its
-borrowed in-port. Everywhere else the Component is still the Maven parent.
+borrowed in-port. Everywhere else except Architecture & Decisions and Project Registry
+(built in Welle 1 of #656, below) the Component is still the Maven parent.
 
 Built for Model Analysis (#560): `arknet-model-analysis` is the one read-only
 Component, Maven parent of its own `core`/`adapter-kogniordf`/`adapter-mcp` directly
-under `arknet-parent`, the same shape as Actor, Architecture & Decisions and Project
-Registry. Its core holds the traced graph and the three store checks,
-its `-adapter-kogniordf` serves the two out-ports (`ModelSnapshots`,
-`ResourceHandleLookup`) out of the shared store read path, and its `-adapter-mcp`
-carries the five evaluation tools and `store_check`. The generic read model those
-tools read (`StoreReader`, `StoreSnapshot`, `StoreResource`, `Triple`, `RdfNode`,
-`Prefixes`, `HandleResolver`, `ResourceRenderer`, `Revision`) moved with them out of
-the composition root into `arknet-persistence-support`, where the vocabulary constants
-already are: it is the mechanism by which any published language is read, and both the
-component and the root's type-independent exception speak it.
+under `arknet-parent`, the same shape as Actor. Its core holds the traced graph and the
+three store checks, its `-adapter-kogniordf` serves the two out-ports
+(`ModelSnapshots`, `ResourceHandleLookup`) out of the shared store read path, and its
+`-adapter-mcp` carries the five evaluation tools and `store_check`. The generic read
+model those tools read (`StoreReader`, `StoreSnapshot`, `StoreResource`, `Triple`,
+`RdfNode`, `Prefixes`, `HandleResolver`, `ResourceRenderer`, `Revision`) moved with them
+out of the composition root into `arknet-persistence-support`, where the vocabulary
+constants already are: it is the mechanism by which any published language is read, and
+both the component and the root's type-independent exception speak it.
+
+Built for Welle 1 of #656: `arknet-architecture-decisions` and `arknet-project-registry`
+are now the Maven parents of their one Component each (`arknet-adr`, `arknet-project`);
+neither carries a vocabulary module (ADR-57). The three technical-library modules that
+used to sit directly under `arknet-parent` (`arknet-persistence-support`,
+`arknet-mcp-support`, `arknet-persistence-test-support`) now sit under the new
+aggregator `arknet-support` instead. Actor and Model Analysis are unaffected; they
+still have their Component as the direct Maven parent, pending Welle 2 of #656.
 
 | Target Bounded Context       | Component (today = Maven parent) | Modules                                   |
 |------------------------------|----------------------------------|-------------------------------------------|
@@ -122,9 +130,9 @@ component and the root's type-independent exception speak it.
 | Domain Modelling             | arknet-ubiquitous-language       | -core, -adapter-kogniordf, -adapter-mcp   |
 | Domain Modelling             | arknet-bounded-context           | -core, -adapter-kogniordf, -adapter-mcp   |
 | Domain Modelling             | (vocabulary module, no Component) | arknet-domain-modelling-shared           |
-| Architecture & Decisions     | arknet-adr                       | -core, -adapter-kogniordf, -adapter-mcp   |
+| Architecture & Decisions     | arknet-adr (context parent since Welle 1 of #656: `arknet-architecture-decisions`) | -core, -adapter-kogniordf, -adapter-mcp |
 | Actor                        | arknet-actor                     | -core, -adapter-kogniordf, -adapter-mcp   |
-| Project Registry             | arknet-project                   | -core, -adapter-kogniordf, -adapter-mcp   |
+| Project Registry             | arknet-project (context parent since Welle 1 of #656: `arknet-project-registry`) | -core, -adapter-kogniordf, -adapter-mcp |
 | Model Analysis               | arknet-model-analysis            | -core, -adapter-kogniordf, -adapter-mcp (an -adapter-html follows with the report, #560 step 2) |
 
 Outside every Bounded Context:
@@ -133,9 +141,9 @@ Outside every Bounded Context:
 |------------------------------------|---------------------------------|------|
 | Application (composition root)     | arknet-mcp                      | Spring Boot daemon; carries the type-independent exception (ADR-55: `store_overview`, `resource_get`, `resource_history`, `project_export`) and `text_search`, which reads literals without knowing a type. The HTML report still lives here and still composes the in-ports of every context; its target is Model Analysis (ADR-54, #560 step 2) |
 | Shared Kernel                      | arknet-shared-kernel            | ADR-56: ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale, LocalizedLiteral. `DependencyRulesTest` rule 12 lists the admitted terms, so a new type in the package turns a test red |
-| Technical library                  | arknet-persistence-support      | SHACL gate, WriteFunnel, vocabulary constants and, since #560, the type-independent read path over a project's dataset (StoreReader, the triple read model, Prefixes, HandleResolver, ResourceRenderer) -- no model term, hence neither Shared Kernel nor vocabulary |
-| Technical library                  | arknet-mcp-support              | Support of the driving MCP adapters and the composition root: ProjectResolver/ResolvedProject, StaleTranslationHint/FieldLanguageLookup, WriteResponse, ToolParameterDescriptions. No core and no vocabulary module depends on it (rule 11) |
-| Technical library (test scope)     | arknet-persistence-test-support | Guarded* decorators |
+| Technical library                  | arknet-persistence-support      | Under the `arknet-support` aggregator since Welle 1 of #656. SHACL gate, WriteFunnel, vocabulary constants and, since #560, the type-independent read path over a project's dataset (StoreReader, the triple read model, Prefixes, HandleResolver, ResourceRenderer) -- no model term, hence neither Shared Kernel nor vocabulary |
+| Technical library                  | arknet-mcp-support              | Under the `arknet-support` aggregator since Welle 1 of #656. Support of the driving MCP adapters and the composition root: ProjectResolver/ResolvedProject, StaleTranslationHint/FieldLanguageLookup, WriteResponse, ToolParameterDescriptions. No core and no vocabulary module depends on it (rule 11) |
+| Technical library (test scope)     | arknet-persistence-test-support | Under the `arknet-support` aggregator since Welle 1 of #656. Guarded* decorators |
 | Published Language (schema)        | arknet-ontology                 | .ttl ontologies and shapes |
 | Checker                            | arknet-architecture-tests       | ArchUnit rules and ontology cross-checks |
 
