@@ -84,7 +84,7 @@ above its Component(s) -- module schema, no record behind it. The two Bounded
 Contexts with more than one Component, Product &
 Requirements and Domain Modelling, additionally carry a `<bc>-shared` vocabulary
 module (typed codes, the context's one `TermRef`); Architecture & Decisions, Actor,
-Project Registry and Model Analysis hold one Component each and need none (ADR-57).
+Project Registry and Model Analysis hold one Component each and need none.
 Model Analysis is an eighth Component (ADR-54).
 
 `arknet-product-requirements` is the Maven parent of its two Components
