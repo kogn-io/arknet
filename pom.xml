@@ -77,16 +77,24 @@
     </properties>
 
     <modules>
-        <module>arknet-ontology</module>
-        <module>arknet-mcp</module>
-        <module>arknet-shared-kernel</module>
-        <module>arknet-support</module>
+        <!-- Bounded contexts, in BC order (BC-1..BC-6). arknet-actor and
+             arknet-model-analysis still are their own single component, not yet
+             a context parent with a renamed component underneath (#656 Welle 2). -->
         <module>arknet-product-requirements</module>
         <module>arknet-domain-modelling</module>
-        <module>arknet-project-registry</module>
         <module>arknet-architecture-decisions</module>
         <module>arknet-actor</module>
+        <module>arknet-project-registry</module>
         <module>arknet-model-analysis</module>
+
+        <!-- Application, Shared Kernel, Ontology. arknet-mcp is renamed to
+             arknet-app in #656 Welle 3. -->
+        <module>arknet-mcp</module>
+        <module>arknet-shared-kernel</module>
+        <module>arknet-ontology</module>
+
+        <!-- Technical support, checker. -->
+        <module>arknet-support</module>
         <module>arknet-architecture-tests</module>
     </modules>
 

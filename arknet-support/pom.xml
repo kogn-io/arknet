@@ -16,7 +16,7 @@
 
     <modules>
         <module>arknet-persistence-support</module>
-        <module>arknet-persistence-test-support</module>
         <module>arknet-mcp-support</module>
+        <module>arknet-persistence-test-support</module>
     </modules>
 </project>
