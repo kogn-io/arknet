@@ -760,7 +760,12 @@ class StoreReportToolsTest {
         assertThat(result).doesNotContain("REF-2  ");
     }
 
-    /** Writes a single triple pointing at {@link #FR_1_IRI}, straight into a model graph. */
+    /**
+     * Writes a single triple pointing at {@link #FR_1_IRI}, straight into a model graph. The
+     * predicate {@code arkreq:refinesTerm} is deliberately declared by no shipped ontology:
+     * {@code resource_get} must list an incoming reference without knowing the vocabulary it
+     * comes from.
+     */
     private void seedReferenceToFr1(String subjectIri, String identifier) {
         RDF rdf = new SimpleRdf();
         Graph graph = rdf.createGraph();

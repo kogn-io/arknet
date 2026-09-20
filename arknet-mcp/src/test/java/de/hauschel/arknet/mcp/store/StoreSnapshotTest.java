@@ -56,6 +56,8 @@ class StoreSnapshotTest {
 
     @Test
     void detectsDanglingInstanceReferenceButNotVocabularyObjects() {
+        // arkreq:refinesTerm is deliberately declared by no shipped ontology, here and below: the
+        // snapshot must follow an edge without knowing the vocabulary it comes from.
         StoreSnapshot snapshot = StoreSnapshot.of(List.of(
                 iri(ID + "fr-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
                 iri(ID + "fr-3", ARKREQ + "status", ARKREQ + "Proposed"),
