@@ -12,26 +12,9 @@
 
     <artifactId>arknet-model-analysis</artifactId>
     <packaging>pom</packaging>
-    <description>Model Analysis bounded context (BC-6): the read-only component that evaluates the model across context boundaries - impact, traceability, orphans, the role/use-case matrix, term co-occurrence and the store checks. Owns no resource; reads every context over its published language.</description>
+    <description>Model Analysis bounded context (BC-6): aggregates the arknet-model-evaluation component, its only component</description>
 
     <modules>
-        <module>arknet-model-analysis-core</module>
-        <module>arknet-model-analysis-adapter-kogniordf</module>
-        <module>arknet-model-analysis-adapter-mcp</module>
+        <module>arknet-model-evaluation</module>
     </modules>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>de.hauschel.arknet</groupId>
-                <artifactId>arknet-model-analysis-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>de.hauschel.arknet</groupId>
-                <artifactId>arknet-model-analysis-adapter-mcp</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 </project>

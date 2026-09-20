@@ -6,17 +6,17 @@
 
     <parent>
         <groupId>de.hauschel.arknet</groupId>
-        <artifactId>arknet-model-analysis</artifactId>
+        <artifactId>arknet-model-evaluation</artifactId>
         <version>${revision}</version>
     </parent>
 
-    <artifactId>arknet-model-analysis-adapter-kogniordf</artifactId>
+    <artifactId>arknet-model-evaluation-adapter-kogniordf</artifactId>
     <description>Out-adapter: serves the ModelSnapshots and ResourceHandleLookup out-ports by reading the published language of every context out of the project dataset through the shared kognio-rdf read path.</description>
 
     <dependencies>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-model-analysis-core</artifactId>
+            <artifactId>arknet-model-evaluation-core</artifactId>
         </dependency>
         <!-- The shared read path (StoreReader, HandleResolver) and the vocabulary constants. No
              RDF4J anywhere in this module: the store read path speaks only the technology-neutral

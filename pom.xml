@@ -77,9 +77,7 @@
     </properties>
 
     <modules>
-        <!-- Bounded contexts, in BC order (BC-1..BC-6). arknet-actor and
-             arknet-model-analysis still are their own single component, not yet
-             a context parent with a renamed component underneath (#656 Welle 2). -->
+        <!-- Bounded contexts, in BC order (BC-1..BC-6). -->
         <module>arknet-product-requirements</module>
         <module>arknet-domain-modelling</module>
         <module>arknet-architecture-decisions</module>

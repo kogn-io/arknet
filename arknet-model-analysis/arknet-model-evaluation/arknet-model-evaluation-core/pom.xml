@@ -6,11 +6,11 @@
 
     <parent>
         <groupId>de.hauschel.arknet</groupId>
-        <artifactId>arknet-model-analysis</artifactId>
+        <artifactId>arknet-model-evaluation</artifactId>
         <version>${revision}</version>
     </parent>
 
-    <artifactId>arknet-model-analysis-core</artifactId>
+    <artifactId>arknet-model-evaluation-core</artifactId>
     <description>Pure hexagon interior: the traced graph, the store checks, the in-ports the tools call and the out-port through which the published language is read. Technology-neutral.</description>
 
     <dependencies>

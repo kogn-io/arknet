@@ -151,19 +151,19 @@
              faellt leer aus - was ArchUnit als Fehler meldet, nicht als gruenen Lauf. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-model-analysis-core</artifactId>
+            <artifactId>arknet-model-evaluation-core</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-model-analysis-adapter-kogniordf</artifactId>
+            <artifactId>arknet-model-evaluation-adapter-kogniordf</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-model-analysis-adapter-mcp</artifactId>
+            <artifactId>arknet-model-evaluation-adapter-mcp</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

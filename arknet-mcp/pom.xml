@@ -156,12 +156,12 @@
              anderen Kontext ueber dessen Published Language und haengt an keinem seiner Module. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-model-analysis-adapter-mcp</artifactId>
+            <artifactId>arknet-model-evaluation-adapter-mcp</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-model-analysis-adapter-kogniordf</artifactId>
+            <artifactId>arknet-model-evaluation-adapter-kogniordf</artifactId>
             <version>${project.version}</version>
         </dependency>
 

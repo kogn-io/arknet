@@ -6,17 +6,17 @@
 
     <parent>
         <groupId>de.hauschel.arknet</groupId>
-        <artifactId>arknet-model-analysis</artifactId>
+        <artifactId>arknet-model-evaluation</artifactId>
         <version>${revision}</version>
     </parent>
 
-    <artifactId>arknet-model-analysis-adapter-mcp</artifactId>
+    <artifactId>arknet-model-evaluation-adapter-mcp</artifactId>
     <description>Driving adapter: exposes the analyses as MCP tools (trace_matrix, orphan_check, impact_analysis, role_usecase_matrix, term_cooccurrence, store_check) and renders their read models as text.</description>
 
     <dependencies>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-model-analysis-core</artifactId>
+            <artifactId>arknet-model-evaluation-core</artifactId>
         </dependency>
         <!-- Technischer Support der treibenden MCP-Adapter: Anker-Aufloesung, Antwortformen und
              Parameter-Texte. Nicht transitiv ueber den Kern zu bekommen - kein *-core haengt
