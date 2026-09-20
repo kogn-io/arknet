@@ -323,7 +323,8 @@
             </plugin>
             <!-- SPDX license header (Apache-2.0) on every .java. Headers only,
                  no formatter: deliberately NOT the full rdf-core Spotless
-                 config, to avoid reformatting the whole codebase in this PR. -->
+                 config, because adding a formatter would reformat the whole
+                 codebase in one sweep. -->
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
                 <artifactId>spotless-maven-plugin</artifactId>
