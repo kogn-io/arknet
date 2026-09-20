@@ -1,6 +1,6 @@
 # arknet-actor-register
 
-Siebte hexagonale BC (Bauart 1:1 zu bounded-context/adr) -- arknet-actor-register-core + arknet-actor-register-adapter-kogniordf (Out) + arknet-actor-register-adapter-mcp (In).
+Einzige Komponente des Bounded Context Akteur (BC-4 im Store, Maven-Parent `arknet-actor`): ihre drei Module `arknet-actor-register-core`, `arknet-actor-register-adapter-kogniordf` (Out), `arknet-actor-register-adapter-mcp` (In) -- Bauart 1:1 zu bounded-context/adr.
 Macht `arkproc:Actor` store-first mintbar (`actor_add`/`actor_list`/`actor_get`/`actor_update`/`actor_delete`) und loest damit die Bedingung auf, dass ein Akteur nur als Facette eines Glossarbegriffs existieren konnte.
 Seit ADR-37/kogn-io/arknet#405 (Teil B) traegt derselbe Hexagon einen zweiten Ressourcentyp, `arkproc:Role` (`role_add`/`role_list`/`role_get`/`role_update`/`role_delete`) -- Details im eigenen Abschnitt am Ende dieser Datei.
 Der Anlass ist zweiteilig: `arkproc:Actor` war **zu eng definiert** ("Person oder System, das an einem Prozess beteiligt ist" -- eine Aufsichtsbehoerde oder ein Fachbereich ohne jede Systeminteraktion fiel per Definition heraus), und es gab **keinen eigenen Traeger** -- Actor-Sein hiess, ein zweites `rdf:type` auf einem `skos:Concept` zu tragen, mit drei Folgen: Definitionszwang (`Term` verlangt nicht-leere `definition` plus `TERM-N`-Code), Namenskollision (die Aufloesung lief ueber `skos:prefLabel`, also konnten der Fachbegriff "Kunde" und der Actor "Kunde" nicht beide so heissen) und Ununterscheidbarkeit von Klasse und Individuum.

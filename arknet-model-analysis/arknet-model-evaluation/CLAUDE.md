@@ -1,6 +1,6 @@
 # arknet-model-evaluation
 
-Einzige Komponente des Bounded Context "Model Analysis" (BC-6 im Store, Maven-Parent `arknet-model-analysis`): ihre drei Module `arknet-model-evaluation-core`, `arknet-model-evaluation-adapter-kogniordf`, `arknet-model-evaluation-adapter-mcp`.
+Einzige Komponente des Bounded Context "Modellanalyse" (BC-6 im Store, Maven-Parent `arknet-model-analysis`): ihre drei Module `arknet-model-evaluation-core`, `arknet-model-evaluation-adapter-kogniordf`, `arknet-model-evaluation-adapter-mcp`.
 Kein Vokabularmodul (ADR-57): ein Kontext mit einer Komponente hat keinen zweiten Nutzer fuer eines.
 Kein `api`-Modul (ADR-58), keine Ausbaustufe `starter`, `bom` oder `adapter-events` -- kein Ausloeser dafuer vorhanden.
 
