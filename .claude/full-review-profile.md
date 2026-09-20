@@ -27,7 +27,7 @@ the skill's generic methodology.
   BC-spanning read paths (`mcp/store`, `mcp/report`, and the model-analysis component) -- a
   contract hole there distorts all six hexagons at once. Weight it above the individual BC
   modules.
-- `StoreReader` (`arknet-persistence-support/.../persistence/StoreReader.java`, until #560 in
+- `StoreReader` (`arknet-support/arknet-persistence-support/.../persistence/StoreReader.java`, until #560 in
   `arknet-mcp`'s `mcp/store`) is the single highest
   priority file: all five generic tools (`store_overview`, `resource_get`, `trace_matrix`,
   `orphan_check`, `impact_analysis`) and the HTML report read through the same
