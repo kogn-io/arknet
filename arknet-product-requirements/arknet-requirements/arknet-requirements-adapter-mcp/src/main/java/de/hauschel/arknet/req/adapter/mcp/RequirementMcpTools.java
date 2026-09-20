@@ -76,7 +76,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * scanner discovers the {@code @McpTool} methods and registers them automatically. No
  * manual tool-specification bridge is needed - the earlier {@code tools()} adapter (which
  * pre-built {@code SyncToolSpecification}s for a raw-SDK composition root) was removed
- * with the arknet-mcp migration.</p>
+ * with the Spring AI 2.0 migration of the application (then {@code arknet-mcp}, now
+ * {@code arknet-app}).</p>
  *
  * <p><strong>Identity vs. code.</strong> Every tool takes a requirement identity as a plain
  * {@code String} - what a human types, e.g. {@code FR-1} - and maps it to a
