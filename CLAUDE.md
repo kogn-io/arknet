@@ -117,7 +117,7 @@ abdriften. Abfragbar ueber `term_list`/`term_get` (arknet-ubiquitous-language BC
 - Java-Package: `de.hauschel.arknet.*`
 - GroupId: `de.hauschel.arknet`
 - Modulverzeichnis == artifactId (ausnahmslos), und **jedes** Modul traegt das
-  `arknet-`-Prefix -- auch BC-Submodule (`arknet-app`, `arknet-requirements`,
+  `arknet-`-Prefix -- auch BC-Submodule (`arknet-adr`, `arknet-requirements`,
   `arknet-requirements-core`, `arknet-ubiquitous-language-adapter-mcp`).
   Keine Abkuerzungen im Modulnamen: der BC-Name wird ausgeschrieben
   (`arknet-ubiquitous-language-core`, nicht `ul-core`). Java-Packages duerfen

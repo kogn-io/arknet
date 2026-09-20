@@ -13,8 +13,9 @@
     <artifactId>arknet-requirements-adapter-mcp</artifactId>
     <description>In-adapter (driving): translates MCP tool calls into the arknet-requirements-core in-ports via Spring AI @McpTool. A composition root (arknet-app) collects the tools by bean auto-detection.</description>
 
-    <!-- Kein lokales dependencyManagement-Override mehr noetig (#27): seit arknet-mcp auf
-         Spring AI 2.0 migriert ist, pinnt arknet-parent mcp-core nicht mehr auf 1.1.0.
+    <!-- Kein lokales dependencyManagement-Override mehr noetig (#27): seit der Anwendung
+         (damals arknet-mcp, heute arknet-app) auf Spring AI 2.0 migriert ist, pinnt
+         arknet-parent mcp-core nicht mehr auf 1.1.0.
          Die spring-ai-bom managed den kompletten MCP-Stack einheitlich auf 2.0.0 (mcp-core
          transitiv ueber spring-ai-mcp-annotations -> io.modelcontextprotocol.sdk:mcp),
          inklusive einer aktuellen jackson-Linie. -->
