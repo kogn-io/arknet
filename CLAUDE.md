@@ -33,7 +33,9 @@ Details/Start: `arknet-mcp/CLAUDE.md`, `README.md`.
   Diagnose (`jdt_get_compilation_errors`, nach externen Aenderungen erst `jdt_refresh_project`) und
   `jdt_organize_imports`; `jdt_find_references` auf einen Kernel-Typ liefert tausende Treffer ohne Limit,
   also Methoden-/Feld-Ebene abfragen. `jdt_run_tests` scheitert mit dem JUnit 6 des Projekts (Eclipse-Runner
-  findet `Testable` nicht) -- Tests laufen ueber `mvn`. Eclipse sortiert Imports anders als Spotless.
+  findet `Testable` nicht) -- Tests laufen ueber `mvn`. Spotless prueft allein den SPDX-Lizenzheader
+  jeder `.java` und formatiert nichts -- keine `importOrder`, kein Formatter --, `jdt_organize_imports`
+  kollidiert also mit keiner Build-Regel.
 - Lokaler Vollbuild: `mvn -T 1C clean install` -- Reaktor parallel je Kern, gemessen ca. 20-25%
   schneller als seriell, aber begrenzt durch eine tiefe Modulkette: `arknet-mcp` haengt von fast
   allen anderen Modulen ab und dominiert mit >2 Min allein den kritischen Pfad, egal wie parallel
