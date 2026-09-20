@@ -18,7 +18,7 @@ the skill's generic methodology.
   broken on purpose) and which are "reviewer attention only". Treat the enforced ones as verified
   ground truth, not something to re-derive from scratch. **Its reach stops at its own `pom.xml`
   dependencies, though**: `arknet-app` is declared as a test dependency since Rule 5 was added
-  (issue #185, 2026-08-01), so `DependencyRulesTest`'s `@AnalyzeClasses` now sees
+  (issue #185, landed 2026-08-02 in `6b9352b7`), so `DependencyRulesTest`'s `@AnalyzeClasses` now sees
   `de.hauschel.arknet.mcp..` too — but that coverage is only as good as the module actually being
   on the classpath, so before trusting this module's silence on a given package as "verified
   clean", check its `pom.xml` actually depends on that package's module.
@@ -117,7 +117,7 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   **Related recurring bug (2026-08-01, issue #143):** lexicographic (`String` natural order)
   sorting of unpadded business codes (`ADR-1, ADR-10, ADR-11, ADR-2, ...`) is a bug this repo has
   already fixed once (`KognioRdfAdrRepository`'s numeric comparator) and re-introduced once
-  (arknet-app's report card builders). Grep for `Comparator.comparing(... code().value())` and
+  (arknet-mcp's report card builders). Grep for `Comparator.comparing(... code().value())` and
   verify the backing field isn't unpadded numeric text.
 - **A read path and a write/export path over the same store can silently diverge on edge cases.**
   Found in `arknet-mcp` (2026-08-01, issue #136): `StoreExporter` handles blank-node subjects

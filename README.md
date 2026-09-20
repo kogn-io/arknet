@@ -196,8 +196,9 @@ docker compose up --build
 
 The compose service was renamed from `arknet-mcp` to `arknet-app` (kogn-io/arknet#656). If you
 still have a container running under the old service name, stop and remove it first --
-otherwise the new one starts alongside it and fails on the storage-root lock described
-below (`docker compose down`, or `docker compose up -d --remove-orphans`).
+otherwise the new one starts alongside it and fails to start -- on the published port, and
+behind it on the storage-root lock described below (`docker compose down --remove-orphans`, or
+`docker compose up -d --remove-orphans`).
 
 As long as the process runs, any number of Claude Code sessions (including
 parallel worktrees of the same project) can share the same store without
