@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>de.hauschel.arknet</groupId>
-        <artifactId>arknet-parent</artifactId>
+        <artifactId>arknet-architecture-decisions</artifactId>
         <version>${revision}</version>
     </parent>
 

@@ -86,7 +86,7 @@
         <module>arknet-product-requirements</module>
         <module>arknet-domain-modelling</module>
         <module>arknet-project</module>
-        <module>arknet-adr</module>
+        <module>arknet-architecture-decisions</module>
         <module>arknet-actor</module>
         <module>arknet-model-analysis</module>
         <module>arknet-architecture-tests</module>
