@@ -47,7 +47,7 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
  * <p><strong>Why an injected predicate, not a narrower RDF4J catch.</strong> The composition root
  * deliberately stays free of any direct RDF4J dependency (see
  * {@code KognioRdfRequirementRepositoryFactory#persistentLifecycle}) so that swapping the RDF4J
- * backend for another {@link DatasetLifecycle} implementation never touches arknet-mcp. Catching
+ * backend for another {@link DatasetLifecycle} implementation never touches arknet-app. Catching
  * {@code org.eclipse.rdf4j.repository.RepositoryLockedException} by name here would reintroduce
  * exactly that dependency. Instead {@code isLockConflict} is a constructor parameter -
  * {@code KognioRdfRequirementRepositoryFactory} supplies {@code DEFAULT_LOCK_CONFLICT}, the one

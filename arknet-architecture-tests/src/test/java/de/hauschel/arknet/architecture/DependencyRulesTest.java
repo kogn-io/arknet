@@ -262,9 +262,9 @@ class DependencyRulesTest {
             noClasses()
                     .that().resideInAPackage("de.hauschel.arknet.mcp..")
                     .should().dependOnClassesThat().resideInAnyPackage(RDF4J_PACKAGES)
-                    .because("arknet-mcp wires the out-adapters but does not itself reach for "
-                            + "RDF4J-backed types; its generic read path uses only the "
-                            + "technology-neutral kognio-rdf ports");
+                    .because("arknet-app (package de.hauschel.arknet.mcp) wires the out-adapters "
+                            + "but does not itself reach for RDF4J-backed types; its generic "
+                            + "read path uses only the technology-neutral kognio-rdf ports");
 
     /**
      * Rule 6 -- the shared kernel stays technology-free too, mirroring rule 3's claim for the

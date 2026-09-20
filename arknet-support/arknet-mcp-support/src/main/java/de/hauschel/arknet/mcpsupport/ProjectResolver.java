@@ -7,7 +7,7 @@ package de.hauschel.arknet.mcpsupport;
  * Resolves which {@link de.hauschel.arknet.kernel.ProjectId} a single tool call targets, from
  * the opaque anchor the calling client supplied.
  *
- * <p>arknet-mcp runs as one shared server for every project on the machine: a single
+ * <p>arknet-app runs as one shared server for every project on the machine: a single
  * process, a single port, no per-project daemon. There is therefore no single
  * {@link de.hauschel.arknet.kernel.ProjectId} per process to inject as a singleton; instead
  * every in-adapter resolves the project <em>per call</em> from the anchor the request

@@ -295,7 +295,7 @@ public class ArknetMcpConfiguration {
      * predicate does not recognise - a permissions problem, a full disk, a corrupted store -
      * passes through unchanged rather than being misdiagnosed as a lock conflict. A second full
      * daemon instance no longer reaches this path at all - {@link #daemonStorageLock} above fails
-     * it first, at startup. arknet-mcp itself stays free of any direct RDF4J dependency either
+     * it first, at startup. arknet-app itself stays free of any direct RDF4J dependency either
      * way.</p>
      *
      * <p>{@code destroyMethod = "close"} (issue #140): {@link LockConflictReportingDatasetLifecycle}
@@ -400,7 +400,7 @@ public class ArknetMcpConfiguration {
 
     /**
      * Resolves each tool call's target project by looking the caller's anchor up in the registry
-     *. arknet-mcp is one shared server for every project on the machine, so there is no
+     *. arknet-app is one shared server for every project on the machine, so there is no
      * single project fixed at boot; the anchor arrives per call in the request header (see
      * {@link AnchorHttpTransportConfiguration}) or as a tool parameter.
      *
@@ -453,7 +453,7 @@ public class ArknetMcpConfiguration {
 
     /**
      * The display language this server instance reads labels in - a consumer-supplied context,
-     * injected once per process as this single bean (unlike {@link ProjectId}, which arknet-mcp
+     * injected once per process as this single bean (unlike {@link ProjectId}, which arknet-app
      * resolves per call from the caller's anchor rather than fixing at boot).
      * A glossary concept may carry {@code skos:prefLabel} in several languages;
      * {@link DisplayLocale#select} then chooses which one the read paths surface, degrading
@@ -957,7 +957,7 @@ public class ArknetMcpConfiguration {
      * opaque {@code arkreq:Step} subjects ordered by an {@code arkreq:position} literal), so the
      * report asks the context that wrote it instead of re-deriving the answer here. The generic
      * snapshot still backs every card's raw triples and catches whatever no context claims -
-     * see {@code arknet-mcp/CLAUDE.md} for the reasoning behind the per-bounded-context report.
+     * see {@code arknet-app/CLAUDE.md} for the reasoning behind the per-bounded-context report.
      *
      * <p>The glossary arrives as {@code ListTerms} rather than {@link ResolveTerms}: besides
      * labelling references, the report marks the ubiquitous language up inside the other

@@ -1,4 +1,4 @@
-# Convenience wiring for the arknet-mcp daemon (issue #140).
+# Convenience wiring for the arknet-app daemon (issue #140).
 #
 #     docker compose up --build
 #
@@ -6,7 +6,7 @@
 #
 #   * The published port binds to HOST LOOPBACK ONLY (127.0.0.1:47331). The
 #     daemon has no authentication (loopback-only trust boundary); the
-#     image binds 0.0.0.0 *inside* the container (see arknet-mcp/Dockerfile), so
+#     image binds 0.0.0.0 *inside* the container (see arknet-app/Dockerfile), so
 #     the host-side bind is what keeps it off the LAN. Do NOT change this to a
 #     bare "47331:47331" -- that would expose it to every host on your network.
 #
@@ -34,7 +34,7 @@
 #     tool's result would name the container-internal /data/export.
 #
 # Container/host ownership of the mounted store, report and export dirs:
-# arknet-mcp/entrypoint.sh adopts the store directory's EXISTING owner
+# arknet-app/entrypoint.sh adopts the store directory's EXISTING owner
 # automatically at every start (a fresh, container-only volume falls back to
 # the image's own non-root user), then applies that same identity to the
 # report and export dirs -- no manual chown/chmod on the host is needed, and
@@ -46,10 +46,10 @@ x-report-host-dir: &report-host-dir "${HOME}/.arknet/report"
 x-export-host-dir: &export-host-dir "${HOME}/.arknet/export"
 
 services:
-  arknet-mcp:
+  arknet-app:
     build:
       context: .
-      dockerfile: arknet-mcp/Dockerfile
+      dockerfile: arknet-app/Dockerfile
     image: ghcr.io/kogn-io/arknet:latest
     environment:
       ARKNET_REPORT_HOST_DIR: *report-host-dir

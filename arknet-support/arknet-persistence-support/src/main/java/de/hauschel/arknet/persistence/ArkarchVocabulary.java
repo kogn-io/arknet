@@ -8,7 +8,7 @@ package de.hauschel.arknet.persistence;
  * {@code String} constants - the single source of truth shared by the code that <em>writes</em>
  * them (the ADR out-adapter,
  * {@code de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepository}) and the code that
- * <em>reads</em> them ({@code arknet-mcp}'s traceability read path,
+ * <em>reads</em> them ({@code arknet-app}'s traceability read path,
  * {@code de.hauschel.arknet.analysis.domain.TraceabilityGraph}, which traverses
  * {@code addressesRequirement}/{@code affectsContext} backwards and, since kogn-io/arknet#357,
  * {@code supersededBy} forwards for {@code impact_analysis} (the pre-#357

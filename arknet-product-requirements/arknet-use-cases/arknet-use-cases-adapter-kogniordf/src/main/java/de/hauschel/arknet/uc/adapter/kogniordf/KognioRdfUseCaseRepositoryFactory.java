@@ -42,7 +42,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  * ({@link ShaclValidationRdf4j}) and the Turtle parsing ({@link Rio}) used to load the
  * use-case SHACL shapes and ontology axioms onto the classpath. It lets the composition root
  * wire an RDF-persisted use-case repository by handing over just a storage directory, without
- * itself depending on {@code io.kogn.rdf.rdf4j.*} - keeping RDF4J out of arknet-mcp and
+ * itself depending on {@code io.kogn.rdf.rdf4j.*} - keeping RDF4J out of arknet-app and
  * preserving the port-neutrality of {@link KognioRdfUseCaseRepository} and
  * {@link ShaclWriteGate}, which only know technology-neutral kognio-rdf ports.</p>
  */
@@ -80,7 +80,7 @@ public final class KognioRdfUseCaseRepositoryFactory {
      * {@link #persistent(Path, DisplayLocale)} and directly by tests that supply their own
      * (e.g. in-memory) lifecycle.
      *
-     * <p>This is the seam the composition root (arknet-mcp) uses: it passes the single shared
+     * <p>This is the seam the composition root (arknet-app) uses: it passes the single shared
      * {@link DatasetLifecycle} bean so the use-case repository reads and writes the <em>same</em>
      * per-project store as the requirements and actor repositories - which is
      * what makes the strict cross-bounded-context label resolution (a use-case step realising an

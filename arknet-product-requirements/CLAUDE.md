@@ -12,6 +12,6 @@ Der Borrowed In-Port, mit dem `arknet-use-cases-adapter-mcp` frueher die Lese-In
 Ueber Kontextgrenzen hinweg gibt es ihn weiter: beide `-adapter-mcp` haengen fuer die Anzeige-Aufloesung `ResourceId -> TERM-N` am In-Port `ResolveTerms` von `arknet-ubiquitous-language-core`, `arknet-use-cases-adapter-mcp` zusaetzlich fuer `ROLE-N` an `ResolveRoles` von `arknet-actor-register-core`.
 
 Kein `api`-Modul (ADR-58): die In-Port-Interfaces liegen in den Cores, eines je Anwendungsfall, und dass ein In-Adapter aus seinem Core nur `application.port.in` und Domaenentypen sieht, haelt Regel 8 desselben Tests.
-Keine Ausbaustufe `starter`, `bom` oder `adapter-events` -- kein Ausloeser dafuer vorhanden, es gibt genau eine Anwendung (`arknet-mcp`) und einen Reactor.
+Keine Ausbaustufe `starter`, `bom` oder `adapter-events` -- kein Ausloeser dafuer vorhanden, es gibt genau eine Anwendung (`arknet-app`) und einen Reactor.
 
 Detail je Baustein: `arknet-product-requirements-shared/CLAUDE.md`, `arknet-requirements/CLAUDE.md`, `arknet-use-cases/CLAUDE.md`.

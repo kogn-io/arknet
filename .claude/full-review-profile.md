@@ -17,13 +17,12 @@ the skill's generic methodology.
   mechanically enforced (with a note that each rule was confirmed to fail when the invariant was
   broken on purpose) and which are "reviewer attention only". Treat the enforced ones as verified
   ground truth, not something to re-derive from scratch. **Its reach stops at its own `pom.xml`
-  dependencies, though** (issues #185/#191, 2026-08-01): `arknet-mcp` is never declared as a test
-  dependency, so `DependencyRulesTest`'s `@AnalyzeClasses` cannot see a single class in
-  `de.hauschel.arknet.mcp..` — not "reviewer attention only" but structurally invisible — even
-  though `ArknetMcpConfiguration`/`StoreReader`/`TraceabilityGraph` each carry their own explicit
-  "stays free of RDF4J" Javadoc claim. Before trusting this module's silence on a given package as
-  "verified clean", check its `pom.xml` actually depends on that package's module.
-- `arknet-mcp` is the composition root and additionally carries three cross-cutting,
+  dependencies, though**: `arknet-app` is declared as a test dependency since Rule 5 was added
+  (issue #185, landed 2026-08-02 in `6b9352b7`), so `DependencyRulesTest`'s `@AnalyzeClasses` now sees
+  `de.hauschel.arknet.mcp..` too — but that coverage is only as good as the module actually being
+  on the classpath, so before trusting this module's silence on a given package as "verified
+  clean", check its `pom.xml` actually depends on that package's module.
+- `arknet-app` is the composition root and additionally carries three cross-cutting,
   BC-spanning read paths (`mcp/store`, `mcp/report`, and the model-analysis component) -- a
   contract hole there distorts all six hexagons at once. Weight it above the individual BC
   modules.
@@ -53,21 +52,23 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
 
 | Module | Path | Priority | Last reviewed commit | Date |
 |---|---|---|---|---|
-| `arknet-mcp` | `arknet-mcp` | 1 | `f7ad8db8` | 2026-08-06 |
+| `arknet-app` | `arknet-app` | 1 | `f7ad8db8` | 2026-08-06 |
 | `arknet-shared-kernel` | `arknet-shared-kernel` | 1 | `e157bc5` | 2026-08-01 |
-| `arknet-persistence-support` | `arknet-persistence-support` | 1 | `8a579e5` | 2026-08-01 |
-| `arknet-requirements` | `arknet-requirements` | 2 | `266e7ea` | 2026-08-01 |
-| `arknet-ubiquitous-language` | `arknet-ubiquitous-language` | 2 | `18bc394` | 2026-08-01 |
-| `arknet-use-cases` | `arknet-use-cases` | 2 | `941b4aa` | 2026-08-01 |
-| `arknet-bounded-context` | `arknet-bounded-context` | 2 | `c6113c7` | 2026-08-01 |
-| `arknet-project` | `arknet-project` | 2 | `ae218d2` | 2026-08-01 |
-| `arknet-adr` | `arknet-adr` | 2 | `3187cdc` | 2026-08-01 |
+| `arknet-persistence-support` | `arknet-support/arknet-persistence-support` | 1 | `8a579e5` | 2026-08-01 |
+| `arknet-requirements` | `arknet-product-requirements/arknet-requirements` | 2 | `266e7ea` | 2026-08-01 |
+| `arknet-ubiquitous-language` | `arknet-domain-modelling/arknet-ubiquitous-language` | 2 | `18bc394` | 2026-08-01 |
+| `arknet-use-cases` | `arknet-product-requirements/arknet-use-cases` | 2 | `941b4aa` | 2026-08-01 |
+| `arknet-bounded-context` | `arknet-domain-modelling/arknet-bounded-context` | 2 | `c6113c7` | 2026-08-01 |
+| `arknet-project` | `arknet-project-registry/arknet-project` | 2 | `ae218d2` | 2026-08-01 |
+| `arknet-adr` | `arknet-architecture-decisions/arknet-adr` | 2 | `3187cdc` | 2026-08-01 |
+| `arknet-actor-register` | `arknet-actor/arknet-actor-register` | 2 | — | never reviewed |
+| `arknet-model-evaluation` | `arknet-model-analysis/arknet-model-evaluation` | 2 | — | never reviewed |
 | `arknet-architecture-tests` | `arknet-architecture-tests` | 3 | `e228741` | 2026-08-01 |
 
 ## Known project-specific traps
 
 - **A port's implementation often lives in a different module than the port itself.** Several
-  tool-adapter support ports (`ProjectResolver`) have their sole implementation in `arknet-mcp`'s
+  tool-adapter support ports (`ProjectResolver`) have their sole implementation in `arknet-app`'s
   composition root, not in a sibling `*-core`/`*-adapter-*` module. Grep the whole repo for
   `implements <PortName>` before concluding a port is unimplemented or before skipping Phase 1's
   interface-vs-implementation comparison — stopping at the port's own module directory misses the
@@ -92,7 +93,7 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   accepting it -- don't take a comment's word for it.
 - **Anchor/Project routing is the one recurring hot spot.** `ProjectId`,
   `ProjectResolver`, `UnresolvedProjectAnchorException` (mcp-support) plus `RegisteredAnchorProjectResolver`
-  (`arknet-mcp`) together implement "no default, no fallback, registry lookup only". Any future
+  (`arknet-app`) together implement "no default, no fallback, registry lookup only". Any future
   change touching project routing should be re-checked against that invariant specifically: no
   default anchor, and no migration of legacy opaque ids onto it.
   **Extension found (2026-08-01, issue #149):** the "no call without an anchor" wording is
@@ -258,7 +259,7 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   patched the one reported symptom.
 
 - **A new resource type or edge shipped by a BC module does not automatically reach the
-  cross-cutting read paths — check every inventory list in `arknet-mcp` whenever one lands.**
+  cross-cutting read paths — check every inventory list in `arknet-app` whenever one lands.**
   Found twice on 2026-08-06: `bc_link_context`'s `arkddd:upstream`/`downstream` edges (landed
   2026-08-01, the same day the last review snapshot was taken) never entered
   `TraceabilityGraph.DEPENDENT_EDGE_PREDICATES`, making a recorded ContextRelationship invisible
@@ -281,7 +282,7 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
 - Write funnel, revision as concurrency token — relevant whenever a review
   touches a write path's transaction/concurrency behavior (Phase 2).
 - Generic store read path / Borrowed In-Port pattern —
-  relevant whenever a review touches `arknet-mcp`'s `mcp/store`/`mcp/report` or the
+  relevant whenever a review touches `arknet-app`'s `mcp/store`/`mcp/report` or the
   model-analysis component, since those packages exist entirely because of these two decisions.
 
 ## Calibration log

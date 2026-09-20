@@ -36,7 +36,7 @@ import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
  * ({@link ShaclValidationRdf4j}) and the Turtle parsing ({@link Rio}) used to load the project
  * SHACL shapes onto the classpath. It lets the composition root wire the project component by
  * handing over just a storage directory, without itself depending on {@code io.kogn.rdf.rdf4j.*} -
- * keeping RDF4J out of arknet-mcp and preserving the port-neutrality of
+ * keeping RDF4J out of arknet-app and preserving the port-neutrality of
  * {@link KognioRdfProjectRegistry}, {@link KognioRdfProjectSelfDescription} and
  * {@link ShaclWriteGate}, which only know technology-neutral kognio-rdf ports. This naming
  * discipline is also an ArchUnit rule (see {@code arknet-architecture-tests}'s

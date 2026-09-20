@@ -33,7 +33,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * ({@link ShaclValidationRdf4j}) and the Turtle parsing ({@link Rio}) used to load the actor SHACL
  * shapes and ontology axioms off the classpath. It lets the composition root wire an RDF-persisted
  * actor repository by handing over just a storage directory, without itself depending on
- * {@code io.kogn.rdf.rdf4j.*} - keeping RDF4J out of arknet-mcp and preserving the port-neutrality
+ * {@code io.kogn.rdf.rdf4j.*} - keeping RDF4J out of arknet-app and preserving the port-neutrality
  * of {@link KognioRdfActorRepository} and {@link ShaclWriteGate}, which only know
  * technology-neutral kognio-rdf ports.</p>
  *

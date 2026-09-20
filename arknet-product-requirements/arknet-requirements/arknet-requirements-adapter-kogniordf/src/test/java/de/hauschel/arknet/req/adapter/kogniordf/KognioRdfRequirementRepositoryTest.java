@@ -1582,7 +1582,7 @@ class KognioRdfRequirementRepositoryTest {
      * Writes a glossary term straight into the sibling terms graph of the shared project
      * dataset - deliberately via raw SPARQL rather than the ubiquitous-language adapter, so
      * this test does not couple the two bounded contexts. The cross-BC wiring itself is
-     * covered by {@code CrossBoundedContextStoreWiringTest} in arknet-mcp.
+     * covered by {@code CrossBoundedContextStoreWiringTest} in arknet-app.
      */
     private void givenTerm(ProjectId projectId, String termId) {
         String termIri = "https://w3id.org/arknet/model/term/" + termId;

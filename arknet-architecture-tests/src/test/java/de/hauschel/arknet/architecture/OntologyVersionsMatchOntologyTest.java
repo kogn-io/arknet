@@ -25,7 +25,7 @@ import de.hauschel.arknet.mcp.version.OntologyVersions;
  * Nails down the one deliberately fragile thing about {@link OntologyVersions}: it reads arknet's
  * shipped ontology headers with a narrow line scan rather than an RDF parser.
  *
- * <p><strong>Why it cannot parse.</strong> {@code arknet-mcp} is barred from RDF4J
+ * <p><strong>Why it cannot parse.</strong> {@code arknet-app} is barred from RDF4J
  * ({@link DependencyRulesTest}'s composition-root rule) and the technology-neutral kognio-rdf
  * ports carry a serialiser but no parser, so the scan is the only way the composition root can
  * read a {@code .ttl} at all. The failure mode that buys is silent: reformat an ontology header -
@@ -35,13 +35,13 @@ import de.hauschel.arknet.mcp.version.OntologyVersions;
  *
  * <p>This module is where such a seam belongs, and it is the only one that can hold it: it may
  * parse with RDF4J (it already does, for the vocabulary-versus-ontology tests) and it depends on
- * {@code arknet-mcp}, so it can put both answers side by side. Same shape as
+ * {@code arknet-app}, so it can put both answers side by side. Same shape as
  * {@code ProvenanceVocabularyMatchesOntologyTest}: two independent readings of the same shipped
  * file, asserted equal.</p>
  */
 class OntologyVersionsMatchOntologyTest {
 
-    /** What {@code arknet-mcp} will put into the next export envelope. */
+    /** What {@code arknet-app} will put into the next export envelope. */
     private static final Map<String, String> SCANNED = OntologyVersions.onClasspath();
 
     /**

@@ -22,7 +22,7 @@ Arknets eigene Architekturentscheidungen sind Records im arknet-Store (`adr_*`-T
 - Keine Datei-Pipeline: `arknet-core`, `arknet-projection` und die datei-basierten `arknet_*`-MCP-Tools existieren nicht mehr. Store-first (die BC-Tools) ist der einzige Modell-Lebenszyklus. Generierende Ausgabepfade: das self-contained `store-report.html` (`store_overview`) sowie, seit issue #415, `docs/adr-export/` -- ein reproduzierbarer, ins Repository committeter Store-Export (`.trig`-Volldump + Report), manuell erzeugt via `scripts/export-store-docs.sh`; siehe `docs/adr-export/README.md`.
 - MCP-Betriebsmodell: EIN geteilter, langlebiger Daemon fuer alle Projekte der Maschine (Streamable HTTP, `127.0.0.1:47331`), kein Claude-Code-Subprozess pro Session -- Grund: mehrere Sessions/Worktrees desselben Projekts teilen einen Store und kollidierten als eigene Subprozesse am NativeStore-Verzeichnis-Lock.
 Welches Projekt ein Aufruf trifft, entscheidet der Anker, den der Client pro Aufruf mitschickt (`.mcp.json`-Header `X-Arknet-Project-Anchor: ${PWD}`, alternativ der optionale `projectAnchor`-Parameter jedes Tools) und den der Server ausschliesslich nachschlaegt -- darum genuegt ein Port fuer alle Projekte.
-Details/Start: `arknet-mcp/CLAUDE.md`, `README.md`.
+Details/Start: `arknet-app/CLAUDE.md`, `README.md`.
 - Repo-Schnitt: `kogn-io/arknet` (dieses Repo, der Service) und `kogn-io/arknet-plugin` (das Claude Code Plugin) sind getrennte Repositories mit unabhaengigen Release-Zyklen/Versionsachsen.
 
 ## Tech-Stack
@@ -37,7 +37,7 @@ Details/Start: `arknet-mcp/CLAUDE.md`, `README.md`.
   jeder `.java` und formatiert nichts -- keine `importOrder`, kein Formatter --, `jdt_organize_imports`
   kollidiert also mit keiner Build-Regel.
 - Lokaler Vollbuild: `mvn -T 1C clean install` -- Reaktor parallel je Kern, gemessen ca. 20-25%
-  schneller als seriell, aber begrenzt durch eine tiefe Modulkette: `arknet-mcp` haengt von fast
+  schneller als seriell, aber begrenzt durch eine tiefe Modulkette: `arknet-app` haengt von fast
   allen anderen Modulen ab und dominiert mit >2 Min allein den kritischen Pfad, egal wie parallel
   der Rest laeuft. `*RealStoreConcurrencyTest` u.a. nutzen durchweg `@TempDir`, kein
   Verzeichnis-Lock zwischen Modul-Forks -- sie konkurrieren allein um CPU. Gilt nur lokal, nicht
@@ -71,7 +71,7 @@ Wie die Module zu Komponenten und Bounded Contexts gehoeren (Bausteinsicht), ste
 `docs/building-block-view.md`.
 
 - **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes). `arknet-ontology/CLAUDE.md`
-- **arknet-mcp**: MCP-Server (geteilter lokaler Daemon, `127.0.0.1:47331`) + Composition Root, verdrahtet alle acht Komponenten-Hexagons, die Anker-Aufloesung, den generischen Store-Lesepfad und das Suchwerkzeug `text_search`. `arknet-mcp/CLAUDE.md`
+- **arknet-app**: MCP-Server (geteilter lokaler Daemon, `127.0.0.1:47331`) + Composition Root, verdrahtet alle acht Komponenten-Hexagons, die Anker-Aufloesung, den generischen Store-Lesepfad und das Suchwerkzeug `text_search`. `arknet-app/CLAUDE.md`
 - **arknet-shared-kernel**: DDD Shared Kernel -- ProjectId, ResourceId, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale/LocalizedLiteral; Aufnahme je Begriff entschieden (ADR-56), die zugelassene Liste steht als ArchUnit-Regel. `arknet-shared-kernel/CLAUDE.md`
 - **arknet-support**: Aggregator (packaging pom, kein Code), kein Bounded Context; buendelt die drei technischen Support-Bibliotheken zwischen den Kontexten. `arknet-support/CLAUDE.md`
 - **arknet-mcp-support**: technischer Support der treibenden MCP-Adapter und des Composition Root -- ProjectResolver/ResolvedProject, StaleTranslationHint/FieldLanguageLookup, WriteResponse, ToolParameterDescriptions; kein `*-core` und kein Vokabularmodul haengt daran. `arknet-support/arknet-mcp-support/CLAUDE.md`
@@ -117,7 +117,7 @@ abdriften. Abfragbar ueber `term_list`/`term_get` (arknet-ubiquitous-language BC
 - Java-Package: `de.hauschel.arknet.*`
 - GroupId: `de.hauschel.arknet`
 - Modulverzeichnis == artifactId (ausnahmslos), und **jedes** Modul traegt das
-  `arknet-`-Prefix -- auch BC-Submodule (`arknet-mcp`, `arknet-requirements`,
+  `arknet-`-Prefix -- auch BC-Submodule (`arknet-adr`, `arknet-requirements`,
   `arknet-requirements-core`, `arknet-ubiquitous-language-adapter-mcp`).
   Keine Abkuerzungen im Modulnamen: der BC-Name wird ausgeschrieben
   (`arknet-ubiquitous-language-core`, nicht `ul-core`). Java-Packages duerfen
@@ -187,7 +187,7 @@ Prosa-Feld ein enges Markdown-Subset (`**fett**`, `*kursiv*`, `` `code` ``,
 bleiben bewusst Text, weil ein handgeschriebener Link den modellvalidierten
 Bezug (`usesTerm` & Co.) und damit die Luecken-Erkennung umginge. Das
 Store-Literal bleibt roh -- geparst wird beim Lesen (`ProseMarkdown` in
-`arknet-mcp`), nicht beim Schreiben.
+`arknet-app`), nicht beim Schreiben.
 
 ## Regel fuer diese Datei
 

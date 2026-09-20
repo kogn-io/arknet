@@ -112,7 +112,7 @@ Every push to `main` publishes the daemon image, so nothing has to be built
 locally:
 
 ```bash
-docker run --rm -d --name arknet-mcp \
+docker run --rm -d --name arknet-app \
   -p 127.0.0.1:47331:47331 \
   -v ~/.arknet/rdf:/data/rdf \
   -v ~/.arknet/report:/data/report \
@@ -142,19 +142,19 @@ thus the tags you can pin, are listed under
 #### Option B: Docker, built from source
 
 Build the image from the repo root -- the build context MUST be the repo root,
-because `arknet-mcp` is a multi-module reactor and needs its neighbouring
+because `arknet-app` is a multi-module reactor and needs its neighbouring
 modules:
 
 ```bash
-docker build -f arknet-mcp/Dockerfile -t arknet-mcp .
-docker run --rm -d --name arknet-mcp \
+docker build -f arknet-app/Dockerfile -t arknet-app .
+docker run --rm -d --name arknet-app \
   -p 127.0.0.1:47331:47331 \
   -v ~/.arknet/rdf:/data/rdf \
   -v ~/.arknet/report:/data/report \
   -e ARKNET_REPORT_HOST_DIR=$HOME/.arknet/report \
   -v ~/.arknet/export:/data/export \
   -e ARKNET_EXPORT_HOST_DIR=$HOME/.arknet/export \
-  arknet-mcp
+  arknet-app
 ```
 
 The `-p 127.0.0.1:47331:47331` is **deliberate, do not simplify it**: inside the
@@ -193,6 +193,12 @@ Wires up the port publish (host loopback) and volume mount for you:
 ```bash
 docker compose up --build
 ```
+
+The compose service was renamed from `arknet-mcp` to `arknet-app` (kogn-io/arknet#656). If you
+still have a container running under the old service name, stop and remove it first --
+otherwise the new one starts alongside it and fails to start -- on the published port, and
+behind it on the storage-root lock described below (`docker compose down --remove-orphans`, or
+`docker compose up -d --remove-orphans`).
 
 As long as the process runs, any number of Claude Code sessions (including
 parallel worktrees of the same project) can share the same store without
@@ -451,11 +457,11 @@ truth anymore.
 | Module | Description |
 |--------|-------------|
 | `arknet-ontology` | OWL ontology and SHACL shapes (.ttl resources only, no Java) |
-| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the component hexagons (requirements / use-cases / ubiquitous-language / bounded-context / project / adr / actor / model-analysis) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`/`resource_history`/`project_export`, whose HTML report is assembled per bounded context through their read in-ports) + the generic search path (`text_search`). The traceability read path (`trace_matrix`, the deprecated `orphan_check` alias, `impact_analysis`, `role_usecase_matrix`, `term_cooccurrence`) and the generic check path (`store_check`) are `arknet-model-evaluation`'s tools, wired here like every other component's |
+| `arknet-app` | MCP server (Streamable HTTP, local daemon) + composition root: wires the component hexagons (requirements / use-cases / ubiquitous-language / bounded-context / project / adr / actor / model-analysis) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`/`resource_history`/`project_export`, whose HTML report is assembled per bounded context through their read in-ports) + the generic search path (`text_search`). The traceability read path (`trace_matrix`, the deprecated `orphan_check` alias, `impact_analysis`, `role_usecase_matrix`, `term_cooccurrence`) and the generic check path (`store_check`) are `arknet-model-evaluation`'s tools, wired here like every other component's |
 | `arknet-support` | Aggregator (`packaging=pom`, no code) grouping `arknet-mcp-support`, `arknet-persistence-support` and `arknet-persistence-test-support`, none of which carries a bounded-context model |
-| `arknet-mcp-support` | Technical support for the driving MCP adapters and the composition root: project-anchor resolution (`ProjectResolver`/`ResolvedProject`), the stale-translation hint and field-language lookup behind every multilingual `*_update` tool, the shared `WriteResponse` renderer, and the shared MCP parameter descriptions -- consumed by every `*-adapter-mcp` module and `arknet-mcp` |
+| `arknet-mcp-support` | Technical support for the driving MCP adapters and the composition root: project-anchor resolution (`ProjectResolver`/`ResolvedProject`), the stale-translation hint and field-language lookup behind every multilingual `*_update` tool, the shared `WriteResponse` renderer, and the shared MCP parameter descriptions -- consumed by every `*-adapter-mcp` module and `arknet-app` |
 | `arknet-shared-kernel` | DDD shared kernel: domain building blocks shared by several BCs (`ProjectId`, opaque `ResourceId`/`ResourceIdFactory`, `DisplayLocale`/`LocalizedLiteral`) |
-| `arknet-persistence-support` | Technical support for the kognio-rdf adapters, write and read alike: the shared SHACL write gate (validate-before-commit), the shared write funnel, the `Ark*Vocabulary` predicate/type-IRI constants, and the type-independent read path (`StoreReader` and its read model) that `arknet-mcp`'s generic tools and `arknet-model-evaluation`'s evaluations both read |
+| `arknet-persistence-support` | Technical support for the kognio-rdf adapters, write and read alike: the shared SHACL write gate (validate-before-commit), the shared write funnel, the `Ark*Vocabulary` predicate/type-IRI constants, and the type-independent read path (`StoreReader` and its read model) that `arknet-app`'s generic tools and `arknet-model-evaluation`'s evaluations both read |
 | `arknet-persistence-test-support` | Test-side counterpart to `arknet-persistence-support`: shared `DatasetLifecycle`/`DatasetHandle`/`DatasetTx` decorators that pin a deterministic write interleaving for real-store concurrency tests, consumed at test scope by the requirement/use-case/bounded-context/term adapters |
 | `arknet-product-requirements` | Context parent of the Bounded Context "Product & Requirements" (`packaging=pom`, aggregation only): holds the vocabulary module `arknet-product-requirements-shared` plus the `arknet-requirements` and `arknet-use-cases` components below |
 | `arknet-product-requirements-shared` | Vocabulary module shared by `arknet-requirements` and `arknet-use-cases`: `RequirementCode`, `ConstraintCode`, and the context's one `TermRef` |

@@ -35,7 +35,7 @@ import de.hauschel.arknet.ul.application.port.out.TermRepository;
  * ({@link ShaclValidationRdf4j}) and the Turtle parsing ({@link Rio}) used to load the
  * ubiquitous-language SHACL shapes onto the classpath. It lets the composition root wire
  * an RDF-persisted term repository by handing over just a storage directory, without
- * itself depending on {@code io.kogn.rdf.rdf4j.*} - keeping RDF4J out of arknet-mcp and
+ * itself depending on {@code io.kogn.rdf.rdf4j.*} - keeping RDF4J out of arknet-app and
  * preserving the port-neutrality of {@link KognioRdfTermRepository} and
  * {@link ShaclWriteGate}, which only know technology-neutral kognio-rdf ports.</p>
  */

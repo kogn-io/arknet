@@ -144,7 +144,7 @@ Outside every Bounded Context:
 
 | Role in the schema                 | Module                          | Note |
 |------------------------------------|---------------------------------|------|
-| Application (composition root)     | arknet-mcp                      | Spring Boot daemon; carries the type-independent exception (ADR-55: `store_overview`, `resource_get`, `resource_history`, `project_export`) and `text_search`, which reads literals without knowing a type. The HTML report still lives here and still composes the in-ports of every context; its target is Model Analysis (ADR-54, #560 step 2) |
+| Application (composition root)     | arknet-app                      | Spring Boot daemon; carries the type-independent exception (ADR-55: `store_overview`, `resource_get`, `resource_history`, `project_export`) and `text_search`, which reads literals without knowing a type. The HTML report still lives here and still composes the in-ports of every context; its target is Model Analysis (ADR-54, #560 step 2) |
 | Shared Kernel                      | arknet-shared-kernel            | ADR-56: ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale, LocalizedLiteral. `DependencyRulesTest` rule 12 lists the admitted terms, so a new type in the package turns a test red |
 | Technical library                  | arknet-persistence-support      | Under the `arknet-support` aggregator since Welle 1 of #656. SHACL gate, WriteFunnel, vocabulary constants and, since #560, the type-independent read path over a project's dataset (StoreReader, the triple read model, Prefixes, HandleResolver, ResourceRenderer) -- no model term, hence neither Shared Kernel nor vocabulary |
 | Technical library                  | arknet-mcp-support              | Under the `arknet-support` aggregator since Welle 1 of #656. Support of the driving MCP adapters and the composition root: ProjectResolver/ResolvedProject, StaleTranslationHint/FieldLanguageLookup, WriteResponse, ToolParameterDescriptions. No core and no vocabulary module depends on it (rule 11) |
@@ -167,7 +167,7 @@ As built (from the POMs):
 - Every `-adapter-kogniordf` depends on its own core and `arknet-persistence-support`,
   the writing ones additionally on `arknet-ontology`; on no neighbouring module. It resolves neighbour codes
   by SPARQL in the neighbour's graph (Published Language).
-- Every `-adapter-mcp` and `arknet-mcp` depend on `arknet-mcp-support`; it is not
+- Every `-adapter-mcp` and `arknet-app` depend on `arknet-mcp-support`; it is not
   reachable transitively, because no core depends on it.
 - `-adapter-mcp` depends on neighbouring cores (Borrowed In-Port), except between the
   Components of one and the same Bounded Context, where the edge is gone (ADR-49):
@@ -194,7 +194,7 @@ its own core only; no module of a Component depends on a module of another.
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
 | `<bc>-shared` once ownerless identities exist | built for both contexts that need one: `arknet-product-requirements-shared` (RequirementCode, ConstraintCode, TermRef; #439) and `arknet-domain-modelling-shared` (TermCode; #441) |
-| Application outside every Bounded Context     | present (arknet-mcp); it holds no evaluation any more, only wiring, the type-independent exception and the HTML report still to move |
+| Application outside every Bounded Context     | present (arknet-app); it holds no evaluation any more, only wiring, the type-independent exception and the HTML report still to move |
 | dependency rules as a checker                 | partial: ArchUnit carries the rule that no module of a Component depends on a module of another for Product & Requirements (#439) and Domain Modelling (#441), plus that a driving adapter sees only in-ports and domain types, that a `<bc>-shared` hangs on nothing but the Shared Kernel, that no core or vocabulary module reaches into `arknet-mcp-support`, and that the Shared Kernel holds exactly the terms ADR-56 admits (#561), and that Model Analysis names no module of the contexts it reads (#560); the other contexts still borrow in-ports (ADR-49) |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |
 

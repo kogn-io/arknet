@@ -23,7 +23,7 @@ import de.hauschel.arknet.mcpsupport.ProjectResolver;
 /**
  * Wires the calling client's project anchor into every MCP tool call.
  *
- * <p>arknet-mcp is one shared HTTP server for every project on the machine, so a tool call must
+ * <p>arknet-app is one shared HTTP server for every project on the machine, so a tool call must
  * carry which project it came from. Claude Code cannot set MCP {@code _meta} per call, but a
  * {@code .mcp.json} {@code "headers"} entry expands environment variables - so the client sends its
  * anchor in the {@value #ANCHOR_HEADER} header. This configuration overrides Spring AI's

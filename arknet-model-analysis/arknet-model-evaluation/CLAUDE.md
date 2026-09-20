@@ -100,6 +100,6 @@ Der `orphan_check`-Alias bleibt vorerst bestehen, weil das arknet-plugin-Repo ih
 
 ## Was nicht hier liegt
 
-Der HTML-Report gehoert diesem Kontext (ADR-54, ADR-55), liegt bis kogn-io/arknet#642 aber in `arknet-mcp` und ist dort beschrieben.
+Der HTML-Report gehoert diesem Kontext (ADR-54, ADR-55), liegt bis kogn-io/arknet#642 aber in `arknet-app` und ist dort beschrieben.
 `store_overview`, `resource_get`, `resource_history` und `project_export` bleiben in der Composition Root: sie arbeiten typunabhaengig und kennen kein Metamodell, was die einzige Ausnahme von ADR-55 ist.
 `text_search` bleibt aus demselben Grund dort -- es sucht in Literalen, ohne einen Typ zu kennen.

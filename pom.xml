@@ -59,7 +59,7 @@
              deshalb wird die MCP-SDK-Version hier NICHT mehr separat gepinnt (loest #27:
              frueher pinnte arknet mcp-core auf 1.1.0 -> Doppelversion im Reaktor). -->
         <spring-ai.version>2.0.1</spring-ai.version>
-        <!-- Spring Boot 4.1 = Baseline von Spring AI 2.0 (arknet-mcp Composition Root). -->
+        <!-- Spring Boot 4.1 = Baseline von Spring AI 2.0 (arknet-app Composition Root). -->
         <spring-boot.version>4.1.1</spring-boot.version>
         <!-- kognio-rdf (io.kogn.rdf): embeddable RDF-Substrat hinter den Out-Ports.
              OSS auf github.com/kogn-io/rdf-core; kein BOM-Artefakt -> Version hier gepinnt.
@@ -85,9 +85,8 @@
         <module>arknet-project-registry</module>
         <module>arknet-model-analysis</module>
 
-        <!-- Application, Shared Kernel, Ontology. arknet-mcp is renamed to
-             arknet-app in #656 Welle 3. -->
-        <module>arknet-mcp</module>
+        <!-- Application, Shared Kernel, Ontology. -->
+        <module>arknet-app</module>
         <module>arknet-shared-kernel</module>
         <module>arknet-ontology</module>
 
@@ -190,7 +189,7 @@
             </dependency>
             <!-- Spring Boot BOM zuletzt importiert: die zuvor deklarierten BOMs (rdf4j, junit,
                  spring-ai) gewinnen bei Ueberschneidungen, sodass die bestehenden Modul-Versionen
-                 unangetastet bleiben. arknet-mcp (Spring-Boot-stdio-Server) zieht daraus die
+                 unangetastet bleiben. arknet-app (Spring-Boot-stdio-Server) zieht daraus die
                  einheitlichen Spring-Boot-4.1-Versionen. -->
             <dependency>
                 <groupId>org.springframework.boot</groupId>

@@ -1,11 +1,11 @@
-# arknet-mcp -- Docker image for the shared MCP HTTP daemon (issue #140).
+# arknet-app -- Docker image for the shared MCP HTTP daemon (issue #140).
 #
 # IMPORTANT: build with the REPOSITORY ROOT as the build context, not this module
-# directory. arknet-mcp is a Maven multi-module reactor and depends on its sibling
+# directory. arknet-app is a Maven multi-module reactor and depends on its sibling
 # modules (arknet-requirements-adapter-mcp, ...) via ${project.version}, so the whole
 # source tree must be visible to the build stage:
 #
-#     docker build -f arknet-mcp/Dockerfile -t arknet-mcp .
+#     docker build -f arknet-app/Dockerfile -t arknet-app .
 #
 # ---------------------------------------------------------------------------
 # Build stage: full JDK 25 + Maven, compiles the reactor and produces the
@@ -19,9 +19,9 @@ FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /build
 
 # Copy the entire reactor (the .dockerignore keeps target/, .git, IDE cruft out)
-# and build only arknet-mcp plus the modules it needs (-am = also make dependencies).
+# and build only arknet-app plus the modules it needs (-am = also make dependencies).
 COPY . .
-RUN mvn -pl arknet-mcp -am package -DskipTests -B
+RUN mvn -pl arknet-app -am package -DskipTests -B
 
 # ---------------------------------------------------------------------------
 # Runtime stage: slim JRE 25, non-root, only the fat jar.
@@ -43,8 +43,8 @@ RUN apk add --no-cache su-exec \
     && addgroup -S arknet && adduser -S arknet -G arknet
 
 WORKDIR /app
-COPY --from=build /build/arknet-mcp/target/arknet-mcp-*-exec.jar app.jar
-COPY arknet-mcp/entrypoint.sh /entrypoint.sh
+COPY --from=build /build/arknet-app/target/arknet-app-*-exec.jar app.jar
+COPY arknet-app/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # The version this daemon reports everywhere (issue #159, extended by issue #194: the MCP

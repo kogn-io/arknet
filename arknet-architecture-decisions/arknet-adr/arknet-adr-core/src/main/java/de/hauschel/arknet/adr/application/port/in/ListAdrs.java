@@ -11,7 +11,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * Driving port: list all recorded architecture decisions.
  *
  * <p>Backs the tool {@code adr_list}. Deliberately a single-method functional interface: several
- * report-building tests in {@code arknet-mcp} construct one inline as a lambda, and
+ * report-building tests in {@code arknet-app} construct one inline as a lambda, and
  * {@link CountSkippedAdrs} carries the one additional concern {@code adr_list} needs beyond this
  * (kogn-io/arknet#359) as its own port instead, precisely to keep this one that way.</p>
  */

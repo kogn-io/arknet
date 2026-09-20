@@ -13,14 +13,14 @@ package de.hauschel.arknet.mcpsupport;
  * {@code "to search"} the project) - and the inlined {@code projectAnchor} description alone made
  * up 19.7% of the whole server's {@code tools/list} payload, because Spring AI inlines every
  * parameter schema per tool rather than sharing a {@code $ref}. Centralising the three texts here,
- * in the support module every {@code *-adapter-mcp} module and {@code arknet-mcp} depend on,
+ * in the support module every {@code *-adapter-mcp} module and {@code arknet-app} depend on,
  * removes the duplication. They are tool wording, not model vocabulary, which is why they sit
  * beside {@link ProjectResolver} rather than in the shared kernel.</p>
  *
  * <p>The texts are deliberately short - just enough to say <em>when</em> a caller sets the
  * parameter. The fuller explanation ({@code projectAnchor} overriding the
  * {@code X-Arknet-Project-Anchor} header, the project-default fallback both {@code language} and
- * {@code displayLocale} use) lives once in {@code arknet-mcp}'s
+ * {@code displayLocale} use) lives once in {@code arknet-app}'s
  * {@code spring.ai.mcp.server.instructions}, not repeated on every tool; the full
  * {@code displayLocale} fallback chain is documented on
  * {@link de.hauschel.arknet.kernel.DisplayLocale#select}.</p>

@@ -86,7 +86,7 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  *
  * <p><strong>{@code arkreq:constraintStatement} stays adapter-local.</strong> Unlike
  * {@code arkreq:usesTerm}/{@code acceptanceCriterion} (shared via {@link ArkreqVocabulary}
- * because {@code arknet-mcp}'s traceability read path also needs them), the constraint statement
+ * because {@code arknet-app}'s traceability read path also needs them), the constraint statement
  * text is not scanned by {@code orphan_check}'s unlinked-mention check in this scope - so this
  * predicate is declared once, here, rather than added to the shared vocabulary class.</p>
  *
