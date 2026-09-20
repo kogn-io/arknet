@@ -15,3 +15,8 @@ Ein Namespace-Name ist publizierte Sprache, er steht in jedem Tripel: ein Name, 
 Traegt ein Namespace live weniger, als sein Name verspricht, wird der Name auf das eingeengt, was live ist.
 Ob ein Name mehr behauptet, als der Namespace traegt, ist eine Beurteilung und wird im Review entschieden, keine mechanische Pruefung.
 Das ist eine andere Regel als die Namespace-Spannweite (ADR-12 im arknet-eigenen Store: kein Namespace spannt ueber zwei Kontexte) -- jene ist mechanisch pruefbar und eine Entscheidung ueber die Gestalt des Systems, diese hier eine Beurteilungsfrage ueber Benennung.
+
+Die Ontologie darf der Implementierung vorlaufen, die Shapes duerfen es nicht.
+Ein deklarierter Begriff ohne Schreibpfad ist Vokabular-Vorrat und bleibt stehen; eine Shape ohne Schreibpfad behauptet eine Pruefung, die nie laeuft, und wird geloescht.
+Wer den Schreibpfad spaeter baut, schreibt die Shape mit ihm zusammen -- dann gegen echte Anforderungen statt gegen eine Vermutung von heute.
+Damit ein Vorrat spaeter nicht als Altlast gestrichen wird, traegt der deklarierte Begriff seinen Grund als `skos:note` (so bei `arkreq:Milestone` und `arkreq:Release`).

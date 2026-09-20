@@ -162,6 +162,8 @@ class DigestRendererTest {
         // longer produced by any write path and must not be what dangling detection keys on.
         String subject = OPAQUE + "11111111-1111-1111-1111-111111111111";
         String danglingTarget = OPAQUE + "22222222-2222-2222-2222-222222222222";
+        // arkreq:refinesTerm is deliberately declared by no shipped ontology: the renderer must
+        // report the dangling target without knowing the predicate.
         StoreSnapshot snapshot = StoreSnapshot.of(List.of(
                 iri(subject, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
                 lit(subject, TITLE, "Export"),

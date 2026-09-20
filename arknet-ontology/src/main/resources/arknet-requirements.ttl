@@ -419,6 +419,8 @@ arkreq:status a owl:ObjectProperty ;
 arkreq:Milestone a owl:Class ;
     rdfs:label   "Milestone"@en , "Meilenstein"@de ;
     rdfs:comment "Ein datiertes Planungsziel, das Requirements buendelt (vgl. Issue-Tracker-Milestone). Wird typischerweise als ein Release ausgeliefert."@de ;
+    skos:note    "Declared, not writable: no tool creates a Milestone. Deliberate vocabulary lead, not a leftover - the intent is that release planning is held in the store rather than in an external tracker, so that it survives a tracker change. Its shape will be written together with the write path (kogn-io/arknet#325)."@en ,
+                 "Deklariert, nicht schreibbar: kein Tool erzeugt einen Milestone. Bewusster Vokabular-Vorlauf, kein Ueberbleibsel -- die Release-Planung soll im Store liegen statt in einem externen Tracker und damit einen Tracker-Wechsel ueberleben. Die Shape entsteht zusammen mit dem Schreibpfad (kogn-io/arknet#325)."@de ;
     skos:example "v0.3.0 Projektionen, MVP-Launch"@de .
 
 arkreq:milestoneTitle a owl:DatatypeProperty ;
@@ -460,6 +462,8 @@ arkreq:Release a owl:Class ;
     rdfs:subClassOf doap:Version ;
     rdfs:label   "Release"@en , "Release"@de ;
     rdfs:comment "Eine ausgelieferte Version des Systems (Semantic Versioning). Spezialisierung von doap:Version."@de ;
+    skos:note    "Declared, not writable: no tool creates a Release. Deliberate vocabulary lead, not a leftover - same reasoning as arkreq:Milestone (kogn-io/arknet#325)."@en ,
+                 "Deklariert, nicht schreibbar: kein Tool erzeugt einen Release. Bewusster Vokabular-Vorlauf, kein Ueberbleibsel -- dieselbe Begruendung wie bei arkreq:Milestone (kogn-io/arknet#325)."@de ;
     skos:example "0.3.0, 1.0.0"@de .
 
 arkreq:releaseVersion a owl:DatatypeProperty ;
