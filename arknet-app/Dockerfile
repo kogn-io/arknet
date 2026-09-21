@@ -13,8 +13,16 @@
 # The plugin is configured with classifier "exec" (issue #237) so the plain
 # thin jar stays the reactor's main artifact -- the fat jar this stage copies
 # below therefore carries the "-exec" suffix.
+#
+# Pinned to $BUILDPLATFORM -- the platform buildx actually runs on -- and NOT to the
+# image's target platform. The workflows publish a multi-arch manifest
+# (linux/amd64,linux/arm64), and buildx runs every stage once per target platform.
+# Without this pin the second pass would recompile the whole reactor under QEMU
+# emulation for a bit-identical result: a jar carries bytecode, it has no
+# architecture. With it the reactor compiles once, natively, and each target
+# platform only assembles the slim runtime stage below around that one jar.
 # ---------------------------------------------------------------------------
-FROM maven:3.9-eclipse-temurin-25 AS build
+FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-25 AS build
 
 WORKDIR /build
 
