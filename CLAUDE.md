@@ -7,10 +7,12 @@
 - Repository: Code und Pull Requests leben auf GitHub (`github.com/kogn-io/arknet`, Apache-2.0).
   Bugs/Feature-Requests laufen ueber den GitHub-Issue-Tracker (Label-Schema
   `prio:*`, Typ-Labels (`bug`/`enhancement`/`chore`/`refactor`/`documentation`/`vision`/...),
-  `deferred`), offene Fragen ueber GitHub Discussions. Milestones sind Release-Schnitte und
-  heissen `X.Y.Z Thema` (Version vorne, Thema hinten, z.B. `0.7.0 Stabil+Sprache`); nicht
-  jedes Issue traegt einen -- ein Epic, das mehrere Milestones spannt oder vor ihnen laeuft,
-  bleibt milestone-frei. Siehe README "Repository"-Abschnitt.
+  `deferred`), offene Fragen ueber GitHub Discussions. Milestones sind Release-Schnitte, keine
+  Themenkoerbe, und heissen `X.Y.Z Thema` (Version vorne, Thema hinten, z.B.
+  `0.7.0 Stabil+Sprache`). Jedes offene Issue traegt einen; ohne Themenbindung gehoert es in
+  einen spaeteren, nicht in gar keinen. Milestone-frei bleiben allein ein Epic, das mehrere
+  Milestones spannt oder vor ihnen laeuft, und `vision`-Issues, die Scope statt Release
+  tragen. Siehe README "Repository"-Abschnitt.
 
 ## Architektur
 
