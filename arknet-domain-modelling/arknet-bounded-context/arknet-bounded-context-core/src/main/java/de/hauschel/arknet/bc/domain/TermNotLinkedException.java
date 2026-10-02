@@ -9,7 +9,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when {@code bc_unlink_term} names a glossary term that the bounded context does not
- * currently link.
+ * currently carry under the named {@link TermRelation}.
  *
  * <p>An expected domain outcome, not a programming error, and the exact counterpart of
  * {@link ContextRelationshipNotFoundException}: an unlink that removes nothing must fail loudly,
@@ -28,6 +28,18 @@ public class TermNotLinkedException extends RuntimeException {
     private final transient ProjectId projectId;
     private final transient BoundedContextCode code;
     private final transient String termCode;
+    private final TermRelation relation;
+
+    /**
+     * Creates the exception for a term that is not part of the context's language.
+     *
+     * @param projectId the project that was searched
+     * @param code      the bounded-context code the caller named
+     * @param termCode  the term code the caller named
+     */
+    public TermNotLinkedException(ProjectId projectId, BoundedContextCode code, String termCode) {
+        this(projectId, code, termCode, TermRelation.USES);
+    }
 
     /**
      * Creates the exception.
@@ -35,14 +47,19 @@ public class TermNotLinkedException extends RuntimeException {
      * @param projectId the project that was searched
      * @param code      the bounded-context code the caller named
      * @param termCode  the term code the caller named
+     * @param relation  the relation the caller asked to remove
      */
-    public TermNotLinkedException(ProjectId projectId, BoundedContextCode code, String termCode) {
-        super("bounded context " + Objects.requireNonNull(code, "code").value() + " does not link term "
+    public TermNotLinkedException(ProjectId projectId, BoundedContextCode code, String termCode,
+            TermRelation relation) {
+        super("bounded context " + Objects.requireNonNull(code, "code").value()
+                + (Objects.requireNonNull(relation, "relation") == TermRelation.USES
+                        ? " does not link term " : " does not delimit term ")
                 + Objects.requireNonNull(termCode, "termCode") + " in project "
                 + Objects.requireNonNull(projectId, "projectId").value());
         this.projectId = projectId;
         this.code = code;
         this.termCode = termCode;
+        this.relation = relation;
     }
 
     /** @return the project that was searched */
@@ -58,5 +75,10 @@ public class TermNotLinkedException extends RuntimeException {
     /** @return the term code the caller named */
     public String termCode() {
         return termCode;
+    }
+
+    /** @return the relation the caller asked to remove */
+    public TermRelation relation() {
+        return relation;
     }
 }

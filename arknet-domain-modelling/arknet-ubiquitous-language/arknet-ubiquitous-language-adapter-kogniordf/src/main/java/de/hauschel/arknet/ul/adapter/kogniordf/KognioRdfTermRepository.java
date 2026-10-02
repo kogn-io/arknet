@@ -616,7 +616,8 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
             ArkreqVocabulary.USES_TERM, "arkreq:usesTerm",
             ArkarchVocabulary.USES_TERM, "arkarch:usesTerm",
-            ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM, "arkddd:ubiquitousLanguageTerm");
+            ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM, "arkddd:ubiquitousLanguageTerm",
+            ArkdddVocabulary.DELIMITS_TERM, "arkddd:delimitsTerm");
 
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still

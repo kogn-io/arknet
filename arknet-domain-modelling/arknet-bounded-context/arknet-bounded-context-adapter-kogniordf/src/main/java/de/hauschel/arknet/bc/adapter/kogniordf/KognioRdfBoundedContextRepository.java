@@ -181,6 +181,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private static final String SUBDOMAIN_CLASS = ArkdddVocabulary.SUBDOMAIN_CLASS;
     private static final String OWNED_BY_PROPERTY = ArkdddVocabulary.OWNED_BY_PROPERTY;
     private static final String UBIQUITOUS_LANGUAGE_TERM_PROPERTY = ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM;
+    private static final String DELIMITS_TERM_PROPERTY = ArkdddVocabulary.DELIMITS_TERM;
     private static final String HAS_AGGREGATE_PROPERTY = ArkdddVocabulary.HAS_AGGREGATE_PROPERTY;
 
     /**
@@ -353,6 +354,9 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         }
         for (IRI termIri : termIris) {
             graph.add(subjectIri, rdf.createIRI(UBIQUITOUS_LANGUAGE_TERM_PROPERTY), termIri);
+        }
+        for (ResourceId delimited : boundedContext.delimitedTerms()) {
+            graph.add(subjectIri, rdf.createIRI(DELIMITS_TERM_PROPERTY), termIriFor(delimited));
         }
         return graph;
     }
@@ -543,11 +547,13 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
             }
             NameVisionSelection selected = selection.get();
             SubdomainOwnedBy reduced = reduceSubdomainOwnedBy(rows, subjectIriString);
+            List<ResourceId> usesTerms = readUsesTerms(sparql::select, subject);
             BoundedContext boundedContext = new BoundedContext(
                     new BoundedContextId(ResourceId.of(subjectIriString)), code,
                     selected.name().value(), selected.domainVision().value(),
                     reduced.subdomain(), reduced.ownedBy(),
-                    readUsesTerms(sparql::select, subject));
+                    usesTerms,
+                    readDelimitedTerms(sparql::select, subject, usesTerms));
             RevisionToken head = rows.get(0).getValue("head")
                     .filter(IRI.class::isInstance)
                     .map(value -> new RevisionToken(((IRI) value).getIRIString()))
@@ -611,6 +617,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         SparqlQuery sparql = handle.sparqlQuery();
         return selectNameVision(sparql::select, subject, locale).map(selection -> {
             SubdomainOwnedBy reduced = reduceSubdomainOwnedBy(rows, subjectIriString);
+            List<ResourceId> usesTerms = readUsesTerms(sparql::select, subject);
             return new BoundedContext(
                     new BoundedContextId(ResourceId.of(subjectIriString)),
                     code,
@@ -618,7 +625,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                     selection.domainVision().value(),
                     reduced.subdomain(),
                     reduced.ownedBy(),
-                    readUsesTerms(sparql::select, subject));
+                    usesTerms,
+                    readDelimitedTerms(sparql::select, subject, usesTerms));
         });
     }
 
@@ -677,7 +685,9 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             SparqlQuery sparql = handle.sparqlQuery();
-            Map<String, List<ResourceId>> termsBySubject = readUsesTermsBySubject(handle);
+            Map<String, List<ResourceId>> termsBySubject =
+                    readTermsBySubject(handle, UBIQUITOUS_LANGUAGE_TERM_PROPERTY);
+            Map<String, List<ResourceId>> delimitedBySubject = readTermsBySubject(handle, DELIMITS_TERM_PROPERTY);
             Map<String, List<LocalizedLiteral>> namesBySubject = literalsBySubject(sparql, NAME_PROPERTY);
             Map<String, List<LocalizedLiteral>> domainVisionsBySubject =
                     literalsBySubject(sparql, DOMAIN_VISION_PROPERTY);
@@ -702,8 +712,10 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 if (domainVision.isEmpty()) {
                     return;
                 }
+                List<ResourceId> usesTerms = termsBySubject.getOrDefault(subjectIri, List.of());
                 results.add(assembly.toBoundedContext(name.get().value(), domainVision.get().value(),
-                        termsBySubject.getOrDefault(subjectIri, List.of())));
+                        usesTerms, withoutLanguageTerms(delimitedBySubject.getOrDefault(subjectIri, List.of()),
+                                usesTerms)));
             });
             return List.copyOf(results);
         }
@@ -1035,10 +1047,11 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
             }
         }
 
-        private BoundedContext toBoundedContext(String name, String domainVision, List<ResourceId> usesTerms) {
+        private BoundedContext toBoundedContext(String name, String domainVision, List<ResourceId> usesTerms,
+                List<ResourceId> delimitedTerms) {
             return new BoundedContext(id, code, name, domainVision,
                     firstDistinctValue(subdomains, id.value().value(), "subdomain"),
-                    firstDistinctValue(ownedBys, id.value().value(), "ownedBy"), usesTerms);
+                    firstDistinctValue(ownedBys, id.value().value(), "ownedBy"), usesTerms, delimitedTerms);
         }
     }
 
@@ -1124,10 +1137,38 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 .toList();
     }
 
-    /** Bulk variant of {@link #readUsesTerms}: all bounded contexts' term references in one query. */
-    private Map<String, List<ResourceId>> readUsesTermsBySubject(DatasetHandle handle) {
+    /**
+     * Reads the {@code arkddd:delimitsTerm} edges of one bounded context, ordered and filtered as
+     * {@link #readUsesTerms} does, minus any term the context also carries as a language term
+     * ({@code usesTerms}, already read by the caller). The SHACL gate now rejects a write carrying
+     * both edges for one term, so this only tolerates legacy data from before the gate: such a
+     * pair would otherwise make the read fail on {@link BoundedContext}'s disjointness invariant,
+     * and the language edge wins because it is the older, stronger statement. The next write of
+     * the context drops the discarded {@code delimitsTerm} edge for good.
+     */
+    private List<ResourceId> readDelimitedTerms(Function<String, Stream<BindingSet>> selectFn, String subject,
+            List<ResourceId> usesTerms) {
+        String query = "SELECT ?term WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                + subject + " <" + DELIMITS_TERM_PROPERTY + "> ?term } "
+                + "FILTER(isIRI(?term)) } ORDER BY ?term";
+        List<ResourceId> delimited = selectFn.apply(query)
+                .map(row -> ResourceId.of(iriOf(row, "term").getIRIString()))
+                .toList();
+        return withoutLanguageTerms(delimited, usesTerms);
+    }
+
+    /** {@code delimited} without any term {@code usesTerms} also names - see {@link #readDelimitedTerms}. */
+    private static List<ResourceId> withoutLanguageTerms(List<ResourceId> delimited, List<ResourceId> usesTerms) {
+        return delimited.stream().filter(term -> !usesTerms.contains(term)).toList();
+    }
+
+    /**
+     * Bulk variant of {@link #readUsesTerms}/{@link #readDelimitedTerms}: every bounded context's
+     * edges under {@code predicate} in one query.
+     */
+    private Map<String, List<ResourceId>> readTermsBySubject(DatasetHandle handle, String predicate) {
         String query = "SELECT ?s ?term WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
-                + "?s <" + UBIQUITOUS_LANGUAGE_TERM_PROPERTY + "> ?term } "
+                + "?s <" + predicate + "> ?term } "
                 + "FILTER(isIRI(?s) && isIRI(?term)) } ORDER BY ?s ?term";
         Map<String, List<ResourceId>> bySubject = new LinkedHashMap<>();
         handle.sparqlQuery().select(query).forEach(row -> bySubject

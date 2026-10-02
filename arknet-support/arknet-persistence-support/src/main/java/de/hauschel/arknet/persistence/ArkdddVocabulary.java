@@ -138,6 +138,12 @@ public final class ArkdddVocabulary {
     public static final String UBIQUITOUS_LANGUAGE_TERM = NAMESPACE + "ubiquitousLanguageTerm";
 
     /**
+     * {@code arkddd:delimitsTerm} - BoundedContext -&gt; a glossary term it names in its prose to
+     * draw its boundary against it; deliberately not part of its language.
+     */
+    public static final String DELIMITS_TERM = NAMESPACE + "delimitsTerm";
+
+    /**
      * {@code arkddd:hasAggregate} - BoundedContext -&gt; an aggregate that belongs to it. Its
      * range, {@code arkddd:Aggregate}, lives in the not-yet-published, parked tactical-DDD block
      * and is out of this class's scope (see the class javadoc).

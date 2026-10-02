@@ -32,6 +32,8 @@ import de.hauschel.arknet.bc.domain.ContextRelationshipNotFoundException;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermNotLinkedException;
+import de.hauschel.arknet.bc.domain.TermRelation;
+import de.hauschel.arknet.bc.domain.TermRelationConflictException;
 import de.hauschel.arknet.kernel.MissingDefaultLanguageException;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
@@ -402,6 +404,85 @@ class BoundedContextServiceTest {
         assertThrows(NoSuchElementException.class, () -> service.unlinkTerm(WS, code, "TERM-99"));
 
         assertEquals(List.of((TERM_1)), service.get(WS, code, null).orElseThrow().context().usesTerms());
+    }
+
+    /**
+     * kogn-io/arknet#610: a delimited term is held apart from the language terms - linking it as
+     * {@code DELIMITS} leaves {@code usesTerms} untouched, and re-delimiting is idempotent.
+     */
+    @Test
+    void delimitTermRecordsTheTermApartFromTheLanguageTerms() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-1");
+
+        service.linkTerm(WS, code, "TERM-2", TermRelation.DELIMITS);
+        BoundedContext delimited = service.linkTerm(WS, code, "TERM-2", TermRelation.DELIMITS);
+
+        assertEquals(List.of(TERM_1), delimited.usesTerms());
+        assertEquals(List.of(TERM_2), delimited.delimitedTerms());
+        BoundedContext stored = service.get(WS, code, null).orElseThrow().context();
+        assertEquals(List.of(TERM_1), stored.usesTerms());
+        assertEquals(List.of(TERM_2), stored.delimitedTerms());
+    }
+
+    /** A term is either part of the context's language or delimited, never both - in both orders. */
+    @Test
+    void aTermCannotBeBothALanguageTermAndADelimitedTerm() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-1");
+        service.linkTerm(WS, code, "TERM-2", TermRelation.DELIMITS);
+
+        TermRelationConflictException delimitLinked = assertThrows(TermRelationConflictException.class,
+                () -> service.linkTerm(WS, code, "TERM-1", TermRelation.DELIMITS));
+        TermRelationConflictException linkDelimited = assertThrows(TermRelationConflictException.class,
+                () -> service.linkTerm(WS, code, "TERM-2", TermRelation.USES));
+
+        assertEquals(TermRelation.USES, delimitLinked.existing());
+        assertEquals(TermRelation.DELIMITS, linkDelimited.existing());
+        BoundedContext stored = service.get(WS, code, null).orElseThrow().context();
+        assertEquals(List.of(TERM_1), stored.usesTerms());
+        assertEquals(List.of(TERM_2), stored.delimitedTerms());
+    }
+
+    /** bc_update's wholesale {@code terms} set must not slip a delimited term into the language. */
+    @Test
+    void updateRejectsATermsSetThatNamesADelimitedTerm() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-2", TermRelation.DELIMITS);
+
+        TermRelationConflictException ex = assertThrows(TermRelationConflictException.class,
+                () -> service.update(WS, code, null, null, List.of("TERM-1", "TERM-2"), null, null));
+
+        assertEquals("TERM-2", ex.termCode());
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().context().usesTerms());
+    }
+
+    /** Language-term writes leave the delimited terms alone - the two edges round-trip independently. */
+    @Test
+    void languageTermWritesPreserveTheDelimitedTerms() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-2", TermRelation.DELIMITS);
+
+        service.linkTerm(WS, code, "TERM-1");
+        service.update(WS, code, "Renamed", null, List.of(), "en", null);
+
+        assertEquals(List.of(TERM_2), service.get(WS, code, null).orElseThrow().context().delimitedTerms());
+    }
+
+    @Test
+    void undelimitTermRemovesTheDelimitationAndRejectsATermThatIsNotDelimited() {
+        BoundedContextCode code = service.add(WS, newBoundedContext(), null).code();
+        service.linkTerm(WS, code, "TERM-1");
+        service.linkTerm(WS, code, "TERM-2", TermRelation.DELIMITS);
+
+        TermNotLinkedException notDelimited = assertThrows(TermNotLinkedException.class,
+                () -> service.unlinkTerm(WS, code, "TERM-1", TermRelation.DELIMITS));
+        BoundedContext undelimited = service.unlinkTerm(WS, code, "TERM-2", TermRelation.DELIMITS);
+
+        assertEquals(TermRelation.DELIMITS, notDelimited.relation());
+        assertEquals(List.of(), undelimited.delimitedTerms());
+        assertEquals(List.of(TERM_1), undelimited.usesTerms());
+        assertThrows(TermNotLinkedException.class, () -> service.unlinkTerm(WS, code, "TERM-2"));
     }
 
     @Test

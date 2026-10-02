@@ -233,6 +233,13 @@ public final class TraceabilityGraph {
     // each turned out to already carry their own private copy of the exact same type IRI.
     private static final String UBIQUITOUS_LANGUAGE_TERM = ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM;
 
+    /**
+     * {@code arkddd:delimitsTerm} - BoundedContext -&gt; a term it names only to draw its boundary
+     * against it. An impact edge like {@link #UBIQUITOUS_LANGUAGE_TERM}: the context's prose names
+     * the term, so a change to the term reaches it.
+     */
+    private static final String DELIMITS_TERM = ArkdddVocabulary.DELIMITS_TERM;
+
     private static final String FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.FUNCTIONAL_REQUIREMENT_TYPE;
     private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.NON_FUNCTIONAL_REQUIREMENT_TYPE;
     private static final String USE_CASE_TYPE = ArkreqVocabulary.USE_CASE_TYPE;
@@ -336,7 +343,7 @@ public final class TraceabilityGraph {
      */
     private static final Set<String> DEPENDENT_EDGE_PREDICATES = Set.of(
             USES_TERM, PRIMARY_ROLE, SUPPORTING_ROLE, STEP_REALISES, MAIN_STEP, EXTENSION_STEP,
-            UBIQUITOUS_LANGUAGE_TERM, UPSTREAM, DOWNSTREAM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT,
+            UBIQUITOUS_LANGUAGE_TERM, DELIMITS_TERM, UPSTREAM, DOWNSTREAM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT,
             ADR_USES_TERM, CONSTRAINED_BY, SUPERSEDES, FILLED_BY,
             SCOPED_TO, HAS_CONTEXT, SATISFIES, DEPENDS_ON, INCLUDES_USE_CASE, EXTENDS_USE_CASE);
 

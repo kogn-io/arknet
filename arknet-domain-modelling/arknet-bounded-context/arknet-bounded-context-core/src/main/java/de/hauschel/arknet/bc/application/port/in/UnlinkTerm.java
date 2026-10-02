@@ -6,6 +6,7 @@ package de.hauschel.arknet.bc.application.port.in;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.TermNotLinkedException;
+import de.hauschel.arknet.bc.domain.TermRelation;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
@@ -38,5 +39,21 @@ public interface UnlinkTerm {
      * @throws de.hauschel.arknet.bc.domain.BoundedContextNotFoundException if {@code code} is unknown
      * @throws TermNotLinkedException if the term is not currently linked to this bounded context
      */
-    BoundedContext unlinkTerm(ProjectId projectId, BoundedContextCode code, String termCode);
+    default BoundedContext unlinkTerm(ProjectId projectId, BoundedContextCode code, String termCode) {
+        return unlinkTerm(projectId, code, termCode, TermRelation.USES);
+    }
+
+    /**
+     * Removes the edge of {@code relation} from bounded context {@code code} to the glossary term
+     * identified by {@code termCode}; the other relation's edges stay untouched.
+     *
+     * @param projectId the project (architecture model) the bounded context lives in
+     * @param code      the bounded-context code, e.g. {@code BC-1}
+     * @param termCode  the term's human-readable business code, e.g. {@code TERM-1}
+     * @param relation  which edge to remove
+     * @return the bounded context without the edge
+     * @throws de.hauschel.arknet.bc.domain.BoundedContextNotFoundException if {@code code} is unknown
+     * @throws TermNotLinkedException if the term does not currently carry {@code relation}
+     */
+    BoundedContext unlinkTerm(ProjectId projectId, BoundedContextCode code, String termCode, TermRelation relation);
 }

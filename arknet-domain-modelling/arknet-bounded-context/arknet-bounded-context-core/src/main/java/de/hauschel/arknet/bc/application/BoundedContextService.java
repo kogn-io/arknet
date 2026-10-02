@@ -43,6 +43,8 @@ import de.hauschel.arknet.bc.domain.ContextRelationshipNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.TermNotLinkedException;
+import de.hauschel.arknet.bc.domain.TermRelation;
+import de.hauschel.arknet.bc.domain.TermRelationConflictException;
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.LanguageTag;
@@ -319,56 +321,57 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     }
 
     @Override
-    public BoundedContext linkTerm(ProjectId projectId, BoundedContextCode code, String termCode) {
+    public BoundedContext linkTerm(ProjectId projectId, BoundedContextCode code, String termCode,
+            TermRelation relation) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(termCode, "termCode");
+        Objects.requireNonNull(relation, "relation");
         // Resolution does not depend on the bounded context's current state, so it happens once,
         // outside the retry loop below - an unknown/ambiguous term code must propagate as a
         // didactic rejection immediately and leave the bounded context untouched.
         ResourceId term = termLookup.resolveByCode(projectId, termCode);
         // Touches no language-tagged field: name/domainVision and their tags pass straight
         // through from `current`, so compareAndUpdate's write is a scoped no-op on both language
-        // variants, and the null write-side default keeps issue #258's sweep off - exactly as
-        // before kogn-io/arknet#520.
+        // variants, and the null write-side default keeps issue #258's sweep off.
         return updateWithOptimisticRetry(projectId, code, null, current -> {
-            if (current.value().usesTerms().contains(term)) {
+            if (current.value().terms(relation.opposite()).contains(term)) {
+                // Judged inside the mutation, against the state this very attempt read.
+                throw new TermRelationConflictException(projectId, code, termCode, relation.opposite());
+            }
+            if (current.value().terms(relation).contains(term)) {
                 return Optional.empty();
             }
-            List<ResourceId> linked = new ArrayList<>(current.value().usesTerms());
+            List<ResourceId> linked = new ArrayList<>(current.value().terms(relation));
             linked.add(term);
-            BoundedContext updated = new BoundedContext(current.value().id(), current.value().code(),
-                    current.value().name(), current.value().domainVision(), current.value().subdomain(),
-                    current.value().ownedBy(), linked);
-            return Optional.of(new PendingWrite(updated, current.nameLanguage(), current.domainVisionLanguage(),
-                    null));
+            return Optional.of(new PendingWrite(current.value().withTerms(relation, linked), current.nameLanguage(),
+                    current.domainVisionLanguage(), null));
         });
     }
 
     @Override
-    public BoundedContext unlinkTerm(ProjectId projectId, BoundedContextCode code, String termCode) {
+    public BoundedContext unlinkTerm(ProjectId projectId, BoundedContextCode code, String termCode,
+            TermRelation relation) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(termCode, "termCode");
+        Objects.requireNonNull(relation, "relation");
         // Resolved once, outside the retry loop, exactly as linkTerm does: an unknown or ambiguous
         // term code is a didactic rejection of the whole call, not a race worth retrying.
         ResourceId term = termLookup.resolveByCode(projectId, termCode);
         // Touches no language-tagged field, so the tags read from `current` pass straight through
         // and the null write-side default keeps issue #258's sweep off - same as linkTerm.
         return updateWithOptimisticRetry(projectId, code, null, current -> {
-            if (!current.value().usesTerms().contains(term)) {
+            if (!current.value().terms(relation).contains(term)) {
                 // Thrown from inside the mutation rather than checked before it: the state that
                 // decides is the one this very attempt read, and a check outside the loop would
                 // judge a snapshot the retry may already have replaced.
-                throw new TermNotLinkedException(projectId, code, termCode);
+                throw new TermNotLinkedException(projectId, code, termCode, relation);
             }
-            List<ResourceId> linked = new ArrayList<>(current.value().usesTerms());
+            List<ResourceId> linked = new ArrayList<>(current.value().terms(relation));
             linked.remove(term);
-            BoundedContext updated = new BoundedContext(current.value().id(), current.value().code(),
-                    current.value().name(), current.value().domainVision(), current.value().subdomain(),
-                    current.value().ownedBy(), linked);
-            return Optional.of(new PendingWrite(updated, current.nameLanguage(), current.domainVisionLanguage(),
-                    null));
+            return Optional.of(new PendingWrite(current.value().withTerms(relation, linked), current.nameLanguage(),
+                    current.domainVisionLanguage(), null));
         });
     }
 
@@ -382,19 +385,30 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
         // null stays null here - it is the "leave this relation alone" signal
         // (kogn-io/arknet#567, precedent RequirementService#update's usesTermCodes resolution), an
         // empty list a deliberate clear.
-        List<ResourceId> terms = termCodes == null
-                ? null
-                : termCodes.stream()
-                        .map(termCode -> termLookup.resolveByCode(projectId, termCode))
-                        .distinct()
-                        .toList();
+        // Keyed by identity, first typed code kept: the code is what a conflict reports back.
+        Map<ResourceId, String> codeByTerm = new LinkedHashMap<>();
+        if (termCodes != null) {
+            termCodes.forEach(termCode -> codeByTerm.putIfAbsent(termLookup.resolveByCode(projectId, termCode),
+                    termCode));
+        }
+        List<ResourceId> terms = termCodes == null ? null : List.copyOf(codeByTerm.keySet());
         // Mirrors ConstraintService#updateWithOptimisticRetry exactly for the language handling.
         return updateWithOptimisticRetry(projectId, code, defaultLanguage, current -> {
+            if (terms != null) {
+                // `terms` restates the language edges only; a delimited term named there would
+                // silently turn a delimitation into a language term (kogn-io/arknet#610).
+                for (ResourceId term : terms) {
+                    if (current.value().delimitedTerms().contains(term)) {
+                        throw new TermRelationConflictException(projectId, code, codeByTerm.get(term),
+                                TermRelation.DELIMITS);
+                    }
+                }
+            }
             BoundedContext updated = new BoundedContext(current.value().id(), current.value().code(),
                     name != null ? name : current.value().name(),
                     domainVision != null ? domainVision : current.value().domainVision(),
                     current.value().subdomain(), current.value().ownedBy(),
-                    terms != null ? terms : current.value().usesTerms());
+                    terms != null ? terms : current.value().usesTerms(), current.value().delimitedTerms());
             // name/domainVision each get their own language: a field this call did not name
             // round-trips under the exact tag it was read under (a scoped no-op), never under
             // `language`/`defaultLanguage`. Resolved lazily, per field, mirroring

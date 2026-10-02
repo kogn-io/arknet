@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -37,6 +38,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextDisplayFallback;
 import de.hauschel.arknet.bc.domain.ContextRelationship;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
+import de.hauschel.arknet.bc.domain.TermRelation;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -149,6 +151,13 @@ public final class BoundedContextMcpTools {
      * apart on what they are talking about.
      */
     private static final String TERM_EDGE = "ubiquitousLanguageTerm";
+    private static final String DELIMITS_EDGE = "delimitsTerm";
+
+    /** The {@code relation} parameter's description, shared by {@code bc_link_term} and {@code bc_unlink_term}. */
+    private static final String RELATION_DESCRIPTION = "Which edge (optional, default USES): USES - the term "
+            + "is part of this context's ubiquitous language (arkddd:ubiquitousLanguageTerm); DELIMITS - the "
+            + "context names the term only to draw its boundary against it, the term is deliberately not "
+            + "part of its language (arkddd:delimitsTerm). A term carries at most one of the two.";
 
     private static final String NAME_FIELD = "name";
     private static final String DOMAIN_VISION_FIELD = "domainVision";
@@ -316,6 +325,8 @@ public final class BoundedContextMcpTools {
     }
 
     @McpTool(name = "bc_get", description = "Fetch a single bounded context by its identity (e.g. BC-1). "
+            + "Its language terms are shown as '[terms: ...]', the terms it delimits itself against "
+            + "(bc_link_term relation DELIMITS) separately as '[delimits: ...]'. "
             + "Every context relationship it carries (bc_link_context) is shown inline, e.g. "
             + "'[upstream of: BC-1 (PUBLISHED_LANGUAGE)] [downstream of: BC-5 (CONFORMIST)]'.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
@@ -385,34 +396,62 @@ public final class BoundedContextMcpTools {
 
     @McpTool(name = "bc_link_term",
             description = "Link a bounded context to a glossary term of the ubiquitous language it "
-                    + "names. The term must already exist (create it with term_add first). Linking the "
-                    + "same term twice is a no-op.")
+                    + "names, or - with relation DELIMITS - record a term the context names only to draw "
+                    + "its boundary against it (e.g. 'X does not belong to this context'). The term must "
+                    + "already exist (create it with term_add first). Linking the same term twice under "
+                    + "the same relation is a no-op; a term already carried under the other relation is "
+                    + "rejected - unlink it first.")
     public String linkTerm(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Bounded-context identity, e.g. BC-1") final String bcId,
             @McpToolParam(description = "Term code, e.g. TERM-1 (the term's business code, resolved "
                     + "against the glossary - not its skos:prefLabel or its store IRI)")
             final String termId,
+            @McpToolParam(description = RELATION_DESCRIPTION, required = false) final String relation,
             @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        linkTerm.linkTerm(project.id(), new BoundedContextCode(bcId), termId);
-        return WriteResponse.withProject(WriteResponse.linked(bcId, termId, TERM_EDGE), project);
+        final TermRelation parsed = parseTermRelation(relation);
+        linkTerm.linkTerm(project.id(), new BoundedContextCode(bcId), termId, parsed);
+        return WriteResponse.withProject(WriteResponse.linked(bcId, termId, edgeOf(parsed)), project);
     }
 
     @McpTool(name = "bc_unlink_term",
             description = "Remove one bounded context's link to one glossary term, without restating "
-                    + "the rest (bc_update's terms replaces the whole set). Never a silent no-op: a term "
-                    + "that is not currently linked is rejected.")
+                    + "the rest (bc_update's terms replaces the whole set); with relation DELIMITS, remove "
+                    + "a delimitation instead. Never a silent no-op: a term that does not currently carry "
+                    + "the named relation is rejected.")
     public String unlinkTerm(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Bounded-context identity, e.g. BC-1") final String bcId,
             @McpToolParam(description = "Term code, e.g. TERM-1") final String termId,
+            @McpToolParam(description = RELATION_DESCRIPTION, required = false) final String relation,
             @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        unlinkTerm.unlinkTerm(project.id(), new BoundedContextCode(bcId), termId);
-        return WriteResponse.withProject(WriteResponse.unlinked(bcId, termId, TERM_EDGE), project);
+        final TermRelation parsed = parseTermRelation(relation);
+        unlinkTerm.unlinkTerm(project.id(), new BoundedContextCode(bcId), termId, parsed);
+        return WriteResponse.withProject(WriteResponse.unlinked(bcId, termId, edgeOf(parsed)), project);
+    }
+
+    /**
+     * Parses {@code bc_link_term}/{@code bc_unlink_term}'s optional {@code relation}: blank means
+     * {@link TermRelation#USES}, the behaviour both tools had before the parameter existed.
+     */
+    private static TermRelation parseTermRelation(final String value) {
+        if (value == null || value.isBlank()) {
+            return TermRelation.USES;
+        }
+        try {
+            return TermRelation.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("only USES or DELIMITS are valid term relations, not " + value, e);
+        }
+    }
+
+    /** The predicate local name a write response names for {@code relation}. */
+    private static String edgeOf(final TermRelation relation) {
+        return relation == TermRelation.USES ? TERM_EDGE : DELIMITS_EDGE;
     }
 
     @McpTool(name = "bc_link_context",
@@ -537,12 +576,18 @@ public final class BoundedContextMcpTools {
     private static String format(final BoundedContext bc, final Map<ResourceId, TermCode> termsById) {
         final String subdomain = bc.subdomain() == null ? "" : " {" + bc.subdomain() + "}";
         final String ownedBy = bc.ownedBy() == null ? "" : " <" + bc.ownedBy() + ">";
-        final String terms = bc.usesTerms().isEmpty()
+        return "%s %s (%s)%s%s%s%s".formatted(
+                bc.code().value(), bc.name(), bc.domainVision(), subdomain, ownedBy,
+                termGroup("terms", bc.usesTerms(), termsById), termGroup("delimits", bc.delimitedTerms(), termsById));
+    }
+
+    /** One {@code [label: TERM-1, TERM-2]} group, or nothing for an empty list. */
+    private static String termGroup(final String label, final List<ResourceId> terms,
+            final Map<ResourceId, TermCode> termsById) {
+        return terms.isEmpty()
                 ? ""
-                : " [terms: " + bc.usesTerms().stream().map(ref -> renderTerm(ref, termsById))
+                : " [" + label + ": " + terms.stream().map(ref -> renderTerm(ref, termsById))
                         .reduce((a, b) -> a + ", " + b).orElse("") + "]";
-        return "%s %s (%s)%s%s%s".formatted(
-                bc.code().value(), bc.name(), bc.domainVision(), subdomain, ownedBy, terms);
     }
 
     /** Renders one term reference: its resolved business code, or its bare IRI as a fallback. */
@@ -563,7 +608,7 @@ public final class BoundedContextMcpTools {
     private Map<ResourceId, TermCode> resolveTermsFor(
             final ProjectId projectId, final List<BoundedContext> boundedContexts) {
         final ResourceId[] ids = boundedContexts.stream()
-                .flatMap(bc -> bc.usesTerms().stream())
+                .flatMap(bc -> Stream.concat(bc.usesTerms().stream(), bc.delimitedTerms().stream()))
                 .distinct()
                 .toArray(ResourceId[]::new);
         if (ids.length == 0) {

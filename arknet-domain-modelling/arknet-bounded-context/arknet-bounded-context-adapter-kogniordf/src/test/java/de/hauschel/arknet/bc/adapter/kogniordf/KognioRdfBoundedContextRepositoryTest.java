@@ -48,6 +48,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextReferencedException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.bc.domain.Subdomain;
+import de.hauschel.arknet.bc.domain.TermRelation;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -373,6 +374,25 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     @Test
+    void writeRejectsATermCarriedByBothTermEdgesViaTheShaclGate() {
+        // shapes:BoundedContext-delimitsTerm-disjoint (sh:disjoint, sh:Violation): a term is either
+        // part of the context's language or delimited, never both.
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI term = rdf.createIRI("https://w3id.org/arknet/id/term-1");
+        Graph candidate = rdf.createGraph();
+        candidate.add(subject, VocabRdf.TYPE, rdf.createIRI(BOUNDED_CONTEXT_TYPE));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/core#name"), rdf.createLiteral("OrderManagement"));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#domainVision"),
+                rdf.createLiteral("A vision long enough to satisfy the ten-character minimum."));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#ubiquitousLanguageTerm"), term);
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#delimitsTerm"), term);
+
+        ShaclWriteGate gate = KognioRdfBoundedContextRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
+    }
+
+    @Test
     void aBoundedContextWithoutAggregatesPassesTheGate() {
         // shapes:BoundedContext-hasAggregate was lowered to sh:Warning: a store-first
         // bounded context minted during analysis has no aggregates yet, and that must not block
@@ -396,6 +416,74 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"), null).orElseThrow();
 
         assertEquals(List.of(term1, term2), found.usesTerms());
+    }
+
+    /**
+     * kogn-io/arknet#610: {@code arkddd:delimitsTerm} is written and read back apart from the
+     * language edges, on the single-context read, the current-state read and the bulk read.
+     */
+    @Test
+    void writePersistsDelimitsTermEdgesApartFromTheLanguageEdges() {
+        ResourceId term1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
+        ResourceId term2 = ResourceId.of("https://w3id.org/arknet/id/term-2");
+        BoundedContext bc = new BoundedContext(freshId(), new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null,
+                List.of(term1), List.of(term2));
+
+        repository.create(PROJECT_A, bc, "en");
+
+        BoundedContext found = repository.findByCode(PROJECT_A, bc.code(), null).orElseThrow();
+        assertEquals(List.of(term1), found.usesTerms());
+        assertEquals(List.of(term2), found.delimitedTerms());
+        assertEquals(List.of(term2),
+                repository.findCurrentByCode(PROJECT_A, bc.code(), null).orElseThrow().value().delimitedTerms());
+        assertEquals(List.of(term2), repository.findAll(PROJECT_A, null).getFirst().delimitedTerms());
+    }
+
+    /** An update that drops the delimitation removes the edge; the language edge stays. */
+    @Test
+    void updateReplacesDelimitsTermEdges() {
+        BoundedContextId id = freshId();
+        ResourceId term1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
+        ResourceId term2 = ResourceId.of("https://w3id.org/arknet/id/term-2");
+        BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null,
+                List.of(term1), List.of(term2));
+        repository.create(PROJECT_A, original, "en");
+
+        BoundedContext undelimited = original.withTerms(TermRelation.DELIMITS, List.of());
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), undelimited, "en", "en", null);
+
+        BoundedContext found = repository.findByCode(PROJECT_A, original.code(), null).orElseThrow();
+        assertEquals(List.of(term1), found.usesTerms());
+        assertEquals(List.of(), found.delimitedTerms());
+    }
+
+    /**
+     * A store-first context carrying both edges for one term must still read - the language edge
+     * wins - rather than fail the whole read on the value object's disjointness invariant.
+     */
+    @Test
+    void aStoreFirstTermCarriedByBothEdgesReadsAsALanguageTermOnly() {
+        BoundedContextId id = freshId();
+        ResourceId term1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
+        BoundedContext bc = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null,
+                List.of(term1));
+        repository.create(PROJECT_A, bc, "en");
+        String insertDelimits = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
+                + "> <https://w3id.org/arknet/ddd#delimitsTerm> <" + term1.value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insertDelimits);
+                return null;
+            });
+        }
+
+        BoundedContext found = repository.findByCode(PROJECT_A, bc.code(), null).orElseThrow();
+        assertEquals(List.of(term1), found.usesTerms());
+        assertEquals(List.of(), found.delimitedTerms());
+        assertEquals(List.of(), repository.findAll(PROJECT_A, null).getFirst().delimitedTerms());
     }
 
     /**
