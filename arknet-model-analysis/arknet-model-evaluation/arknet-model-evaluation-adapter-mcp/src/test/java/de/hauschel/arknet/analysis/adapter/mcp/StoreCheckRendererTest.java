@@ -38,6 +38,7 @@ class StoreCheckRendererTest {
 
         assertThat(rendered).contains("not checked").contains("project_update");
         assertThat(rendered).doesNotContain("No field is missing");
+        assertThat(rendered).contains(StoreCheckRenderer.LANGUAGE_BLIND_SPOT);
     }
 
     @Test
@@ -68,14 +69,32 @@ class StoreCheckRendererTest {
         assertThat(rendered).contains("| " + ID + "abc | - | skos:definition | en |");
     }
 
+    /** Every rule's output names what it checks and what it does not, from the one source in the enum. */
+    @Test
+    void everySectionNamesScopeAndBlindSpotOfItsRule() {
+        for (final StoreCheckKind kind : StoreCheckKind.values()) {
+            assertThat(kind.scope()).isNotBlank();
+            assertThat(kind.notSeen()).isNotBlank();
+        }
+        assertThat(renderer.roleTermDuplicateSection(List.of()))
+                .contains("Checked here: " + StoreCheckKind.ROLE_TERM_DUPLICATE.scope())
+                .contains("Not seen here: " + StoreCheckKind.ROLE_TERM_DUPLICATE.notSeen());
+        assertThat(renderer.roleTermDuplicateSection(List.of(new Finding("ROLE-1", "TERM-1", "Reviewer"))))
+                .contains(StoreCheckRenderer.ROLE_TERM_BLIND_SPOT);
+        assertThat(renderer.stepAcceptanceSection(List.of()))
+                .contains("Checked here: " + StoreCheckKind.STEP_ACCEPTANCE.scope());
+        assertThat(renderer.orphanSection(new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of())))
+                .contains("Checked here: " + StoreCheckKind.ORPHAN.scope());
+    }
+
     /** An empty section that does not say what it could not see reads as "reviewed". */
     @Test
     void alwaysNamesItsBlindSpotWhetherItFoundSomethingOrNot() {
         assertThat(renderer.languageSection(List.of("de", "en"), List.of()))
-                .contains(StoreCheckRenderer.BLIND_SPOT);
+                .contains(StoreCheckRenderer.LANGUAGE_BLIND_SPOT);
         assertThat(renderer.languageSection(List.of("de", "en"),
                 List.of(new Gap(ID + "t1", "TERM-1", "Concept", SKOS + "definition", List.of("en")))))
-                .contains(StoreCheckRenderer.BLIND_SPOT);
+                .contains(StoreCheckRenderer.LANGUAGE_BLIND_SPOT);
     }
 
     @Test

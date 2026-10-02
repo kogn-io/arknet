@@ -27,38 +27,21 @@ import de.hauschel.arknet.persistence.Prefixes;
  */
 public final class StoreCheckRenderer {
 
-    /**
-     * Named in the output, not only in the tool description: an empty section that does not say
-     * what it could not look at reads as "reviewed", which is the one misreading a check must not
-     * invite - the same discipline {@code adr_check} follows with its own "not checked here" list.
-     */
-    static final String BLIND_SPOT =
-            "Not seen here: a field that carries no language-tagged literal at all (a single "
-                    + "untagged value written before a project had a default language, or a field never "
-                    + "written) is indistinguishable from a field that is simply not multilingual, and "
-                    + "is not reported. resource_get shows a resource's raw literals.";
+    /** Scope notes per rule, built from {@link StoreCheckKind} so output and tests share one source. */
+    static final String LANGUAGE_BLIND_SPOT = scopeNote(StoreCheckKind.LANGUAGE);
+    static final String ROLE_TERM_BLIND_SPOT = scopeNote(StoreCheckKind.ROLE_TERM_DUPLICATE);
+    static final String STEP_BLIND_SPOT = scopeNote(StoreCheckKind.STEP_ACCEPTANCE);
+    static final String ORPHAN_BLIND_SPOT = scopeNote(StoreCheckKind.ORPHAN);
 
     /**
-     * The same discipline for {@code STEP_ACCEPTANCE}: what the check deliberately does not look
-     * at travels in its output, not only in a {@code CLAUDE.md}.
+     * What a check looks at and what it does not, appended to every section: an empty section that
+     * does not say what it could not look at reads as "reviewed", which is the one misreading a
+     * check must not invite - the same discipline {@code adr_check} follows with its own "not
+     * checked here" list.
      */
-    static final String STEP_BLIND_SPOT =
-            "Not seen here: extension steps - they carry no arkreq:stepRealises edge at tool level "
-                    + "(kogn-io/arknet#317), so they are out of scope rather than reported as a missing "
-                    + "edge; whether a criterion actually covers the step it is reached from, which is a "
-                    + "reading and not a check; and a use case without a business code of its own, which "
-                    + "is skipped rather than named by a guessed handle.";
-
-    /**
-     * The same discipline for {@code ORPHAN}: the mention match is literal and whole-word, not
-     * stem-based, so "Mentioned in text but not linked" also flags everyday words used in their
-     * ordinary sense - a hit there is a reading hint for a human, not a finding that demands an edge.
-     */
-    static final String ORPHAN_BLIND_SPOT =
-            "Not seen here: the text-mention match (\"Mentioned in text but not linked\") is literal "
-                    + "and whole-word, not stem-based, so it also flags everyday words used in their "
-                    + "ordinary sense (e.g. \"Rolle\", \"Begriff\", \"Projekt\") - a hit there is a "
-                    + "reading hint for a human, not a finding that demands an edge.";
+    static String scopeNote(final StoreCheckKind kind) {
+        return "Checked here: " + kind.scope() + "\nNot seen here: " + kind.notSeen();
+    }
 
     private final Prefixes prefixes;
 
@@ -87,12 +70,12 @@ public final class StoreCheckRenderer {
             // result here would answer a question that was never asked (kogn-io/arknet#412).
             return "LANGUAGE: not checked - this project declares no maintained language set, so there "
                     + "is no target state to compare its fields against. Declare one with "
-                    + "project_update(languages=[\"de\",\"en\"]), then run this check again.";
+                    + "project_update(languages=[\"de\",\"en\"]), then run this check again.\n\n" + LANGUAGE_BLIND_SPOT;
         }
         final StringBuilder rendered = new StringBuilder("LANGUAGE: maintained languages ")
                 .append(String.join(", ", maintainedLanguages)).append(".");
         if (gaps.isEmpty()) {
-            return rendered.append(" No field is missing one of them.\n\n").append(BLIND_SPOT).toString();
+            return rendered.append(" No field is missing one of them.\n\n").append(LANGUAGE_BLIND_SPOT).toString();
         }
         rendered.append("\n\n| Resource | Type | Field | Missing |\n| --- | --- | --- | --- |");
         for (final Gap gap : gaps) {
@@ -106,7 +89,7 @@ public final class StoreCheckRenderer {
         rendered.append("\n\n").append(gaps.size()).append(gaps.size() == 1 ? " field on " : " fields on ")
                 .append(resources).append(resources == 1 ? " resource" : " resources")
                 .append(" missing a maintained language.");
-        return rendered.append("\n\n").append(BLIND_SPOT).toString();
+        return rendered.append("\n\n").append(LANGUAGE_BLIND_SPOT).toString();
     }
 
     /**
@@ -118,7 +101,7 @@ public final class StoreCheckRenderer {
     public String roleTermDuplicateSection(final List<Finding> findings) {
         Objects.requireNonNull(findings, "findings");
         if (findings.isEmpty()) {
-            return "ROLE_TERM_DUPLICATE: no role and glossary term share a name.";
+            return "ROLE_TERM_DUPLICATE: no role and glossary term share a name.\n\n" + ROLE_TERM_BLIND_SPOT;
         }
         final StringBuilder rendered = new StringBuilder("ROLE_TERM_DUPLICATE: ")
                 .append(findings.size()).append(findings.size() == 1 ? " pair" : " pairs")
@@ -130,7 +113,7 @@ public final class StoreCheckRenderer {
                     .append(" | ").append(finding.name())
                     .append(" |");
         }
-        return rendered.toString();
+        return rendered.append("\n\n").append(ROLE_TERM_BLIND_SPOT).toString();
     }
 
     /**

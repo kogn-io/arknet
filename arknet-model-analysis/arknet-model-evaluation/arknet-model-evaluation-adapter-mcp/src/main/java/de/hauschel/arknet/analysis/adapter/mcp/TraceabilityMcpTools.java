@@ -77,7 +77,9 @@ public final class TraceabilityMcpTools {
     @McpTool(name = "trace_matrix",
             description = "Traceability matrix: for every requirement (FR and NFR) in the project, which"
                     + " glossary terms it uses (arkreq:usesTerm) and which use case(s) realise it (via their"
-                    + " step flow's arkreq:stepRealises). One line per requirement, business codes not IRIs.",
+                    + " step flow's arkreq:stepRealises). One line per requirement, business codes not IRIs."
+                    + " Reports edges only, not whether a listed term or use case covers the requirement's"
+                    + " content; the output says so.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String traceMatrix(
             final McpSyncRequestContext context,

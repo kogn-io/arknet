@@ -82,6 +82,7 @@ class TraceabilityRendererTest {
         assertThat(matrix).contains("FR-2 [FunctionalRequirement] \"Logout\"");
         assertThat(matrix).contains("uses terms  : (none)");
         assertThat(matrix).contains("realised by : (none)");
+        assertThat(matrix).endsWith(TraceabilityRenderer.TRACE_MATRIX_SCOPE);
     }
 
     // The orphan check itself moved to OrphanCheckTest (core module) with kogn-io/arknet#473;
