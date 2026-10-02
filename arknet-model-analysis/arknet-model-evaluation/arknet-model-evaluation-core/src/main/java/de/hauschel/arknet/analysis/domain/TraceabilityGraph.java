@@ -323,8 +323,8 @@ public final class TraceabilityGraph {
      * reproduce the {@code filledBy} contradiction six times over - {@code impact_analysis}
      * answering "nothing depends on this" for a store-first-referenced use case that
      * {@code uc_delete} then refuses to delete. ({@code orphan_check} is untouched by this set: it
-     * reads its own three dedicated predicates through {@link #realisingUseCases(String)},
-     * {@link #isReferencedTerm(String)} and {@link #isConstraintReferenced(String)}, and reports no
+     * reads its own dedicated checks through {@link #isCarriedByUseCase(String)} (which follows
+     * {@code oslc_rm:satisfies} and nothing else of this set), {@link #isReferencedTerm(String)} and {@link #isConstraintReferenced(String)}, and reports no
      * use-case or bounded-context orphans at all.) The {@code relatedTo} exception does not
      * cover the two use-case edges: it rests on that edge being <em>symmetric</em>, which turns a
      * "see also" cluster into a single reachable blob, while {@code includesUseCase}/
@@ -471,6 +471,21 @@ public final class TraceabilityGraph {
                     .forEach(useCases::add);
         }
         return List.copyOf(useCases);
+    }
+
+    /**
+     * Whether a use case carries the requirement: some use case binds it through {@code
+     * oslc_rm:satisfies}, or some step realises it (see {@link #realisingUseCases(String)}). The
+     * {@code satisfies} edge counts on its own because it is the edge {@code req_delete} refuses
+     * to break; a requirement it binds is not an orphan even when no step realises it.
+     *
+     * @return {@code true} if a use case satisfies or realises the requirement
+     */
+    public boolean isCarriedByUseCase(String requirementIri) {
+        Objects.requireNonNull(requirementIri, "requirementIri");
+        return incomingByObject.getOrDefault(requirementIri, List.of()).stream()
+                .anyMatch(t -> SATISFIES.equals(t.predicate()))
+                || !realisingUseCases(requirementIri).isEmpty();
     }
 
     /** @return the IRIs of every {@code arkreq:UseCase}, sorted. */

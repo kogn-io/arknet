@@ -106,7 +106,7 @@ public final class StoreCheckMcpTools {
             + "scope rather than reported; whether a criterion actually covers the step, which is a "
             + "reading and not a check; and a use case with no business code of its own, which is "
             + "skipped rather than named by a guessed handle. ORPHAN reports every orphaned artifact "
-            + "(kogn-io/arknet#473): a requirement no use case realises, a glossary term never "
+            + "(kogn-io/arknet#473): a requirement no use case satisfies (oslc_rm:satisfies) or realises (arkreq:stepRealises), a glossary term never "
             + "referenced (neither used by a requirement, a use case or an architecture decision "
             + "(arkarch:usesTerm), a bounded context's ubiquitous language, nor another term's "
             + "skos:broader or skos:related), a requirement's, use case's, bounded context's or "

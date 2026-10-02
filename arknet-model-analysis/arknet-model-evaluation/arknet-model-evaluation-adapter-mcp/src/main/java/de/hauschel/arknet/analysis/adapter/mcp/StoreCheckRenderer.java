@@ -184,7 +184,7 @@ public final class StoreCheckRenderer {
         final StringBuilder rendered = new StringBuilder("ORPHAN: ")
                 .append(result.orphanRequirements().size())
                 .append(result.orphanRequirements().size() == 1 ? " requirement without" : " requirements without")
-                .append(" a realising use case, ")
+                .append(" a satisfying or realising use case, ")
                 .append(result.orphanTerms().size())
                 .append(result.orphanTerms().size() == 1 ? " term" : " terms").append(" never referenced, ")
                 .append(result.unlinkedMentions().size())
@@ -193,7 +193,7 @@ public final class StoreCheckRenderer {
                 .append(result.orphanConstraints().size() == 1 ? " constraint" : " constraints")
                 .append(" not attached to any requirement or use case.");
         if (!result.orphanRequirements().isEmpty()) {
-            rendered.append("\n\nRequirements without a realising use case:\n\n");
+            rendered.append("\n\nRequirements no use case satisfies or realises:\n\n");
             appendResourceTable(rendered, result.orphanRequirements());
         }
         if (!result.orphanTerms().isEmpty()) {

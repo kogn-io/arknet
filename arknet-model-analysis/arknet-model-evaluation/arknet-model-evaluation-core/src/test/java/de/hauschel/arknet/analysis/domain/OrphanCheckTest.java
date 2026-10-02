@@ -37,6 +37,8 @@ class OrphanCheckTest {
     private static final String IDENTIFIER = "http://purl.org/dc/terms/identifier";
     private static final String MAIN_STEP = ARKREQ + "mainStep";
     private static final String STEP_REALISES = ARKREQ + "stepRealises";
+    private static final String SATISFIES = "http://open-services.net/ns/rm#satisfies";
+    private static final String USE_CASE = ARKREQ + "UseCase";
     private static final String DOMAIN_VISION = ARKDDD + "domainVision";
     private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
     private static final String CONSTRAINED_BY = "http://open-services.net/ns/rm#constrainedBy";
@@ -71,6 +73,20 @@ class OrphanCheckTest {
 
         assertThat(result.orphanRequirements()).containsExactly(
                 new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout"));
+    }
+
+    /** A use case binding a requirement via {@code oslc_rm:satisfies} carries it, step or no step. */
+    @Test
+    void doesNotReportARequirementOnlyASatisfiesEdgeBinds() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(ID + "fr-4", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-4", IDENTIFIER, "FR-4"),
+                iri(ID + "uc-4", RDF_TYPE, USE_CASE),
+                iri(ID + "uc-4", SATISFIES, ID + "fr-4")));
+
+        OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
+
+        assertThat(result.orphanRequirements()).isEmpty();
     }
 
     @Test

@@ -164,8 +164,8 @@ class TraceabilityMcpToolsTest {
             String report = tools.orphanCheck(null, ANCHOR);
 
             assertThat(report).startsWith("ORPHAN:");
-            assertThat(report).contains("1 requirement without a realising use case");
-            assertThat(report).contains("Requirements without a realising use case:");
+            assertThat(report).contains("1 requirement without a satisfying or realising use case");
+            assertThat(report).contains("Requirements no use case satisfies or realises:");
             assertThat(report).contains(fr2.code().value());
             assertThat(report).doesNotContain("| " + fr1.code().value() + " |");
 
