@@ -49,6 +49,18 @@ public final class TraceabilityRenderer {
     }
 
     /**
+     * Scope note of {@code trace_matrix}: an empty "none" line reads as a verdict, a filled one as
+     * coverage; neither is what the matrix measures.
+     */
+    static final String TRACE_MATRIX_SCOPE =
+            "Checked here: which glossary terms (arkreq:usesTerm) each requirement uses and which use "
+                    + "cases realise it through arkreq:stepRealises on main-flow steps.\n"
+                    + "Not seen here: whether a listed term or use case covers the requirement's content "
+                    + "(a filled line says an edge exists, nothing more); extension steps, which carry no "
+                    + "realises edge at tool level (kogn-io/arknet#317); acceptance criteria, constraints "
+                    + "and architecture decisions.";
+
+    /**
      * Renders {@code trace_matrix}: one line per requirement (FR and NFR alike) listing the
      * glossary terms it uses and the use case(s) realising it.
      *
@@ -57,6 +69,10 @@ public final class TraceabilityRenderer {
      * @return the digest text
      */
     public String traceMatrix(ProjectId projectId, TraceabilityGraph graph) {
+        return traceMatrixLines(projectId, graph) + "\n" + TRACE_MATRIX_SCOPE;
+    }
+
+    private String traceMatrixLines(ProjectId projectId, TraceabilityGraph graph) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(graph, "graph");
         List<String> requirementIris = graph.requirementIris();
