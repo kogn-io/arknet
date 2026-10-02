@@ -54,11 +54,12 @@ public final class TraceabilityRenderer {
      */
     static final String TRACE_MATRIX_SCOPE =
             "Checked here: which glossary terms (arkreq:usesTerm) each requirement uses and which use "
-                    + "cases realise it through arkreq:stepRealises on main-flow steps.\n"
+                    + "cases realise it through arkreq:stepRealises on any of their steps "
+                    + "(main flow or extension).\n"
                     + "Not seen here: whether a listed term or use case covers the requirement's content "
-                    + "(a filled line says an edge exists, nothing more); extension steps, which carry no "
-                    + "realises edge at tool level (kogn-io/arknet#317); acceptance criteria, constraints "
-                    + "and architecture decisions.";
+                    + "(a filled line says an edge exists, nothing more); realises edges on extension steps, "
+                    + "which carry none at tool level today (kogn-io/arknet#317), so none appears here; "
+                    + "acceptance criteria, constraints and architecture decisions.";
 
     /**
      * Renders {@code trace_matrix}: one line per requirement (FR and NFR alike) listing the
