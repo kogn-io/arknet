@@ -38,6 +38,7 @@ class StoreCheckRendererTest {
 
         assertThat(rendered).contains("not checked").contains("project_update");
         assertThat(rendered).doesNotContain("No field is missing");
+        assertThat(rendered).contains(StoreCheckRenderer.BLIND_SPOT);
     }
 
     @Test

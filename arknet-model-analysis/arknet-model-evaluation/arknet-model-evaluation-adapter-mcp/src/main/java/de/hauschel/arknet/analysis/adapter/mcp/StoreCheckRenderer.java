@@ -70,7 +70,7 @@ public final class StoreCheckRenderer {
             // result here would answer a question that was never asked (kogn-io/arknet#412).
             return "LANGUAGE: not checked - this project declares no maintained language set, so there "
                     + "is no target state to compare its fields against. Declare one with "
-                    + "project_update(languages=[\"de\",\"en\"]), then run this check again.";
+                    + "project_update(languages=[\"de\",\"en\"]), then run this check again.\n\n" + BLIND_SPOT;
         }
         final StringBuilder rendered = new StringBuilder("LANGUAGE: maintained languages ")
                 .append(String.join(", ", maintainedLanguages)).append(".");
