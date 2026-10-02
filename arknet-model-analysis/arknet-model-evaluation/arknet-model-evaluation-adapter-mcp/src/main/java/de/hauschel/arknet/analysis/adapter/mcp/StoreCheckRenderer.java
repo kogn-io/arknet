@@ -27,8 +27,8 @@ import de.hauschel.arknet.persistence.Prefixes;
  */
 public final class StoreCheckRenderer {
 
-    /** Scope note of every rule; one source ({@link StoreCheckKind}) for output and tests. */
-    static final String BLIND_SPOT = scopeNote(StoreCheckKind.LANGUAGE);
+    /** Scope notes per rule, built from {@link StoreCheckKind} so output and tests share one source. */
+    static final String LANGUAGE_BLIND_SPOT = scopeNote(StoreCheckKind.LANGUAGE);
     static final String ROLE_TERM_BLIND_SPOT = scopeNote(StoreCheckKind.ROLE_TERM_DUPLICATE);
     static final String STEP_BLIND_SPOT = scopeNote(StoreCheckKind.STEP_ACCEPTANCE);
     static final String ORPHAN_BLIND_SPOT = scopeNote(StoreCheckKind.ORPHAN);
@@ -70,12 +70,12 @@ public final class StoreCheckRenderer {
             // result here would answer a question that was never asked (kogn-io/arknet#412).
             return "LANGUAGE: not checked - this project declares no maintained language set, so there "
                     + "is no target state to compare its fields against. Declare one with "
-                    + "project_update(languages=[\"de\",\"en\"]), then run this check again.\n\n" + BLIND_SPOT;
+                    + "project_update(languages=[\"de\",\"en\"]), then run this check again.\n\n" + LANGUAGE_BLIND_SPOT;
         }
         final StringBuilder rendered = new StringBuilder("LANGUAGE: maintained languages ")
                 .append(String.join(", ", maintainedLanguages)).append(".");
         if (gaps.isEmpty()) {
-            return rendered.append(" No field is missing one of them.\n\n").append(BLIND_SPOT).toString();
+            return rendered.append(" No field is missing one of them.\n\n").append(LANGUAGE_BLIND_SPOT).toString();
         }
         rendered.append("\n\n| Resource | Type | Field | Missing |\n| --- | --- | --- | --- |");
         for (final Gap gap : gaps) {
@@ -89,7 +89,7 @@ public final class StoreCheckRenderer {
         rendered.append("\n\n").append(gaps.size()).append(gaps.size() == 1 ? " field on " : " fields on ")
                 .append(resources).append(resources == 1 ? " resource" : " resources")
                 .append(" missing a maintained language.");
-        return rendered.append("\n\n").append(BLIND_SPOT).toString();
+        return rendered.append("\n\n").append(LANGUAGE_BLIND_SPOT).toString();
     }
 
     /**

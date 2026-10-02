@@ -38,7 +38,7 @@ class StoreCheckRendererTest {
 
         assertThat(rendered).contains("not checked").contains("project_update");
         assertThat(rendered).doesNotContain("No field is missing");
-        assertThat(rendered).contains(StoreCheckRenderer.BLIND_SPOT);
+        assertThat(rendered).contains(StoreCheckRenderer.LANGUAGE_BLIND_SPOT);
     }
 
     @Test
@@ -91,10 +91,10 @@ class StoreCheckRendererTest {
     @Test
     void alwaysNamesItsBlindSpotWhetherItFoundSomethingOrNot() {
         assertThat(renderer.languageSection(List.of("de", "en"), List.of()))
-                .contains(StoreCheckRenderer.BLIND_SPOT);
+                .contains(StoreCheckRenderer.LANGUAGE_BLIND_SPOT);
         assertThat(renderer.languageSection(List.of("de", "en"),
                 List.of(new Gap(ID + "t1", "TERM-1", "Concept", SKOS + "definition", List.of("en")))))
-                .contains(StoreCheckRenderer.BLIND_SPOT);
+                .contains(StoreCheckRenderer.LANGUAGE_BLIND_SPOT);
     }
 
     @Test
