@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.bc.domain;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -45,6 +46,12 @@ import de.hauschel.arknet.kernel.ResourceId;
  *                     {@code null} argument is normalised to an empty list. Part of the context's own state rather than a side edge: the
  *                     out-adapter persists a bounded context by replacing it wholesale, so a link
  *                     kept outside this record would be silently dropped by the next write.
+ * @param delimitedTerms the glossary terms this context names in its prose only to draw its
+ *                     boundary against them; maps to {@code arkddd:delimitsTerm}, {@code 0..n},
+ *                     held the same way as {@link #usesTerms()}. A model statement in its own
+ *                     right, not a suppression flag: the context knows the term and excludes it
+ *                     from its language. Disjoint from {@link #usesTerms()} - a term is either
+ *                     part of the language or delimited, never both. Never {@code null}.
  */
 public record BoundedContext(
         BoundedContextId id,
@@ -53,7 +60,8 @@ public record BoundedContext(
         String domainVision,
         Subdomain subdomain,
         String ownedBy,
-        List<ResourceId> usesTerms) {
+        List<ResourceId> usesTerms,
+        List<ResourceId> delimitedTerms) {
 
     public BoundedContext {
         Objects.requireNonNull(id, "id");
@@ -61,6 +69,10 @@ public record BoundedContext(
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(domainVision, "domainVision");
         usesTerms = usesTerms == null ? List.of() : List.copyOf(usesTerms);
+        delimitedTerms = delimitedTerms == null ? List.of() : List.copyOf(delimitedTerms);
+        if (!Collections.disjoint(usesTerms, delimitedTerms)) {
+            throw new IllegalArgumentException("a term cannot be both a language term and a delimited term");
+        }
         if (name.isBlank()) {
             throw new IllegalArgumentException("name must not be blank");
         }
@@ -70,5 +82,34 @@ public record BoundedContext(
         if (ownedBy != null && ownedBy.isBlank()) {
             throw new IllegalArgumentException("ownedBy must not be blank when present");
         }
+    }
+
+    /**
+     * A bounded context that delimits no term - the shape every context had before
+     * {@code arkddd:delimitsTerm} existed, kept so callers that never deal with delimitations need
+     * not spell out an empty list.
+     */
+    public BoundedContext(BoundedContextId id, BoundedContextCode code, String name, String domainVision,
+            Subdomain subdomain, String ownedBy, List<ResourceId> usesTerms) {
+        this(id, code, name, domainVision, subdomain, ownedBy, usesTerms, List.of());
+    }
+
+    /**
+     * This context with {@code terms} as the edges of {@code relation}, the other relation's edges
+     * unchanged.
+     */
+    public BoundedContext withTerms(TermRelation relation, List<ResourceId> terms) {
+        return switch (Objects.requireNonNull(relation, "relation")) {
+            case USES -> new BoundedContext(id, code, name, domainVision, subdomain, ownedBy, terms, delimitedTerms);
+            case DELIMITS -> new BoundedContext(id, code, name, domainVision, subdomain, ownedBy, usesTerms, terms);
+        };
+    }
+
+    /** The terms carried as edges of {@code relation}. */
+    public List<ResourceId> terms(TermRelation relation) {
+        return switch (Objects.requireNonNull(relation, "relation")) {
+            case USES -> usesTerms;
+            case DELIMITS -> delimitedTerms;
+        };
     }
 }

@@ -83,6 +83,7 @@ class DddVocabularyMatchesOntologyTest {
                 ArkdddVocabulary.DOMAIN_VISION,
                 ArkdddVocabulary.OWNED_BY_PROPERTY,
                 ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM,
+                ArkdddVocabulary.DELIMITS_TERM,
                 ArkdddVocabulary.HAS_AGGREGATE_PROPERTY,
                 ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE,
                 ArkdddVocabulary.RELATIONSHIP_TYPE_CLASS,
@@ -117,6 +118,19 @@ class DddVocabularyMatchesOntologyTest {
         assertTrue(ontology.contains(iri(ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM), RDFS.RANGE,
                 iri("http://www.w3.org/2004/02/skos/core#Concept")),
                 "arkddd:ubiquitousLanguageTerm must range over skos:Concept");
+    }
+
+    /** The bounded-context out-adapter writes {@code delimitsTerm} as a second edge into the glossary. */
+    @Test
+    void theOntologyDeclaresDelimitsTermAsWrittenByTheAdapter() {
+        assertTrue(ontology.contains(iri(ArkdddVocabulary.DELIMITS_TERM), RDF.TYPE, OWL.OBJECTPROPERTY),
+                "arkddd:delimitsTerm must be declared an owl:ObjectProperty");
+        assertTrue(ontology.contains(iri(ArkdddVocabulary.DELIMITS_TERM), RDFS.DOMAIN,
+                iri(ArkdddVocabulary.BOUNDED_CONTEXT_TYPE)),
+                "arkddd:delimitsTerm must have arkddd:BoundedContext as its domain");
+        assertTrue(ontology.contains(iri(ArkdddVocabulary.DELIMITS_TERM), RDFS.RANGE,
+                iri("http://www.w3.org/2004/02/skos/core#Concept")),
+                "arkddd:delimitsTerm must range over skos:Concept");
     }
 
     /**

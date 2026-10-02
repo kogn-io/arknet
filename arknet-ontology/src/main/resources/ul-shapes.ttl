@@ -81,7 +81,8 @@ ulshapes:Term-related
 ulshapes:BoundedContextTermsShape
     a sh:NodeShape ;
     sh:targetClass arkddd:BoundedContext ;
-    sh:property ulshapes:BoundedContext-ubiquitousLanguageTerm .
+    sh:property ulshapes:BoundedContext-ubiquitousLanguageTerm ,
+                ulshapes:BoundedContext-delimitsTerm .
 
 ulshapes:BoundedContext-ubiquitousLanguageTerm
     a sh:PropertyShape ;
@@ -89,6 +90,14 @@ ulshapes:BoundedContext-ubiquitousLanguageTerm
     sh:nodeKind sh:IRI ;
     sh:class    skos:Concept ;
     sh:message  "arkddd:ubiquitousLanguageTerm must reference a skos:Concept (IRI), not a string."@en , "arkddd:ubiquitousLanguageTerm muss auf einen skos:Concept (IRI) verweisen, nicht auf einen String."@de ;
+    sh:severity sh:Violation .
+
+ulshapes:BoundedContext-delimitsTerm
+    a sh:PropertyShape ;
+    sh:path     arkddd:delimitsTerm ;
+    sh:nodeKind sh:IRI ;
+    sh:class    skos:Concept ;
+    sh:message  "arkddd:delimitsTerm must reference a skos:Concept (IRI), not a string."@en , "arkddd:delimitsTerm muss auf einen skos:Concept (IRI) verweisen, nicht auf einen String."@de ;
     sh:severity sh:Violation .
 
 # END OF UL SHAPES

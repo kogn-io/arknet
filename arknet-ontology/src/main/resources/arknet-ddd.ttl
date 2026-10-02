@@ -142,6 +142,14 @@ arkddd:ubiquitousLanguageTerm
                  "The glossary is project-wide, one skos:ConceptScheme per project, deliberately not one per Bounded Context. A scheme per context could not express a shared term, since every term carries exactly one skos:inScheme, and would force duplication for a Shared Kernel or a Published Language. Context boundaries are discovered from language -- the glossary is input to the context split, not its output. The edge arkddd:ubiquitousLanguageTerm is n:m without sh:maxCount, so a shared term and a homonym both remain expressible, and the direction BoundedContext -> Term is deliberate because the naming context owns the edge (structurally the same as arkreq:usesTerm)."@en ,
                  "Das Glossar ist projektweit gefuehrt, ein skos:ConceptScheme je Projekt, bewusst nicht je Bounded Context. Ein Scheme je Kontext koennte einen geteilten Begriff nicht ausdruecken, weil jeder Term genau ein skos:inScheme traegt, und wuerde Duplikation bei Shared Kernel oder Published Language erzwingen. Kontextgrenzen werden erst aus der Sprache entdeckt -- das Glossar ist Input fuer den Kontextschnitt, nicht dessen Output. Die Kante arkddd:ubiquitousLanguageTerm ist n:m ohne sh:maxCount, damit sind geteilter Begriff und Homonym darstellbar, und die Richtung BoundedContext -> Term ist gewollt, weil der nennende Kontext die Kante besitzt (strukturgleich zu arkreq:usesTerm)."@de .
 
+arkddd:delimitsTerm
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:BoundedContext ;
+    rdfs:range   skos:Concept ;
+    rdfs:label   "delimits term"@en , "grenzt Begriff ab"@de ;
+    rdfs:comment "Points at a glossary term this Bounded Context names in its prose in order to draw its boundary against it -- the term is deliberately not part of this context's language. A model statement, not a suppression flag for a checking tool: it says the context knows the term and excludes it. Disjoint in intent from arkddd:ubiquitousLanguageTerm; a term is either part of the language or delimited, never both. n:m without sh:maxCount, direction BoundedContext -> Term because the naming context owns the edge, same as arkddd:ubiquitousLanguageTerm."@en ,
+                 "Verweist auf einen Glossarbegriff, den dieser Bounded Context in seiner Prosa nennt, um sich gegen ihn abzugrenzen -- der Begriff gehoert bewusst nicht zu seiner Sprache. Eine Modellaussage, kein Unterdrueckungs-Flag fuer ein Pruefwerkzeug: der Kontext kennt den Begriff und schliesst ihn aus. In der Absicht disjunkt zu arkddd:ubiquitousLanguageTerm; ein Begriff gehoert entweder zur Sprache oder ist abgegrenzt, nie beides. n:m ohne sh:maxCount, Richtung BoundedContext -> Term, weil der nennende Kontext die Kante besitzt, wie bei arkddd:ubiquitousLanguageTerm."@de .
+
 arkddd:hasAggregate
     a owl:ObjectProperty ;
     rdfs:domain  arkddd:BoundedContext ;

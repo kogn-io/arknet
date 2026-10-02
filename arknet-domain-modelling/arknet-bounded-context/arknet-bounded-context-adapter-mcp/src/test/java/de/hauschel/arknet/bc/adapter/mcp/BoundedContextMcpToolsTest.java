@@ -41,6 +41,7 @@ import de.hauschel.arknet.bc.domain.ContextRelationshipId;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermNotLinkedException;
+import de.hauschel.arknet.bc.domain.TermRelation;
 import de.hauschel.arknet.mcpsupport.FieldLanguageLookup;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -265,7 +266,7 @@ class BoundedContextMcpToolsTest {
 
     @Test
     void linkTermPassesTheRawTermCodeThroughToTheInPort() {
-        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1", ANCHOR);
+        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1", null, ANCHOR);
 
         assertEquals(new BoundedContextCode("BC-1"), stub.lastLinkedBoundedContext);
         assertEquals("TERM-1", stub.lastLinkedTermCode);
@@ -281,6 +282,44 @@ class BoundedContextMcpToolsTest {
         String rendered = adapter.get(null, "BC-1", null, ANCHOR);
 
         assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
+    }
+
+    /** kogn-io/arknet#610: delimited terms render in a group of their own, never among the language terms. */
+    @Test
+    void getRendersDelimitedTermsApartFromTheLanguageTerms() {
+        ResourceId languageTerm = ResourceId.of("https://w3id.org/arknet/id/language-term");
+        ResourceId delimitedTerm = ResourceId.of("https://w3id.org/arknet/id/delimited-term");
+        resolveTerms.register(languageTerm, new TermCode("TERM-7"));
+        resolveTerms.register(delimitedTerm, new TermCode("TERM-8"));
+        stub.nextGetDetail = new BoundedContextDetail(boundedContextWithTerms("BC-1", languageTerm)
+                .withTerms(TermRelation.DELIMITS, List.of(delimitedTerm)), List.of());
+
+        String rendered = adapter.get(null, "BC-1", null, ANCHOR);
+
+        assertTrue(rendered.contains("[terms: TERM-7] [delimits: TERM-8]"), rendered);
+    }
+
+    /** Omitting {@code relation} keeps the pre-#610 meaning; DELIMITS reaches the in-port and names its own edge. */
+    @Test
+    void linkAndUnlinkTermPassTheRelationThroughAndDefaultToUses() {
+        adapter.linkTerm(null, "BC-1", "TERM-1", null, ANCHOR);
+        assertEquals(TermRelation.USES, stub.lastTermRelation);
+
+        String linked = adapter.linkTerm(null, "BC-1", "TERM-1", "delimits", ANCHOR);
+        assertEquals(TermRelation.DELIMITS, stub.lastTermRelation);
+        assertTrue(linked.startsWith("linked BC-1 -> TERM-1 (delimitsTerm)"), linked);
+
+        String unlinked = adapter.unlinkTerm(null, "BC-1", "TERM-1", "DELIMITS", ANCHOR);
+        assertEquals(TermRelation.DELIMITS, stub.lastTermRelation);
+        assertTrue(unlinked.startsWith("unlinked BC-1 -> TERM-1 (delimitsTerm)"), unlinked);
+    }
+
+    @Test
+    void linkTermRejectsAnUnknownRelation() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> adapter.linkTerm(null, "BC-1", "TERM-1", "EXCLUDES", ANCHOR));
+
+        assertTrue(ex.getMessage().contains("USES or DELIMITS"), ex.getMessage());
     }
 
     @Test
@@ -483,8 +522,8 @@ class BoundedContextMcpToolsTest {
         assertTrue(named.add(null, "OrderManagement", "Owns orders end to end.", null, null, "en", ANCHOR)
                 .endsWith(trailer));
         assertTrue(named.update(null, "BC-1", "Renamed", null, null, "en", ANCHOR).endsWith(trailer));
-        assertTrue(named.linkTerm(null, "BC-1", "TERM-1", ANCHOR).endsWith(trailer));
-        assertTrue(named.unlinkTerm(null, "BC-1", "TERM-1", ANCHOR).endsWith(trailer));
+        assertTrue(named.linkTerm(null, "BC-1", "TERM-1", null, ANCHOR).endsWith(trailer));
+        assertTrue(named.unlinkTerm(null, "BC-1", "TERM-1", null, ANCHOR).endsWith(trailer));
         assertTrue(named.linkContext(null, "BC-1", "BC-2", "CONFORMIST", ANCHOR).endsWith(trailer));
         assertTrue(named.unlinkContext(null, "BC-1", "BC-2", "CONFORMIST", ANCHOR).endsWith(trailer));
         assertTrue(named.delete(null, "BC-1", ANCHOR).endsWith(trailer));
@@ -514,7 +553,7 @@ class BoundedContextMcpToolsTest {
      */
     @Test
     void linkToolsAnswerWithTheEdgeRatherThanTheWholeResource() {
-        String linkedTerm = adapter.linkTerm(null, "BC-1", "TERM-1", ANCHOR);
+        String linkedTerm = adapter.linkTerm(null, "BC-1", "TERM-1", null, ANCHOR);
         String linkedContext = adapter.linkContext(null, "BC-1", "BC-2", "CUSTOMER_SUPPLIER", ANCHOR);
         String unlinkedContext = adapter.unlinkContext(null, "BC-1", "BC-2", "CUSTOMER_SUPPLIER", ANCHOR);
 
@@ -562,7 +601,7 @@ class BoundedContextMcpToolsTest {
 
     @Test
     void unlinkTermPassesTheRawTermCodeThroughToTheInPort() {
-        String rendered = adapter.unlinkTerm(null, "BC-1", "TERM-1", ANCHOR);
+        String rendered = adapter.unlinkTerm(null, "BC-1", "TERM-1", null, ANCHOR);
 
         assertEquals(new BoundedContextCode("BC-1"), stub.lastUnlinkedTermBoundedContext);
         assertEquals("TERM-1", stub.lastUnlinkedTermCode);
@@ -576,7 +615,7 @@ class BoundedContextMcpToolsTest {
         stub.unlinkTermRejects = true;
 
         TermNotLinkedException ex = assertThrows(TermNotLinkedException.class,
-                () -> adapter.unlinkTerm(null, "BC-1", "TERM-1", ANCHOR));
+                () -> adapter.unlinkTerm(null, "BC-1", "TERM-1", null, ANCHOR));
 
         assertEquals("TERM-1", ex.termCode());
     }
@@ -592,6 +631,8 @@ class BoundedContextMcpToolsTest {
             implements AddBoundedContext, ListBoundedContexts, DescribeBoundedContextDisplayFallback,
             GetBoundedContext, UpdateBoundedContext, LinkTerm, UnlinkTerm, LinkContext, UnlinkContext,
             DeleteBoundedContext {
+
+        private TermRelation lastTermRelation;
 
         private BoundedContextCode lastLinkedBoundedContext;
         private String lastLinkedTermCode;
@@ -666,8 +707,10 @@ class BoundedContextMcpToolsTest {
         }
 
         @Override
-        public BoundedContext linkTerm(ProjectId projectId, BoundedContextCode code, String termCode) {
+        public BoundedContext linkTerm(ProjectId projectId, BoundedContextCode code, String termCode,
+                TermRelation relation) {
             lastProjectId = projectId;
+            lastTermRelation = relation;
             lastLinkedBoundedContext = code;
             lastLinkedTermCode = termCode;
             List<ResourceId> terms =
@@ -677,8 +720,10 @@ class BoundedContextMcpToolsTest {
         }
 
         @Override
-        public BoundedContext unlinkTerm(ProjectId projectId, BoundedContextCode code, String termCode) {
+        public BoundedContext unlinkTerm(ProjectId projectId, BoundedContextCode code, String termCode,
+                TermRelation relation) {
             lastProjectId = projectId;
+            lastTermRelation = relation;
             lastUnlinkedTermBoundedContext = code;
             lastUnlinkedTermCode = termCode;
             if (unlinkTermRejects) {
