@@ -374,6 +374,25 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     @Test
+    void writeRejectsATermCarriedByBothTermEdgesViaTheShaclGate() {
+        // shapes:BoundedContext-delimitsTerm-disjoint (sh:disjoint, sh:Violation): a term is either
+        // part of the context's language or delimited, never both.
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI term = rdf.createIRI("https://w3id.org/arknet/id/term-1");
+        Graph candidate = rdf.createGraph();
+        candidate.add(subject, VocabRdf.TYPE, rdf.createIRI(BOUNDED_CONTEXT_TYPE));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/core#name"), rdf.createLiteral("OrderManagement"));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#domainVision"),
+                rdf.createLiteral("A vision long enough to satisfy the ten-character minimum."));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#ubiquitousLanguageTerm"), term);
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#delimitsTerm"), term);
+
+        ShaclWriteGate gate = KognioRdfBoundedContextRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
+    }
+
+    @Test
     void aBoundedContextWithoutAggregatesPassesTheGate() {
         // shapes:BoundedContext-hasAggregate was lowered to sh:Warning: a store-first
         // bounded context minted during analysis has no aggregates yet, and that must not block

@@ -115,7 +115,7 @@ public final class TraceabilityMcpTools {
     @McpTool(name = "impact_analysis",
             description = "What is transitively affected if the given resource changes: follows"
                     + " arkreq:usesTerm/primaryRole/supportingRole/stepRealises, oslc_rm:constrainedBy,"
-                    + " arkddd:ubiquitousLanguageTerm/upstream/downstream and"
+                    + " arkddd:ubiquitousLanguageTerm/delimitsTerm/upstream/downstream and"
                     + " arkarch:addressesRequirement/affectsContext/usesTerm backwards (who references this)"
                     + " and arkarch:supersededBy forwards (from a superseded decision to its"
                     + " successor) to every reachable requirement, term, use case, constraint,"

@@ -396,8 +396,9 @@ public final class UbiquitousLanguageMcpTools {
                     + "definition, in every language) - not just a correction, the whole resource goes "
                     + "away. Rejected if anything else still references it: a requirement's or use case's "
                     + "arkreq:usesTerm, an architecture decision's arkarch:usesTerm, a bounded context's "
-                    + "ubiquitousLanguageTerm, or another term's broader or related. Remove those edges first "
-                    + "(req_update/uc_update, adr_update, bc_link_term, or term_unlink_related/term_update on "
+                    + "ubiquitousLanguageTerm or delimitsTerm, or another term's broader or related. Remove "
+                    + "those edges first (req_update/uc_update, adr_update, bc_unlink_term with relation "
+                    + "USES or DELIMITS, or term_unlink_related/term_update on "
                     + "the other term to clear its broader/related).")
     public String delete(
             final McpSyncRequestContext context,

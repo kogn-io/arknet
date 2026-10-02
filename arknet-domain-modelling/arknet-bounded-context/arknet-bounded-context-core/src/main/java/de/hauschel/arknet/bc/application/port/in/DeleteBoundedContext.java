@@ -14,7 +14,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <p>Unlike {@link UpdateBoundedContext}, there is no field-level correction here - the whole
  * resource goes away, including the edges it owns ({@code arkddd:ubiquitousLanguageTerm},
- * {@code arkddd:partOf}, {@code arkddd:ownedBy}, {@code arkddd:domainVision}). The typical case is
+ * {@code arkddd:delimitsTerm}, {@code arkddd:partOf}, {@code arkddd:ownedBy}, {@code arkddd:domainVision}). The typical case is
  * a boundary that turned out not to be one: a context drawn too early, or two contexts that
  * collapsed into one.</p>
  *

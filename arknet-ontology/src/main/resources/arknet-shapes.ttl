@@ -29,7 +29,8 @@ shapes:BoundedContextShape
     sh:property shapes:BoundedContext-domainVision ;
     sh:property shapes:BoundedContext-hasAggregate ;
     sh:property shapes:BoundedContext-partOf ;
-    sh:property shapes:BoundedContext-ownedBy .
+    sh:property shapes:BoundedContext-ownedBy ;
+    sh:property shapes:BoundedContext-delimitsTerm-disjoint .
 
 shapes:BoundedContext-name
     a sh:PropertyShape ;
@@ -70,6 +71,14 @@ shapes:BoundedContext-ownedBy
     sh:path     arkddd:ownedBy ;
     sh:message  "A BoundedContext should have 'arkddd:ownedBy' (team name)."@en , "BoundedContext sollte 'arkddd:ownedBy' (Team-Name) haben."@de ;
     sh:severity sh:Warning .
+
+# A term is either part of the context's language or delimited, never both.
+shapes:BoundedContext-delimitsTerm-disjoint
+    a sh:PropertyShape ;
+    sh:path     arkddd:delimitsTerm ;
+    sh:disjoint arkddd:ubiquitousLanguageTerm ;
+    sh:message  "A BoundedContext must not carry the same term as both 'arkddd:ubiquitousLanguageTerm' and 'arkddd:delimitsTerm' - a term is either part of the language or delimited."@en , "Ein BoundedContext darf denselben Begriff nicht zugleich als 'arkddd:ubiquitousLanguageTerm' und 'arkddd:delimitsTerm' tragen - ein Begriff gehoert entweder zur Sprache oder ist abgegrenzt."@de ;
+    sh:severity sh:Violation .
 
 
 ##############################################################################

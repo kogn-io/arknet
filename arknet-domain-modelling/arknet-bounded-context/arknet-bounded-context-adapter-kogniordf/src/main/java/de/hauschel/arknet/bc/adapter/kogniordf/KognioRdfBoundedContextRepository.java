@@ -547,12 +547,13 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
             }
             NameVisionSelection selected = selection.get();
             SubdomainOwnedBy reduced = reduceSubdomainOwnedBy(rows, subjectIriString);
+            List<ResourceId> usesTerms = readUsesTerms(sparql::select, subject);
             BoundedContext boundedContext = new BoundedContext(
                     new BoundedContextId(ResourceId.of(subjectIriString)), code,
                     selected.name().value(), selected.domainVision().value(),
                     reduced.subdomain(), reduced.ownedBy(),
-                    readUsesTerms(sparql::select, subject),
-                    readDelimitedTerms(sparql::select, subject));
+                    usesTerms,
+                    readDelimitedTerms(sparql::select, subject, usesTerms));
             RevisionToken head = rows.get(0).getValue("head")
                     .filter(IRI.class::isInstance)
                     .map(value -> new RevisionToken(((IRI) value).getIRIString()))
@@ -616,6 +617,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         SparqlQuery sparql = handle.sparqlQuery();
         return selectNameVision(sparql::select, subject, locale).map(selection -> {
             SubdomainOwnedBy reduced = reduceSubdomainOwnedBy(rows, subjectIriString);
+            List<ResourceId> usesTerms = readUsesTerms(sparql::select, subject);
             return new BoundedContext(
                     new BoundedContextId(ResourceId.of(subjectIriString)),
                     code,
@@ -623,8 +625,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                     selection.domainVision().value(),
                     reduced.subdomain(),
                     reduced.ownedBy(),
-                    readUsesTerms(sparql::select, subject),
-                    readDelimitedTerms(sparql::select, subject));
+                    usesTerms,
+                    readDelimitedTerms(sparql::select, subject, usesTerms));
         });
     }
 
@@ -1137,19 +1139,22 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
 
     /**
      * Reads the {@code arkddd:delimitsTerm} edges of one bounded context, ordered and filtered as
-     * {@link #readUsesTerms} does, minus any term the context also carries as a language term. The
-     * service never writes both edges for one term; a store-first pair would otherwise make the
-     * read itself fail on {@link BoundedContext}'s disjointness invariant, and the language edge
-     * is the one that wins because it is the older, stronger statement.
+     * {@link #readUsesTerms} does, minus any term the context also carries as a language term
+     * ({@code usesTerms}, already read by the caller). The SHACL gate now rejects a write carrying
+     * both edges for one term, so this only tolerates legacy data from before the gate: such a
+     * pair would otherwise make the read fail on {@link BoundedContext}'s disjointness invariant,
+     * and the language edge wins because it is the older, stronger statement. The next write of
+     * the context drops the discarded {@code delimitsTerm} edge for good.
      */
-    private List<ResourceId> readDelimitedTerms(Function<String, Stream<BindingSet>> selectFn, String subject) {
+    private List<ResourceId> readDelimitedTerms(Function<String, Stream<BindingSet>> selectFn, String subject,
+            List<ResourceId> usesTerms) {
         String query = "SELECT ?term WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
                 + subject + " <" + DELIMITS_TERM_PROPERTY + "> ?term } "
                 + "FILTER(isIRI(?term)) } ORDER BY ?term";
         List<ResourceId> delimited = selectFn.apply(query)
                 .map(row -> ResourceId.of(iriOf(row, "term").getIRIString()))
                 .toList();
-        return withoutLanguageTerms(delimited, readUsesTerms(selectFn, subject));
+        return withoutLanguageTerms(delimited, usesTerms);
     }
 
     /** {@code delimited} without any term {@code usesTerms} also names - see {@link #readDelimitedTerms}. */

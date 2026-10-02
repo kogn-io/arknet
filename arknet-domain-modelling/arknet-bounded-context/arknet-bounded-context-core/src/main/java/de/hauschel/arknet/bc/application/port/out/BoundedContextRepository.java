@@ -262,7 +262,8 @@ public interface BoundedContextRepository {
      * can reach - the {@code arkddd:Subdomain} node behind {@code arkddd:partOf} in particular,
      * which would otherwise pile up one orphaned, typed node per deleted context in a graph the
      * store's generic read path renders. The edges the context holds outward
-     * ({@code arkddd:ubiquitousLanguageTerm}, {@code arkddd:partOf}, {@code arkddd:ownedBy}) are
+     * ({@code arkddd:ubiquitousLanguageTerm}, {@code arkddd:delimitsTerm}, {@code arkddd:partOf},
+     * {@code arkddd:ownedBy}) are
      * its own triples and vanish with it, while what sits at the far end of one - a glossary term,
      * a domain - is a resource of its own and is left standing. A {@link ContextRelationship} is
      * likewise never deleted along with it; its {@code upstream}/{@code downstream} edge is one of
