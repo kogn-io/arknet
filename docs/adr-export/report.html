@@ -176,11 +176,11 @@ footer.foot{margin-top:40px;color:var(--ink-faint);font-size:12px;font-family:va
   <header class="top">
     <h1>arknet Store Report</h1>
     <span class="ws">project: arknet (id: arknet)</span>
-    <span class="meta"><b>80</b> model elements &middot; <b>383</b> resources &middot; <b>2914</b> triples</span>
+    <span class="meta"><b>82</b> model elements &middot; <b>403</b> resources &middot; <b>3070</b> triples</span>
   </header>
   <details class="agent-panel">
     <summary>What the agent gets back <span class="hint">- compact digest as the tool return value (text)</span></summary>
-<pre># Project arknet (id: arknet) -- 383 resources, 2914 triples, 14 types
+<pre># Project arknet (id: arknet) -- 403 resources, 3070 triples, 14 types
 # Prefixes:
 #   rdf:     = http://www.w3.org/1999/02/22-rdf-syntax-ns#
 #   arkreq:  = https://w3id.org/arknet/requirements#
@@ -194,9 +194,9 @@ footer.foot{margin-top:40px;color:var(--ink-faint);font-size:12px;font-family:va
 
 27 skos:Concept
 1 skos:ConceptScheme
-28 arkarch:ArchitectureDecisionRecord
-111 arkarch:Consequence
-102 arkarch:ConsideredOption
+30 arkarch:ArchitectureDecisionRecord
+123 arkarch:Consequence
+108 arkarch:ConsideredOption
 6 arkddd:BoundedContext
 13 arkddd:ContextRelationship
 6 arkddd:Subdomain
@@ -239,16 +239,18 @@ TERM-5 [Concept] &quot;Legal Actor&quot;  -&gt; resource_get(&quot;TERM-5&quot;)
 ## skos:ConceptScheme (1)
 1 more without a label or business id (not listed individually - reachable via their owning resource's resource_get)
 
-## arkarch:ArchitectureDecisionRecord (28)
+## arkarch:ArchitectureDecisionRecord (30)
 ADR-6 [ArchitectureDecisionRecord] &quot;Lokaler Single-User-Client ohne Auth- oder Mandantenbegriff in den Cores&quot;  -&gt; resource_get(&quot;ADR-6&quot;)
 ADR-46 [ArchitectureDecisionRecord] &quot;Ein benannter Lifecycle-Zielschnitt aus acht Kontexten als Scope-Rahmen&quot;  -&gt; resource_get(&quot;ADR-46&quot;)
 ADR-4 [ArchitectureDecisionRecord] &quot;Ein benannter Lifecycle-Zielschnitt als Scope-Rahmen&quot;  -&gt; resource_get(&quot;ADR-4&quot;)
 ADR-58 [ArchitectureDecisionRecord] &quot;Kein API-Modul je Komponente; die In-Port-Schnittstellen bleiben im Kern&quot;  -&gt; resource_get(&quot;ADR-58&quot;)
+ADR-60 [ArchitectureDecisionRecord] &quot;Lesen läuft über generische Zugriffs- und Frage-Tools; typspezifische Lese-Tools entfallen&quot;  -&gt; resource_get(&quot;ADR-60&quot;)
 ADR-54 [ArchitectureDecisionRecord] &quot;Modellanalyse ist ein eigener, rein lesender Bounded Context über der Published Language jedes Kontexts&quot;  -&gt; resource_get(&quot;ADR-54&quot;)
 ADR-7 [ArchitectureDecisionRecord] &quot;Der generische Store-Lesepfad lebt im Composition Root, nicht in einem Kontext&quot;  -&gt; resource_get(&quot;ADR-7&quot;)
 ADR-28 [ArchitectureDecisionRecord] &quot;Jede Modelländerung erzeugt eine unveränderliche Revision&quot;  -&gt; resource_get(&quot;ADR-28&quot;)
 ADR-57 [ArchitectureDecisionRecord] &quot;Ein Vokabularmodul je Bounded Context mit mehr als einer Komponente&quot;  -&gt; resource_get(&quot;ADR-57&quot;)
 ADR-8 [ArchitectureDecisionRecord] &quot;Persistenz ausschließlich über domänennahe Out-Ports&quot;  -&gt; resource_get(&quot;ADR-8&quot;)
+ADR-59 [ArchitectureDecisionRecord] &quot;Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools&quot;  -&gt; resource_get(&quot;ADR-59&quot;)
 ADR-19 [ArchitectureDecisionRecord] &quot;Fremdgeführte Konzepte werden übersetzt, nicht als eigener Kontext gespiegelt&quot;  -&gt; resource_get(&quot;ADR-19&quot;)
 ADR-37 [ArchitectureDecisionRecord] &quot;Die Rolle wird eine eigene Ressource neben dem Träger&quot;  -&gt; resource_get(&quot;ADR-37&quot;)
 ADR-27 [ArchitectureDecisionRecord] &quot;Die Projekt-Registry wohnt in einem reservierten System-Dataset&quot;  -&gt; resource_get(&quot;ADR-27&quot;)
@@ -269,10 +271,10 @@ ADR-13 [ArchitectureDecisionRecord] &quot;Die Projekt-Registry steht außerhalb 
 ADR-56 [ArchitectureDecisionRecord] &quot;Ein Shared Kernel aller Bounded Contexts für Identität, Code-Vergabe und Sprache&quot;  -&gt; resource_get(&quot;ADR-56&quot;)
 ADR-3 [ArchitectureDecisionRecord] &quot;Alle Schreibpfade laufen durch einen geteilten Schreibtrichter&quot;  -&gt; resource_get(&quot;ADR-3&quot;)
 
-## arkarch:Consequence (111)
-111 more without a label or business id (not listed individually - reachable via their owning resource's resource_get)
+## arkarch:Consequence (123)
+123 more without a label or business id (not listed individually - reachable via their owning resource's resource_get)
 
-## arkarch:ConsideredOption (102)
+## arkarch:ConsideredOption (108)
 https://w3id.org/arknet/id/0256b17d-132b-4792-b65c-35d51d4bcaa9 [ConsideredOption] &quot;Alles lassen wie es ist&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/0256b17d-132b-4792-b65c-35d51d4bcaa9&quot;)
 https://w3id.org/arknet/id/062d18fe-5777-4272-8e88-0a32d1b14373 [ConsideredOption] &quot;Generischer Lesepfad im Composition Root, typunabhängig&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/062d18fe-5777-4272-8e88-0a32d1b14373&quot;)
 https://w3id.org/arknet/id/06436646-91fb-471e-b607-7a89f7f452d6 [ConsideredOption] &quot;Aufteilen: kontextinterne Anteile in den jeweiligen Kontext, übergreifende bleiben generisch&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/06436646-91fb-471e-b607-7a89f7f452d6&quot;)
@@ -308,6 +310,7 @@ https://w3id.org/arknet/id/4a47157d-0cca-4f99-835f-ee41b0c31a0f [ConsideredOptio
 https://w3id.org/arknet/id/4b1b8a97-d757-4f7f-a2a0-2febfb8d39da [ConsideredOption] &quot;Je Kante beim Umbau einzeln entscheiden&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/4b1b8a97-d757-4f7f-a2a0-2febfb8d39da&quot;)
 https://w3id.org/arknet/id/4ba40cd8-19f8-41b9-b91c-7ffc37d05005 [ConsideredOption] &quot;Je Kontext ein eigener Überblick&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/4ba40cd8-19f8-41b9-b91c-7ffc37d05005&quot;)
 https://w3id.org/arknet/id/4bc109ed-7050-4937-8c65-33b8e8941a70 [ConsideredOption] &quot;Scope weiter am Bauzustand messen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/4bc109ed-7050-4937-8c65-33b8e8941a70&quot;)
+https://w3id.org/arknet/id/4f863c45-80bc-4c0c-a88a-0bd75cfb3ab3 [ConsideredOption] &quot;Je Ressourcentyp einen Tool-Satz behalten&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/4f863c45-80bc-4c0c-a88a-0bd75cfb3ab3&quot;)
 https://w3id.org/arknet/id/50574e72-7aaa-4373-9916-3eed2fdd6565 [ConsideredOption] &quot;Nur die tatsächlich gebauten Kontexte benennen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/50574e72-7aaa-4373-9916-3eed2fdd6565&quot;)
 https://w3id.org/arknet/id/5361b5cd-bc54-4f13-b00c-d92392fbf36e [ConsideredOption] &quot;Nur die tatsächlich gebauten Kontexte benennen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/5361b5cd-bc54-4f13-b00c-d92392fbf36e&quot;)
 https://w3id.org/arknet/id/553cc7be-dc96-49e3-9deb-af035be64bd2 [ConsideredOption] &quot;Identität aus dem Verzeichnis ableiten&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/553cc7be-dc96-49e3-9deb-af035be64bd2&quot;)
@@ -333,6 +336,7 @@ https://w3id.org/arknet/id/92ad85b6-ee14-42df-affa-5bf79e5d1ed3 [ConsideredOptio
 https://w3id.org/arknet/id/939e38a6-a496-49aa-9437-f6c05aee458d [ConsideredOption] &quot;Modell-Kontexte entlang des Zielschnitts schneiden&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/939e38a6-a496-49aa-9437-f6c05aee458d&quot;)
 https://w3id.org/arknet/id/95029c69-57de-40a3-99ea-2e65b38a530b [ConsideredOption] &quot;Modul im Anforderungskontext&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/95029c69-57de-40a3-99ea-2e65b38a530b&quot;)
 https://w3id.org/arknet/id/97ad56b0-8d57-4bff-b332-e1a3ed9ae6ae [ConsideredOption] &quot;Rohes MCP-SDK&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/97ad56b0-8d57-4bff-b332-e1a3ed9ae6ae&quot;)
+https://w3id.org/arknet/id/9a465dd7-1d86-4550-bb33-835ccd7422a6 [ConsideredOption] &quot;Generische Zugriffs-Tools und Lese-/Such-Aktivitäten, dazu Frage-Tools&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/9a465dd7-1d86-4550-bb33-835ccd7422a6&quot;)
 https://w3id.org/arknet/id/9b0f6d85-7730-4a70-ac6c-b662ad9e9140 [ConsideredOption] &quot;Kerne dürfen Nachbarkerne direkt rufen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/9b0f6d85-7730-4a70-ac6c-b662ad9e9140&quot;)
 https://w3id.org/arknet/id/9b6a5045-2049-4ef9-ba14-53c8f2b48973 [ConsideredOption] &quot;Das Modul als technische Bibliothek ohne Modellbegriffe führen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/9b6a5045-2049-4ef9-ba14-53c8f2b48973&quot;)
 https://w3id.org/arknet/id/9bd4e840-e192-403e-a8df-42e0e3f2a55c [ConsideredOption] &quot;Fremde Konzepte unübersetzt übernehmen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/9bd4e840-e192-403e-a8df-42e0e3f2a55c&quot;)
@@ -346,6 +350,7 @@ https://w3id.org/arknet/id/b60980e8-6ed6-43e5-8a4e-36347b262575 [ConsideredOptio
 https://w3id.org/arknet/id/ba37889d-ab31-4e34-9230-306074ce7e42 [ConsideredOption] &quot;Scope weiter am Bauzustand messen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/ba37889d-ab31-4e34-9230-306074ce7e42&quot;)
 https://w3id.org/arknet/id/bb951a6c-a984-4252-ba32-5d79ce242356 [ConsideredOption] &quot;Die Rolle im Use-Cases-Kontext&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/bb951a6c-a984-4252-ba32-5d79ce242356&quot;)
 https://w3id.org/arknet/id/bbb937fd-284d-4848-aace-d833c14121cb [ConsideredOption] &quot;Die Rolle in einem eigenen Bounded Context&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/bbb937fd-284d-4848-aace-d833c14121cb&quot;)
+https://w3id.org/arknet/id/bc0fe3da-08e1-4cf4-b62b-1f7c80c6fd10 [ConsideredOption] &quot;Typspezifische Anlege- und Änderungs-Tools behalten, nur die Verknüpfungs-Tools streichen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/bc0fe3da-08e1-4cf4-b62b-1f7c80c6fd10&quot;)
 https://w3id.org/arknet/id/bef9b717-2739-4e9b-abd1-d9b1826c173e [ConsideredOption] &quot;Default-Projekt als Rückfall bei unbekanntem Anker&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/bef9b717-2739-4e9b-abd1-d9b1826c173e&quot;)
 https://w3id.org/arknet/id/bf4dd767-3642-4c2a-8228-e2389128f4b9 [ConsideredOption] &quot;Zielschnitt an eine einzelne Norm binden&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/bf4dd767-3642-4c2a-8228-e2389128f4b9&quot;)
 https://w3id.org/arknet/id/c2520781-eef7-4630-b347-6e1e57d3fcf6 [ConsideredOption] &quot;Ein geteilter Daemon für alle Projekte, Routing per Anker&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/c2520781-eef7-4630-b347-6e1e57d3fcf6&quot;)
@@ -356,14 +361,17 @@ https://w3id.org/arknet/id/caad1241-ec60-4d3f-a4fd-86f107764a90 [ConsideredOptio
 https://w3id.org/arknet/id/d19777bd-90c3-4781-9d34-90684589f8e2 [ConsideredOption] &quot;Pro Modul entscheiden&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/d19777bd-90c3-4781-9d34-90684589f8e2&quot;)
 https://w3id.org/arknet/id/d2560bbf-55d5-421d-a27f-cdd7f9c3f23a [ConsideredOption] &quot;Auch Überblick und Rohzugriff in die Modellanalyse geben&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/d2560bbf-55d5-421d-a27f-cdd7f9c3f23a&quot;)
 https://w3id.org/arknet/id/d5fa7d81-5c8c-4370-a7c8-7eb3afabcc02 [ConsideredOption] &quot;Liste der Kontexte als Constraint neben der Entscheidung führen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/d5fa7d81-5c8c-4370-a7c8-7eb3afabcc02&quot;)
+https://w3id.org/arknet/id/d870e140-04b9-41f8-94a5-9de191230877 [ConsideredOption] &quot;Je Ressourcentyp ein get- und ein list-Tool behalten&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/d870e140-04b9-41f8-94a5-9de191230877&quot;)
 https://w3id.org/arknet/id/da88ae40-02b5-4ee8-b50c-37524f695348 [ConsideredOption] &quot;Einen übergreifenden Identitäts-Kontext mit dem schreibenden Agenten zusammen einführen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/da88ae40-02b5-4ee8-b50c-37524f695348&quot;)
 https://w3id.org/arknet/id/dabdb35e-883b-4e40-a42a-2558e5a8310d [ConsideredOption] &quot;Ein API-Modul je Komponente&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/dabdb35e-883b-4e40-a42a-2558e5a8310d&quot;)
 https://w3id.org/arknet/id/dc8e6e5a-30fa-4ce1-bfc4-32b74060480b [ConsideredOption] &quot;Actor als weiterer Ressourcentyp im Requirements-Kontext&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/dc8e6e5a-30fa-4ce1-bfc4-32b74060480b&quot;)
 https://w3id.org/arknet/id/dd443153-e54d-435c-9b12-bbf0bcc4a516 [ConsideredOption] &quot;Eine minimale Regel (keine Kontextüberspannung), Migration nur bei Regelverletzung&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/dd443153-e54d-435c-9b12-bbf0bcc4a516&quot;)
 https://w3id.org/arknet/id/de270ad5-d2e6-4a8f-9d90-1525bd510891 [ConsideredOption] &quot;Registry in einen der Kernkontexte einlegen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/de270ad5-d2e6-4a8f-9d90-1525bd510891&quot;)
+https://w3id.org/arknet/id/df9c52f8-6e23-427f-978f-1800486bf405 [ConsideredOption] &quot;JSON-Dokument statt Turtle für submit&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/df9c52f8-6e23-427f-978f-1800486bf405&quot;)
 https://w3id.org/arknet/id/e00eb903-928c-45ce-90f6-7b8f845c5aaa [ConsideredOption] &quot;Erst die Module umschneiden, Kontextgrenzen später&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/e00eb903-928c-45ce-90f6-7b8f845c5aaa&quot;)
 https://w3id.org/arknet/id/e04734db-8e66-4557-b4ec-831d13f53921 [ConsideredOption] &quot;Registry außerhalb der Modell-Kontexte als Werkzeug-Infrastruktur&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/e04734db-8e66-4557-b4ec-831d13f53921&quot;)
 https://w3id.org/arknet/id/e195b8be-2ee4-484e-9cf7-c52a74e6b9a9 [ConsideredOption] &quot;Außerhalb der Kontexte als Werkzeug-Infrastruktur führen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/e195b8be-2ee4-484e-9cf7-c52a74e6b9a9&quot;)
+https://w3id.org/arknet/id/e6c62b49-a869-4a89-8183-9421ed7c1a5e [ConsideredOption] &quot;Zwei generische Tools, describe und submit, aus Shapes und Ontologie getrieben&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/e6c62b49-a869-4a89-8183-9421ed7c1a5e&quot;)
 https://w3id.org/arknet/id/e9c52e39-6205-452d-b205-1cc5671d9dcc [ConsideredOption] &quot;Jede Komponente hält weiterhin eigene Kopien der Codes&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/e9c52e39-6205-452d-b205-1cc5671d9dcc&quot;)
 https://w3id.org/arknet/id/ea7ba81c-acf1-4087-8dcc-722489d35e87 [ConsideredOption] &quot;Identität über einen registrierten, opaken Anker mit Server-seitiger Registry&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/ea7ba81c-acf1-4087-8dcc-722489d35e87&quot;)
 https://w3id.org/arknet/id/eb2216c5-154f-4afc-8f14-6c3cbec9aa3c [ConsideredOption] &quot;Das Modul unverändert als Sammelbecken belassen&quot;  -&gt; resource_get(&quot;https://w3id.org/arknet/id/eb2216c5-154f-4afc-8f14-6c3cbec9aa3c&quot;)
@@ -446,7 +454,7 @@ UC2 [UseCase] &quot;Requirement erfassen&quot;  -&gt; resource_get(&quot;UC2&quo
       <a href="#sec-bounded-contexts"><span>Bounded Contexts</span><span class="cnt">6</span></a>
       <a href="#sec-requirements"><span>Requirements</span><span class="cnt">11</span></a>
       <a href="#sec-use-cases"><span>Use Cases</span><span class="cnt">4</span></a>
-      <a href="#sec-architecture-decisions"><span>Architecture Decisions</span><span class="cnt">28</span></a>
+      <a href="#sec-architecture-decisions"><span>Architecture Decisions</span><span class="cnt">30</span></a>
       <a href="#sec-roles"><span>Roles</span><span class="cnt">4</span></a>
       <a href="#sec-glossary"><span>Glossary</span><span class="cnt">27</span></a>
       <a class="muted" href="#sec-other"><span>Other resources</span><span class="cnt">7</span></a>
@@ -776,8 +784,9 @@ UC2 [UseCase] &quot;Requirement erfassen&quot;  -&gt; resource_get(&quot;UC2&quo
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 2</summary>
+              <summary>Referenced by 3</summary>
               <table class="props">
+                <tr><td class="pred">arkarch:addressesRequirement</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e" title="Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools">ADR-59</a></td></tr>
                 <tr><td class="pred">arkreq:stepRealises</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-f40f24d3-3bf8-4803-8d23-d89af2966469-4e9f916e63f98a29">f40f24d3-3bf8-4803-8d23-d89af2966469</a></td></tr>
                 <tr><td class="pred">http://open-services.net/ns/rm#satisfies</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-dfab53b5-4f4f-4629-9756-182ff0f8e659-0f8c2ffca9f891d1" title="Requirement erfassen">UC2</a></td></tr>
               </table>
@@ -836,8 +845,9 @@ UC2 [UseCase] &quot;Requirement erfassen&quot;  -&gt; resource_get(&quot;UC2&quo
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 2</summary>
+              <summary>Referenced by 3</summary>
               <table class="props">
+                <tr><td class="pred">arkarch:addressesRequirement</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a-9ecd2bd2759da9a1" title="Lesen läuft über generische Zugriffs- und Frage-Tools; typspezifische Lese-Tools entfallen">ADR-60</a></td></tr>
                 <tr><td class="pred">arkreq:stepRealises</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-59813d34-a1bd-4570-8cd9-5999e4c6f4bf-e257f6444787a9cf">59813d34-a1bd-4570-8cd9-5999e4c6f4bf</a></td></tr>
                 <tr><td class="pred">http://open-services.net/ns/rm#satisfies</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-d7f6ea8a-3615-4f04-a32b-4248c15d3728-584f42e004e74c4e" title="Requirement/Constraint nachschlagen">UC1</a></td></tr>
               </table>
@@ -901,8 +911,9 @@ UC2 [UseCase] &quot;Requirement erfassen&quot;  -&gt; resource_get(&quot;UC2&quo
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 2</summary>
+              <summary>Referenced by 3</summary>
               <table class="props">
+                <tr><td class="pred">arkarch:addressesRequirement</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e" title="Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools">ADR-59</a></td></tr>
                 <tr><td class="pred">arkreq:stepRealises</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-1e8d4602-c730-4a98-9a5e-eb368e6dd57f-beff9ded4ecafd5e">1e8d4602-c730-4a98-9a5e-eb368e6dd57f</a></td></tr>
                 <tr><td class="pred">http://open-services.net/ns/rm#satisfies</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-55bde8b5-1a6d-47d5-b8c4-50f435bfc207-8a778571b015dcce" title="Requirement korrigieren">UC3</a></td></tr>
               </table>
@@ -964,8 +975,9 @@ UC2 [UseCase] &quot;Requirement erfassen&quot;  -&gt; resource_get(&quot;UC2&quo
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 4</summary>
+              <summary>Referenced by 5</summary>
               <table class="props">
+                <tr><td class="pred">arkarch:addressesRequirement</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e" title="Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools">ADR-59</a></td></tr>
                 <tr><td class="pred">arkreq:stepRealises</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-8e068c32-6aba-46d2-bc4b-97516e023ea8-c147fca0b9884dbf">8e068c32-6aba-46d2-bc4b-97516e023ea8</a></td></tr>
                 <tr><td class="pred">arkreq:stepRealises</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-ab38c44a-8959-4494-bcbb-c34f5ee5406c-1a76c24c597c03d9">ab38c44a-8959-4494-bcbb-c34f5ee5406c</a></td></tr>
                 <tr><td class="pred">http://open-services.net/ns/rm#satisfies</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-55bde8b5-1a6d-47d5-b8c4-50f435bfc207-8a778571b015dcce" title="Requirement korrigieren">UC3</a></td></tr>
@@ -1770,7 +1782,7 @@ UC2 [UseCase] &quot;Requirement erfassen&quot;  -&gt; resource_get(&quot;UC2&quo
         </div>
       </section>
       <section class="group" id="sec-architecture-decisions">
-        <h2>Architecture Decisions <span class="of">28</span></h2>
+        <h2>Architecture Decisions <span class="of">30</span></h2>
         <p class="sub">decisions made, their status, what they replace and what they relate to</p>
         <div class="cards">
           <article class="card" id="r-https-w3id-org-arknet-id-fafb3370-a9a5-46a7-bca5-824c1b2023e0-9914a4e1833abff0">
@@ -1811,13 +1823,14 @@ UC2 [UseCase] &quot;Requirement erfassen&quot;  -&gt; resource_get(&quot;UC2&quo
               </div>
               <div class="block b-related-to">
                 <span class="blabel">Related to</span>
-                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-58dd5050-2c33-4723-a789-479f7c4c47a8-fa7e00657366848f">ADR-28</a><a class="chip" href="#r-https-w3id-org-arknet-id-c3a189a2-b7ea-4ac6-8096-9f18a5692fec-a244b767d4e9b33a">ADR-32</a></div>
+                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-58dd5050-2c33-4723-a789-479f7c4c47a8-fa7e00657366848f">ADR-28</a><a class="chip" href="#r-https-w3id-org-arknet-id-c3a189a2-b7ea-4ac6-8096-9f18a5692fec-a244b767d4e9b33a">ADR-32</a><a class="chip" href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e">ADR-59</a></div>
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 2</summary>
+              <summary>Referenced by 3</summary>
               <table class="props">
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-58dd5050-2c33-4723-a789-479f7c4c47a8-fa7e00657366848f" title="Jede Modelländerung erzeugt eine unveränderliche Revision">ADR-28</a></td></tr>
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e" title="Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools">ADR-59</a></td></tr>
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-c3a189a2-b7ea-4ac6-8096-9f18a5692fec-a244b767d4e9b33a" title="Die Revision dient zugleich als Concurrency-Token">ADR-32</a></td></tr>
               </table>
             </details>
@@ -2518,13 +2531,14 @@ A context boundary is not the same as a module boundary -- a context may hold se
               </div>
               <div class="block b-related-to">
                 <span class="blabel">Related to</span>
-                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-53c40f6c-0af0-43f0-89d2-a88e32947331-910d219372ae1a3f">ADR-7</a><a class="chip" href="#r-https-w3id-org-arknet-id-aa935fe9-4193-4cc6-bb7f-374cdf6659d8-37bc48581c224750">ADR-16</a><a class="chip" href="#r-https-w3id-org-arknet-id-b6936ffb-8575-4ce1-90a6-5265bdcb560d-cd51333f7f80e4ee">ADR-51</a><a class="chip" href="#r-https-w3id-org-arknet-id-e0730767-b4af-4f10-9158-7525d8d40587-e694d9da4f87027c">ADR-55</a></div>
+                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-53c40f6c-0af0-43f0-89d2-a88e32947331-910d219372ae1a3f">ADR-7</a><a class="chip" href="#r-https-w3id-org-arknet-id-aa935fe9-4193-4cc6-bb7f-374cdf6659d8-37bc48581c224750">ADR-16</a><a class="chip" href="#r-https-w3id-org-arknet-id-b6936ffb-8575-4ce1-90a6-5265bdcb560d-cd51333f7f80e4ee">ADR-51</a><a class="chip" href="#r-https-w3id-org-arknet-id-e0730767-b4af-4f10-9158-7525d8d40587-e694d9da4f87027c">ADR-55</a><a class="chip" href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e">ADR-59</a></div>
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 4</summary>
+              <summary>Referenced by 5</summary>
               <table class="props">
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-53c40f6c-0af0-43f0-89d2-a88e32947331-910d219372ae1a3f" title="Der generische Store-Lesepfad lebt im Composition Root, nicht in einem Kontext">ADR-7</a></td></tr>
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e" title="Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools">ADR-59</a></td></tr>
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-aa935fe9-4193-4cc6-bb7f-374cdf6659d8-37bc48581c224750" title="Ein geteilter HTTP-Daemon statt eines Subprozesses je Session">ADR-16</a></td></tr>
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-b6936ffb-8575-4ce1-90a6-5265bdcb560d-cd51333f7f80e4ee" title="Der Composition Root trägt keine Anwendungslogik; der generische Store-Lesepfad ist die einzige, gebundene Ausnahme">ADR-51</a></td></tr>
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-e0730767-b4af-4f10-9158-7525d8d40587-e694d9da4f87027c" title="Der Composition Root trägt keine Anwendungslogik; nur Überblick und Rohzugriff bleiben als typunabhängige Ausnahme">ADR-55</a></td></tr>
@@ -3045,12 +3059,13 @@ The choice decides whether the project boundary is also the data boundary."</spa
               </div>
               <div class="block b-related-to">
                 <span class="blabel">Related to</span>
-                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-fafb3370-a9a5-46a7-bca5-824c1b2023e0-9914a4e1833abff0">ADR-3</a><a class="chip" href="#r-https-w3id-org-arknet-id-c3a189a2-b7ea-4ac6-8096-9f18a5692fec-a244b767d4e9b33a">ADR-32</a></div>
+                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-fafb3370-a9a5-46a7-bca5-824c1b2023e0-9914a4e1833abff0">ADR-3</a><a class="chip" href="#r-https-w3id-org-arknet-id-c3a189a2-b7ea-4ac6-8096-9f18a5692fec-a244b767d4e9b33a">ADR-32</a><a class="chip" href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e">ADR-59</a></div>
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 2</summary>
+              <summary>Referenced by 3</summary>
               <table class="props">
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e" title="Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools">ADR-59</a></td></tr>
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-c3a189a2-b7ea-4ac6-8096-9f18a5692fec-a244b767d4e9b33a" title="Die Revision dient zugleich als Concurrency-Token">ADR-32</a></td></tr>
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-fafb3370-a9a5-46a7-bca5-824c1b2023e0-9914a4e1833abff0" title="Alle Schreibpfade laufen durch einen geteilten Schreibtrichter">ADR-3</a></td></tr>
               </table>
@@ -4015,12 +4030,13 @@ Three circumstances speak against that placement. The module schema knows no com
               </div>
               <div class="block b-related-to">
                 <span class="blabel">Related to</span>
-                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-dbad2180-8120-46ea-8b02-18b22118de39-a9539e7331bd5616">ADR-49</a><a class="chip" href="#r-https-w3id-org-arknet-id-b6936ffb-8575-4ce1-90a6-5265bdcb560d-cd51333f7f80e4ee">ADR-51</a><a class="chip" href="#r-https-w3id-org-arknet-id-e0730767-b4af-4f10-9158-7525d8d40587-e694d9da4f87027c">ADR-55</a></div>
+                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-dbad2180-8120-46ea-8b02-18b22118de39-a9539e7331bd5616">ADR-49</a><a class="chip" href="#r-https-w3id-org-arknet-id-b6936ffb-8575-4ce1-90a6-5265bdcb560d-cd51333f7f80e4ee">ADR-51</a><a class="chip" href="#r-https-w3id-org-arknet-id-e0730767-b4af-4f10-9158-7525d8d40587-e694d9da4f87027c">ADR-55</a><a class="chip" href="#r-https-w3id-org-arknet-id-3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a-9ecd2bd2759da9a1">ADR-60</a></div>
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 3</summary>
+              <summary>Referenced by 4</summary>
               <table class="props">
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a-9ecd2bd2759da9a1" title="Lesen läuft über generische Zugriffs- und Frage-Tools; typspezifische Lese-Tools entfallen">ADR-60</a></td></tr>
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-b6936ffb-8575-4ce1-90a6-5265bdcb560d-cd51333f7f80e4ee" title="Der Composition Root trägt keine Anwendungslogik; der generische Store-Lesepfad ist die einzige, gebundene Ausnahme">ADR-51</a></td></tr>
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-dbad2180-8120-46ea-8b02-18b22118de39-a9539e7331bd5616" title="Ein Nachbar wird über die Published Language gelesen, in beide Richtungen; der Borrowed In-Port entfällt">ADR-49</a></td></tr>
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-e0730767-b4af-4f10-9158-7525d8d40587-e694d9da4f87027c" title="Der Composition Root trägt keine Anwendungslogik; nur Überblick und Rohzugriff bleiben als typunabhängige Ausnahme">ADR-55</a></td></tr>
@@ -4123,7 +4139,7 @@ Against a context of its own for the evaluations stands the objection that it ha
               </div>
               <div class="block b-related-to">
                 <span class="blabel">Related to</span>
-                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5-8623af9ab9822fbe">ADR-14</a><a class="chip" href="#r-https-w3id-org-arknet-id-3f9264eb-10fe-4d04-911c-0b627ab9fa36-2c50af82e65648cb">ADR-54</a></div>
+                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5-8623af9ab9822fbe">ADR-14</a><a class="chip" href="#r-https-w3id-org-arknet-id-3f9264eb-10fe-4d04-911c-0b627ab9fa36-2c50af82e65648cb">ADR-54</a><a class="chip" href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e">ADR-59</a><a class="chip" href="#r-https-w3id-org-arknet-id-3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a-9ecd2bd2759da9a1">ADR-60</a></div>
               </div>
               <div class="block b-uses-terms-not-named-in-the-text">
                 <span class="blabel">Uses terms (not named in the text)</span>
@@ -4131,9 +4147,11 @@ Against a context of its own for the evaluations stands the objection that it ha
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 2</summary>
+              <summary>Referenced by 4</summary>
               <table class="props">
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a-9ecd2bd2759da9a1" title="Lesen läuft über generische Zugriffs- und Frage-Tools; typspezifische Lese-Tools entfallen">ADR-60</a></td></tr>
                 <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-3f9264eb-10fe-4d04-911c-0b627ab9fa36-2c50af82e65648cb" title="Modellanalyse ist ein eigener, rein lesender Bounded Context über der Published Language jedes Kontexts">ADR-54</a></td></tr>
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e" title="Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools">ADR-59</a></td></tr>
                 <tr><td class="pred">arkarch:supersededBy</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-b6936ffb-8575-4ce1-90a6-5265bdcb560d-cd51333f7f80e4ee" title="Der Composition Root trägt keine Anwendungslogik; der generische Store-Lesepfad ist die einzige, gebundene Ausnahme">ADR-51</a></td></tr>
               </table>
             </details>
@@ -4458,6 +4476,194 @@ The trigger for an api module remains the one of the schema: a module outside th
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-d6f351d9-ec26-4041-95f9-77059a89090d-6cf1cc743cbf4728">https://w3id.org/arknet/id/d6f351d9-ec26-4041-95f9-77059a89090d</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-86b4a4c3-80da-46ba-86dd-960553988619-da18d5508de2e6c5">https://w3id.org/arknet/id/86b4a4c3-80da-46ba-86dd-960553988619</a></td></tr>
                 <tr><td class="pred">arkarch:decisionDate</td><td class="obj"><span class="lit str">"2026-09-19"</span><span class="dt">^^xsd:date</span></td></tr>
+              </table>
+            </details>
+            </details>
+          </article>
+          <article class="card" id="r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e">
+            <details class="fold">
+              <summary class="head">
+                <span class="code">ADR-59</span>
+                <h3><span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Generic write surface describe/submit replaces type-specific MCP tools</span><span class="lang-variant" data-lang="de" hidden>Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools</span></span></h3>
+                <span class="pill status v-accepted">Accepted</span>
+                <a class="anchor" href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e">#</a>
+              </summary>
+              <div class="body">
+              <div class="block b-context">
+                <span class="blabel">Context</span>
+                <div class="lang-group" data-default-lang="en"><div class="lang-variant" data-lang="en"><div class="prose-body"><p class="prose">arknet exposes 77 MCP tools; 58 of them follow one repeated pattern per <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> type: create, update, link, unlink, get, list. The tool list alone costs about 121 KB per session before the first call, every new <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> type costs a new set of tools, and the target cut plans eight bounded contexts.</p><p class="prose">A prototype with a generic write path, driven solely by the SHACL shapes and the ontology, was measured against the current tool set in measurement runs in September and October 2026 (Sonnet in Claude Code across five phases, plus the open-weight models Qwen3.5-397B and Qwen3.8-27B): the tool list shrinks to under 1 KB, task completion is equivalent, and explanation sentences in the type description are a precondition rather than a nicety: without them the model asks back instead of acting in three of four mutation phases. The composition root is already required to know nothing about the <a class="term" href="#r-https-w3id-org-arknet-id-0a6971c4-4c22-43a2-9e91-a8a56f3bf379-e932f4dd79934933" title="TERM-1">metamodel</a>; a tool per <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> type works against that <span class="term gap" title="TERM-10 - in the glossary, but this element does not link to it">requirement</span> with every new type.</p></div></div><div class="lang-variant" data-lang="de" hidden><div class="prose-body"><p class="prose">arknet bietet 77 MCP-Tools an; 58 davon folgen einem je Ressourcentyp wiederholten Muster: anlegen, ändern, verknüpfen, entknüpfen, lesen, auflisten. Allein die Tool-Liste kostet etwa 121 KB je Session vor dem ersten Aufruf, jeder neue Ressourcentyp kostet einen neuen Satz Tools, und der Zielschnitt plant acht Bounded Contexts.</p><p class="prose">Ein Prototyp mit generischem Schreibpfad, ausschließlich aus den SHACL-Shapes und der Ontologie getrieben, wurde in Messläufen im September und Oktober 2026 gegen den aktuellen Tool-Satz gemessen (Sonnet in Claude Code über fünf Phasen, dazu die Open-Weight-Modelle Qwen3.5-397B und Qwen3.8-27B): die Tool-Liste schrumpft auf unter 1 KB, die Aufgabenerfüllung ist gleichwertig, und Erklärungssätze in der Typbeschreibung sind Voraussetzung, keine Zugabe: ohne sie fragt das Modell in drei von vier Mutationsphasen zurück, statt zu handeln. Vom Composition Root ist bereits gefordert, nichts vom Metamodell zu wissen; ein Tool je Ressourcentyp arbeitet mit jedem neuen Typ gegen diese Forderung.</p></div></div></div>
+              </div>
+              <div class="block b-decision">
+                <span class="blabel">Decision</span>
+                <div class="lang-group" data-default-lang="en"><div class="lang-variant" data-lang="en"><div class="prose-body"><p class="prose">arknet's write surface consists of two generic tools: describe, which renders a <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> type's fields, edges and rules with explanation sentences from the SHACL shapes and the ontology, and submit, which accepts a Turtle document of activities (create, update, add-to, remove-from and further activity types), validates it against the same shapes and applies it all-or-nothing; every type-specific write and link tool is removed.</p></div></div><div class="lang-variant" data-lang="de" hidden><div class="prose-body"><p class="prose">arknets Schreibfläche besteht aus zwei generischen Tools: describe, das Felder, Kanten und Regeln eines Ressourcentyps mit Erklärungssätzen aus den SHACL-Shapes und der Ontologie rendert, und submit, das ein Turtle-Dokument von Aktivitäten (anlegen, ändern, hinzufügen, entfernen und weitere Aktivitätstypen) entgegennimmt, gegen dieselben Shapes validiert und ganz oder gar nicht anwendet; jedes typspezifische Schreib- und Verknüpfungs-Tool entfällt.</p></div></div></div>
+              </div>
+              <div class="block b-consequences">
+                <span class="blabel">Consequences</span>
+                <ul class="bullets">
+                  <li><span class="pill consequence v-positive">Positive</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">The schema of a <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> type lives only in its shape and ontology; adding a type costs a shape, not a set of tools, and the composition root stays free of <a class="term" href="#r-https-w3id-org-arknet-id-0a6971c4-4c22-43a2-9e91-a8a56f3bf379-e932f4dd79934933" title="TERM-1">metamodel</a> knowledge.</span><span class="lang-variant" data-lang="de" hidden>Das Schema eines Ressourcentyps lebt nur in seiner Shape und der Ontologie; ein neuer Typ kostet eine Shape, keinen Satz Tools, und der Composition Root bleibt frei von Metamodell-Wissen.</span></span></li>
+                  <li><span class="pill consequence v-positive">Positive</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">The tool list shrinks by two orders of magnitude per session, and it no longer grows with the number of <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> types.</span><span class="lang-variant" data-lang="de" hidden>Die Tool-Liste schrumpft je Session um zwei Größenordnungen und wächst nicht mehr mit der Zahl der Ressourcentypen.</span></span></li>
+                  <li><span class="pill consequence v-neutral">Neutral</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Turtle is the wire format for writing: a client produces an RDF document instead of filling named parameters.</span><span class="lang-variant" data-lang="de" hidden>Turtle ist das Übertragungsformat fürs Schreiben: ein Client erzeugt ein RDF-Dokument, statt benannte Parameter zu füllen.</span></span></li>
+                  <li><span class="pill consequence v-neutral">Neutral</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Every submitted activity is persisted as a <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> of its own and becomes the basis of provenance.</span><span class="lang-variant" data-lang="de" hidden>Jede eingereichte Aktivität wird als eigene Ressource persistiert und wird zur Grundlage der Provenienz.</span></span></li>
+                  <li><span class="pill consequence v-negative">Negative</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Explanation sentences in the type description and in every rejection text (the full namespace behind every prefix, a pointer to the type description, how to read via activities) are mandatory, not optional; without them the model stops and asks instead of acting.</span><span class="lang-variant" data-lang="de" hidden>Erklärungssätze in der Typbeschreibung und in jedem Ablehnungstext (der volle Namensraum hinter jedem Präfix, ein Verweis auf die Typbeschreibung, wie über Aktivitäten gelesen wird) sind Pflicht, nicht optional; ohne sie hält das Modell an und fragt, statt zu handeln.</span></span></li>
+                  <li><span class="pill consequence v-negative">Negative</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">The type-specific write and link tools are removed in one cut together with the vocabulary IRI renames found during prototyping: every client and skill migrates once instead of twice.</span><span class="lang-variant" data-lang="de" hidden>Die typspezifischen Schreib- und Verknüpfungs-Tools entfallen in einem Schnitt zusammen mit den beim Prototyping gefundenen Umbenennungen von Vokabular-IRIs: jeder Client und jeder Skill migriert einmal statt zweimal.</span></span></li>
+                  <li><span class="pill consequence v-negative">Negative</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Applying a document all-or-nothing requires one transaction spanning every <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> the document touches; the write funnel's atomicity guarantee has to hold for the whole document, not per <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a>.</span><span class="lang-variant" data-lang="de" hidden>Ein Dokument ganz oder gar nicht anzuwenden erfordert eine Transaktion über jede Ressource, die das Dokument berührt; die Atomaritätszusage des Schreibtrichters muss für das ganze Dokument gelten, nicht je Ressource.</span></span></li>
+                  <li><span class="pill consequence v-neutral">Neutral</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Operations of the reporting path (an implementation report, an evidence record) become activity types, not tools.</span><span class="lang-variant" data-lang="de" hidden>Operationen des Berichtspfads (ein Umsetzungsbericht, ein Nachweis) werden zu Aktivitätstypen, nicht zu Tools.</span></span></li>
+                </ul>
+              </div>
+              <div class="block b-considered-options">
+                <span class="blabel">Considered options</span>
+                <ul class="bullets">
+                  <li><span class="pill outcome v-chosen">Chosen</span> <strong class="bullet-caption"><span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Two generic tools, describe and submit, driven by shapes and ontology</span><span class="lang-variant" data-lang="de" hidden>Zwei generische Tools, describe und submit, aus Shapes und Ontologie getrieben</span></span></strong> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Measured equivalent in task completion, shrinks the tool list by two orders of magnitude, and makes a new <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> type cost a shape instead of tools.</span><span class="lang-variant" data-lang="de" hidden>In der Aufgabenerfüllung gleichwertig gemessen, schrumpft die Tool-Liste um zwei Größenordnungen und lässt einen neuen Ressourcentyp eine Shape statt Tools kosten.</span></span></li>
+                  <li><span class="pill outcome v-rejected">Rejected</span> <strong class="bullet-caption"><span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Keep one tool set per resource type</span><span class="lang-variant" data-lang="de" hidden>Je Ressourcentyp einen Tool-Satz behalten</span></span></strong> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">The measured status quo: about 121 KB of tool list per session, growing with every type and every context of the target cut.</span><span class="lang-variant" data-lang="de" hidden>Der gemessene Status quo: etwa 121 KB Tool-Liste je Session, wachsend mit jedem Typ und jedem Kontext des Zielschnitts.</span></span></li>
+                  <li><span class="pill outcome v-rejected">Rejected</span> <strong class="bullet-caption"><span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Keep type-specific add and update tools, drop only the link tools</span><span class="lang-variant" data-lang="de" hidden>Typspezifische Anlege- und Änderungs-Tools behalten, nur die Verknüpfungs-Tools streichen</span></span></strong> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Still roughly 42 tools; scaling to eight contexts still costs tools per type and the tool list stays large.</span><span class="lang-variant" data-lang="de" hidden>Immer noch rund 42 Tools; die Skalierung auf acht Kontexte kostet weiterhin Tools je Typ, und die Tool-Liste bleibt groß.</span></span></li>
+                  <li><span class="pill outcome v-rejected">Rejected</span> <strong class="bullet-caption"><span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">JSON document instead of Turtle for submit</span><span class="lang-variant" data-lang="de" hidden>JSON-Dokument statt Turtle für submit</span></span></strong> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Not compared in a controlled measurement; Turtle is kept because the prototype measurements were made with it.</span><span class="lang-variant" data-lang="de" hidden>Nicht kontrolliert verglichen; Turtle bleibt, weil die Prototyp-Messungen damit gemacht wurden.</span></span></li>
+                </ul>
+              </div>
+              <div class="block b-decision-date">
+                <span class="blabel">Decision date</span>
+                <div class="prose-body"><p class="prose">2026-10-02</p></div>
+              </div>
+              <div class="block b-addresses-requirements">
+                <span class="blabel">Addresses requirements</span>
+                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-2a1acada-473e-4a73-9c1f-b54b7b463445-447e8ca52eea1deb">FR-3</a><a class="chip" href="#r-https-w3id-org-arknet-id-80601114-b9c2-4c74-8616-a23d586fed75-e04c468521147981">FR-4</a><a class="chip" href="#r-https-w3id-org-arknet-id-943d28d3-95aa-4ee3-b6db-55add7df5dd3-180ff0649c4b6556">FR-1</a></div>
+              </div>
+              <div class="block b-related-to">
+                <span class="blabel">Related to</span>
+                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-fafb3370-a9a5-46a7-bca5-824c1b2023e0-9914a4e1833abff0">ADR-3</a><a class="chip" href="#r-https-w3id-org-arknet-id-aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5-8623af9ab9822fbe">ADR-14</a><a class="chip" href="#r-https-w3id-org-arknet-id-58dd5050-2c33-4723-a789-479f7c4c47a8-fa7e00657366848f">ADR-28</a><a class="chip" href="#r-https-w3id-org-arknet-id-e0730767-b4af-4f10-9158-7525d8d40587-e694d9da4f87027c">ADR-55</a><a class="chip" href="#r-https-w3id-org-arknet-id-3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a-9ecd2bd2759da9a1">ADR-60</a></div>
+              </div>
+              <div class="block b-uses-terms-not-named-in-the-text">
+                <span class="blabel">Uses terms (not named in the text)</span>
+                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-b8be1103-00f8-40dd-a688-1b0e11f9678f-0bdd92c5dd4c4a86" title="TERM-20">Revision</a></div>
+              </div>
+              </div>
+            <details class="referenced-by">
+              <summary>Referenced by 1</summary>
+              <table class="props">
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a-9ecd2bd2759da9a1" title="Lesen läuft über generische Zugriffs- und Frage-Tools; typspezifische Lese-Tools entfallen">ADR-60</a></td></tr>
+              </table>
+            </details>
+            <details class="raw">
+              <summary>32 raw triples &middot; ADR-59</summary>
+              <table class="props">
+                <tr><td class="pred">rdf:type</td><td class="obj"><span class="lit">arkarch:ArchitectureDecisionRecord</span></td></tr>
+                <tr><td class="pred">dcterms:identifier</td><td class="obj"><span class="lit str">"ADR-59"</span></td></tr>
+                <tr><td class="pred">arknet:name</td><td class="obj"><span class="lit str">"Generic write surface describe/submit replaces type-specific MCP tools"</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">arknet:name</td><td class="obj"><span class="lit str">"Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools"</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">arkarch:adrStatus</td><td class="obj"><span class="lit">arkarch:Accepted</span></td></tr>
+                <tr><td class="pred">arkarch:adrContext</td><td class="obj"><span class="lit str">"arknet exposes 77 MCP tools; 58 of them follow one repeated pattern per resource type: create, update, link, unlink, get, list. The tool list alone costs about 121 KB per session before the first call, every new resource type costs a new set of tools, and the target cut plans eight bounded contexts.
+
+A prototype with a generic write path, driven solely by the SHACL shapes and the ontology, was measured against the current tool set in measurement runs in September and October 2026 (Sonnet in Claude Code across five phases, plus the open-weight models Qwen3.5-397B and Qwen3.8-27B): the tool list shrinks to under 1 KB, task completion is equivalent, and explanation sentences in the type description are a precondition rather than a nicety: without them the model asks back instead of acting in three of four mutation phases. The composition root is already required to know nothing about the metamodel; a tool per resource type works against that requirement with every new type."</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">arkarch:adrContext</td><td class="obj"><span class="lit str">"arknet bietet 77 MCP-Tools an; 58 davon folgen einem je Ressourcentyp wiederholten Muster: anlegen, ändern, verknüpfen, entknüpfen, lesen, auflisten. Allein die Tool-Liste kostet etwa 121 KB je Session vor dem ersten Aufruf, jeder neue Ressourcentyp kostet einen neuen Satz Tools, und der Zielschnitt plant acht Bounded Contexts.
+
+Ein Prototyp mit generischem Schreibpfad, ausschließlich aus den SHACL-Shapes und der Ontologie getrieben, wurde in Messläufen im September und Oktober 2026 gegen den aktuellen Tool-Satz gemessen (Sonnet in Claude Code über fünf Phasen, dazu die Open-Weight-Modelle Qwen3.5-397B und Qwen3.8-27B): die Tool-Liste schrumpft auf unter 1 KB, die Aufgabenerfüllung ist gleichwertig, und Erklärungssätze in der Typbeschreibung sind Voraussetzung, keine Zugabe: ohne sie fragt das Modell in drei von vier Mutationsphasen zurück, statt zu handeln. Vom Composition Root ist bereits gefordert, nichts vom Metamodell zu wissen; ein Tool je Ressourcentyp arbeitet mit jedem neuen Typ gegen diese Forderung."</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">arkarch:adrDecision</td><td class="obj"><span class="lit str">"arknet's write surface consists of two generic tools: describe, which renders a resource type's fields, edges and rules with explanation sentences from the SHACL shapes and the ontology, and submit, which accepts a Turtle document of activities (create, update, add-to, remove-from and further activity types), validates it against the same shapes and applies it all-or-nothing; every type-specific write and link tool is removed."</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">arkarch:adrDecision</td><td class="obj"><span class="lit str">"arknets Schreibfläche besteht aus zwei generischen Tools: describe, das Felder, Kanten und Regeln eines Ressourcentyps mit Erklärungssätzen aus den SHACL-Shapes und der Ontologie rendert, und submit, das ein Turtle-Dokument von Aktivitäten (anlegen, ändern, hinzufügen, entfernen und weitere Aktivitätstypen) entgegennimmt, gegen dieselben Shapes validiert und ganz oder gar nicht anwendet; jedes typspezifische Schreib- und Verknüpfungs-Tool entfällt."</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-04d848c3-6ee2-430b-b52f-7dbe14180ded-909f7367bd08e28c">https://w3id.org/arknet/id/04d848c3-6ee2-430b-b52f-7dbe14180ded</a></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-37690059-4b56-4a69-b116-083a46807966-2fe993a7ebdea334">https://w3id.org/arknet/id/37690059-4b56-4a69-b116-083a46807966</a></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5c3f8dd7-2ae8-4ea4-bfb1-20787802a9c7-f730fe791603d6d4">https://w3id.org/arknet/id/5c3f8dd7-2ae8-4ea4-bfb1-20787802a9c7</a></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-6c4b51ef-55ba-47cb-a88b-08dc9301e6b0-6507c0329e2f4a8a">https://w3id.org/arknet/id/6c4b51ef-55ba-47cb-a88b-08dc9301e6b0</a></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-295a6072-f6ea-4e85-868b-ab82cee0de85-1ea20457524ebedc">https://w3id.org/arknet/id/295a6072-f6ea-4e85-868b-ab82cee0de85</a></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-39c78354-b4f4-4723-9547-c191f2103f30-71da6efdda7d0aa3">https://w3id.org/arknet/id/39c78354-b4f4-4723-9547-c191f2103f30</a></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-f748e29d-2aea-42fc-b64c-dfffd687cf4a-ee74d6a6eb846201">https://w3id.org/arknet/id/f748e29d-2aea-42fc-b64c-dfffd687cf4a</a></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-3ac2ea67-9dec-4324-8cbf-1f5eff23ce7b-d22bec14ae5ce541">https://w3id.org/arknet/id/3ac2ea67-9dec-4324-8cbf-1f5eff23ce7b</a></td></tr>
+                <tr><td class="pred">arkarch:consideredOption</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-e6c62b49-a869-4a89-8183-9421ed7c1a5e-c698fa7f0699eed1">https://w3id.org/arknet/id/e6c62b49-a869-4a89-8183-9421ed7c1a5e</a></td></tr>
+                <tr><td class="pred">arkarch:consideredOption</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-4f863c45-80bc-4c0c-a88a-0bd75cfb3ab3-bd5fc94546b0991f">https://w3id.org/arknet/id/4f863c45-80bc-4c0c-a88a-0bd75cfb3ab3</a></td></tr>
+                <tr><td class="pred">arkarch:consideredOption</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-bc0fe3da-08e1-4cf4-b62b-1f7c80c6fd10-284e86c9950cc44a">https://w3id.org/arknet/id/bc0fe3da-08e1-4cf4-b62b-1f7c80c6fd10</a></td></tr>
+                <tr><td class="pred">arkarch:consideredOption</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-df9c52f8-6e23-427f-978f-1800486bf405-a414e6589dd12d2a">https://w3id.org/arknet/id/df9c52f8-6e23-427f-978f-1800486bf405</a></td></tr>
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-fafb3370-a9a5-46a7-bca5-824c1b2023e0-9914a4e1833abff0">https://w3id.org/arknet/id/fafb3370-a9a5-46a7-bca5-824c1b2023e0</a></td></tr>
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5-8623af9ab9822fbe">https://w3id.org/arknet/id/aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5</a></td></tr>
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-58dd5050-2c33-4723-a789-479f7c4c47a8-fa7e00657366848f">https://w3id.org/arknet/id/58dd5050-2c33-4723-a789-479f7c4c47a8</a></td></tr>
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-e0730767-b4af-4f10-9158-7525d8d40587-e694d9da4f87027c">https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587</a></td></tr>
+                <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-0a6971c4-4c22-43a2-9e91-a8a56f3bf379-e932f4dd79934933">https://w3id.org/arknet/id/0a6971c4-4c22-43a2-9e91-a8a56f3bf379</a></td></tr>
+                <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101">https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4</a></td></tr>
+                <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-b8be1103-00f8-40dd-a688-1b0e11f9678f-0bdd92c5dd4c4a86">https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f</a></td></tr>
+                <tr><td class="pred">arkarch:addressesRequirement</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-943d28d3-95aa-4ee3-b6db-55add7df5dd3-180ff0649c4b6556">https://w3id.org/arknet/id/943d28d3-95aa-4ee3-b6db-55add7df5dd3</a></td></tr>
+                <tr><td class="pred">arkarch:addressesRequirement</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-2a1acada-473e-4a73-9c1f-b54b7b463445-447e8ca52eea1deb">https://w3id.org/arknet/id/2a1acada-473e-4a73-9c1f-b54b7b463445</a></td></tr>
+                <tr><td class="pred">arkarch:addressesRequirement</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-80601114-b9c2-4c74-8616-a23d586fed75-e04c468521147981">https://w3id.org/arknet/id/80601114-b9c2-4c74-8616-a23d586fed75</a></td></tr>
+                <tr><td class="pred">arkarch:decisionDate</td><td class="obj"><span class="lit str">"2026-10-02"</span><span class="dt">^^xsd:date</span></td></tr>
+              </table>
+            </details>
+            </details>
+          </article>
+          <article class="card" id="r-https-w3id-org-arknet-id-3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a-9ecd2bd2759da9a1">
+            <details class="fold">
+              <summary class="head">
+                <span class="code">ADR-60</span>
+                <h3><span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Reading runs through generic access and question-answering tools; type-specific read tools are removed</span><span class="lang-variant" data-lang="de" hidden>Lesen läuft über generische Zugriffs- und Frage-Tools; typspezifische Lese-Tools entfallen</span></span></h3>
+                <span class="pill status v-accepted">Accepted</span>
+                <a class="anchor" href="#r-https-w3id-org-arknet-id-3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a-9ecd2bd2759da9a1">#</a>
+              </summary>
+              <div class="body">
+              <div class="block b-context">
+                <span class="blabel">Context</span>
+                <div class="lang-group" data-default-lang="en"><div class="lang-variant" data-lang="en"><div class="prose-body"><p class="prose">Once the write surface is generic, the type-specific read tools (one get and one list per <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> type) would remain as the only per-type tools, keeping the per-type cost and much of the tool list that the write decision removes.</p><p class="prose">The prototype measurement runs of September and October 2026 showed where a generic read path fails: a find that matches labels only lets the model guess handles, and a read limited to one <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> per call lets the read path dominate the call count of a task. The cross-context evaluations (impact, traceability, orphans, matrices) are not type-specific CRUD; each answers one question and is unaffected by the question of per-type tools.</p></div></div><div class="lang-variant" data-lang="de" hidden><div class="prose-body"><p class="prose">Ist die Schreibfläche generisch, blieben die typspezifischen Lese-Tools (ein get und ein list je Ressourcentyp) als einzige Tools je Typ übrig und hielten die Kosten je Typ sowie einen großen Teil der Tool-Liste fest, die die Schreibentscheidung entfernt.</p><p class="prose">Die Prototyp-Messläufe im September und Oktober 2026 zeigten, wo ein generischer Lesepfad scheitert: ein Suchen, das nur Bezeichnungen trifft, lässt das Modell Handles raten, und ein Lesen, das auf eine Ressource je Aufruf beschränkt ist, lässt den Lesepfad die Aufrufzahl einer Aufgabe dominieren. Die kontextübergreifenden Auswertungen (Auswirkung, Nachverfolgbarkeit, Waisen, Matrizen) sind kein typspezifisches CRUD; jede beantwortet eine Frage und ist von der Frage der Tools je Typ nicht betroffen.</p></div></div></div>
+              </div>
+              <div class="block b-decision">
+                <span class="blabel">Decision</span>
+                <div class="lang-group" data-default-lang="en"><div class="lang-variant" data-lang="en"><div class="prose-body"><p class="prose">Reading is served by generic access tools (a single <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> by handle, a listing, full-text search, a <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a>'s history) and by read and find activities in a submitted document, plus document and analysis tools that each answer one question across <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> types; every type-specific get and list tool is removed.</p></div></div><div class="lang-variant" data-lang="de" hidden><div class="prose-body"><p class="prose">Lesen wird über generische Zugriffs-Tools (eine einzelne Ressource per Handle, eine Auflistung, Volltextsuche, die Historie einer Ressource) und über Lese- und Such-Aktivitäten in einem eingereichten Dokument bedient, dazu über Dokument- und Analyse-Tools, die je eine Frage über Ressourcentypen hinweg beantworten; jedes typspezifische get- und list-Tool entfällt.</p></div></div></div>
+              </div>
+              <div class="block b-consequences">
+                <span class="blabel">Consequences</span>
+                <ul class="bullets">
+                  <li><span class="pill consequence v-positive">Positive</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">No per-type read tool exists; a new <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> type is readable the moment its shape exists.</span><span class="lang-variant" data-lang="de" hidden>Es gibt kein Lese-Tool je Typ; ein neuer Ressourcentyp ist lesbar, sobald seine Shape existiert.</span></span></li>
+                  <li><span class="pill consequence v-negative">Negative</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Find must match full text, and read must accept several handles per call; otherwise the read path dominates call counts.</span><span class="lang-variant" data-lang="de" hidden>Suchen muss Volltext treffen, und Lesen muss mehrere Handles je Aufruf annehmen; sonst dominiert der Lesepfad die Aufrufzahlen.</span></span></li>
+                  <li><span class="pill consequence v-negative">Negative</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">A typed, formatted answer (a decision with its consequences, a <span class="term gap" title="TERM-27 - in the glossary, but this element does not link to it">use case</span> with its steps) is no longer one dedicated tool call; it is a rendering produced by a generic read or by a document tool.</span><span class="lang-variant" data-lang="de" hidden>Eine typisierte, formatierte Antwort (eine Entscheidung mit ihren Konsequenzen, ein Use Case mit seinen Schritten) ist kein eigener Tool-Aufruf mehr; sie ist eine Darstellung, die ein generisches Lesen oder ein Dokument-Tool erzeugt.</span></span></li>
+                  <li><span class="pill consequence v-neutral">Neutral</span> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">The analysis tools that answer a question across contexts stay as tools; they are not part of the removed per-type set.</span><span class="lang-variant" data-lang="de" hidden>Die Analyse-Tools, die eine Frage über Kontexte hinweg beantworten, bleiben Tools; sie gehören nicht zum entfernten Satz je Typ.</span></span></li>
+                </ul>
+              </div>
+              <div class="block b-considered-options">
+                <span class="blabel">Considered options</span>
+                <ul class="bullets">
+                  <li><span class="pill outcome v-chosen">Chosen</span> <strong class="bullet-caption"><span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Generic access tools and read/find activities, plus question-answering tools</span><span class="lang-variant" data-lang="de" hidden>Generische Zugriffs-Tools und Lese-/Such-Aktivitäten, dazu Frage-Tools</span></span></strong> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Removes the last per-type tools and keeps the tool list independent of the number of <a class="term" href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="TERM-14">resource</a> types, at the price of full-text find and multi-handle read.</span><span class="lang-variant" data-lang="de" hidden>Entfernt die letzten Tools je Typ und hält die Tool-Liste unabhängig von der Zahl der Ressourcentypen, um den Preis von Volltextsuche und Mehrfach-Handle-Lesen.</span></span></li>
+                  <li><span class="pill outcome v-rejected">Rejected</span> <strong class="bullet-caption"><span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Keep one get and one list tool per resource type</span><span class="lang-variant" data-lang="de" hidden>Je Ressourcentyp ein get- und ein list-Tool behalten</span></span></strong> <span class="lang-group" data-default-lang="en"><span class="lang-variant" data-lang="en">Keeps a typed, formatted answer per call, but keeps the per-type cost and roughly a quarter of the tool list the write decision removes.</span><span class="lang-variant" data-lang="de" hidden>Behält eine typisierte, formatierte Antwort je Aufruf, aber auch die Kosten je Typ und rund ein Viertel der Tool-Liste, die die Schreibentscheidung entfernt.</span></span></li>
+                </ul>
+              </div>
+              <div class="block b-decision-date">
+                <span class="blabel">Decision date</span>
+                <div class="prose-body"><p class="prose">2026-10-02</p></div>
+              </div>
+              <div class="block b-addresses-requirements">
+                <span class="blabel">Addresses requirements</span>
+                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-14713dc9-142b-44c4-8415-e8a4bace5408-18b3d7c1213537d6">FR-2</a></div>
+              </div>
+              <div class="block b-related-to">
+                <span class="blabel">Related to</span>
+                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-3f9264eb-10fe-4d04-911c-0b627ab9fa36-2c50af82e65648cb">ADR-54</a><a class="chip" href="#r-https-w3id-org-arknet-id-e0730767-b4af-4f10-9158-7525d8d40587-e694d9da4f87027c">ADR-55</a><a class="chip" href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e">ADR-59</a></div>
+              </div>
+              <div class="block b-uses-terms-not-named-in-the-text">
+                <span class="blabel">Uses terms (not named in the text)</span>
+                <div class="chips"><a class="chip" href="#r-https-w3id-org-arknet-id-e4942ed2-d1f7-4a1e-9322-9c5f323d767d-d0018996863d8620" title="TERM-15">Business Code</a></div>
+              </div>
+              </div>
+            <details class="raw">
+              <summary>22 raw triples &middot; ADR-60</summary>
+              <table class="props">
+                <tr><td class="pred">rdf:type</td><td class="obj"><span class="lit">arkarch:ArchitectureDecisionRecord</span></td></tr>
+                <tr><td class="pred">dcterms:identifier</td><td class="obj"><span class="lit str">"ADR-60"</span></td></tr>
+                <tr><td class="pred">arknet:name</td><td class="obj"><span class="lit str">"Reading runs through generic access and question-answering tools; type-specific read tools are removed"</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">arknet:name</td><td class="obj"><span class="lit str">"Lesen läuft über generische Zugriffs- und Frage-Tools; typspezifische Lese-Tools entfallen"</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">arkarch:adrStatus</td><td class="obj"><span class="lit">arkarch:Accepted</span></td></tr>
+                <tr><td class="pred">arkarch:adrContext</td><td class="obj"><span class="lit str">"Once the write surface is generic, the type-specific read tools (one get and one list per resource type) would remain as the only per-type tools, keeping the per-type cost and much of the tool list that the write decision removes.
+
+The prototype measurement runs of September and October 2026 showed where a generic read path fails: a find that matches labels only lets the model guess handles, and a read limited to one resource per call lets the read path dominate the call count of a task. The cross-context evaluations (impact, traceability, orphans, matrices) are not type-specific CRUD; each answers one question and is unaffected by the question of per-type tools."</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">arkarch:adrContext</td><td class="obj"><span class="lit str">"Ist die Schreibfläche generisch, blieben die typspezifischen Lese-Tools (ein get und ein list je Ressourcentyp) als einzige Tools je Typ übrig und hielten die Kosten je Typ sowie einen großen Teil der Tool-Liste fest, die die Schreibentscheidung entfernt.
+
+Die Prototyp-Messläufe im September und Oktober 2026 zeigten, wo ein generischer Lesepfad scheitert: ein Suchen, das nur Bezeichnungen trifft, lässt das Modell Handles raten, und ein Lesen, das auf eine Ressource je Aufruf beschränkt ist, lässt den Lesepfad die Aufrufzahl einer Aufgabe dominieren. Die kontextübergreifenden Auswertungen (Auswirkung, Nachverfolgbarkeit, Waisen, Matrizen) sind kein typspezifisches CRUD; jede beantwortet eine Frage und ist von der Frage der Tools je Typ nicht betroffen."</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">arkarch:adrDecision</td><td class="obj"><span class="lit str">"Reading is served by generic access tools (a single resource by handle, a listing, full-text search, a resource's history) and by read and find activities in a submitted document, plus document and analysis tools that each answer one question across resource types; every type-specific get and list tool is removed."</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">arkarch:adrDecision</td><td class="obj"><span class="lit str">"Lesen wird über generische Zugriffs-Tools (eine einzelne Ressource per Handle, eine Auflistung, Volltextsuche, die Historie einer Ressource) und über Lese- und Such-Aktivitäten in einem eingereichten Dokument bedient, dazu über Dokument- und Analyse-Tools, die je eine Frage über Ressourcentypen hinweg beantworten; jedes typspezifische get- und list-Tool entfällt."</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-51246399-8d1b-4782-ae54-926897368a37-8b2f11720208468a">https://w3id.org/arknet/id/51246399-8d1b-4782-ae54-926897368a37</a></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-8893c64a-b95f-46fe-a356-06013ef38fcf-a77281aa3f700bea">https://w3id.org/arknet/id/8893c64a-b95f-46fe-a356-06013ef38fcf</a></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-f01f40c3-40c4-4571-8258-d75729b91a18-560da5192b384a50">https://w3id.org/arknet/id/f01f40c3-40c4-4571-8258-d75729b91a18</a></td></tr>
+                <tr><td class="pred">arkarch:consequence</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-1f78f076-5989-4251-8d24-c535f4b98fa3-e4e831c6fce70c90">https://w3id.org/arknet/id/1f78f076-5989-4251-8d24-c535f4b98fa3</a></td></tr>
+                <tr><td class="pred">arkarch:consideredOption</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-9a465dd7-1d86-4550-bb33-835ccd7422a6-a5217206d8e19795">https://w3id.org/arknet/id/9a465dd7-1d86-4550-bb33-835ccd7422a6</a></td></tr>
+                <tr><td class="pred">arkarch:consideredOption</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-d870e140-04b9-41f8-94a5-9de191230877-f37e18ef0cb2b6d2">https://w3id.org/arknet/id/d870e140-04b9-41f8-94a5-9de191230877</a></td></tr>
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-3f9264eb-10fe-4d04-911c-0b627ab9fa36-2c50af82e65648cb">https://w3id.org/arknet/id/3f9264eb-10fe-4d04-911c-0b627ab9fa36</a></td></tr>
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-e0730767-b4af-4f10-9158-7525d8d40587-e694d9da4f87027c">https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587</a></td></tr>
+                <tr><td class="pred">arkarch:relatedTo</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e">https://w3id.org/arknet/id/5f36b25a-8712-400c-b494-be07d8a4ee09</a></td></tr>
+                <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101">https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4</a></td></tr>
+                <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-e4942ed2-d1f7-4a1e-9322-9c5f323d767d-d0018996863d8620">https://w3id.org/arknet/id/e4942ed2-d1f7-4a1e-9322-9c5f323d767d</a></td></tr>
+                <tr><td class="pred">arkarch:addressesRequirement</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-14713dc9-142b-44c4-8415-e8a4bace5408-18b3d7c1213537d6">https://w3id.org/arknet/id/14713dc9-142b-44c4-8415-e8a4bace5408</a></td></tr>
+                <tr><td class="pred">arkarch:decisionDate</td><td class="obj"><span class="lit str">"2026-10-02"</span><span class="dt">^^xsd:date</span></td></tr>
               </table>
             </details>
             </details>
@@ -4892,8 +5098,9 @@ The trigger for an api module remains the one of the schema: a module outside th
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 13</summary>
+              <summary>Referenced by 14</summary>
               <table class="props">
+                <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a-9ecd2bd2759da9a1" title="Lesen läuft über generische Zugriffs- und Frage-Tools; typspezifische Lese-Tools entfallen">ADR-60</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-58edc68b-e71e-4c51-b170-9510ef862ddf-1a3bab31d901691b" title="Ein Vokabularmodul je Bounded Context mit mehr als einer Komponente">ADR-57</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-a2fdde31-3d1c-4da2-862f-e014e892855d-064c0278cb69ac51" title="Actor wird ein eigener Bounded Context">ADR-36</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-dbad2180-8120-46ea-8b02-18b22118de39-a9539e7331bd5616" title="Ein Nachbar wird über die Published Language gelesen, in beide Richtungen; der Borrowed In-Port entfällt">ADR-49</a></td></tr>
@@ -5281,10 +5488,11 @@ The trigger for an api module remains the one of the schema: a module outside th
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 6</summary>
+              <summary>Referenced by 7</summary>
               <table class="props">
                 <tr><td class="pred">skos:related</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-db788965-188e-47cc-854d-d03ad8e62eee-e113d48fe2bdaf38" title="Architecture Model">TERM-12</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-3f9264eb-10fe-4d04-911c-0b627ab9fa36-2c50af82e65648cb" title="Modellanalyse ist ein eigener, rein lesender Bounded Context über der Published Language jedes Kontexts">ADR-54</a></td></tr>
+                <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e" title="Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools">ADR-59</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-a2fdde31-3d1c-4da2-862f-e014e892855d-064c0278cb69ac51" title="Actor wird ein eigener Bounded Context">ADR-36</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-acf820e0-d3a5-4e84-95e5-948538994549-5c57b0b803b229b7" title="Namespace-Grenzen folgen Kontextgrenzen, ohne mit ihnen gleichgesetzt zu werden">ADR-12</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-b6936ffb-8575-4ce1-90a6-5265bdcb560d-cd51333f7f80e4ee" title="Der Composition Root trägt keine Anwendungslogik; der generische Store-Lesepfad ist die einzige, gebundene Ausnahme">ADR-51</a></td></tr>
@@ -5426,7 +5634,7 @@ The trigger for an api module remains the one of the schema: a module outside th
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 29</summary>
+              <summary>Referenced by 31</summary>
               <table class="props">
                 <tr><td class="pred">skos:broader</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-0c5ff58a-96c6-4143-80e2-683586edf6e8-7fc5d417d036992c" title="Requirement">TERM-10</a></td></tr>
                 <tr><td class="pred">skos:broader</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-1cd42d86-585e-4777-9ba7-baa5f837ae0d-fe87c44072cd4207" title="Architecture Decision Record">TERM-29</a></td></tr>
@@ -5441,8 +5649,10 @@ The trigger for an api module remains the one of the schema: a module outside th
                 <tr><td class="pred">skos:broader</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-c2df3868-3a66-46ca-8621-677374d02aa6-b9bf8e50bd7d2045" title="Term">TERM-13</a></td></tr>
                 <tr><td class="pred">skos:broader</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-d744ba5d-eb40-4fb4-a0fd-068b5d3309cb-3060aaa040b6bf5b" title="Context Relationship">TERM-32</a></td></tr>
                 <tr><td class="pred">skos:related</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-e4942ed2-d1f7-4a1e-9322-9c5f323d767d-d0018996863d8620" title="Business Code">TERM-15</a></td></tr>
+                <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a-9ecd2bd2759da9a1" title="Lesen läuft über generische Zugriffs- und Frage-Tools; typspezifische Lese-Tools entfallen">ADR-60</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-3f9264eb-10fe-4d04-911c-0b627ab9fa36-2c50af82e65648cb" title="Modellanalyse ist ein eigener, rein lesender Bounded Context über der Published Language jedes Kontexts">ADR-54</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-53c40f6c-0af0-43f0-89d2-a88e32947331-910d219372ae1a3f" title="Der generische Store-Lesepfad lebt im Composition Root, nicht in einem Kontext">ADR-7</a></td></tr>
+                <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e" title="Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools">ADR-59</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-7777a2c0-87ff-48fa-ba58-6d6e3e4c2834-87e3d4c7bf616e31" title="Die Rolle wird eine eigene Ressource neben dem Träger">ADR-37</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-a2fdde31-3d1c-4da2-862f-e014e892855d-064c0278cb69ac51" title="Actor wird ein eigener Bounded Context">ADR-36</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5-8623af9ab9822fbe" title="Spring AI als Technologie-Linie des MCP-Layers">ADR-14</a></td></tr>
@@ -5488,10 +5698,11 @@ The trigger for an api module remains the one of the schema: a module outside th
               </div>
               </div>
             <details class="referenced-by">
-              <summary>Referenced by 4</summary>
+              <summary>Referenced by 5</summary>
               <table class="props">
                 <tr><td class="pred">skos:related</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-2334e63d-bcf6-4923-9ce3-ea70d6f3b72e-a4a86e357fd511f8" title="Dataset">TERM-23</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-58dd5050-2c33-4723-a789-479f7c4c47a8-fa7e00657366848f" title="Jede Modelländerung erzeugt eine unveränderliche Revision">ADR-28</a></td></tr>
+                <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5f36b25a-8712-400c-b494-be07d8a4ee09-b261606cbbf5ab9e" title="Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools">ADR-59</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-c3a189a2-b7ea-4ac6-8096-9f18a5692fec-a244b767d4e9b33a" title="Die Revision dient zugleich als Concurrency-Token">ADR-32</a></td></tr>
                 <tr><td class="pred">arkarch:usesTerm</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-fafb3370-a9a5-46a7-bca5-824c1b2023e0-9914a4e1833abff0" title="Alle Schreibpfade laufen durch einen geteilten Schreibtrichter">ADR-3</a></td></tr>
               </table>

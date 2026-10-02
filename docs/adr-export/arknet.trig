@@ -1042,8 +1042,7 @@
   
   <https://w3id.org/arknet/activity/8636ce5f-efc0-483c-bf2d-9e902e4da7c9> a <http://www.w3.org/ns/prov#Activity> .
   
-  <https://w3id.org/arknet/revision/8991550c-d743-4d95-8d6c-6c5898b76323> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision> .
+  <https://w3id.org/arknet/revision/8991550c-d743-4d95-8d6c-6c5898b76323> a <http://www.w3.org/ns/prov#Entity> .
 }
 
 <https://w3id.org/arknet/model/requirements> {
@@ -1215,8 +1214,8 @@
 }
 
 <https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/revision/8991550c-d743-4d95-8d6c-6c5898b76323> <http://www.w3.org/ns/prov#specializationOf>
-      <https://w3id.org/arknet/id/5277fb69-94b4-4526-a981-1a1e244b431d>;
+  <https://w3id.org/arknet/revision/8991550c-d743-4d95-8d6c-6c5898b76323> a <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/5277fb69-94b4-4526-a981-1a1e244b431d>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/8636ce5f-efc0-483c-bf2d-9e902e4da7c9>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-08-06T16:27:14.227881855Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
@@ -2001,8 +2000,7 @@
   <https://w3id.org/arknet/activity/e63c79fe-fd2b-4c54-9ec6-cd5b2782d835> a <http://www.w3.org/ns/prov#Activity> .
   
   <https://w3id.org/arknet/revision/eb0c23b1-5c6e-4976-b21d-99b1c17ac495> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision>;
-    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/8f2c527c-a9f4-44a6-966c-94ea37537563> .
+      <https://w3id.org/arknet/provenance#Revision> .
 }
 
 
@@ -2501,8 +2499,9 @@ The target type of the carrying edges is thereby wrong, right down into validati
 }
 
 <https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/revision/eb0c23b1-5c6e-4976-b21d-99b1c17ac495> <http://www.w3.org/ns/prov#wasGeneratedBy>
-      <https://w3id.org/arknet/activity/e63c79fe-fd2b-4c54-9ec6-cd5b2782d835>;
+  <https://w3id.org/arknet/revision/eb0c23b1-5c6e-4976-b21d-99b1c17ac495> <http://www.w3.org/ns/prov#specializationOf>
+      <https://w3id.org/arknet/id/8f2c527c-a9f4-44a6-966c-94ea37537563>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/e63c79fe-fd2b-4c54-9ec6-cd5b2782d835>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-01T18:01:19.896104019Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/activity/091a484d-21c8-4f67-86e8-516973d890b4> a <http://www.w3.org/ns/prov#Activity> .
@@ -3675,8 +3674,6 @@ The target type of the carrying edges is thereby wrong, right down into validati
     <http://www.w3.org/ns/prov#invalidatedAtTime> "2026-09-05T09:08:59.972036591Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
   
   <https://w3id.org/arknet/activity/0801276a-6f7f-42d4-9ac3-43902b8be20e> a <http://www.w3.org/ns/prov#Activity> .
-  
-  <https://w3id.org/arknet/revision/7f4301de-52c0-49d9-af7d-dd5aa58f2b1f> a <http://www.w3.org/ns/prov#Entity> .
 }
 
 <https://w3id.org/arknet/model/ubiquitous-language> {
@@ -3793,7 +3790,8 @@ The other way is a record as a pure value that knows nothing of RDF, with an out
 }
 
 <https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/revision/7f4301de-52c0-49d9-af7d-dd5aa58f2b1f> a <https://w3id.org/arknet/provenance#Revision>;
+  <https://w3id.org/arknet/revision/7f4301de-52c0-49d9-af7d-dd5aa58f2b1f> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
     <http://purl.org/dc/terms/identifier> "ADR-41";
     <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/25f15589-6262-4b60-8afe-b8312977b098>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/0801276a-6f7f-42d4-9ac3-43902b8be20e>;
@@ -4933,8 +4931,7 @@ The other way is a record as a pure value that knows nothing of RDF, with an out
   
   <https://w3id.org/arknet/activity/2bd7acd2-a917-4d3c-988a-3b5049fd83ec> a <http://www.w3.org/ns/prov#Activity> .
   
-  <https://w3id.org/arknet/revision/fd2ed95a-ccf8-443a-8a6b-2e13764b2512> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision> .
+  <https://w3id.org/arknet/revision/fd2ed95a-ccf8-443a-8a6b-2e13764b2512> a <http://www.w3.org/ns/prov#Entity> .
 }
 
 <https://w3id.org/arknet/model/requirements> {
@@ -5094,8 +5091,8 @@ The core of this decision is the distinction between \"unbuilt\" and \"outside\"
 }
 
 <https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/revision/fd2ed95a-ccf8-443a-8a6b-2e13764b2512> <http://www.w3.org/ns/prov#specializationOf>
-      <https://w3id.org/arknet/id/e3168f4d-6994-463c-8acf-732a873ec354>;
+  <https://w3id.org/arknet/revision/fd2ed95a-ccf8-443a-8a6b-2e13764b2512> a <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/e3168f4d-6994-463c-8acf-732a873ec354>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/2bd7acd2-a917-4d3c-988a-3b5049fd83ec>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-06T08:34:36.329422830Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/a069bc8b-d1b0-42ea-ab2b-cc390f696871> .
@@ -5878,8 +5875,7 @@ The core of this decision is the distinction between \"unbuilt\" and \"outside\"
   
   <https://w3id.org/arknet/activity/ed0d55ee-c3a4-462e-83a3-3065c4dfaecc> a <http://www.w3.org/ns/prov#Activity> .
   
-  <https://w3id.org/arknet/revision/0a4ede05-d7dd-4f93-8bbf-e0cde9048fb6> a <http://www.w3.org/ns/prov#Entity>,
-      <https://w3id.org/arknet/provenance#Revision> .
+  <https://w3id.org/arknet/revision/0a4ede05-d7dd-4f93-8bbf-e0cde9048fb6> a <http://www.w3.org/ns/prov#Entity> .
 }
 
 <https://w3id.org/arknet/model/roles> {
@@ -6356,8 +6352,8 @@ Cross-context evaluations that follow the edges of the metamodel do not belong i
 }
 
 <https://w3id.org/arknet/model/provenance> {
-  <https://w3id.org/arknet/revision/0a4ede05-d7dd-4f93-8bbf-e0cde9048fb6> <http://www.w3.org/ns/prov#specializationOf>
-      <https://w3id.org/arknet/id/2f2943e7-0df6-4238-8a59-99606852aa36>;
+  <https://w3id.org/arknet/revision/0a4ede05-d7dd-4f93-8bbf-e0cde9048fb6> a <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/2f2943e7-0df6-4238-8a59-99606852aa36>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/ed0d55ee-c3a4-462e-83a3-3065c4dfaecc>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T11:39:55.875886510Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/2b3eedb1-4efb-4d73-b0ca-aa6aa23eb0fc> .
@@ -7155,8 +7151,6 @@ Cross-context evaluations that follow the edges of the metamodel do not belong i
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/499ce00e-6eba-4253-9f62-1899e4840986>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-08T15:13:27.763465897Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/fbad85d9-80f1-48f0-811d-5b664a1fb61a> .
-  
-  <https://w3id.org/arknet/activity/f12bc8bf-1557-436f-b233-57a1468d8172> a <http://www.w3.org/ns/prov#Activity> .
 }
 
 <https://w3id.org/arknet/model/bounded-context> {
@@ -7630,6 +7624,8 @@ The trigger for an api module remains the one of the schema: a module outside th
 }
 
 <https://w3id.org/arknet/model/provenance> {
+  <https://w3id.org/arknet/activity/f12bc8bf-1557-436f-b233-57a1468d8172> a <http://www.w3.org/ns/prov#Activity> .
+  
   <https://w3id.org/arknet/revision/71868dcd-454e-4c1f-8ab0-b9fa05f028b9> a <http://www.w3.org/ns/prov#Entity>,
       <https://w3id.org/arknet/provenance#Revision>;
     <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/8fc7d040-da89-4b17-9aff-5d557709088a>;
@@ -8780,8 +8776,6 @@ The trigger for an api module remains the one of the schema: a module outside th
     <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
     <https://w3id.org/arknet/architecture#consequenceStatement> "Die Entlastung ist nur teilweise: mehrere Kanten bleiben über eine Kontextgrenze hinweg bestehen, das Gateway-Muster wird seltener gebraucht, aber nicht überflüssig."@de,
       "The relief is only partial: several edges remain across a context boundary, the gateway pattern is needed less often, but not made superfluous."@en .
-  
-  <https://w3id.org/arknet/id/216c679d-63f5-4dad-9ac3-5dd2496aacbd> a <https://w3id.org/arknet/architecture#ConsideredOption> .
 }
 
 <https://w3id.org/arknet/model/bounded-context> {
@@ -8876,8 +8870,8 @@ The trigger for an api module remains the one of the schema: a module outside th
 }
 
 <https://w3id.org/arknet/model/adr> {
-  <https://w3id.org/arknet/id/216c679d-63f5-4dad-9ac3-5dd2496aacbd> <https://w3id.org/arknet/core#name>
-      "Schnitt lassen wie er ist"@de, "Leave the cut as it is"@en;
+  <https://w3id.org/arknet/id/216c679d-63f5-4dad-9ac3-5dd2496aacbd> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Schnitt lassen wie er ist"@de, "Leave the cut as it is"@en;
     <https://w3id.org/arknet/core#position> 1;
     <https://w3id.org/arknet/architecture#optionRationale> "Er ist nicht klein, sondern fein, und läuft nicht auf das Zielbild zu."@de,
       "It is not small but fine-grained, and does not run toward the target picture."@en;
@@ -9215,8 +9209,7 @@ The trigger for an api module remains the one of the schema: a module outside th
   
   <https://w3id.org/arknet/id/c9c60db7-02ad-4062-af21-0a8af4e0edfc> a <https://w3id.org/arknet/architecture#Consequence>;
     <https://w3id.org/arknet/core#position> 2;
-    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
-    <https://w3id.org/arknet/architecture#consequenceStatement> "Die Registry ist damit ein Hexagon, das in keiner Kontextkarte der Modell-Kontexte auftaucht, obwohl jeder Aufruf jedes Modell-Kontexts durch sie läuft -- wer die Karte liest, sieht diese Abhängigkeit nicht."@de .
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative> .
 }
 
 <https://w3id.org/arknet/model/provenance> {
@@ -10125,6 +10118,7 @@ The trigger for an api module remains the one of the schema: a module outside th
 
 <https://w3id.org/arknet/model/adr> {
   <https://w3id.org/arknet/id/c9c60db7-02ad-4062-af21-0a8af4e0edfc> <https://w3id.org/arknet/architecture#consequenceStatement>
+      "Die Registry ist damit ein Hexagon, das in keiner Kontextkarte der Modell-Kontexte auftaucht, obwohl jeder Aufruf jedes Modell-Kontexts durch sie läuft -- wer die Karte liest, sieht diese Abhängigkeit nicht."@de,
       "The registry is thereby a hexagon that appears in no context map of the model contexts, even though every call to every model context runs through it -- whoever reads the map does not see this dependency."@en .
   
   <https://w3id.org/arknet/id/4a47157d-0cca-4f99-835f-ee41b0c31a0f> a <https://w3id.org/arknet/architecture#ConsideredOption>;
@@ -10335,6 +10329,180 @@ The trigger for an api module remains the one of the schema: a module outside th
     <https://w3id.org/arknet/architecture#optionRationale> "Macht den Root zu dem einen Modul, das alle Kontexte kennt: ein Kontext ohne Domäne unter anderem Namen."@de,
       "Makes the root the one module that knows every context: a context without a domain under another name."@en;
     <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/5f36b25a-8712-400c-b494-be07d8a4ee09> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
+    <http://purl.org/dc/terms/identifier> "ADR-59";
+    <https://w3id.org/arknet/core#name> "Generic write surface describe/submit replaces type-specific MCP tools"@en,
+      "Generische Schreibfläche describe/submit ersetzt typspezifische MCP-Tools"@de;
+    <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Accepted>;
+    <https://w3id.org/arknet/architecture#adrContext> """arknet exposes 77 MCP tools; 58 of them follow one repeated pattern per resource type: create, update, link, unlink, get, list. The tool list alone costs about 121 KB per session before the first call, every new resource type costs a new set of tools, and the target cut plans eight bounded contexts.
+
+A prototype with a generic write path, driven solely by the SHACL shapes and the ontology, was measured against the current tool set in measurement runs in September and October 2026 (Sonnet in Claude Code across five phases, plus the open-weight models Qwen3.5-397B and Qwen3.8-27B): the tool list shrinks to under 1 KB, task completion is equivalent, and explanation sentences in the type description are a precondition rather than a nicety: without them the model asks back instead of acting in three of four mutation phases. The composition root is already required to know nothing about the metamodel; a tool per resource type works against that requirement with every new type."""@en,
+      """arknet bietet 77 MCP-Tools an; 58 davon folgen einem je Ressourcentyp wiederholten Muster: anlegen, ändern, verknüpfen, entknüpfen, lesen, auflisten. Allein die Tool-Liste kostet etwa 121 KB je Session vor dem ersten Aufruf, jeder neue Ressourcentyp kostet einen neuen Satz Tools, und der Zielschnitt plant acht Bounded Contexts.
+
+Ein Prototyp mit generischem Schreibpfad, ausschließlich aus den SHACL-Shapes und der Ontologie getrieben, wurde in Messläufen im September und Oktober 2026 gegen den aktuellen Tool-Satz gemessen (Sonnet in Claude Code über fünf Phasen, dazu die Open-Weight-Modelle Qwen3.5-397B und Qwen3.8-27B): die Tool-Liste schrumpft auf unter 1 KB, die Aufgabenerfüllung ist gleichwertig, und Erklärungssätze in der Typbeschreibung sind Voraussetzung, keine Zugabe: ohne sie fragt das Modell in drei von vier Mutationsphasen zurück, statt zu handeln. Vom Composition Root ist bereits gefordert, nichts vom Metamodell zu wissen; ein Tool je Ressourcentyp arbeitet mit jedem neuen Typ gegen diese Forderung."""@de;
+    <https://w3id.org/arknet/architecture#adrDecision> "arknet's write surface consists of two generic tools: describe, which renders a resource type's fields, edges and rules with explanation sentences from the SHACL shapes and the ontology, and submit, which accepts a Turtle document of activities (create, update, add-to, remove-from and further activity types), validates it against the same shapes and applies it all-or-nothing; every type-specific write and link tool is removed."@en,
+      "arknets Schreibfläche besteht aus zwei generischen Tools: describe, das Felder, Kanten und Regeln eines Ressourcentyps mit Erklärungssätzen aus den SHACL-Shapes und der Ontologie rendert, und submit, das ein Turtle-Dokument von Aktivitäten (anlegen, ändern, hinzufügen, entfernen und weitere Aktivitätstypen) entgegennimmt, gegen dieselben Shapes validiert und ganz oder gar nicht anwendet; jedes typspezifische Schreib- und Verknüpfungs-Tool entfällt."@de;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/04d848c3-6ee2-430b-b52f-7dbe14180ded>,
+      <https://w3id.org/arknet/id/37690059-4b56-4a69-b116-083a46807966>, <https://w3id.org/arknet/id/5c3f8dd7-2ae8-4ea4-bfb1-20787802a9c7>,
+      <https://w3id.org/arknet/id/6c4b51ef-55ba-47cb-a88b-08dc9301e6b0>, <https://w3id.org/arknet/id/295a6072-f6ea-4e85-868b-ab82cee0de85>,
+      <https://w3id.org/arknet/id/39c78354-b4f4-4723-9547-c191f2103f30>, <https://w3id.org/arknet/id/f748e29d-2aea-42fc-b64c-dfffd687cf4a>,
+      <https://w3id.org/arknet/id/3ac2ea67-9dec-4324-8cbf-1f5eff23ce7b>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/e6c62b49-a869-4a89-8183-9421ed7c1a5e>,
+      <https://w3id.org/arknet/id/4f863c45-80bc-4c0c-a88a-0bd75cfb3ab3>, <https://w3id.org/arknet/id/bc0fe3da-08e1-4cf4-b62b-1f7c80c6fd10>,
+      <https://w3id.org/arknet/id/df9c52f8-6e23-427f-978f-1800486bf405>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/fafb3370-a9a5-46a7-bca5-824c1b2023e0>,
+      <https://w3id.org/arknet/id/aaa42cea-0fa9-4b00-98ec-10a7bfa98ad5>, <https://w3id.org/arknet/id/58dd5050-2c33-4723-a789-479f7c4c47a8>,
+      <https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587>;
+    <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/0a6971c4-4c22-43a2-9e91-a8a56f3bf379>,
+      <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4>, <https://w3id.org/arknet/id/b8be1103-00f8-40dd-a688-1b0e11f9678f>;
+    <https://w3id.org/arknet/architecture#addressesRequirement> <https://w3id.org/arknet/id/943d28d3-95aa-4ee3-b6db-55add7df5dd3>,
+      <https://w3id.org/arknet/id/2a1acada-473e-4a73-9c1f-b54b7b463445>, <https://w3id.org/arknet/id/80601114-b9c2-4c74-8616-a23d586fed75>;
+    <https://w3id.org/arknet/architecture#decisionDate> "2026-10-02"^^<http://www.w3.org/2001/XMLSchema#date> .
+  
+  <https://w3id.org/arknet/id/3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
+    <http://purl.org/dc/terms/identifier> "ADR-60";
+    <https://w3id.org/arknet/core#name> "Reading runs through generic access and question-answering tools; type-specific read tools are removed"@en,
+      "Lesen läuft über generische Zugriffs- und Frage-Tools; typspezifische Lese-Tools entfallen"@de;
+    <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Accepted>;
+    <https://w3id.org/arknet/architecture#adrContext> """Once the write surface is generic, the type-specific read tools (one get and one list per resource type) would remain as the only per-type tools, keeping the per-type cost and much of the tool list that the write decision removes.
+
+The prototype measurement runs of September and October 2026 showed where a generic read path fails: a find that matches labels only lets the model guess handles, and a read limited to one resource per call lets the read path dominate the call count of a task. The cross-context evaluations (impact, traceability, orphans, matrices) are not type-specific CRUD; each answers one question and is unaffected by the question of per-type tools."""@en,
+      """Ist die Schreibfläche generisch, blieben die typspezifischen Lese-Tools (ein get und ein list je Ressourcentyp) als einzige Tools je Typ übrig und hielten die Kosten je Typ sowie einen großen Teil der Tool-Liste fest, die die Schreibentscheidung entfernt.
+
+Die Prototyp-Messläufe im September und Oktober 2026 zeigten, wo ein generischer Lesepfad scheitert: ein Suchen, das nur Bezeichnungen trifft, lässt das Modell Handles raten, und ein Lesen, das auf eine Ressource je Aufruf beschränkt ist, lässt den Lesepfad die Aufrufzahl einer Aufgabe dominieren. Die kontextübergreifenden Auswertungen (Auswirkung, Nachverfolgbarkeit, Waisen, Matrizen) sind kein typspezifisches CRUD; jede beantwortet eine Frage und ist von der Frage der Tools je Typ nicht betroffen."""@de;
+    <https://w3id.org/arknet/architecture#adrDecision> "Reading is served by generic access tools (a single resource by handle, a listing, full-text search, a resource's history) and by read and find activities in a submitted document, plus document and analysis tools that each answer one question across resource types; every type-specific get and list tool is removed."@en,
+      "Lesen wird über generische Zugriffs-Tools (eine einzelne Ressource per Handle, eine Auflistung, Volltextsuche, die Historie einer Ressource) und über Lese- und Such-Aktivitäten in einem eingereichten Dokument bedient, dazu über Dokument- und Analyse-Tools, die je eine Frage über Ressourcentypen hinweg beantworten; jedes typspezifische get- und list-Tool entfällt."@de;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/51246399-8d1b-4782-ae54-926897368a37>,
+      <https://w3id.org/arknet/id/8893c64a-b95f-46fe-a356-06013ef38fcf>, <https://w3id.org/arknet/id/f01f40c3-40c4-4571-8258-d75729b91a18>,
+      <https://w3id.org/arknet/id/1f78f076-5989-4251-8d24-c535f4b98fa3>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/9a465dd7-1d86-4550-bb33-835ccd7422a6>,
+      <https://w3id.org/arknet/id/d870e140-04b9-41f8-94a5-9de191230877>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/3f9264eb-10fe-4d04-911c-0b627ab9fa36>,
+      <https://w3id.org/arknet/id/e0730767-b4af-4f10-9158-7525d8d40587>, <https://w3id.org/arknet/id/5f36b25a-8712-400c-b494-be07d8a4ee09>;
+    <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/43046391-b5fb-4ab2-b05b-c4eacb1e88f4>,
+      <https://w3id.org/arknet/id/e4942ed2-d1f7-4a1e-9322-9c5f323d767d>;
+    <https://w3id.org/arknet/architecture#addressesRequirement> <https://w3id.org/arknet/id/14713dc9-142b-44c4-8415-e8a4bace5408>;
+    <https://w3id.org/arknet/architecture#decisionDate> "2026-10-02"^^<http://www.w3.org/2001/XMLSchema#date> .
+  
+  <https://w3id.org/arknet/id/04d848c3-6ee2-430b-b52f-7dbe14180ded> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "The schema of a resource type lives only in its shape and ontology; adding a type costs a shape, not a set of tools, and the composition root stays free of metamodel knowledge."@en,
+      "Das Schema eines Ressourcentyps lebt nur in seiner Shape und der Ontologie; ein neuer Typ kostet eine Shape, keinen Satz Tools, und der Composition Root bleibt frei von Metamodell-Wissen."@de .
+  
+  <https://w3id.org/arknet/id/37690059-4b56-4a69-b116-083a46807966> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "The tool list shrinks by two orders of magnitude per session, and it no longer grows with the number of resource types."@en,
+      "Die Tool-Liste schrumpft je Session um zwei Größenordnungen und wächst nicht mehr mit der Zahl der Ressourcentypen."@de .
+  
+  <https://w3id.org/arknet/id/5c3f8dd7-2ae8-4ea4-bfb1-20787802a9c7> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Turtle is the wire format for writing: a client produces an RDF document instead of filling named parameters."@en,
+      "Turtle ist das Übertragungsformat fürs Schreiben: ein Client erzeugt ein RDF-Dokument, statt benannte Parameter zu füllen."@de .
+  
+  <https://w3id.org/arknet/id/6c4b51ef-55ba-47cb-a88b-08dc9301e6b0> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Every submitted activity is persisted as a resource of its own and becomes the basis of provenance."@en,
+      "Jede eingereichte Aktivität wird als eigene Ressource persistiert und wird zur Grundlage der Provenienz."@de .
+  
+  <https://w3id.org/arknet/id/295a6072-f6ea-4e85-868b-ab82cee0de85> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 5;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Explanation sentences in the type description and in every rejection text (the full namespace behind every prefix, a pointer to the type description, how to read via activities) are mandatory, not optional; without them the model stops and asks instead of acting."@en,
+      "Erklärungssätze in der Typbeschreibung und in jedem Ablehnungstext (der volle Namensraum hinter jedem Präfix, ein Verweis auf die Typbeschreibung, wie über Aktivitäten gelesen wird) sind Pflicht, nicht optional; ohne sie hält das Modell an und fragt, statt zu handeln."@de .
+  
+  <https://w3id.org/arknet/id/39c78354-b4f4-4723-9547-c191f2103f30> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 6;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "The type-specific write and link tools are removed in one cut together with the vocabulary IRI renames found during prototyping: every client and skill migrates once instead of twice."@en,
+      "Die typspezifischen Schreib- und Verknüpfungs-Tools entfallen in einem Schnitt zusammen mit den beim Prototyping gefundenen Umbenennungen von Vokabular-IRIs: jeder Client und jeder Skill migriert einmal statt zweimal."@de .
+  
+  <https://w3id.org/arknet/id/f748e29d-2aea-42fc-b64c-dfffd687cf4a> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 7;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Applying a document all-or-nothing requires one transaction spanning every resource the document touches; the write funnel's atomicity guarantee has to hold for the whole document, not per resource."@en,
+      "Ein Dokument ganz oder gar nicht anzuwenden erfordert eine Transaktion über jede Ressource, die das Dokument berührt; die Atomaritätszusage des Schreibtrichters muss für das ganze Dokument gelten, nicht je Ressource."@de .
+  
+  <https://w3id.org/arknet/id/3ac2ea67-9dec-4324-8cbf-1f5eff23ce7b> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 8;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Operations of the reporting path (an implementation report, an evidence record) become activity types, not tools."@en,
+      "Operationen des Berichtspfads (ein Umsetzungsbericht, ein Nachweis) werden zu Aktivitätstypen, nicht zu Tools."@de .
+  
+  <https://w3id.org/arknet/id/e6c62b49-a869-4a89-8183-9421ed7c1a5e> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Two generic tools, describe and submit, driven by shapes and ontology"@en,
+      "Zwei generische Tools, describe und submit, aus Shapes und Ontologie getrieben"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Measured equivalent in task completion, shrinks the tool list by two orders of magnitude, and makes a new resource type cost a shape instead of tools."@en,
+      "In der Aufgabenerfüllung gleichwertig gemessen, schrumpft die Tool-Liste um zwei Größenordnungen und lässt einen neuen Ressourcentyp eine Shape statt Tools kosten."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/4f863c45-80bc-4c0c-a88a-0bd75cfb3ab3> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Keep one tool set per resource type"@en, "Je Ressourcentyp einen Tool-Satz behalten"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "The measured status quo: about 121 KB of tool list per session, growing with every type and every context of the target cut."@en,
+      "Der gemessene Status quo: etwa 121 KB Tool-Liste je Session, wachsend mit jedem Typ und jedem Kontext des Zielschnitts."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/bc0fe3da-08e1-4cf4-b62b-1f7c80c6fd10> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Keep type-specific add and update tools, drop only the link tools"@en,
+      "Typspezifische Anlege- und Änderungs-Tools behalten, nur die Verknüpfungs-Tools streichen"@de;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#optionRationale> "Still roughly 42 tools; scaling to eight contexts still costs tools per type and the tool list stays large."@en,
+      "Immer noch rund 42 Tools; die Skalierung auf acht Kontexte kostet weiterhin Tools je Typ, und die Tool-Liste bleibt groß."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/df9c52f8-6e23-427f-978f-1800486bf405> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "JSON document instead of Turtle for submit"@en,
+      "JSON-Dokument statt Turtle für submit"@de;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#optionRationale> "Not compared in a controlled measurement; Turtle is kept because the prototype measurements were made with it."@en,
+      "Nicht kontrolliert verglichen; Turtle bleibt, weil die Prototyp-Messungen damit gemacht wurden."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+  
+  <https://w3id.org/arknet/id/51246399-8d1b-4782-ae54-926897368a37> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "No per-type read tool exists; a new resource type is readable the moment its shape exists."@en,
+      "Es gibt kein Lese-Tool je Typ; ein neuer Ressourcentyp ist lesbar, sobald seine Shape existiert."@de .
+  
+  <https://w3id.org/arknet/id/8893c64a-b95f-46fe-a356-06013ef38fcf> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Find must match full text, and read must accept several handles per call; otherwise the read path dominates call counts."@en,
+      "Suchen muss Volltext treffen, und Lesen muss mehrere Handles je Aufruf annehmen; sonst dominiert der Lesepfad die Aufrufzahlen."@de .
+  
+  <https://w3id.org/arknet/id/f01f40c3-40c4-4571-8258-d75729b91a18> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 3;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "A typed, formatted answer (a decision with its consequences, a use case with its steps) is no longer one dedicated tool call; it is a rendering produced by a generic read or by a document tool."@en,
+      "Eine typisierte, formatierte Antwort (eine Entscheidung mit ihren Konsequenzen, ein Use Case mit seinen Schritten) ist kein eigener Tool-Aufruf mehr; sie ist eine Darstellung, die ein generisches Lesen oder ein Dokument-Tool erzeugt."@de .
+  
+  <https://w3id.org/arknet/id/1f78f076-5989-4251-8d24-c535f4b98fa3> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 4;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Neutral>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "The analysis tools that answer a question across contexts stay as tools; they are not part of the removed per-type set."@en,
+      "Die Analyse-Tools, die eine Frage über Kontexte hinweg beantworten, bleiben Tools; sie gehören nicht zum entfernten Satz je Typ."@de .
+  
+  <https://w3id.org/arknet/id/9a465dd7-1d86-4550-bb33-835ccd7422a6> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Generic access tools and read/find activities, plus question-answering tools"@en,
+      "Generische Zugriffs-Tools und Lese-/Such-Aktivitäten, dazu Frage-Tools"@de;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Removes the last per-type tools and keeps the tool list independent of the number of resource types, at the price of full-text find and multi-handle read."@en,
+      "Entfernt die letzten Tools je Typ und hält die Tool-Liste unabhängig von der Zahl der Ressourcentypen, um den Preis von Volltextsuche und Mehrfach-Handle-Lesen."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/d870e140-04b9-41f8-94a5-9de191230877> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Keep one get and one list tool per resource type"@en,
+      "Je Ressourcentyp ein get- und ein list-Tool behalten"@de;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Keeps a typed, formatted answer per call, but keeps the per-type cost and roughly a quarter of the tool list the write decision removes."@en,
+      "Behält eine typisierte, formatierte Antwort je Aufruf, aber auch die Kosten je Typ und rund ein Viertel der Tool-Liste, die die Schreibentscheidung entfernt."@de;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
 }
 
 <https://w3id.org/arknet/model/provenance> {
@@ -10373,19 +10541,78 @@ The trigger for an api module remains the one of the schema: a module outside th
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/e6b986e9-9d39-4385-879c-4483f900e6d0>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-19T16:04:57.411266538Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
     <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/01155a52-4a3d-4e46-9910-644a10649598> .
+  
+  <https://w3id.org/arknet/id/5f36b25a-8712-400c-b494-be07d8a4ee09> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/883e99bd-4a9b-4543-a4f7-51e525e75fd9> .
+  
+  <https://w3id.org/arknet/activity/fa56d363-4a93-4f8b-b0b1-e0d33f9689fa> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/6c5433d4-1e6c-4ed8-b24f-028365d0d126> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/5f36b25a-8712-400c-b494-be07d8a4ee09>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/fa56d363-4a93-4f8b-b0b1-e0d33f9689fa>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-10-02T10:44:40.316975574Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/90eb7a16-f7d6-457f-b887-635f34a7df5a> .
+  
+  <https://w3id.org/arknet/activity/3ccd8c70-75e4-4910-9091-980a5388ac8c> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/00c4bc88-33af-475f-8b1d-9f5f66efdddf> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/3ccd8c70-75e4-4910-9091-980a5388ac8c>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-10-02T10:44:53.703373736Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/a0d7d20b-3cd8-42a1-a177-e651a91f63ed> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/ced0e4c9-ee0d-471c-93c5-b4a156ed882f> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/5f36b25a-8712-400c-b494-be07d8a4ee09>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/a0d7d20b-3cd8-42a1-a177-e651a91f63ed>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-10-02T10:45:33.459064497Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/6c5433d4-1e6c-4ed8-b24f-028365d0d126> .
+  
+  <https://w3id.org/arknet/activity/f1994933-0e9d-4cde-9870-1e8d8350c9b7> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/df20527c-d963-4719-86f2-b1fbc24fb393> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/f1994933-0e9d-4cde-9870-1e8d8350c9b7>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-10-02T10:45:33.657278526Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/00c4bc88-33af-475f-8b1d-9f5f66efdddf> .
+  
+  <https://w3id.org/arknet/activity/9b7d13d3-4764-4d33-9fc9-17755d3a86b2> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/883e99bd-4a9b-4543-a4f7-51e525e75fd9> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/5f36b25a-8712-400c-b494-be07d8a4ee09>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/9b7d13d3-4764-4d33-9fc9-17755d3a86b2>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-10-02T10:50:06.923665297Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/ced0e4c9-ee0d-471c-93c5-b4a156ed882f> .
+  
+  <https://w3id.org/arknet/activity/fb3f358e-10af-4f7f-be02-8dd59b4f66e6> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/90eb7a16-f7d6-457f-b887-635f34a7df5a> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/3b2a6fe8-8d52-4c28-9f08-7b9ca3d9176a>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/fb3f358e-10af-4f7f-be02-8dd59b4f66e6>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-10-02T10:50:07.052073255Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/df20527c-d963-4719-86f2-b1fbc24fb393> .
 }
 
+
 <https://w3id.org/arknet/model/export-metadata> {
-    <https://w3id.org/arknet/export/20b34b87-8465-4e79-adfd-ab3143dc74f0>
+    <https://w3id.org/arknet/export/880ca819-d62c-42f0-b7e1-fabf8aa06dce>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#Activity> ;
-        <http://www.w3.org/ns/prov#endedAtTime> "2026-09-19T16:05:36Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
+        <http://www.w3.org/ns/prov#endedAtTime> "2026-10-02T10:59:50Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
         <http://www.w3.org/ns/prov#wasAssociatedWith> <https://w3id.org/arknet/agent/arknet> ;
         <http://www.w3.org/ns/prov#used> <https://w3id.org/arknet/core> , <https://w3id.org/arknet/ddd> , <https://w3id.org/arknet/process> , <https://w3id.org/arknet/requirements> , <https://w3id.org/arknet/architecture> , <https://w3id.org/arknet/provenance> , <https://w3id.org/arknet/project> .
 
     <https://w3id.org/arknet/agent/arknet>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#SoftwareAgent> ;
-        <http://www.w3.org/2002/07/owl#versionInfo> "32221608b9327708589f1dac31b66f40a987da51" ;
-        <http://purl.org/dc/terms/created> "2026-09-18T18:09:27Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+        <http://www.w3.org/2002/07/owl#versionInfo> "297bf3b77d4e6949d6a44e137dc5f37f104ece8c" ;
+        <http://purl.org/dc/terms/created> "2026-09-21T12:58:13Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
 
     <https://w3id.org/arknet/core>
         <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ;
