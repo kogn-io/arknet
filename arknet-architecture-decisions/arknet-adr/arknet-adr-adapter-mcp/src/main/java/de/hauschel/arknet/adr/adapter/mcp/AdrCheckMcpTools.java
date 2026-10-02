@@ -73,10 +73,11 @@ public final class AdrCheckMcpTools {
             + "a decision date on a decision that has not been taken, no consequence or no considered "
             + "option recorded, an option space with nothing CHOSEN on a decision that was taken, a "
             + "decision that addresses no requirement and affects no bounded context, and an ADR-n "
-            + "named in the prose that this project does not hold or that no supersedes/relatedTo "
-            + "edge backs. Suspicions, each a hint and not a defect: tracker references (#123), "
-            + "address and port literals, status prose ('today', 'currently', 'not yet') in the "
-            + "decision or a consequence, and two decisions with near-identical titles. Reads only - "
+            + "named in the prose that this project does not hold or that no "
+            + "supersedes/supersededBy/relatedTo edge backs. Suspicions, each a hint and not a "
+            + "defect: tracker references (#123), address and port literals, status prose ('today', "
+            + "'currently', 'not yet') in the decision or a consequence, and two decisions with "
+            + "near-identical titles. Reads only - "
             + "it changes nothing, sets no status and refuses nothing. What it cannot decide is named "
             + "in its own output and stays with the reviewer.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
