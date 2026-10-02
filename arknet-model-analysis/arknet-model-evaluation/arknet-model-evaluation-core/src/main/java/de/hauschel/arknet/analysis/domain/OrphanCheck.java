@@ -10,7 +10,7 @@ import de.hauschel.arknet.persistence.StoreResource;
 
 /**
  * Finds every orphaned artifact of a project (kogn-io/arknet#473, folding {@code orphan_check}
- * into {@code store_check ORPHAN}): a requirement no use case realises, a glossary term never
+ * into {@code store_check ORPHAN}): a requirement no use case satisfies or realises, a glossary term never
  * referenced, a requirement's/use case's/bounded context's/architecture decision's prose naming a
  * term without the matching edge, and a constraint no requirement or use case is bound by.
  *
@@ -55,7 +55,7 @@ public final class OrphanCheck {
     public static Result run(final TraceabilityGraph graph) {
         Objects.requireNonNull(graph, "graph");
         final List<ResourceFinding> orphanRequirements = graph.requirementIris().stream()
-                .filter(iri -> graph.realisingUseCases(iri).isEmpty())
+                .filter(iri -> !graph.isCarriedByUseCase(iri))
                 .map(iri -> resourceFinding(graph, iri))
                 .toList();
         final List<ResourceFinding> orphanTerms = graph.termIris().stream()

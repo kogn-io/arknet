@@ -92,7 +92,7 @@ public final class TraceabilityMcpTools {
     @McpTool(name = "orphan_check",
             description = "Deprecated: use store_check with checks=[ORPHAN]. Kept as an alias so existing"
                     + " callers keep working; will be removed in a future release. Finds orphaned artifacts:"
-                    + " requirements no use case realises, glossary terms never referenced (neither used by a"
+                    + " requirements no use case satisfies (oslc_rm:satisfies) or realises (arkreq:stepRealises), glossary terms never referenced (neither used by a"
                     + " requirement, a use case or an architecture decision (arkarch:usesTerm), a bounded"
                     + " context's ubiquitous language, nor another term's skos:broader or skos:related), mentions"
                     + " without a backing edge - a requirement's, use case's, bounded context's or architecture"

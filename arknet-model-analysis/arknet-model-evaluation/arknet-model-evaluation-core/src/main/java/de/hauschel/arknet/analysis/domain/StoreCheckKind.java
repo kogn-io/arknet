@@ -55,12 +55,12 @@ public enum StoreCheckKind {
 
     /**
      * Every orphaned artifact of the project (kogn-io/arknet#473, folding the former {@code
-     * orphan_check} tool in here): a requirement no use case realises, a glossary term never
+     * orphan_check} tool in here): a requirement no use case satisfies or realises, a glossary term never
      * referenced, a requirement's/use case's/bounded context's/architecture decision's prose
      * naming a term without the matching edge, and a constraint no requirement or use case is
      * bound by. See {@link OrphanCheck}.
      */
-    ORPHAN("the presence of edges: requirements no use case realises, terms never referenced, text naming a "
+    ORPHAN("the presence of edges: requirements no use case satisfies (oslc_rm:satisfies) or realises (arkreq:stepRealises), terms never referenced, text naming a "
             + "term without the matching edge, constraints bound by nothing.",
             "the text-mention match (\"Mentioned in text but not linked\") is literal and whole-word, "
                     + "not stem-based, so it also flags everyday words used in their ordinary sense (e.g. "

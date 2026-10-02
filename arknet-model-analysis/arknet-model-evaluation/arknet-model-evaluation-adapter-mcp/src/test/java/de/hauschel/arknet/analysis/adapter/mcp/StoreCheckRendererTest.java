@@ -193,11 +193,11 @@ class StoreCheckRendererTest {
                 List.of()));
 
         assertThat(rendered)
-                .contains("1 requirement without a realising use case")
+                .contains("1 requirement without a satisfying or realising use case")
                 .contains("0 terms never referenced")
                 .contains("1 unlinked mention")
                 .contains("0 constraints not attached")
-                .contains("Requirements without a realising use case:")
+                .contains("Requirements no use case satisfies or realises:")
                 .contains("| Resource | Type | Label |")
                 .contains("| FR-2 | FunctionalRequirement | Logout |")
                 .contains("Mentioned in text but not linked:")
