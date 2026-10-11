@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -23,6 +24,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
+import de.hauschel.arknet.mcp.report.SpecificationRenderer;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
@@ -67,9 +69,13 @@ import de.hauschel.arknet.prj.domain.Project;
 public final class StoreReportTools {
 
     private static final String REPORT_FILE_NAME = "store-report.html";
+    private static final String SPECIFICATION_FILE_NAME = "store-specification.html";
+    private static final String REPORT_LINE_LABEL = "HTML report";
+    private static final String SPECIFICATION_LINE_LABEL = "HTML specification";
 
     private final StoreReader storeReader;
     private final HtmlReportRenderer htmlRenderer;
+    private final SpecificationRenderer specificationRenderer;
     private final ModelViews modelViews;
     private final DigestRenderer digestRenderer;
     private final ResourceRenderer resourceRenderer;
@@ -92,6 +98,8 @@ public final class StoreReportTools {
      *                          {@code orphan_check}/{@code trace_matrix} already apply, so the two
      *                          keep agreeing on the very same term's label
      * @param htmlRenderer      the self-contained HTML report renderer
+     * @param specificationRenderer the self-contained business-reader specification renderer, fed
+     *                          by the same {@link ModelViews} pass as {@code htmlRenderer}
      * @param modelViews        assembles the report's per-bounded-context sections; never fails the
      *                          tool - a context whose read path throws is reported as a warning in
      *                          the HTML and its resources fall back to the generic raw view
@@ -113,6 +121,7 @@ public final class StoreReportTools {
             final Prefixes prefixes,
             final DisplayLocale displayLocale,
             final HtmlReportRenderer htmlRenderer,
+            final SpecificationRenderer specificationRenderer,
             final ModelViews modelViews,
             final ProjectResolver projects,
             final FindProject findProject,
@@ -122,6 +131,7 @@ public final class StoreReportTools {
         this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.htmlRenderer = Objects.requireNonNull(htmlRenderer, "htmlRenderer");
+        this.specificationRenderer = Objects.requireNonNull(specificationRenderer, "specificationRenderer");
         this.modelViews = Objects.requireNonNull(modelViews, "modelViews");
         this.digestRenderer = new DigestRenderer(prefixes);
         this.resourceRenderer = new ResourceRenderer(prefixes);
@@ -142,7 +152,9 @@ public final class StoreReportTools {
                     + " summed into one trailing count per type instead of listed - drill into its owning"
                     + " resource via resource_get to see it. The HTML groups the model by bounded context -"
                     + " use cases with their flow, requirements with their acceptance criteria, glossary,"
-                    + " bounded contexts - and keeps a raw section for the rest.",
+                    + " bounded contexts - and keeps a raw section for the rest. A second self-contained"
+                    + " HTML file, the specification, reads the same model as a numbered requirements"
+                    + " document for business readers and is written next to it (its path is returned too).",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String storeOverview(
             final McpSyncRequestContext context,
@@ -150,7 +162,10 @@ public final class StoreReportTools {
             final String projectAnchor) {
         final ResolvedProject resolved = AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
         final RenderedReport report = renderReport(resolved);
-        return report.digest() + "\n" + writeReportLine(report.html(), report.projectId()) + "\n";
+        return report.digest() + "\n"
+                + writeReportLine(REPORT_LINE_LABEL, REPORT_FILE_NAME, report.projectId(), report::html) + "\n"
+                + writeReportLine(SPECIFICATION_LINE_LABEL, SPECIFICATION_FILE_NAME, report.projectId(),
+                        report.specification()) + "\n";
     }
 
     /**
@@ -175,8 +190,26 @@ public final class StoreReportTools {
         return renderReport(resolved).html();
     }
 
-    /** The digest/HTML pair {@link #storeOverview} and {@link #htmlReport} both derive from one render pass. */
-    private record RenderedReport(ProjectId projectId, String digest, String html) {
+    /**
+     * Renders the business-reader specification for the browser-reachable {@code GET /specification}
+     * endpoint, from the same resolution as {@link #htmlReport} and without writing a file.
+     *
+     * @param projectAnchor the anchor identifying the project; must be a registered anchor
+     * @throws de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException if {@code projectAnchor}
+     *                                                                    is blank or unregistered
+     */
+    String specificationHtml(final String projectAnchor) {
+        final ResolvedProject resolved = AnchorContext.resolveResolvedProject(null, projectAnchor, projects);
+        return renderReport(resolved).specification().get();
+    }
+
+    /**
+     * What {@link #storeOverview}, {@link #htmlReport} and {@link #specificationHtml} derive from
+     * one read pass. The specification is a supplier: it is rendered only for the callers that
+     * want it, and a failure in it surfaces where it is asked for - {@link #storeOverview} turns it
+     * into a failure line, never into a lost tool response.
+     */
+    private record RenderedReport(ProjectId projectId, String digest, String html, Supplier<String> specification) {
     }
 
     private RenderedReport renderReport(final ResolvedProject resolved) {
@@ -188,9 +221,10 @@ public final class StoreReportTools {
 
         final StoreSnapshot snapshot = storeReader.readSnapshot(projectId);
         final String digest = digestRenderer.render(projectId, label, description, snapshot, effective);
-        final String html = htmlRenderer.render(projectId, label, description, snapshot, digest,
-                modelViews.of(projectId, resolved.defaultLanguage()), effective);
-        return new RenderedReport(projectId, digest, html);
+        final ModelViews.Views views = modelViews.of(projectId, resolved.defaultLanguage());
+        final String html = htmlRenderer.render(projectId, label, description, snapshot, digest, views, effective);
+        return new RenderedReport(projectId, digest, html,
+                () -> specificationRenderer.render(label, description, views, effective));
     }
 
     @McpTool(name = "resource_get",
@@ -349,28 +383,31 @@ public final class StoreReportTools {
      * that escape and lose the whole tool response, the exact failure mode this method exists to
      * prevent.</p>
      */
-    private String writeReportLine(final String html, final ProjectId projectId) {
+    private String writeReportLine(
+            final String lineLabel, final String fileName, final ProjectId projectId,
+            final Supplier<String> html) {
         final Path targetDir;
         try {
             targetDir = fallbackDirFor(projectId);
         } catch (final RuntimeException failure) {
-            return reportFailureLine(fallbackReportDir, failure);
+            return reportFailureLine(lineLabel, fallbackReportDir, failure);
         }
         try {
-            return "# HTML report: " + displayPath(writeReport(html, targetDir), projectId);
+            return "# " + lineLabel + ": "
+                    + displayPath(writeReport(html.get(), targetDir, fileName), projectId, fileName);
         } catch (final RuntimeException | IOException failure) {
-            return reportFailureLine(targetDir, failure);
+            return reportFailureLine(lineLabel, targetDir, failure);
         }
     }
 
-    private String displayPath(final Path written, final ProjectId projectId) {
+    private String displayPath(final Path written, final ProjectId projectId, final String fileName) {
         return reportHostDir != null
-                ? reportHostDir.resolve(reportSegment(projectId)).resolve(REPORT_FILE_NAME).toString()
+                ? reportHostDir.resolve(reportSegment(projectId)).resolve(fileName).toString()
                 : written.toString();
     }
 
-    private static String reportFailureLine(final Path targetDir, final Exception failure) {
-        return "# HTML report: FAILED to write to " + targetDir + " (" + failure.getClass().getSimpleName()
+    private static String reportFailureLine(final String lineLabel, final Path targetDir, final Exception failure) {
+        return "# " + lineLabel + ": FAILED to write to " + targetDir + " (" + failure.getClass().getSimpleName()
                 + ": " + failure.getMessage() + ") - digest above is unaffected.";
     }
 
@@ -388,10 +425,10 @@ public final class StoreReportTools {
      * several sessions of one project against it) would otherwise both write through the identical fixed
      * temp path at once, corrupting each other's content before either reached the rename.
      */
-    private Path writeReport(final String html, final Path targetDir) throws IOException {
+    private Path writeReport(final String html, final Path targetDir, final String fileName) throws IOException {
         Files.createDirectories(targetDir);
-        final Path target = targetDir.resolve(REPORT_FILE_NAME);
-        final Path tmp = Files.createTempFile(targetDir, REPORT_FILE_NAME, ".tmp");
+        final Path target = targetDir.resolve(fileName);
+        final Path tmp = Files.createTempFile(targetDir, fileName, ".tmp");
         try {
             Files.writeString(tmp, html, StandardCharsets.UTF_8);
             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);

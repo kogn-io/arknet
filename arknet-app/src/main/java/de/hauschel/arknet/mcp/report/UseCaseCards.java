@@ -157,18 +157,18 @@ public final class UseCaseCards {
         texts.addAll(uc.extensions());
 
         final List<Block> blocks = new ArrayList<>();
-        blocks.add(ProseMarkdown.prose("Goal", uc.goal(), text -> glossary.markUp(text, linked)));
-        addIfPresent(blocks, "Scope", uc.scope(), glossary, linked);
-        addIfPresent(blocks, "Trigger", uc.trigger(), glossary, linked);
-        blocks.add(new Block.Refs("Primary role", List.of(roleRef(uc.primaryRole(), roles))));
+        blocks.add(ProseMarkdown.prose(CardLabels.GOAL, uc.goal(), text -> glossary.markUp(text, linked)));
+        addIfPresent(blocks, CardLabels.SCOPE, uc.scope(), glossary, linked);
+        addIfPresent(blocks, CardLabels.TRIGGER, uc.trigger(), glossary, linked);
+        blocks.add(new Block.Refs(CardLabels.PRIMARY_ROLE, List.of(roleRef(uc.primaryRole(), roles))));
         if (!uc.supportingRoles().isEmpty()) {
-            blocks.add(new Block.Refs("Supporting roles", uc.supportingRoles().stream()
+            blocks.add(new Block.Refs(CardLabels.SUPPORTING_ROLES, uc.supportingRoles().stream()
                     .map(ref -> roleRef(ref, roles))
                     .toList()));
         }
-        addIfPresent(blocks, "Precondition", uc.precondition(), glossary, linked);
-        addIfPresent(blocks, "Postcondition", uc.postcondition(), glossary, linked);
-        blocks.add(new Block.Flow("Main flow",
+        addIfPresent(blocks, CardLabels.PRECONDITION, uc.precondition(), glossary, linked);
+        addIfPresent(blocks, CardLabels.POSTCONDITION, uc.postcondition(), glossary, linked);
+        blocks.add(new Block.Flow(CardLabels.MAIN_FLOW,
                 uc.steps().stream().map(step -> flowStep(step, reqs, glossary, linked)).toList()));
         if (!uc.extensions().isEmpty()) {
             final List<BulletItem> items = new ArrayList<>(uc.extensions().size());

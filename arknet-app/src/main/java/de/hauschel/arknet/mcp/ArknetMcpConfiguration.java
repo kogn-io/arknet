@@ -33,6 +33,7 @@ import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcp.report.RequirementCards;
 import de.hauschel.arknet.mcp.report.RoleCards;
+import de.hauschel.arknet.mcp.report.SpecificationRenderer;
 import de.hauschel.arknet.mcp.report.TermCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.mcp.store.ExportMetadata;
@@ -1025,7 +1026,8 @@ public class ArknetMcpConfiguration {
             @Value("${arknet.report.dir:${user.dir}}") final Path fallbackReportDir,
             @Value("${arknet.report.host-dir:#{null}}") final Path reportHostDir) {
         return new StoreReportTools(
-                storeReader, prefixes, displayLocale, new HtmlReportRenderer(prefixes), modelViews,
+                storeReader, prefixes, displayLocale, new HtmlReportRenderer(prefixes),
+                new SpecificationRenderer(), modelViews,
                 projectResolver, projectService, fallbackReportDir, reportHostDir);
     }
 

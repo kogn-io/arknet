@@ -93,14 +93,14 @@ public final class RequirementCards {
         requirement.acceptanceCriteria().stream().map(AcceptanceCriterion::text).forEach(texts::add);
 
         final List<Block> blocks = new ArrayList<>();
-        blocks.add(ProseMarkdown.prose("Description", requirement.description(),
+        blocks.add(ProseMarkdown.prose(CardLabels.DESCRIPTION, requirement.description(),
                 text -> glossary.markUp(text, linked)));
         if (requirement.rationale() != null) {
             // Right after the statement it explains, and glossary-marked like every other prose
             // block - a reason names the same domain terms the requirement itself does (issue
             // #321). Absent for a requirement whose reason nobody recorded: the field is
             // optional, so no block beats an empty one.
-            blocks.add(ProseMarkdown.prose("Rationale", requirement.rationale(),
+            blocks.add(ProseMarkdown.prose(CardLabels.RATIONALE, requirement.rationale(),
                     text -> glossary.markUp(text, linked)));
         }
         blocks.add(new Block.Bullets(ACCEPTANCE_CRITERIA_LABEL, requirement.acceptanceCriteria().stream()
@@ -108,7 +108,7 @@ public final class RequirementCards {
                         ProseMarkdown.inline(criterion.text(), text -> glossary.markUp(text, linked))))
                 .toList()));
         if (requirement.qualityCategory() != null) {
-            blocks.add(Block.Prose.plain("Quality category", requirement.qualityCategory()));
+            blocks.add(Block.Prose.plain(CardLabels.QUALITY_CATEGORY, requirement.qualityCategory()));
         }
         UnmentionedTerms.addTo(blocks, linked, glossary, texts, "Uses terms", "not named in the text");
         return new ModelCard(requirement.code().value(), requirement.title(),

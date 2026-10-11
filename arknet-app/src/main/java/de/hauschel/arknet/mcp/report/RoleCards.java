@@ -60,16 +60,16 @@ public final class RoleCards {
     private static ModelCard card(final RoleDetail detail) {
         final List<Block> blocks = new ArrayList<>();
         if (detail.role().description() != null) {
-            blocks.add(ProseMarkdown.prose("Description", detail.role().description(), RichText::plain));
+            blocks.add(ProseMarkdown.prose(CardLabels.DESCRIPTION, detail.role().description(), RichText::plain));
         }
-        blocks.add(ProseMarkdown.prose("Filled by", filledByText(detail.filledByActors()), RichText::plain));
+        blocks.add(ProseMarkdown.prose(CardLabels.FILLED_BY, filledByText(detail.filledByActors()), RichText::plain));
         return new ModelCard(detail.role().code().value(), detail.role().name(),
                 detail.role().id().value().value(), List.of(), blocks);
     }
 
     private static String filledByText(final List<FilledByActor> filledByActors) {
         if (filledByActors.isEmpty()) {
-            return "(unfilled)";
+            return CardLabels.UNFILLED;
         }
         return filledByActors.stream()
                 .map(actor -> "%s (%s)".formatted(actor.code().value(), actor.name()))

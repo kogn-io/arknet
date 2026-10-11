@@ -60,7 +60,7 @@ public final class ConstraintCards {
     private static ModelCard card(final Constraint constraint) {
         final List<Badge> badges = List.of(new Badge(Badge.Kind.Known.TYPE, constraint.type().idPrefix()));
         final List<Block> blocks = List.of(
-                ProseMarkdown.prose("Statement", constraint.statement(), RichText::plain));
+                ProseMarkdown.prose(CardLabels.STATEMENT, constraint.statement(), RichText::plain));
         return new ModelCard(constraint.code().value(), constraint.title(),
                 constraint.id().value().value(), badges, blocks);
     }

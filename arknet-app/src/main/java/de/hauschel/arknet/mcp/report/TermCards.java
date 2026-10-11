@@ -46,7 +46,7 @@ public final class TermCards {
 
     private static ModelCard card(final Term term) {
         final List<Block> blocks = new ArrayList<>();
-        blocks.add(ProseMarkdown.prose("Definition", term.definition(), RichText::plain));
+        blocks.add(ProseMarkdown.prose(CardLabels.DEFINITION, term.definition(), RichText::plain));
         return new ModelCard(term.code().value(), term.prefLabel(), term.id().value().value(), List.of(), blocks);
     }
 }

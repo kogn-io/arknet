@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -62,15 +63,32 @@ public final class StoreReportController {
     public ResponseEntity<String> report(
             @RequestParam(name = "projectAnchor", required = false) final String projectAnchor,
             final HttpServletRequest request) {
+        return serve("/report", projectAnchor, request, reportTools::htmlReport);
+    }
+
+    /**
+     * The business-reader specification of the same project ({@code GET /specification}), with
+     * the same project selection and loopback boundary as {@link #report}.
+     */
+    @GetMapping(value = "/specification", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> specification(
+            @RequestParam(name = "projectAnchor", required = false) final String projectAnchor,
+            final HttpServletRequest request) {
+        return serve("/specification", projectAnchor, request, reportTools::specificationHtml);
+    }
+
+    private ResponseEntity<String> serve(
+            final String endpoint, final String projectAnchor, final HttpServletRequest request,
+            final Function<String, String> page) {
         try {
             hostValidator.validateHeaders(headersOf(request));
         } catch (final ServerTransportSecurityException rejected) {
             return textResponse(HttpStatus.valueOf(rejected.getStatusCode()), rejected.getMessage());
         }
         try {
-            return ResponseEntity.ok(reportTools.htmlReport(projectAnchor));
+            return ResponseEntity.ok(page.apply(projectAnchor));
         } catch (final UnresolvedProjectAnchorException unresolved) {
-            return textResponse(HttpStatus.BAD_REQUEST, browserRemedyFor(unresolved));
+            return textResponse(HttpStatus.BAD_REQUEST, browserRemedyFor(endpoint, unresolved));
         }
     }
 
@@ -84,9 +102,9 @@ public final class StoreReportController {
      * same way the kernel exception's javadoc does: {@code null} for a call that carried no anchor
      * at all, a value for one nobody registered.
      */
-    private static String browserRemedyFor(final UnresolvedProjectAnchorException unresolved) {
+    private static String browserRemedyFor(final String endpoint, final UnresolvedProjectAnchorException unresolved) {
         return unresolved.anchor() == null
-                ? "GET /report needs a registered project - add ?projectAnchor=<anchor> to the URL. "
+                ? "GET " + endpoint + " needs a registered project - add ?projectAnchor=<anchor> to the URL. "
                         + "An MCP client can see the registered anchors via the project_list tool."
                 : "No project is registered for anchor '" + unresolved.anchor() + "'. Check the "
                         + "?projectAnchor=<anchor> value in the URL, or ask an MCP client to register "
