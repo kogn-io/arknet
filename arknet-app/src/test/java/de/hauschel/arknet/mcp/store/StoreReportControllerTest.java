@@ -189,6 +189,42 @@ class StoreReportControllerTest {
         verifyNoInteractions(reportTools);
     }
 
+    @Test
+    void dispatchesGetSpecificationThroughRealSpringMvcRoutingAndReturnsTheHtmlBody() throws Exception {
+        final StoreReportTools reportTools = mock(StoreReportTools.class);
+        when(reportTools.specificationHtml(ANCHOR)).thenReturn("<!doctype html><html>spec</html>");
+        final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new StoreReportController(reportTools)).build();
+
+        mockMvc.perform(get("/specification").param("projectAnchor", ANCHOR).header("Host", "127.0.0.1:47331"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(content().string("<!doctype html><html>spec</html>"));
+    }
+
+    @Test
+    void specificationRejectsAForeignHostHeaderBeforeRenderingAnything() throws Exception {
+        final StoreReportTools reportTools = mock(StoreReportTools.class);
+        final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new StoreReportController(reportTools)).build();
+
+        mockMvc.perform(get("/specification").param("projectAnchor", ANCHOR)
+                        .header("Host", "evil.example.com:47331"))
+                .andExpect(status().is(421));
+
+        verifyNoInteractions(reportTools);
+    }
+
+    @Test
+    void specificationAnswers400WithTheBrowserRemedyForAnUnregisteredAnchor() throws Exception {
+        final StoreReportTools reportTools = mock(StoreReportTools.class);
+        when(reportTools.specificationHtml("/unknown")).thenThrow(new UnresolvedProjectAnchorException("/unknown", "no project registered"));
+        final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new StoreReportController(reportTools)).build();
+
+        mockMvc.perform(get("/specification").param("projectAnchor", "/unknown")
+                        .header("Host", "127.0.0.1:47331"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("/unknown")));
+    }
+
     private static HttpServletRequest requestWithHost(final String host) {
         final HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getHeader("Host")).thenReturn(host);

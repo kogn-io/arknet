@@ -49,6 +49,7 @@ import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcp.report.RequirementCards;
 import de.hauschel.arknet.mcp.report.RoleCards;
+import de.hauschel.arknet.mcp.report.SpecificationRenderer;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
@@ -128,6 +129,7 @@ class StoreReportToolsTest {
         ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         tools = new StoreReportTools(
                 reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
+                new SpecificationRenderer(),
                 modelViews(), projects, NO_LABELS, reportDir, null);
     }
 
@@ -210,6 +212,42 @@ class StoreReportToolsTest {
     }
 
     /**
+     * The specification lands next to the store report, both paths come back, and the page is
+     * built from the real card builders (so the block labels the renderer selects by are the ones
+     * the builders write).
+     */
+    @Test
+    void storeOverviewWritesTheSpecificationNextToTheReportAndReturnsBothPaths() throws Exception {
+        final String result = tools.storeOverview(null, ANCHOR);
+
+        final Path segmentDir = reportDir.resolve(StoreReportTools.reportSegment(PROJECT));
+        final Path specification = segmentDir.resolve("store-specification.html");
+        assertThat(result).contains("# HTML report: " + segmentDir.resolve("store-report.html").toAbsolutePath())
+                .contains("# HTML specification: " + specification.toAbsolutePath());
+        assertThat(specification).exists();
+        final String content = Files.readString(specification);
+        assertThat(content).startsWith("<!doctype html>").contains("Functional requirements")
+                .contains("Login").contains("The system shall authenticate a user.")
+                .contains("Login succeeds with valid credentials")
+                .contains("Priority: Must").contains("<dt id=\"a-term-1\"")
+                .doesNotContain(FR_1_IRI).doesNotContain(TERM_1_IRI);
+    }
+
+    @Test
+    void specificationHtmlRendersOnlyThePageAndNeverWritesAFile() {
+        final String html = tools.specificationHtml(ANCHOR);
+
+        assertThat(html).startsWith("<!doctype html>").contains("Login").endsWith("</html>\n");
+        assertThat(reportDir.resolve(StoreReportTools.reportSegment(PROJECT))).doesNotExist();
+    }
+
+    @Test
+    void specificationHtmlRejectsAnUnregisteredAnchor() {
+        assertThatThrownBy(() -> tools.specificationHtml("/never/registered"))
+                .isInstanceOf(UnresolvedProjectAnchorException.class);
+    }
+
+    /**
      * The report is written to the server's own report directory
      * and never to anything the client sent, so a daemon that shares no filesystem with its caller
      * (containerized, only {@code /data/rdf} mounted) cannot fail the tool call over it.
@@ -278,6 +316,7 @@ class StoreReportToolsTest {
         final ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         final StoreReportTools toolsWithBrokenFallback = new StoreReportTools(
                 reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
+                new SpecificationRenderer(),
                 modelViews(), projects, NO_LABELS, blockedFallbackDir, null);
 
         final String result = toolsWithBrokenFallback.storeOverview(null, ANCHOR);
@@ -308,6 +347,7 @@ class StoreReportToolsTest {
                     unsafeAnchor.equals(anchor) ? new ResolvedProject(unsafeProject, null) : resolveTestAnchor(anchor);
             final StoreReportTools toolsWithUnsafeId = new StoreReportTools(
                     reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
+                new SpecificationRenderer(),
                     modelViews(), projects, NO_LABELS, reportDir, null);
 
             final String result = toolsWithUnsafeId.storeOverview(null, unsafeAnchor);
@@ -344,6 +384,7 @@ class StoreReportToolsTest {
                     escapingAnchor.equals(anchor) ? new ResolvedProject(escapingProject, null) : resolveTestAnchor(anchor);
             final StoreReportTools toolsWithEscapingId = new StoreReportTools(
                     reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
+                new SpecificationRenderer(),
                     modelViews(), projects, NO_LABELS, reportDir, null);
 
             final String result = toolsWithEscapingId.storeOverview(null, escapingAnchor);
@@ -395,6 +436,7 @@ class StoreReportToolsTest {
             };
             final StoreReportTools toolsWithCollidingIds = new StoreReportTools(
                     reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
+                new SpecificationRenderer(),
                     modelViews(), projects, NO_LABELS, reportDir, null);
 
             toolsWithCollidingIds.storeOverview(null, slashAnchor);
@@ -427,6 +469,7 @@ class StoreReportToolsTest {
         final ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         final StoreReportTools toolsWithHostDir = new StoreReportTools(
                 reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
+                new SpecificationRenderer(),
                 modelViews(), projects, NO_LABELS, reportDir, hostDir);
 
         final String result = toolsWithHostDir.storeOverview(null, ANCHOR);
@@ -528,6 +571,7 @@ class StoreReportToolsTest {
                 : Optional.empty();
         final StoreReportTools toolsWithLabel = new StoreReportTools(
                 reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
+                new SpecificationRenderer(),
                 modelViews(), projects, withLabel, reportDir, null);
 
         final String result = toolsWithLabel.storeOverview(null, ANCHOR);
@@ -587,6 +631,7 @@ class StoreReportToolsTest {
                 new RoleCards((projectId, displayLocale) -> List.of()));
         final StoreReportTools toolsWithGermanDefault = new StoreReportTools(
                 reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
+                new SpecificationRenderer(),
                 modelViewsWithRealTerms, germanDefaultProject, NO_LABELS, reportDir, null);
 
         final String result = toolsWithGermanDefault.storeOverview(null, ANCHOR);
