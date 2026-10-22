@@ -313,27 +313,48 @@ class OrphanCheckTest {
     @Test
     void aReferenceAfterASentenceEndDoesNotExemptTheMention() {
         for (final String description : List.of(
-                "Kunde. FR-7 gilt.", "Der Kunde zahlt. FR-7 gilt.", "Kunde! FR-7 gilt.", "Kunde; FR-7 gilt.", "Kunde?\nFR-7 gilt.",
-                "FR-7 gilt.\n\nKunde zahlt.", "Siehe FR-7. Kunde zahlt.")) {
-            final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
-            base.addAll(referencedRequirement(true));
+                "Kunde. FR-7 gilt.", "Der Kunde zahlt. FR-7 gilt.", "Kunde! FR-7 gilt.", "Kunde; FR-7 gilt.",
+                "Kunde? FR-7 gilt.", "FR-7 gilt. Kunde zahlt.", "Siehe FR-7. Kunde zahlt.")) {
+            assertMentionStaysAFinding(description);
+        }
+    }
 
-            final OrphanCheck.Result result = run(base, citingRequirement(description));
-
-            assertThat(result.unlinkedMentions()).as(description).hasSize(1);
-            assertThat(result.mentionHints()).as(description).isEmpty();
+    @Test
+    void aReferenceAcrossALineBreakAloneDoesNotExemptTheMention() {
+        for (final String description : List.of("Kunde\nFR-7", "FR-7\nKunde", "Kunde\n\nFR-7")) {
+            assertMentionStaysAFinding(description);
         }
     }
 
     @Test
     void aReferenceMoreThanThreeSeparatorsAwayDoesNotExemptTheMention() {
+        for (final String description : List.of("Kunde -- FR-7", "Kunde (-- FR-7", "Kunde, : FR-7", "FR-7 -- Kunde")) {
+            assertMentionStaysAFinding(description);
+        }
+    }
+
+    @Test
+    void aReferenceExactlyThreeSeparatorsAwayExemptsTheMention() {
+        for (final String description : List.of("Kunde - FR-7", "Kunde / FR-7", "Kunde \u2013 FR-7",
+                "Kunde \u2014 FR-7", "Kunde\t-\tFR-7", "Kunde\tFR-7", "FR-7 - Kunde")) {
+            final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
+            base.addAll(referencedRequirement(true));
+
+            final OrphanCheck.Result result = run(base, citingRequirement(description));
+
+            assertThat(result.unlinkedMentions()).as(description).isEmpty();
+            assertThat(result.mentionHints()).as(description).hasSize(1);
+        }
+    }
+
+    private void assertMentionStaysAFinding(final String description) {
         final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
         base.addAll(referencedRequirement(true));
 
-        final OrphanCheck.Result result = run(base, citingRequirement("Kunde (--- FR-7) zahlt."));
+        final OrphanCheck.Result result = run(base, citingRequirement(description));
 
-        assertThat(result.unlinkedMentions()).hasSize(1);
-        assertThat(result.mentionHints()).isEmpty();
+        assertThat(result.unlinkedMentions()).as(description).hasSize(1);
+        assertThat(result.mentionHints()).as(description).isEmpty();
     }
 
     @Test

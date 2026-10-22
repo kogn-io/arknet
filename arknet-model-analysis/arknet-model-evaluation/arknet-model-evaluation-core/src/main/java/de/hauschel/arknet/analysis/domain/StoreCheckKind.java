@@ -69,7 +69,7 @@ public enum StoreCheckKind {
                     + "not stem-based, so it also flags everyday words used in their ordinary sense (e.g. "
                     + "\"Rolle\", \"Begriff\", \"Projekt\") - a hit there is a reading hint for a human, "
                     + "not a finding that demands an edge; whether an existing edge is the right one; and the "
-                    + "reference rule only sees a code at most three blanks, brackets, commas, colons, hyphens or "
+                    + "reference rule only sees a code at most three blanks, brackets, commas, colons, dashes, tabs or "
                     + "slashes away from the mention (\"Term (FR-7)\"), not one with words, a sentence end or a "
                     + "line break in between (\"per FR-7 the term\"), and treats every mention outside an acceptance criterion "
                     + "as normative text.");

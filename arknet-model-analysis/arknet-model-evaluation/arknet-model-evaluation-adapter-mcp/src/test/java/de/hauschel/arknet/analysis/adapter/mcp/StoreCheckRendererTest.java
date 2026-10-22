@@ -191,7 +191,7 @@ class StoreCheckRendererTest {
                 List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
                 List.of(),
                 List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
-                        List.of("description", "acceptanceCriterion"), List.of())),
+                        List.of("description"), List.of())),
                 List.of()));
 
         assertThat(rendered)
@@ -204,7 +204,7 @@ class StoreCheckRendererTest {
                 .contains("| FR-2 | FunctionalRequirement | Logout |")
                 .contains("Mentioned in text but not linked:")
                 .contains("| Source | Term | Label | Missing edge | Field |")
-                .contains("| FR-3 | TERM-9 | Kunde | usesTerm | description, acceptanceCriterion |")
+                .contains("| FR-3 | TERM-9 | Kunde | usesTerm | description |")
                 .doesNotContain("Terms never referenced:")
                 .doesNotContain("Constraints not attached to any requirement or use case:");
     }

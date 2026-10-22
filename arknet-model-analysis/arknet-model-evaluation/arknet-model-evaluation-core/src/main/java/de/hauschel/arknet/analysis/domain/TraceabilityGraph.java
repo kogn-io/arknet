@@ -865,15 +865,6 @@ public final class TraceabilityGraph {
      * @param text  the literal's text
      */
     public record ProseField(String field, String text) {
-
-        /**
-         * @return whether a mention in this field is normative text (a missing edge is a finding)
-         *         rather than illustrative text (an acceptance criterion's example), where a missing
-         *         edge is only a hint
-         */
-        public boolean normative() {
-            return !FIELD_ACCEPTANCE_CRITERION.equals(field);
-        }
     }
 
     private static final String FIELD_ACCEPTANCE_CRITERION = "acceptanceCriterion";

@@ -120,8 +120,9 @@ public final class StoreCheckMcpTools {
             + "finding: it is listed in a separate hint table and not counted. What ORPHAN does "
             + "NOT see: the text-mention match is literal and whole-word, not stem-based, so it also "
             + "flags everyday words used in their ordinary sense - a hit there is a reading hint for a "
-            + "human, not a finding that demands an edge; the reference rule does not see a code with words "
-            + "between it and the mention (\"per FR-7 the term\"). orphan_check is a deprecated alias for this "
+            + "human, not a finding that demands an edge; the reference rule does not see a code with words, "
+            + "a sentence end or a line break between it and the mention (\"per FR-7 the term\") or more "
+            + "than three separator characters (blanks, tabs, brackets, commas, colons, dashes, slashes) away. orphan_check is a deprecated alias for this "
             + "check; further checks fold in here too rather than arriving as new tools.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String storeCheck(

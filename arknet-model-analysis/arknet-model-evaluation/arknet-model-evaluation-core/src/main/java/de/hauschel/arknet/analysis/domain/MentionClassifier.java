@@ -25,6 +25,10 @@ import de.hauschel.arknet.analysis.domain.TraceabilityGraph.UnlinkedMention;
  */
 final class MentionClassifier {
 
+    /**
+     * The one place that names the fields whose mentions are not normative: an acceptance
+     * criterion is illustrative, so a missing edge there is only a hint.
+     */
     private static final String NON_NORMATIVE_FIELD = "acceptanceCriterion";
     private static final int MAX_SEPARATOR_LENGTH = 3;
     private static final String SEPARATORS = " \t()[],:-/–—";
