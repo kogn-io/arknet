@@ -11,6 +11,8 @@ import de.hauschel.arknet.analysis.domain.LanguageGapCheck.Gap;
 import de.hauschel.arknet.analysis.domain.OrphanCheck;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.MentionFinding;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.ResourceFinding;
+import de.hauschel.arknet.analysis.domain.OrphanCheck.WeakMention;
+import de.hauschel.arknet.analysis.domain.TraceabilityGraph;
 import de.hauschel.arknet.analysis.domain.RoleTermDuplicateCheck.Finding;
 import de.hauschel.arknet.analysis.domain.StepAcceptanceCheck.Kind;
 import de.hauschel.arknet.analysis.domain.StepAcceptanceCheck;
@@ -172,14 +174,24 @@ public final class StoreCheckRenderer {
      * in here): four sub-tables, one per finding list, each shown only when it is non-empty - the
      * same discipline {@link #stepAcceptanceSection} follows for its two cases.
      *
-     * @param result the four findings lists, already computed by {@link OrphanCheck#run}
+     * <p>Mentions downgraded to hints (kogn-io/arknet#697) follow in a separate block and a
+     * clause of the summary; they never count as findings, so an otherwise clean result stays
+     * clean and merely states them. The mention table names the field(s) each term was found in.</p>
+     *
+     * @param result the findings lists and hints, already computed by {@link OrphanCheck#run}
      * @return the section text
      */
     public String orphanSection(final OrphanCheck.Result result) {
         Objects.requireNonNull(result, "result");
+        final int hints = result.weakMentions().size();
         if (result.total() == 0) {
-            return "ORPHAN: no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
-                    + "constraints found.\n\n" + ORPHAN_BLIND_SPOT;
+            final StringBuilder clear = new StringBuilder("ORPHAN: no orphaned requirements, unreferenced terms, "
+                    + "unlinked mentions or unattached constraints found.");
+            if (hints > 0) {
+                clear.append(' ').append(hintCount(hints)).append('.');
+                appendWeakBlock(clear, result.weakMentions());
+            }
+            return clear.append("\n\n").append(ORPHAN_BLIND_SPOT).toString();
         }
         final StringBuilder rendered = new StringBuilder("ORPHAN: ")
                 .append(result.orphanRequirements().size())
@@ -192,6 +204,9 @@ public final class StoreCheckRenderer {
                 .append(", ").append(result.orphanConstraints().size())
                 .append(result.orphanConstraints().size() == 1 ? " constraint" : " constraints")
                 .append(" not attached to any requirement or use case.");
+        if (hints > 0) {
+            rendered.append(' ').append(hintCount(hints)).append('.');
+        }
         if (!result.orphanRequirements().isEmpty()) {
             rendered.append("\n\nRequirements no use case satisfies or realises:\n\n");
             appendResourceTable(rendered, result.orphanRequirements());
@@ -208,6 +223,9 @@ public final class StoreCheckRenderer {
             rendered.append("\n\nConstraints not attached to any requirement or use case:\n\n");
             appendResourceTable(rendered, result.orphanConstraints());
         }
+        if (hints > 0) {
+            appendWeakBlock(rendered, result.weakMentions());
+        }
         return rendered.append("\n\n").append(ORPHAN_BLIND_SPOT).toString();
     }
 
@@ -222,12 +240,41 @@ public final class StoreCheckRenderer {
     }
 
     private void appendMentionTable(final StringBuilder out, final List<MentionFinding> mentions) {
-        out.append("| Source | Term | Label | Missing edge |\n| --- | --- | --- | --- |");
+        out.append("| Source | Term | Label | Field(s) | Missing edge |\n| --- | --- | --- | --- | --- |");
         for (final MentionFinding mention : mentions) {
             out.append("\n| ").append(handleOf(mention.sourceIri(), mention.sourceHandle()))
                     .append(" | ").append(handleOf(mention.termIri(), mention.termHandle()))
                     .append(" | ").append(mention.termLabel())
+                    .append(" | ").append(fieldsOf(mention.fields()))
                     .append(" | ").append(mention.edgeLocalName())
+                    .append(" |");
+        }
+    }
+
+    private static String hintCount(final int hints) {
+        return hints + (hints == 1 ? " weaker mention hint" : " weaker mention hints") + " not counted";
+    }
+
+    private static String fieldsOf(final List<String> fields) {
+        return fields.isEmpty() ? "-" : String.join(", ", fields);
+    }
+
+    /**
+     * The hint block (kogn-io/arknet#697): mentions that are listed but neither counted nor
+     * demanding an edge, with the field they sit in and why they were downgraded.
+     */
+    private void appendWeakBlock(final StringBuilder out, final List<WeakMention> weakMentions) {
+        out.append("\n\nMentioned only in acceptance criteria or next to a covering reference "
+                + "(hints, not counted):\n\n")
+                .append("| Source | Term | Label | Field(s) | Why |\n| --- | --- | --- | --- | --- |");
+        for (final WeakMention mention : weakMentions) {
+            out.append("\n| ").append(handleOf(mention.sourceIri(), mention.sourceHandle()))
+                    .append(" | ").append(handleOf(mention.termIri(), mention.termHandle()))
+                    .append(" | ").append(mention.termLabel())
+                    .append(" | ").append(fieldsOf(mention.fields()))
+                    .append(" | ").append(mention.reason() == TraceabilityGraph.WeakReason.COVERED_BY_REFERENCE
+                            ? "covered by " + String.join(", ", mention.coveredBy())
+                            : "only in an acceptance criterion")
                     .append(" |");
         }
     }

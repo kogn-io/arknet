@@ -13,6 +13,8 @@ import de.hauschel.arknet.analysis.domain.LanguageGapCheck.Gap;
 import de.hauschel.arknet.analysis.domain.OrphanCheck;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.MentionFinding;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.ResourceFinding;
+import de.hauschel.arknet.analysis.domain.OrphanCheck.WeakMention;
+import de.hauschel.arknet.analysis.domain.TraceabilityGraph.WeakReason;
 import de.hauschel.arknet.analysis.domain.RoleTermDuplicateCheck.Finding;
 import de.hauschel.arknet.analysis.domain.StepAcceptanceCheck.Kind;
 import de.hauschel.arknet.analysis.domain.StepAcceptanceCheck;
@@ -83,7 +85,7 @@ class StoreCheckRendererTest {
                 .contains(StoreCheckRenderer.ROLE_TERM_BLIND_SPOT);
         assertThat(renderer.stepAcceptanceSection(List.of()))
                 .contains("Checked here: " + StoreCheckKind.STEP_ACCEPTANCE.scope());
-        assertThat(renderer.orphanSection(new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of())))
+        assertThat(renderer.orphanSection(new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of(), List.of())))
                 .contains("Checked here: " + StoreCheckKind.ORPHAN.scope());
     }
 
@@ -171,7 +173,7 @@ class StoreCheckRendererTest {
     @Test
     void saysNoOrphansFoundWhenAllFourListsAreEmpty() {
         String rendered = renderer.orphanSection(
-                new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of()));
+                new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of(), List.of()));
 
         assertThat(rendered)
                 .contains("ORPHAN")
@@ -189,8 +191,9 @@ class StoreCheckRendererTest {
         String rendered = renderer.orphanSection(new OrphanCheck.Result(
                 List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
                 List.of(),
-                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm")),
-                List.of()));
+                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("description", "stepText"))),
+                List.of(), List.of()));
 
         assertThat(rendered)
                 .contains("1 requirement without a satisfying or realising use case")
@@ -201,8 +204,8 @@ class StoreCheckRendererTest {
                 .contains("| Resource | Type | Label |")
                 .contains("| FR-2 | FunctionalRequirement | Logout |")
                 .contains("Mentioned in text but not linked:")
-                .contains("| Source | Term | Label | Missing edge |")
-                .contains("| FR-3 | TERM-9 | Kunde | usesTerm |")
+                .contains("| Source | Term | Label | Field(s) | Missing edge |")
+                .contains("| FR-3 | TERM-9 | Kunde | description, stepText | usesTerm |")
                 .doesNotContain("Terms never referenced:")
                 .doesNotContain("Constraints not attached to any requirement or use case:");
     }
@@ -212,18 +215,56 @@ class StoreCheckRendererTest {
     void fallsBackToTheShortenedIriForAnOrphanWithoutAHandle() {
         String rendered = renderer.orphanSection(new OrphanCheck.Result(
                 List.of(), List.of(new ResourceFinding(ID + "term-9", null, "Concept", null)),
-                List.of(), List.of()));
+                List.of(), List.of(), List.of()));
 
         assertThat(rendered).contains("| " + ID + "term-9 | Concept | - |");
     }
 
     @Test
     void alwaysNamesTheOrphanChecksBlindSpotWhetherItFoundSomethingOrNot() {
-        assertThat(renderer.orphanSection(new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of())))
+        assertThat(renderer.orphanSection(new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of(), List.of())))
                 .contains(StoreCheckRenderer.ORPHAN_BLIND_SPOT);
         assertThat(renderer.orphanSection(new OrphanCheck.Result(
                 List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
-                List.of(), List.of(), List.of())))
+                List.of(), List.of(), List.of(), List.of())))
                 .contains(StoreCheckRenderer.ORPHAN_BLIND_SPOT);
+    }
+
+    /** kogn-io/arknet#697: hints get their own block and table, and the summary does not count them. */
+    @Test
+    void rendersWeakMentionsAsSeparateHintBlockAndKeepsThemOutOfTheCount() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
+                List.of(), List.of(), List.of(),
+                List.of(
+                        new WeakMention(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                                List.of("criterionText"), WeakReason.ONLY_IN_ACCEPTANCE_CRITERION, List.of()),
+                        new WeakMention(ID + "fr-4", "FR-4", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                                List.of("description"), WeakReason.COVERED_BY_REFERENCE, List.of("FR-5")))));
+
+        assertThat(rendered)
+                .contains("0 unlinked mentions")
+                .contains("2 weaker mention hints not counted")
+                .contains("Mentioned only in acceptance criteria or next to a covering reference "
+                        + "(hints, not counted):")
+                .contains("| Source | Term | Label | Field(s) | Why |")
+                .contains("| FR-3 | TERM-9 | Kunde | criterionText | only in an acceptance criterion |")
+                .contains("| FR-4 | TERM-9 | Kunde | description | covered by FR-5 |")
+                .doesNotContain("Mentioned in text but not linked:");
+    }
+
+    /** Hints alone never turn an otherwise clean section into a finding; they are still stated. */
+    @Test
+    void staysAllClearButStatesTheHintsWhenOnlyWeakMentionsExist() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(), List.of(), List.of(),
+                List.of(new WeakMention(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("criterionText"), WeakReason.ONLY_IN_ACCEPTANCE_CRITERION, List.of()))));
+
+        assertThat(rendered)
+                .contains("no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
+                        + "constraints found")
+                .contains("1 weaker mention hint not counted")
+                .contains("| FR-3 | TERM-9 | Kunde | criterionText | only in an acceptance criterion |");
     }
 }

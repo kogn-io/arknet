@@ -285,6 +285,11 @@ class TraceabilityRendererTest {
         assertThat(report).contains("- none");
     }
 
+    /**
+     * Also pins kogn-io/arknet#697: {@code store_check ORPHAN} downgrades a term named only in an
+     * acceptance criterion to a hint, but co-occurrence is a plain text statistic and still counts
+     * the criterion-only term ("Bestellung" here) - the downgrade must not leak into it.
+     */
     @Test
     void termCooccurrenceFindsTermsAcrossDifferentProseFieldsOfTheSameRequirement() {
         TraceabilityGraph graph = TraceabilityGraph.of(StoreSnapshot.of(List.of(
@@ -306,7 +311,8 @@ class TraceabilityRendererTest {
 
         String report = renderer.termCooccurrence(PROJECT, graph);
 
-        assertThat(report).contains("## Term pairs named together in the same text (1)");
+        assertThat(report).as("pair (1) exists only because criterion-only term TERM-B still counts (#697)")
+                .contains("## Term pairs named together in the same text (1)");
         assertThat(report).contains("TERM-A").contains("TERM-B").contains("1 text(s)");
     }
 
