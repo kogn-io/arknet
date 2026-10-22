@@ -55,3 +55,5 @@ details.fold{margin:.6rem 0}details.fold>summary{cursor:pointer;font-weight:600;
 @media print{details::details-content{content-visibility:visible;display:block}details.fold>summary{color:inherit;cursor:auto}#foldAll{display:none!important}body{background:#fff;font-size:11pt}.bar,#toc,#detail,#pop,#helpWrap,.grip,.rail{display:none!important}.layout{display:block;padding:0}main{padding:0}.doc{max-width:none}
 .ptoc{display:block;margin:1rem 0 2rem;font-size:10pt}.ptoc a{display:inline;color:inherit;text-decoration:none;padding:0;border:0}.ptoc ul{padding-left:14px}
 h2{break-before:page}h2.first{break-before:auto}.req,.uc,.role,dt{break-inside:avoid}h2,h3,h4{break-after:avoid}a{color:inherit}a.term{border-bottom:0}}
+ol.criteria{list-style:none;padding-left:.2rem}ol.criteria li{margin:.25rem 0}ol.criteria li.example{color:var(--mute)}a.cid{font-size:.85em;font-weight:600;text-decoration:none;margin-right:.2rem}
+.stepreqs{display:block;font-size:.85em;margin:.05rem 0 .3rem}.stepreqs a{margin-right:.5rem}
