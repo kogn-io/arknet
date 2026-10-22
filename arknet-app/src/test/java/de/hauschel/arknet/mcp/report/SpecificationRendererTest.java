@@ -297,6 +297,13 @@ class SpecificationRendererTest {
     }
 
     @Test
+    void theReadingHelpExplainsTheCollapsedBlocks() {
+        assertThat(render(fixture(), ENGLISH)).contains("<h3>Collapsed blocks</h3>")
+                .contains("&ldquo;Expand all&rdquo;").contains("find function does not search collapsed content");
+        assertThat(render(fixture(), GERMAN)).contains("<h3>Aufklappbare Bl\u00f6cke</h3>");
+    }
+
+    @Test
     void theRuleTextStaysVisibleOutsideTheFoldedBlocks() {
         final String html = render(fixture(), ENGLISH);
 
