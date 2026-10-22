@@ -314,6 +314,9 @@ public final class SpecificationRenderer {
                     .append(esc(SpecificationTexts.MENU_OPEN)).append("\">")
                     .append(text(SpecificationTexts.MENU_BUTTON_HTML)).append("</button><span class=\"hdr\">")
                     .append(escape(title)).append("</span><span class=\"sp\"></span>")
+                    .append("<button id=\"foldAll\" type=\"button\" data-collapse=\"")
+                    .append(esc(SpecificationTexts.COLLAPSE_ALL)).append("\">")
+                    .append(esc(SpecificationTexts.EXPAND_ALL)).append("</button>")
                     .append("<button id=\"helpBtn\" type=\"button\" aria-haspopup=\"dialog\">")
                     .append(esc(SpecificationTexts.HELP_BUTTON)).append("</button></header>\n");
         }
@@ -489,8 +492,9 @@ public final class SpecificationRenderer {
             card.blocks().stream().filter(Block.Flow.class::isInstance).map(Block.Flow.class::cast).findFirst()
                     .ifPresent(this::appendFlow);
             bulletsOf(card, UseCaseCards.EXTENSIONS_LABEL).ifPresent(extensions -> {
-                lead(SpecificationTexts.EXTENSIONS);
+                openFold(SpecificationTexts.EXTENSIONS, Optional.of(extensions.items().size()));
                 appendBulletList(extensions);
+                out.append("</details>\n");
             });
             proseOf(card, CardLabels.POSTCONDITION).ifPresent(prose -> labelled(SpecificationTexts.RESULT, prose));
             appendRealisedBy(card);
@@ -562,12 +566,17 @@ public final class SpecificationRenderer {
             open("req", "h3", card, number);
             appendMeta(card);
             proseOf(card, CardLabels.DESCRIPTION).ifPresent(prose -> appendParts(prose.parts()));
-            proseOf(card, CardLabels.RATIONALE).ifPresent(prose -> labelled(SpecificationTexts.RATIONALE, prose));
+            proseOf(card, CardLabels.RATIONALE).ifPresent(prose -> {
+                openFold(SpecificationTexts.RATIONALE, Optional.empty());
+                appendParts(prose.parts());
+                out.append("</details>\n");
+            });
             proseOf(card, CardLabels.QUALITY_CATEGORY)
                     .ifPresent(prose -> labelled(SpecificationTexts.QUALITY_CATEGORY, prose));
             bulletsOf(card, RequirementCards.ACCEPTANCE_CRITERIA_LABEL).ifPresent(criteria -> {
-                lead(SpecificationTexts.ACCEPTANCE);
+                openFold(SpecificationTexts.ACCEPTANCE, Optional.of(criteria.items().size()));
                 appendBulletList(criteria);
+                out.append("</details>\n");
             });
             final List<String> usedIn = useCasesByRequirement.getOrDefault(card.iri(), List.of()).stream()
                     .map(useCase -> link(useCase, useCase.listText()))
@@ -722,6 +731,12 @@ public final class SpecificationRenderer {
 
         private void lead(final SpecificationTexts label) {
             out.append("<p class=\"lead\"><strong>").append(esc(label)).append("</strong></p>");
+        }
+
+        /** Opens a closed {@code <details>} block; the caller appends the content and the closing tag. */
+        private void openFold(final SpecificationTexts label, final Optional<Integer> count) {
+            out.append("<details class=\"fold\"><summary>").append(esc(label))
+                    .append(count.map(number -> " (" + number + ")").orElse("")).append("</summary>");
         }
 
         /** "Label: text" on one line for a single paragraph, else the label above the parts. */

@@ -51,6 +51,7 @@ body.dragging{user-select:none;cursor:col-resize}
 
 .notice{border:1px solid #c2410c;background:#fff4ec;border-radius:6px;padding:8px 14px;margin:0 0 1.5rem;font:14px/1.45 system-ui,sans-serif}.notice p,.notice ul{margin:.2rem 0}
 @page{size:A4;margin:22mm 20mm}
-@media print{body{background:#fff;font-size:11pt}.bar,#toc,#detail,#pop,#helpWrap,.grip,.rail{display:none!important}.layout{display:block;padding:0}main{padding:0}.doc{max-width:none}
+details.fold{margin:.6rem 0}details.fold>summary{cursor:pointer;font-weight:600;color:var(--acc)}details.fold[open]>summary{margin-bottom:.2rem}#foldAll:disabled{opacity:.4;cursor:default}
+@media print{details::details-content{content-visibility:visible;display:block}details.fold>summary{color:inherit;cursor:auto}#foldAll{display:none!important}body{background:#fff;font-size:11pt}.bar,#toc,#detail,#pop,#helpWrap,.grip,.rail{display:none!important}.layout{display:block;padding:0}main{padding:0}.doc{max-width:none}
 .ptoc{display:block;margin:1rem 0 2rem;font-size:10pt}.ptoc a{display:inline;color:inherit;text-decoration:none;padding:0;border:0}.ptoc ul{padding-left:14px}
 h2{break-before:page}h2.first{break-before:auto}.req,.uc,.role,dt{break-inside:avoid}h2,h3,h4{break-after:avoid}a{color:inherit}a.term{border-bottom:0}}

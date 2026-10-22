@@ -18,6 +18,8 @@ enum SpecificationTexts {
     MENU_BUTTON_HTML("&#9776; Inhalt", "&#9776; Contents"),
     MENU_OPEN("Inhaltsverzeichnis \u00f6ffnen", "Open table of contents"),
     HELP_BUTTON("? Hilfe", "? Help"),
+    EXPAND_ALL("Alles \u00f6ffnen", "Expand all"),
+    COLLAPSE_ALL("Alles schlie\u00dfen", "Collapse all"),
     TOC_TITLE("Inhalt", "Contents"),
     TOC_LABEL("Inhaltsverzeichnis", "Table of contents"),
     TOC_COLLAPSE("Inhaltsverzeichnis einklappen", "Collapse table of contents"),

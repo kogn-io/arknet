@@ -63,11 +63,14 @@ class SpecificationRendererTest {
                 new Block.Flow(CardLabels.MAIN_FLOW, List.of(
                         new FlowStep(1, RichText.plain("Scan the card."),
                                 List.of(Ref.of("FR-1", IRI_PREFIX + "FR-1"))),
-                        new FlowStep(2, RichText.plain("Hand out the book."), List.of()))));
+                        new FlowStep(2, RichText.plain("Hand out the book."), List.of()))),
+                new Block.Bullets(UseCaseCards.EXTENSIONS_LABEL, List.of(
+                        new BulletItem(1, RichText.plain("The card is expired.")))));
         final ModelCard record = card("FR-1", "Record loans",
                 List.of(type("FR"), new Badge(Badge.Kind.Known.STATUS, "Proposed"),
                         new Badge(Badge.Kind.Known.PRIORITY, "Must have")),
                 Block.Prose.plain(CardLabels.DESCRIPTION, "Every loan [assumption: one per copy] is stored."),
+                Block.Prose.plain(CardLabels.RATIONALE, "Overdue loans must be traceable."),
                 new Block.Bullets(RequirementCards.ACCEPTANCE_CRITERIA_LABEL, List.of(
                         new BulletItem(1, RichText.plain("A loan has a due date.")),
                         new BulletItem(2, RichText.plain("A loan names the member.")))));
@@ -277,6 +280,37 @@ class SpecificationRendererTest {
 
         assertThat(html).contains("<li>A loan has a due date.</li><li>A loan names the member.</li>")
                 .contains("<ol><li>Scan the card.</li><li>Hand out the book.</li></ol>");
+    }
+
+    @Test
+    void rationaleCriteriaAndDeviationsAreCollapsedBlocksWithTheirCount() {
+        final String html = render(fixture(), ENGLISH);
+
+        assertThat(html)
+                .contains("<details class=\"fold\"><summary>Rationale</summary>")
+                .contains("<details class=\"fold\"><summary>Acceptance criteria (2)</summary>")
+                .contains("<details class=\"fold\"><summary>Deviations (1)</summary>")
+                .doesNotContain("<details open");
+        assertThat(count(html, "<details class=\"fold\">")).isEqualTo(3);
+        assertThat(html).contains("<details class=\"fold\"><summary>Rationale</summary>"
+                + "<p>Overdue loans must be traceable.</p>\n</details>");
+    }
+
+    @Test
+    void theRuleTextStaysVisibleOutsideTheFoldedBlocks() {
+        final String html = render(fixture(), ENGLISH);
+
+        assertThat(html.indexOf("Every loan [assumption")).isLessThan(html.indexOf("<summary>Rationale"));
+        assertThat(html).doesNotContain("<summary>Every loan");
+    }
+
+    @Test
+    void anchorJumpOpensFoldedBlocksAndPrintOpensAllOfThem() {
+        final String html = render(fixture(), ENGLISH);
+
+        assertThat(html).contains("closest('details')").contains("beforeprint").contains("afterprint")
+                .contains("hashchange").contains("id=\"foldAll\"").contains("Expand all");
+        assertThat(html).contains("details::details-content");
     }
 
     @Test
