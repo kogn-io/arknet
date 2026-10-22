@@ -161,6 +161,9 @@ Funktionale und Qualitaetsanforderungen trennt das TYPE-Badge (`NFR` -> Kapitel 
 Glossarerwaehnungen und Code-Verweise stammen aus den `Span`s, die die Builder bereits ausgezeichnet haben; ein Verweis auf ein Ziel, das im Dokument fehlt (etwa ein ADR), bleibt Klartext statt eines toten Links.
 Feste Texte (Ueberschriften, Lesehinweis, Hilfe) stehen zweisprachig in `SpecificationTexts` und folgen der Sprache der effektiven `DisplayLocale` (`de`, sonst Englisch); der Inhalt erscheint nur in dieser einen Sprache.
 CSS und Skript liegen als Klassenpfad-Ressourcen unter `report/specification.css` und `report/specification.js` und werden inline in die Seite gesetzt; das Skript kennt keinen Projektinhalt und liest Pop-up-Titel, Begriffsdefinitionen und Detailbereich aus den `data-*`-Attributen und Elementen, die der Renderer ausgibt.
+Begruendung, Abnahmekriterien und Use-Case-Abweichungen stehen in geschlossenen `<details class="fold">`-Bloecken (Zusammenfassung mit Anzahl), der Regeltext bleibt sichtbar.
+Das Skript oeffnet einen Block, wenn ein Anker-Sprung oder `location.hash` auf Inhalt darin zeigt, bietet "Alles oeffnen/schliessen" und klappt vor dem Druck alles auf (`beforeprint`, zusaetzlich `::details-content` im Druck-CSS).
+Die Browser-Suche oeffnet einen Block beim Fund selbst, wo der Browser das kann.
 Ohne Skript bleibt die Seite ein lineares Dokument mit funktionierenden Anker-Links.
 
 Die kompakte Kartenansicht zeigte bis issue #270 (Teil 2 von #248) nur die zum Report-Zeitpunkt per `DisplayLocale` aufgeloeste Sprache eines mehrsprachigen Feldes, obwohl jede Sprachvariante schon in der Rohtripel-Ansicht der eigenen Karte lag.
