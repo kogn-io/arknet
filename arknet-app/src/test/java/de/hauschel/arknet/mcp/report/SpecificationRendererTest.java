@@ -74,7 +74,10 @@ class SpecificationRendererTest {
                 new Block.Bullets(RequirementCards.ACCEPTANCE_CRITERIA_LABEL, List.of(
                         new BulletItem(1, RichText.plain("A loan has a due date.")),
                         new BulletItem(2, RichText.plain("A loan names the member.")),
-                        new BulletItem(3, RichText.plain("Example: a loan of 14 days ends on day 14.")))));
+                        new BulletItem(3, RichText.plain("Example: a loan of 14 days ends on day 14.")),
+                        new BulletItem(4, new RichText("", List.of(
+                                new Span.Emphasis(Span.Style.STRONG, RichText.plain("example:")),
+                                new Span.Plain(" a late return.")))))));
         final ModelCard longTitle = card("FR-2", "A requirement whose title is far longer than forty characters",
                 List.of(type("FR"), new Badge(Badge.Kind.Known.PRIORITY, "Could have")));
         final ModelCard speed = card("NFR-1", "Fast lookups",
@@ -296,12 +299,13 @@ class SpecificationRendererTest {
     void exampleCriteriaAreGroupedApartAndKeepTheirNumber() {
         final String html = render(fixture(), ENGLISH);
 
-        final int examples = html.indexOf("<summary>Examples (1)</summary>");
+        final int examples = html.indexOf("<summary>Examples (2)</summary>");
         assertThat(examples).isPositive();
         assertThat(html.indexOf("id=\"a-fr-1-c3\"")).isGreaterThan(examples);
         assertThat(html.indexOf("id=\"a-fr-1-c2\"")).isLessThan(examples);
         assertThat(html).contains("<li id=\"a-fr-1-c3\" class=\"example\"><a class=\"cid\" href=\"#a-fr-1-c3\">")
-                .contains("FR-1.3</a> Example: a loan");
+                .contains("FR-1.3</a> Example: a loan")
+                .contains("<li id=\"a-fr-1-c4\" class=\"example\">");
     }
 
     @Test
@@ -353,7 +357,7 @@ class SpecificationRendererTest {
 
         assertThat(html)
                 .contains("<details class=\"fold\" id=\"a-fr-1-rationale\"><summary>Rationale</summary>")
-                .contains("<summary>Acceptance criteria (3)</summary>")
+                .contains("<summary>Acceptance criteria (2)</summary>")
                 .contains("<summary>Deviations (1)</summary>")
                 .doesNotContain("<details open");
         assertThat(count(html, "<details class=\"fold\"")).isEqualTo(4);

@@ -598,7 +598,8 @@ public final class SpecificationRenderer {
                     .ifPresent(prose -> labelled(SpecificationTexts.QUALITY_CATEGORY, prose));
             bulletsOf(card, RequirementCards.ACCEPTANCE_CRITERIA_LABEL).ifPresent(criteria -> {
                 final String anchor = target(card).anchor();
-                openFold(SpecificationTexts.ACCEPTANCE, Optional.of(criteria.items().size()), anchor + "-criteria");
+                final long rules = criteria.items().stream().filter(item -> !isExample(item)).count();
+                openFold(SpecificationTexts.ACCEPTANCE, Optional.of((int) rules), anchor + "-criteria");
                 appendCriteria(criteria, anchor, card.code());
                 out.append("</details>\n");
             });
@@ -833,10 +834,17 @@ public final class SpecificationRenderer {
         }
 
         private static boolean isExample(final BulletItem item) {
-            return item.text().spans().stream().findFirst()
-                    .filter(Span.Plain.class::isInstance).map(span -> ((Span.Plain) span).text().stripLeading())
-                    .map(text -> startsWithIgnoreCase(text, "Beispiel:") || startsWithIgnoreCase(text, "Example:"))
-                    .orElse(false);
+            final String lead = leadingText(item.text()).stripLeading();
+            return startsWithIgnoreCase(lead, "Beispiel:") || startsWithIgnoreCase(lead, "Example:");
+        }
+
+        /** The text the first span starts with, looking into emphasis so that a bold marker counts. */
+        private static String leadingText(final RichText richText) {
+            return richText.spans().stream().findFirst().map(span -> switch (span) {
+                case Span.Plain plain -> plain.text();
+                case Span.Emphasis emphasis -> leadingText(emphasis.content());
+                default -> "";
+            }).orElse("");
         }
 
         private static boolean startsWithIgnoreCase(final String text, final String prefix) {
