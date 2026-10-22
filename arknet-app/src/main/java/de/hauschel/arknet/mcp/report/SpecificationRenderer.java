@@ -170,6 +170,8 @@ public final class SpecificationRenderer {
         private final Map<String, List<Target>> useCasesByRequirement = new HashMap<>();
         private final Map<String, List<RoleParticipation>> useCasesByRole = new HashMap<>();
         private final StringBuilder out = new StringBuilder(64 * 1024);
+        /** Glossary terms already linked in the current card or chapter; later mentions read as plain text. */
+        private final Set<String> linkedTerms = new HashSet<>();
 
         Page(final boolean german, final Optional<String> label, final Optional<String> description,
                 final ModelViews.Views views) {
@@ -406,6 +408,7 @@ public final class SpecificationRenderer {
 
         private void heading(final String anchor, final String number, final SpecificationTexts title,
                 final boolean first) {
+            linkedTerms.clear();
             out.append("<h2 id=\"").append(anchor).append('"').append(first ? " class=\"first\"" : "")
                     .append("><span class=\"num\">").append(number).append("</span> ").append(esc(title))
                     .append("</h2>\n");
@@ -492,7 +495,8 @@ public final class SpecificationRenderer {
             card.blocks().stream().filter(Block.Flow.class::isInstance).map(Block.Flow.class::cast).findFirst()
                     .ifPresent(this::appendFlow);
             bulletsOf(card, UseCaseCards.EXTENSIONS_LABEL).ifPresent(extensions -> {
-                openFold(SpecificationTexts.EXTENSIONS, Optional.of(extensions.items().size()));
+                openFold(SpecificationTexts.EXTENSIONS, Optional.of(extensions.items().size()),
+                        target(card).anchor() + "-extensions");
                 appendBulletList(extensions);
                 out.append("</details>\n");
             });
@@ -533,8 +537,27 @@ public final class SpecificationRenderer {
             lead(SpecificationTexts.FLOW);
             out.append("<ol>");
             flow.steps().stream().sorted(Comparator.comparingInt(FlowStep::position))
-                    .forEach(step -> out.append("<li>").append(inline(step.text())).append("</li>"));
+                    .forEach(step -> {
+                        out.append("<li>").append(inline(step.text()));
+                        appendStepRequirements(step);
+                        out.append("</li>");
+                    });
             out.append("</ol>\n");
+        }
+
+        /** The requirements a step realises, as small linked codes under the step; nothing for a step without edge. */
+        private void appendStepRequirements(final FlowStep step) {
+            final List<String> markers = new ArrayList<>();
+            for (final Ref ref : step.realises()) {
+                final Target target = targets.get(ref.iri());
+                if (target != null) {
+                    markers.add("<a class=\"ref\" href=\"#" + target.anchor() + "\" data-ref=\"" + target.anchor()
+                            + "\" title=\"" + escape(target.title()) + "\">" + escape(target.code()) + "</a>");
+                }
+            }
+            if (!markers.isEmpty()) {
+                out.append("<span class=\"stepreqs\">").append(String.join(", ", markers)).append("</span>");
+            }
         }
 
         private void appendRealisedBy(final ModelCard card) {
@@ -567,15 +590,16 @@ public final class SpecificationRenderer {
             appendMeta(card);
             proseOf(card, CardLabels.DESCRIPTION).ifPresent(prose -> appendParts(prose.parts()));
             proseOf(card, CardLabels.RATIONALE).ifPresent(prose -> {
-                openFold(SpecificationTexts.RATIONALE, Optional.empty());
+                openFold(SpecificationTexts.RATIONALE, Optional.empty(), target(card).anchor() + "-rationale");
                 appendParts(prose.parts());
                 out.append("</details>\n");
             });
             proseOf(card, CardLabels.QUALITY_CATEGORY)
                     .ifPresent(prose -> labelled(SpecificationTexts.QUALITY_CATEGORY, prose));
             bulletsOf(card, RequirementCards.ACCEPTANCE_CRITERIA_LABEL).ifPresent(criteria -> {
-                openFold(SpecificationTexts.ACCEPTANCE, Optional.of(criteria.items().size()));
-                appendBulletList(criteria);
+                final String anchor = target(card).anchor();
+                openFold(SpecificationTexts.ACCEPTANCE, Optional.of(criteria.items().size()), anchor + "-criteria");
+                appendCriteria(criteria, anchor, card.code());
                 out.append("</details>\n");
             });
             final List<String> usedIn = useCasesByRequirement.getOrDefault(card.iri(), List.of()).stream()
@@ -642,6 +666,7 @@ public final class SpecificationRenderer {
             for (final ModelCard card : terms) {
                 final Target target = target(card);
                 final Optional<Block.Prose> definition = proseOf(card, CardLabels.DEFINITION);
+                linkedTerms.clear();
                 out.append("<dt id=\"").append(target.anchor()).append("\" data-kind=\"")
                         .append(esc(SpecificationTexts.KIND_TERM)).append("\" data-title=\"")
                         .append(escape(card.title())).append("\" data-def=\"")
@@ -703,6 +728,7 @@ public final class SpecificationRenderer {
         /** Opens a card's element: anchor, the data the script builds pop-ups and the detail pane from, heading. */
         private void open(final String cssClass, final String headingTag, final ModelCard card, final String number) {
             final Target target = target(card);
+            linkedTerms.clear();
             out.append("<section class=\"").append(cssClass).append("\" id=\"").append(target.anchor())
                     .append("\" data-kind=\"").append(esc(target.kind().label))
                     .append("\" data-code=\"").append(target.kind().showsCode ? escape(card.code()) : "")
@@ -734,8 +760,8 @@ public final class SpecificationRenderer {
         }
 
         /** Opens a closed {@code <details>} block; the caller appends the content and the closing tag. */
-        private void openFold(final SpecificationTexts label, final Optional<Integer> count) {
-            out.append("<details class=\"fold\"><summary>").append(esc(label))
+        private void openFold(final SpecificationTexts label, final Optional<Integer> count, final String id) {
+            out.append("<details class=\"fold\" id=\"").append(id).append("\"><summary>").append(esc(label))
                     .append(count.map(number -> " (" + number + ")").orElse("")).append("</summary>");
         }
 
@@ -769,6 +795,52 @@ public final class SpecificationRenderer {
             bullets.items().stream().sorted(Comparator.comparingInt(BulletItem::position))
                     .forEach(item -> out.append("<li>").append(inline(item.text())).append("</li>"));
             out.append("</ul>\n");
+        }
+
+        /**
+         * Acceptance criteria as a numbered list: the number is "CODE.position", the position being the
+         * stored one, so it stays the same between runs on an unchanged store. A criterion whose text starts
+         * with "Beispiel:" or "Example:" is an example and goes into its own closed group.
+         */
+        private void appendCriteria(final Block.Bullets criteria, final String anchor, final String code) {
+            final List<BulletItem> sorted = criteria.items().stream()
+                    .sorted(Comparator.comparingInt(BulletItem::position)).toList();
+            final List<BulletItem> rules = sorted.stream().filter(item -> !isExample(item)).toList();
+            final List<BulletItem> examples = sorted.stream().filter(Page::isExample).toList();
+            appendCriteriaList(rules, anchor, code, false);
+            if (!examples.isEmpty()) {
+                openFold(SpecificationTexts.EXAMPLES, Optional.of(examples.size()), anchor + "-examples");
+                appendCriteriaList(examples, anchor, code, true);
+                out.append("</details>");
+            }
+        }
+
+        private void appendCriteriaList(final List<BulletItem> items, final String anchor, final String code,
+                final boolean example) {
+            if (items.isEmpty()) {
+                return;
+            }
+            out.append("<ol class=\"criteria\">");
+            for (final BulletItem item : items) {
+                final String id = anchor + "-c" + item.position();
+                final String number = (code.isBlank() ? "" : code + ".") + item.position();
+                out.append("<li id=\"").append(id).append('"').append(example ? " class=\"example\"" : "")
+                        .append("><a class=\"cid\" href=\"#")
+                        .append(id).append("\">").append(escape(number)).append("</a> ")
+                        .append(inline(item.text())).append("</li>");
+            }
+            out.append("</ol>\n");
+        }
+
+        private static boolean isExample(final BulletItem item) {
+            return item.text().spans().stream().findFirst()
+                    .filter(Span.Plain.class::isInstance).map(span -> ((Span.Plain) span).text().stripLeading())
+                    .map(text -> startsWithIgnoreCase(text, "Beispiel:") || startsWithIgnoreCase(text, "Example:"))
+                    .orElse(false);
+        }
+
+        private static boolean startsWithIgnoreCase(final String text, final String prefix) {
+            return text.regionMatches(true, 0, prefix, 0, prefix.length());
         }
 
         private void appendReferenceList(final SpecificationTexts label, final List<String> items) {
@@ -830,11 +902,12 @@ public final class SpecificationRenderer {
         /**
          * A glossary mention, linked when the glossary chapter holds the term. An edge-less mention
          * ({@link Span.TermGap}) reads like a linked one here: a missing modelling edge is a
-         * finding for the developer report, not for this document's reader.
+         * finding for the developer report, not for this document's reader. Only the first mention of
+         * a term within a card (or chapter) is a link; later ones read as plain text.
          */
         private String termMention(final String text, final String iri) {
             final Target target = targets.get(iri);
-            if (target == null || target.kind() != Kind.TERM) {
+            if (target == null || target.kind() != Kind.TERM || !linkedTerms.add(iri)) {
                 return escape(text);
             }
             return "<a class=\"term\" href=\"#" + target.anchor() + "\" data-ref=\"" + target.anchor() + "\">"

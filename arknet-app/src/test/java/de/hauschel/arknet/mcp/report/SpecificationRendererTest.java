@@ -73,7 +73,8 @@ class SpecificationRendererTest {
                 Block.Prose.plain(CardLabels.RATIONALE, "Overdue loans must be traceable."),
                 new Block.Bullets(RequirementCards.ACCEPTANCE_CRITERIA_LABEL, List.of(
                         new BulletItem(1, RichText.plain("A loan has a due date.")),
-                        new BulletItem(2, RichText.plain("A loan names the member.")))));
+                        new BulletItem(2, RichText.plain("A loan names the member.")),
+                        new BulletItem(3, RichText.plain("Example: a loan of 14 days ends on day 14.")))));
         final ModelCard longTitle = card("FR-2", "A requirement whose title is far longer than forty characters",
                 List.of(type("FR"), new Badge(Badge.Kind.Known.PRIORITY, "Could have")));
         final ModelCard speed = card("NFR-1", "Fast lookups",
@@ -278,8 +279,72 @@ class SpecificationRendererTest {
     void acceptanceCriteriaAndFlowStepsRenderAsLists() {
         final String html = render(fixture(), ENGLISH);
 
-        assertThat(html).contains("<li>A loan has a due date.</li><li>A loan names the member.</li>")
-                .contains("<ol><li>Scan the card.</li><li>Hand out the book.</li></ol>");
+        assertThat(html).contains("A loan has a due date.</li>")
+                .contains("<li>Hand out the book.</li></ol>");
+    }
+
+    @Test
+    void acceptanceCriteriaAreNumberedByPositionAndEachCarriesAnAnchor() {
+        final String html = render(fixture(), ENGLISH);
+
+        assertThat(html)
+                .contains("<li id=\"a-fr-1-c1\"><a class=\"cid\" href=\"#a-fr-1-c1\">FR-1.1</a> A loan has a due date.</li>")
+                .contains("<li id=\"a-fr-1-c2\"><a class=\"cid\" href=\"#a-fr-1-c2\">FR-1.2</a> A loan names the member.</li>");
+    }
+
+    @Test
+    void exampleCriteriaAreGroupedApartAndKeepTheirNumber() {
+        final String html = render(fixture(), ENGLISH);
+
+        final int examples = html.indexOf("<summary>Examples (1)</summary>");
+        assertThat(examples).isPositive();
+        assertThat(html.indexOf("id=\"a-fr-1-c3\"")).isGreaterThan(examples);
+        assertThat(html.indexOf("id=\"a-fr-1-c2\"")).isLessThan(examples);
+        assertThat(html).contains("<li id=\"a-fr-1-c3\" class=\"example\"><a class=\"cid\" href=\"#a-fr-1-c3\">")
+                .contains("FR-1.3</a> Example: a loan");
+    }
+
+    @Test
+    void criterionAnchorsAndTheFoldAreInsideTheirDetailsBlockSoAnAnchorJumpOpensIt() {
+        final String html = render(fixture(), ENGLISH);
+
+        final int fold = html.indexOf("<details class=\"fold\" id=\"a-fr-1-criteria\">");
+        final int end = html.indexOf("</details>\n", html.indexOf("id=\"a-fr-1-c3\""));
+        assertThat(fold).isPositive();
+        assertThat(html.indexOf("id=\"a-fr-1-c1\"")).isBetween(fold, end);
+        assertThat(html.indexOf("id=\"a-fr-1-c3\"")).isBetween(fold, end);
+        assertThat(html).contains("id=\"a-fr-1-rationale\"");
+    }
+
+    @Test
+    void aGlossaryTermIsLinkedOnlyAtItsFirstMentionWithinACard() {
+        final RichText twice = new RichText(List.of(
+                new Span.TermLink("loan", IRI_PREFIX + "TERM-1", "TERM-1"), new Span.Plain(" and a "),
+                new Span.TermGap("loan", IRI_PREFIX + "TERM-1", "TERM-1")));
+        final ModelCard first = card("FR-7", "First", List.of(type("FR")), new Block.Prose(CardLabels.DESCRIPTION, "d",
+                List.of(new ProsePart.Paragraph(twice), new ProsePart.Paragraph(twice))));
+        final ModelCard second = card("FR-8", "Second", List.of(type("FR")), new Block.Prose(CardLabels.DESCRIPTION,
+                "d", List.of(new ProsePart.Paragraph(twice))));
+        final ModelCard term = card("TERM-1", "Loan", List.of(),
+                Block.Prose.plain(CardLabels.DEFINITION, "A medium kept."));
+        final String html = render(new ModelViews.Views(List.of(section(RequirementCards.SECTION_TITLE, first, second),
+                section(TermCards.SECTION_TITLE, term)), List.of()), ENGLISH);
+
+        final String card1 = html.substring(html.indexOf("id=\"a-fr-7\""), html.indexOf("id=\"a-fr-8\""));
+        final String card2 = html.substring(html.indexOf("id=\"a-fr-8\""));
+        assertThat(count(card1, "<a class=\"term\"")).isEqualTo(1);
+        assertThat(card1).contains("</a> and a loan</p>");
+        assertThat(count(card2.substring(0, card2.indexOf("</section>")), "<a class=\"term\"")).isEqualTo(1);
+    }
+
+    @Test
+    void aFlowStepShowsTheRequirementsItRealisesDirectlyUnderItsText() {
+        final String html = render(fixture(), ENGLISH);
+
+        assertThat(html).contains("<li>Scan the card.<span class=\"stepreqs\"><a class=\"ref\" href=\"#a-fr-1\" "
+                + "data-ref=\"a-fr-1\" title=\"Record loans\">FR-1</a></span></li>")
+                .contains("<li>Hand out the book.</li></ol>");
+        assertThat(html).contains("Realised by requirements");
     }
 
     @Test
@@ -287,12 +352,12 @@ class SpecificationRendererTest {
         final String html = render(fixture(), ENGLISH);
 
         assertThat(html)
-                .contains("<details class=\"fold\"><summary>Rationale</summary>")
-                .contains("<details class=\"fold\"><summary>Acceptance criteria (2)</summary>")
-                .contains("<details class=\"fold\"><summary>Deviations (1)</summary>")
+                .contains("<details class=\"fold\" id=\"a-fr-1-rationale\"><summary>Rationale</summary>")
+                .contains("<summary>Acceptance criteria (3)</summary>")
+                .contains("<summary>Deviations (1)</summary>")
                 .doesNotContain("<details open");
-        assertThat(count(html, "<details class=\"fold\">")).isEqualTo(3);
-        assertThat(html).contains("<details class=\"fold\"><summary>Rationale</summary>"
+        assertThat(count(html, "<details class=\"fold\"")).isEqualTo(4);
+        assertThat(html).contains("<details class=\"fold\" id=\"a-fr-1-rationale\"><summary>Rationale</summary>"
                 + "<p>Overdue loans must be traceable.</p>\n</details>");
     }
 
