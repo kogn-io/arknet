@@ -60,20 +60,22 @@ public enum StoreCheckKind {
      * naming a term without the matching edge, and a constraint no requirement or use case is
      * bound by. See {@link OrphanCheck}.
      */
-    ORPHAN("the presence of edges: requirements no use case satisfies (oslc_rm:satisfies) or realises (arkreq:stepRealises), terms never referenced, text naming a "
+    ORPHAN("the presence of edges: requirements no use case satisfies (oslc_rm:satisfies) or realises "
+            + "(arkreq:stepRealises), terms never referenced, text naming a "
             + "term without the matching edge (each finding names its field), constraints bound by nothing; "
             + "a pair mentioned only in an acceptance criterion, or only directly next to the business "
             + "code of another resource that already links the term, is listed separately as a hint "
             + "and not counted.",
-            "the text-mention match (\"Mentioned in text but not linked\") is literal and whole-word (a hyphen counts as part of the word, and a label starting with a "
-                    + "capital letter only matches capitalised), "
+            "the text-mention match (\"Mentioned in text but not linked\") is literal and whole-word (a hyphen "
+                    + "counts as part of the word, and a label starting with a capital letter only matches "
+                    + "capitalised, which cannot tell a sentence, list-item or title start from a mention), "
                     + "not stem-based, so it also flags everyday words used in their ordinary sense (e.g. "
                     + "\"Rolle\", \"Begriff\", \"Projekt\") - a hit there is a reading hint for a human, "
                     + "not a finding that demands an edge; whether an existing edge is the right one; and the "
                     + "reference rule only sees a code at most three blanks, brackets, commas, colons, dashes, tabs or "
                     + "slashes away from the mention (\"Term (FR-7)\"), not one with words, a sentence end or a "
-                    + "line break in between (\"per FR-7 the term\"), and treats every mention outside an acceptance criterion "
-                    + "as normative text.");
+                    + "line break in between (\"per FR-7 the term\"), and treats every mention outside an "
+                    + "acceptance criterion as normative text.");
 
     private final String scope;
     private final String notSeen;

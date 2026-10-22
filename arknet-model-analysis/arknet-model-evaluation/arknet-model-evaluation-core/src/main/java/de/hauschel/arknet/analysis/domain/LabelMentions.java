@@ -26,13 +26,14 @@ import java.util.regex.Pattern;
  *
  * <p><strong>Matching is deliberately literal.</strong> Comparison is case-insensitive, except
  * that a label starting with an upper-case letter matches only with that letter capitalised
- * ({@code Soll} is not a mention of the modal verb {@code soll}), and only at word boundaries;
- * {@link Pattern#UNICODE_CHARACTER_CLASS} is what makes a word boundary treat an umlaut as a word
- * character, and a hyphen counts as a word character too, so a hyphenated compound ({@code
- * Kontoauszug-Import}) is not a mention of its first part. German inflections ({@code Kunden} for {@code Kunde}) are
- * therefore missed - the alternative, matching on word stems, would silently claim {@code
- * Kundendienst} mentions {@code Kunde}, and a wrong link in an architecture model costs more than
- * a missed one.</p>
+ * ({@code Soll} is not a mention of the modal verb {@code soll}), and only at word boundaries.
+ * The boundary is an explicit character class - letters, combining marks, digits, {@code _} and
+ * {@code -} - so an umlaut is a word character, and a hyphen counts as one too: a hyphenated
+ * compound ({@code Kontoauszug-Import}) is not a mention of its first part.
+ * {@link Pattern#UNICODE_CASE} keeps the case-insensitive part umlaut-proof. German inflections
+ * ({@code Kunden} for {@code Kunde}) are therefore missed - the alternative, matching on word
+ * stems, would silently claim {@code Kundendienst} mentions {@code Kunde}, and a wrong link in
+ * an architecture model costs more than a missed one.</p>
  *
  * <p>Selection is left-to-right greedy over each match's <em>start</em> position, not its
  * length: of two mentions that begin at the same character, the longer one wins (entries are
@@ -48,9 +49,9 @@ import java.util.regex.Pattern;
  */
 public final class LabelMentions<T> {
 
-    private static final char HYPHEN = '-';
-    private static final String NOT_AFTER_WORD_CHAR = "(?<![\\p{L}\\p{N}_-])";
-    private static final String NOT_BEFORE_WORD_CHAR = "(?![\\p{L}\\p{N}_-])";
+    private static final int HYPHEN = '-';
+    private static final String NOT_AFTER_WORD_CHAR = "(?<![\\p{L}\\p{M}\\p{N}_-])";
+    private static final String NOT_BEFORE_WORD_CHAR = "(?![\\p{L}\\p{M}\\p{N}_-])";
 
     private final List<Entry<T>> entries;
 
@@ -135,10 +136,10 @@ public final class LabelMentions<T> {
      * match the modal verb {@code soll}.</p>
      */
     private static Pattern pattern(final String label) {
-        final String prefix = isWordChar(label.charAt(0)) ? NOT_AFTER_WORD_CHAR : "";
-        final String suffix = isWordChar(label.charAt(label.length() - 1)) ? NOT_BEFORE_WORD_CHAR : "";
+        final String prefix = isWordChar(label.codePointAt(0)) ? NOT_AFTER_WORD_CHAR : "";
+        final String suffix = isWordChar(label.codePointBefore(label.length())) ? NOT_BEFORE_WORD_CHAR : "";
         return Pattern.compile(prefix + body(label) + suffix,
-                Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS);
+                Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     }
 
     private static String body(final String label) {
@@ -151,8 +152,14 @@ public final class LabelMentions<T> {
                 + Pattern.quote(label.substring(initialLength));
     }
 
-    private static boolean isWordChar(final char c) {
-        return Character.isLetterOrDigit(c) || c == '_' || c == HYPHEN;
+    private static boolean isWordChar(final int codePoint) {
+        return Character.isLetterOrDigit(codePoint) || isMark(codePoint) || codePoint == '_' || codePoint == HYPHEN;
+    }
+
+    private static boolean isMark(final int codePoint) {
+        final int type = Character.getType(codePoint);
+        return type == Character.NON_SPACING_MARK || type == Character.COMBINING_SPACING_MARK
+                || type == Character.ENCLOSING_MARK;
     }
 
     /** One item plus the compiled matcher for its label - compiled once, not per text. */

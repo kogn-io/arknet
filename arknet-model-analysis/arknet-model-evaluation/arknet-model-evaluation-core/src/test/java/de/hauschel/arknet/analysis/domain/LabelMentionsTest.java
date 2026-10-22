@@ -70,6 +70,13 @@ class LabelMentionsTest {
     }
 
     @Test
+    void aCombiningMarkIsAWordCharacter() {
+        final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "Konto");
+
+        assertThat(matcher.in("Konto\u0308r")).isEmpty();
+    }
+
+    @Test
     void aHyphenatedLabelMatchesItself() {
         final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "Kontoauszug-Import");
 

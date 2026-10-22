@@ -337,6 +337,22 @@ class OrphanCheckTest {
     }
 
     @Test
+    void aHyphenatedCodeDoesNotExemptTheMention() {
+        assertMentionStaysAFinding("Kunde (FR-7-Nachfolger)");
+    }
+
+    @Test
+    void aHyphenGluedToTheTermIsNoMentionAtAll() {
+        final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
+        base.addAll(referencedRequirement(true));
+
+        final OrphanCheck.Result result = run(base, citingRequirement("Kunde-FR-7"));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.mentionHints()).isEmpty();
+    }
+
+    @Test
     void aReferenceAcrossALineBreakAloneDoesNotExemptTheMention() {
         for (final String description : List.of("Kunde\nFR-7", "FR-7\nKunde", "Kunde\n\nFR-7")) {
             assertMentionStaysAFinding(description);
