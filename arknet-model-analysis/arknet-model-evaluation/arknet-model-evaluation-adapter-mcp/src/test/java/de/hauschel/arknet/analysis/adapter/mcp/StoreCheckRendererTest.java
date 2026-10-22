@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.analysis.domain.LanguageGapCheck.Gap;
 import de.hauschel.arknet.analysis.domain.OrphanCheck;
+import de.hauschel.arknet.analysis.domain.MentionExemption;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.MentionFinding;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.ResourceFinding;
 import de.hauschel.arknet.analysis.domain.RoleTermDuplicateCheck.Finding;
@@ -190,7 +191,7 @@ class StoreCheckRendererTest {
                 List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
                 List.of(),
                 List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
-                        List.of("description", "acceptanceCriterion"), null)),
+                        List.of("description", "acceptanceCriterion"), List.of())),
                 List.of()));
 
         assertThat(rendered)
@@ -233,14 +234,15 @@ class StoreCheckRendererTest {
         String rendered = renderer.orphanSection(new OrphanCheck.Result(
                 List.of(), List.of(), List.of(), List.of(),
                 List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
-                        List.of("acceptanceCriterion"), "only in acceptanceCriterion"))));
+                        List.of("acceptanceCriterion"),
+                        List.of(new MentionExemption.NonNormativeField("acceptanceCriterion"))))));
 
         assertThat(rendered)
                 .contains("no orphaned requirements, unreferenced terms, unlinked mentions or unattached")
                 .contains("1 mention hint (not counted)")
                 .contains("Mentioned only in an acceptance criterion or next to a reference (hint, not counted):")
-                .contains("| Source | Term | Label | Where |")
-                .contains("| FR-3 | TERM-9 | Kunde | only in acceptanceCriterion |")
+                .contains("| Source | Term | Label | Field | Where |")
+                .contains("| FR-3 | TERM-9 | Kunde | acceptanceCriterion | only in acceptanceCriterion |")
                 .doesNotContain("Mentioned in text but not linked:")
                 .contains(StoreCheckRenderer.ORPHAN_BLIND_SPOT);
     }
@@ -251,7 +253,8 @@ class StoreCheckRendererTest {
                 List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
                 List.of(), List.of(), List.of(),
                 List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
-                        List.of("acceptanceCriterion"), "only in acceptanceCriterion"))));
+                        List.of("acceptanceCriterion"),
+                        List.of(new MentionExemption.NonNormativeField("acceptanceCriterion"))))));
 
         assertThat(rendered).contains("0 unlinked mentions, 0 constraints").contains("1 mention hint (not counted)");
     }
@@ -262,5 +265,18 @@ class StoreCheckRendererTest {
                 List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
                 List.of(), List.of(), List.of())))
                 .doesNotContain("mention hint").doesNotContain("(hint, not counted)");
+    }
+
+    @Test
+    void rendersEachExemptionKindAsItsOwnTextAndJoinsSeveral() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(), List.of(), List.of(),
+                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("description", "acceptanceCriterion"),
+                        List.of(new MentionExemption.AdjacentReference("FR-7"),
+                                new MentionExemption.NonNormativeField("acceptanceCriterion"))))));
+
+        assertThat(rendered).contains("| FR-3 | TERM-9 | Kunde | description, acceptanceCriterion | "
+                + "next to FR-7, which links the term; only in acceptanceCriterion |");
     }
 }

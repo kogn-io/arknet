@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.MentionFinding;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.ResourceFinding;
 import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.RdfNode;
 import de.hauschel.arknet.persistence.StoreSnapshot;
 import de.hauschel.arknet.persistence.Triple;
@@ -138,7 +139,7 @@ class OrphanCheckTest {
 
         assertThat(result.unlinkedMentions()).containsExactly(
                 new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
-                        List.of("description"), null));
+                        List.of("description"), List.of()));
     }
 
     /**
@@ -161,7 +162,7 @@ class OrphanCheckTest {
 
         assertThat(result.unlinkedMentions()).containsExactly(
                 new MentionFinding(ID + "bc-2", "BC-2", ID + "term-8", "TERM-8", "Bestellung", "ubiquitousLanguageTerm",
-                        List.of("domainVision"), null));
+                        List.of("domainVision"), List.of()));
     }
 
     /**
@@ -213,7 +214,8 @@ class OrphanCheckTest {
         assertThat(result.unlinkedMentions()).isEmpty();
         assertThat(result.mentionHints()).containsExactly(
                 new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
-                        List.of("acceptanceCriterion"), "only in acceptanceCriterion"));
+                        List.of("acceptanceCriterion"),
+                        List.of(new MentionExemption.NonNormativeField("acceptanceCriterion"))));
         assertThat(result.total()).isEqualTo(result.orphanRequirements().size() + result.orphanTerms().size());
     }
 
@@ -228,7 +230,7 @@ class OrphanCheckTest {
 
         assertThat(result.unlinkedMentions()).containsExactly(
                 new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
-                        List.of("description"), null));
+                        List.of("description"), List.of()));
         assertThat(result.mentionHints()).isEmpty();
     }
 
@@ -261,7 +263,7 @@ class OrphanCheckTest {
             assertThat(result.unlinkedMentions()).as(description).isEmpty();
             assertThat(result.mentionHints()).as(description).singleElement().satisfies(hint -> {
                 assertThat(hint.sourceHandle()).isEqualTo("FR-3");
-                assertThat(hint.hintReason()).isEqualTo("next to FR-7, which links the term");
+                assertThat(hint.exemptions()).containsExactly(new MentionExemption.AdjacentReference("FR-7"));
             });
         }
     }
@@ -306,6 +308,80 @@ class OrphanCheckTest {
 
         assertThat(result.unlinkedMentions()).hasSize(1);
         assertThat(result.mentionHints()).isEmpty();
+    }
+
+    @Test
+    void aReferenceAfterASentenceEndDoesNotExemptTheMention() {
+        for (final String description : List.of(
+                "Kunde. FR-7 gilt.", "Der Kunde zahlt. FR-7 gilt.", "Kunde! FR-7 gilt.", "Kunde; FR-7 gilt.", "Kunde?\nFR-7 gilt.",
+                "FR-7 gilt.\n\nKunde zahlt.", "Siehe FR-7. Kunde zahlt.")) {
+            final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
+            base.addAll(referencedRequirement(true));
+
+            final OrphanCheck.Result result = run(base, citingRequirement(description));
+
+            assertThat(result.unlinkedMentions()).as(description).hasSize(1);
+            assertThat(result.mentionHints()).as(description).isEmpty();
+        }
+    }
+
+    @Test
+    void aReferenceMoreThanThreeSeparatorsAwayDoesNotExemptTheMention() {
+        final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
+        base.addAll(referencedRequirement(true));
+
+        final OrphanCheck.Result result = run(base, citingRequirement("Kunde (--- FR-7) zahlt."));
+
+        assertThat(result.unlinkedMentions()).hasSize(1);
+        assertThat(result.mentionHints()).isEmpty();
+    }
+
+    @Test
+    void severalExemptionsOfOnePairAreListedInTheOrderTheMentionsAreFound() {
+        final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
+        base.addAll(referencedRequirement(true));
+        base.addAll(List.of(
+                iri(ID + "fr-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-3", IDENTIFIER, "FR-3"),
+                lit(ID + "fr-3", DESCRIPTION, "Der Kunde (FR-7) zahlt."),
+                iri(ID + "fr-3", ACCEPTANCE_CRITERION, ID + "ac-1"),
+                lit(ID + "ac-1", CRITERION_TEXT, "Der Kunde sieht die Daten.")));
+
+        final OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(
+                StoreSnapshot.of(base), DisplayLocale.DEFAULT));
+
+        assertThat(result.mentionHints()).singleElement().satisfies(hint -> {
+            assertThat(hint.fields()).containsExactly("description", "acceptanceCriterion");
+            assertThat(hint.exemptions()).containsExactly(
+                    new MentionExemption.AdjacentReference("FR-7"),
+                    new MentionExemption.NonNormativeField("acceptanceCriterion"));
+        });
+    }
+
+    @Test
+    void aReferenceToAnyResourceTypeThatLinksTheTermExemptsTheMention() {
+        final String related = "http://www.w3.org/2004/02/skos/core#related";
+        final List<List<Triple>> referenced = List.of(
+                List.of(iri(ID + "uc-7", RDF_TYPE, USE_CASE), lit(ID + "uc-7", IDENTIFIER, "UC-7"),
+                        iri(ID + "uc-7", USES_TERM, ID + "term-9")),
+                List.of(iri(ID + "adr-7", RDF_TYPE, ArkarchVocabulary.ADR_TYPE), lit(ID + "adr-7", IDENTIFIER, "ADR-7"),
+                        iri(ID + "adr-7", ArkarchVocabulary.USES_TERM, ID + "term-9")),
+                List.of(iri(ID + "term-5", RDF_TYPE, SKOS + "Concept"), lit(ID + "term-5", PREF_LABEL, "Konto"),
+                        lit(ID + "term-5", IDENTIFIER, "TERM-5"), iri(ID + "term-5", related, ID + "term-9")),
+                List.of(iri(ID + "bc-7", RDF_TYPE, ARKDDD + "BoundedContext"), lit(ID + "bc-7", IDENTIFIER, "BC-7"),
+                        iri(ID + "bc-7", UBIQUITOUS_LANGUAGE_TERM, ID + "term-9")));
+        final List<String> codes = List.of("UC-7", "ADR-7", "TERM-5", "BC-7");
+
+        for (int i = 0; i < referenced.size(); i++) {
+            final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
+            base.addAll(referenced.get(i));
+
+            final OrphanCheck.Result result = run(base, citingRequirement("Der Kunde (" + codes.get(i) + ") zahlt."));
+
+            assertThat(result.unlinkedMentions()).as(codes.get(i)).isEmpty();
+            assertThat(result.mentionHints()).as(codes.get(i)).singleElement().satisfies(hint ->
+                    assertThat(hint.sourceHandle()).isEqualTo("FR-3"));
+        }
     }
 
     private static Triple iri(String subject, String predicate, String objectIri) {

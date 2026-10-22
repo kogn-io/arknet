@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 
 import de.hauschel.arknet.analysis.domain.LanguageGapCheck.Gap;
 import de.hauschel.arknet.analysis.domain.OrphanCheck;
+import de.hauschel.arknet.analysis.domain.MentionExemption;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.MentionFinding;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.ResourceFinding;
 import de.hauschel.arknet.analysis.domain.RoleTermDuplicateCheck.Finding;
@@ -231,14 +232,28 @@ public final class StoreCheckRenderer {
             return;
         }
         out.append("\n\nMentioned only in an acceptance criterion or next to a reference (hint, not counted):\n\n")
-                .append("| Source | Term | Label | Where |\n| --- | --- | --- | --- |");
+                .append("| Source | Term | Label | Field | Where |\n| --- | --- | --- | --- | --- |");
         for (final MentionFinding hint : result.mentionHints()) {
             out.append("\n| ").append(handleOf(hint.sourceIri(), hint.sourceHandle()))
                     .append(" | ").append(handleOf(hint.termIri(), hint.termHandle()))
                     .append(" | ").append(hint.termLabel())
-                    .append(" | ").append(hint.hintReason())
+                    .append(" | ").append(String.join(", ", hint.fields()))
+                    .append(" | ").append(exemptionText(hint.exemptions()))
                     .append(" |");
         }
+    }
+
+    private static String exemptionText(final List<MentionExemption> exemptions) {
+        return exemptions.stream().map(StoreCheckRenderer::exemptionText).distinct()
+                .collect(Collectors.joining("; "));
+    }
+
+    private static String exemptionText(final MentionExemption exemption) {
+        return switch (exemption) {
+            case MentionExemption.NonNormativeField nonNormative -> "only in " + nonNormative.field();
+            case MentionExemption.AdjacentReference adjacent ->
+                    "next to " + adjacent.referencedCode() + ", which links the term";
+        };
     }
 
     private void appendResourceTable(final StringBuilder out, final List<ResourceFinding> findings) {

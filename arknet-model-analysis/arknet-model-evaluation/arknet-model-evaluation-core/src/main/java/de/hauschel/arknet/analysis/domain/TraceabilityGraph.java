@@ -6,7 +6,6 @@ package de.hauschel.arknet.analysis.domain;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,7 +17,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.RdfNode;
@@ -144,7 +142,7 @@ public final class TraceabilityGraph {
      * same edge, or {@code related} would resolve the finding, so the message names all three
      * instead of prescribing one as the fix.
      */
-    private static final String GLOSSARY_EDGE_LOCAL_NAME = "broader/narrower/related";
+    static final String GLOSSARY_EDGE_LOCAL_NAME = "broader/narrower/related";
 
     /**
      * {@code skos:definition} - a term's meaning, scanned by {@link #unlinkedMentions()}'s third
@@ -901,16 +899,17 @@ public final class TraceabilityGraph {
 
     /**
      * Every requirement/use-case/bounded-context prose mention of a glossary term the source does
-     * not link to: a requirement's {@code dcterms:description}/{@code
-     * arkreq:acceptanceCriterion} checked against its {@code arkreq:usesTerm} edges, a use case's
+     * not link to that {@link #mentionScan()} keeps as a finding - a pair whose every mention is
+     * exempt ({@link MentionExemption}) is a hint instead and is not listed here. The sweeps: a requirement's
+     * {@code dcterms:description}/{@code arkreq:acceptanceCriterion} checked against its {@code arkreq:usesTerm} edges, a use case's
      * {@link #useCaseProseTexts(String)} checked against its own {@code arkreq:usesTerm} edges
      * plus its {@code arkreq:primaryRole}/{@code supportingRole} edges (issue #333 - a goal or
      * step naming the use case's own role is not an unlinked mention, since that relationship is
      * already recorded, just under a different predicate than {@code usesTerm}), and a
      * bounded context's {@code arkddd:domainVision} checked against its {@code
-     * arkddd:ubiquitousLanguageTerm} edges. Reuses the very matching rules the HTML report
-     * already applies inline ({@code de.hauschel.arknet.mcp.report.Glossary}), via the shared
-     * {@link LabelMentions} engine, so a text mention means the same thing in both places.
+     * arkddd:ubiquitousLanguageTerm} edges. Matches with the very rules the HTML report applies
+     * inline ({@code de.hauschel.arknet.mcp.report.Glossary}), via the shared {@link
+     * LabelMentions} engine; unlike this list, the report keeps marking an exempt mention as a gap.
      *
      * <p><strong>How far the role exemption actually reaches</strong> (kogn-io/arknet#524
      * review): {@link #rolesOf(String)} yields ROLE IRIs, and they are compared against the TERM
@@ -949,7 +948,7 @@ public final class TraceabilityGraph {
      * same {@code "usesTerm"} edge-local-name as that sweep: both name the term the source text
      * mentions without the matching link, only the concrete predicate namespace differs.</p>
      *
-     * @return the unlinked mentions found across every requirement, use case, bounded context,
+     * @return the unlinked mentions kept as findings across every requirement, use case, bounded context,
      *         term and architecture decision
      */
     public List<UnlinkedMention> unlinkedMentions() {
@@ -957,62 +956,22 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * The pairs {@link #unlinkedMentions()} does not count: every mention of the pair stands in a
-     * non-normative field (an acceptance criterion) or directly next to a reference to another
-     * resource that already links the term. Same record shape as a finding, with {@link
-     * UnlinkedMention#hintReason()} set.
-     *
-     * @return the downgraded pairs, in the order of the sweeps
-     */
-    public List<UnlinkedMention> mentionHints() {
-        return mentionScan().hints();
-    }
-
-    /**
-     * Runs the sweeps of {@link #unlinkedMentions()} once and splits the pairs into findings and
-     * hints. A hit (one mention of a term in one field) is exempt when its field is non-normative
-     * or when it stands directly next to the business code of another resource that links the
-     * term - only non-letter, non-digit characters between mention and code, in either direction.
-     * A pair is a finding when at least one hit is not exempt, otherwise a hint.
+     * Runs the sweeps of {@link #unlinkedMentions()} once and splits the (resource, term) pairs
+     * into findings and hints; the rules live in {@code MentionClassifier}.
      *
      * @return findings and hints
      */
     public MentionScan mentionScan() {
-        Map<String, String> termLabels = termLabels();
-        if (termLabels.isEmpty()) {
-            return new MentionScan(List.of(), List.of());
-        }
-        List<String> termIris = termLabels.keySet().stream()
-                .sorted(Comparator.comparing(iri -> identifierOf(iri).orElse(iri)))
-                .toList();
-        Sweep sweep = new Sweep(LabelMentions.of(termIris, termLabels::get), termLabels, codeReferences());
+        return MentionClassifier.scan(this);
+    }
 
-        for (String requirementIri : requirementIris()) {
-            Set<String> linked = new HashSet<>(usedTerms(requirementIri));
-            sweep.run(requirementIri, requirementProseFields(requirementIri), linked, "usesTerm");
-        }
-        for (String useCaseIri : useCaseIris()) {
-            Set<String> linked = new HashSet<>(usedTerms(useCaseIri));
-            linked.addAll(rolesOf(useCaseIri));
-            sweep.run(useCaseIri, useCaseProseFields(useCaseIri), linked, "usesTerm");
-        }
-        for (String boundedContextIri : boundedContextIris()) {
-            Set<String> linked = new HashSet<>(linkedTerms(boundedContextIri));
-            sweep.run(boundedContextIri, boundedContextProseFields(boundedContextIri), linked,
-                    "ubiquitousLanguageTerm");
-        }
-        for (String termIri : termIris) {
-            Set<String> linked = new HashSet<>(relatedTerms(termIri));
-            broaderTerm(termIri).ifPresent(linked::add);
-            linked.addAll(narrowerTerms(termIri));
-            linked.add(termIri);
-            sweep.run(termIri, termProseFields(termIri), linked, GLOSSARY_EDGE_LOCAL_NAME);
-        }
-        for (String adrIri : adrIris()) {
-            Set<String> linked = new HashSet<>(adrUsedTerms(adrIri));
-            sweep.run(adrIri, adrProseFields(adrIri), linked, "usesTerm");
-        }
-        return new MentionScan(List.copyOf(sweep.findings), List.copyOf(sweep.hints));
+    /** @return the business code to resource IRI lookup over every identified resource */
+    Map<String, String> iriByBusinessCode() {
+        Map<String, String> iriByCode = new LinkedHashMap<>();
+        identifierBySubject.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(e -> iriByCode.putIfAbsent(e.getValue(), e.getKey()));
+        return iriByCode;
     }
 
     /**
@@ -1020,102 +979,6 @@ public final class TraceabilityGraph {
      * @param hints    the pairs whose every mention is exempt
      */
     public record MentionScan(List<UnlinkedMention> findings, List<UnlinkedMention> hints) {
-    }
-
-    /** One mention of a term in one field, with the reason it is exempt (or {@code null}). */
-    private record Hit(String field, String exemption) {
-    }
-
-    /** Matcher over every business code of the graph, plus the code-to-resource lookup. */
-    private record CodeReferences(LabelMentions<String> matcher, Map<String, String> iriByCode) {
-    }
-
-    private CodeReferences codeReferences() {
-        Map<String, String> iriByCode = new LinkedHashMap<>();
-        identifierBySubject.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .forEach(e -> iriByCode.putIfAbsent(e.getValue(), e.getKey()));
-        return new CodeReferences(LabelMentions.of(List.copyOf(iriByCode.keySet()), code -> code), iriByCode);
-    }
-
-    /** The term IRIs a resource links, whatever its type - each type only carries its own edge. */
-    private Set<String> linkedTermsOf(String iri) {
-        Set<String> linked = new HashSet<>(usedTerms(iri));
-        linked.addAll(rolesOf(iri));
-        linked.addAll(adrUsedTerms(iri));
-        linked.addAll(linkedTerms(iri));
-        linked.addAll(relatedTerms(iri));
-        broaderTerm(iri).ifPresent(linked::add);
-        linked.addAll(narrowerTerms(iri));
-        return linked;
-    }
-
-    /** Collects findings and hints over the sweeps of {@link #mentionScan()}. */
-    private final class Sweep {
-        private final LabelMentions<String> termMatcher;
-        private final Map<String, String> termLabels;
-        private final CodeReferences codes;
-        private final List<UnlinkedMention> findings = new ArrayList<>();
-        private final List<UnlinkedMention> hints = new ArrayList<>();
-
-        Sweep(LabelMentions<String> termMatcher, Map<String, String> termLabels, CodeReferences codes) {
-            this.termMatcher = termMatcher;
-            this.termLabels = termLabels;
-            this.codes = codes;
-        }
-
-        void run(String sourceIri, List<ProseField> fields, Set<String> linked, String edgeLocalName) {
-            Map<String, List<Hit>> hitsByTerm = new LinkedHashMap<>();
-            for (ProseField field : fields) {
-                List<LabelMentions.Mention<String>> codeMentions = codes.matcher().in(field.text());
-                for (LabelMentions.Mention<String> mention : termMatcher.in(field.text())) {
-                    if (linked.contains(mention.item())) {
-                        continue;
-                    }
-                    String exemption = field.normative()
-                            ? referenceExemption(sourceIri, field.text(), mention, codeMentions)
-                            : "only in " + field.field();
-                    hitsByTerm.computeIfAbsent(mention.item(), k -> new ArrayList<>())
-                            .add(new Hit(field.field(), exemption));
-                }
-            }
-            hitsByTerm.forEach((termIri, hits) -> {
-                List<String> counted = hits.stream().filter(h -> h.exemption() == null)
-                        .map(Hit::field).distinct().toList();
-                if (!counted.isEmpty()) {
-                    findings.add(new UnlinkedMention(
-                            sourceIri, termIri, termLabels.get(termIri), edgeLocalName, counted, null));
-                    return;
-                }
-                List<String> where = hits.stream().map(Hit::field).distinct().toList();
-                String reason = hits.stream().map(Hit::exemption).distinct().collect(Collectors.joining("; "));
-                hints.add(new UnlinkedMention(
-                        sourceIri, termIri, termLabels.get(termIri), edgeLocalName, where, reason));
-            });
-        }
-
-        /** @return the reason a mention is exempt because of an adjacent reference, or {@code null} */
-        private String referenceExemption(String sourceIri, String text, LabelMentions.Mention<String> mention,
-                List<LabelMentions.Mention<String>> codeMentions) {
-            for (LabelMentions.Mention<String> code : codeMentions) {
-                String referencedIri = codes.iriByCode().get(code.item());
-                if (referencedIri == null || referencedIri.equals(sourceIri)
-                        || !linkedTermsOf(referencedIri).contains(mention.item())) {
-                    continue;
-                }
-                boolean adjacent = code.start() >= mention.end()
-                        ? onlySeparators(text, mention.end(), code.start())
-                        : code.end() <= mention.start() && onlySeparators(text, code.end(), mention.start());
-                if (adjacent) {
-                    return "next to " + code.item() + ", which links the term";
-                }
-            }
-            return null;
-        }
-
-        private static boolean onlySeparators(String text, int from, int to) {
-            return text.substring(from, to).codePoints().noneMatch(Character::isLetterOrDigit);
-        }
     }
 
     /**
@@ -1129,10 +992,11 @@ public final class TraceabilityGraph {
      *                      finding rather than prescribing one (kogn-io/arknet#595)
      * @param fields        the fields the counted mentions stand in (for a hint: every field the
      *                      pair stands in), in the order the resource lists them
-     * @param hintReason    why the pair is only a hint, or {@code null} for a finding
+     * @param exemptions    empty for a finding; for a hint why each mention is exempt, distinct, in
+     *                      the order the mentions were found
      */
     public record UnlinkedMention(String sourceIri, String termIri, String termLabel, String edgeLocalName,
-            List<String> fields, String hintReason) {
+            List<String> fields, List<MentionExemption> exemptions) {
     }
 
     private List<String> literals(String subject, String predicate) {

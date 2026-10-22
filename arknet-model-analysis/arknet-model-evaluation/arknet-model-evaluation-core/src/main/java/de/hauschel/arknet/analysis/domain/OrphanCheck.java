@@ -32,12 +32,13 @@ public final class OrphanCheck {
 
     /**
      * One prose mention of a term with no edge backing it up - mirrors {@link
-     * TraceabilityGraph.UnlinkedMention}: {@code fields} names where it stands, {@code hintReason}
-     * is {@code null} for a finding and the reason it is only a hint otherwise.
+     * TraceabilityGraph.UnlinkedMention}: {@code fields} names where it stands, {@code exemptions}
+     * is empty for a finding and lists why each mention is exempt for a hint.
      */
     public record MentionFinding(
             String sourceIri, String sourceHandle, String termIri, String termHandle, String termLabel,
-            String edgeLocalName, List<String> fields, String hintReason) {
+            String edgeLocalName, List<String> fields,
+            List<MentionExemption> exemptions) {
     }
 
     /**
@@ -95,7 +96,7 @@ public final class OrphanCheck {
                 .map(mention -> new MentionFinding(
                         mention.sourceIri(), graph.identifierOf(mention.sourceIri()).orElse(null),
                         mention.termIri(), graph.identifierOf(mention.termIri()).orElse(null),
-                        mention.termLabel(), mention.edgeLocalName(), mention.fields(), mention.hintReason()))
+                        mention.termLabel(), mention.edgeLocalName(), mention.fields(), mention.exemptions()))
                 .toList();
     }
 
