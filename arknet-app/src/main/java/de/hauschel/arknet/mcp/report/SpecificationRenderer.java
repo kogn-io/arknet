@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 import de.hauschel.arknet.kernel.DisplayLocale;
 
 /**
- * Renders the project model as a business-reader specification: numbered chapters, prose instead
+ * Renders the project model as a business-reader specification: numbered chapters (headings below carry their code, not a position), prose instead
  * of cards, no technical internals. The second consumer of {@link ModelViews.Views}, next to
  * {@link HtmlReportRenderer}.
  *
@@ -362,28 +362,29 @@ public final class SpecificationRenderer {
 
         private TocEntry functionalEntry() {
             final List<TocEntry> groups = new ArrayList<>();
-            int number = 0;
             for (final FunctionalGroup group : functionalGroups()) {
-                number++;
                 final List<TocEntry> children = new ArrayList<>();
-                for (int index = 0; index < group.owned().size(); index++) {
-                    final ModelCard card = group.owned().get(index);
-                    children.add(new TocEntry(target(card).anchor(),
-                            "4." + number + "." + (index + 1) + " " + card.title(), List.of()));
+                for (final ModelCard card : group.owned()) {
+                    children.add(new TocEntry(target(card).anchor(), codeAndTitle(card), List.of()));
                 }
-                groups.add(new TocEntry(group.anchor(), "4." + number + " " + group.title(), children));
+                groups.add(new TocEntry(group.anchor(), group.heading(), children));
             }
             return new TocEntry(CH_FUNCTIONAL, "4 " + text(SpecificationTexts.CH_FUNCTIONAL), groups);
+        }
+
+        /** "CODE Title", or the title alone for a card that shows no code. */
+        private String codeAndTitle(final ModelCard card) {
+            final Target target = target(card);
+            return target.kind().showsCode && !card.code().isBlank() ? card.code() + " " + card.title()
+                    : card.title();
         }
 
         private TocEntry chapterEntry(
                 final String anchor, final String number, final SpecificationTexts title,
                 final List<ModelCard> cards) {
             final List<TocEntry> children = new ArrayList<>();
-            for (int index = 0; index < cards.size(); index++) {
-                final ModelCard card = cards.get(index);
-                children.add(new TocEntry(target(card).anchor(), number + "." + (index + 1) + " " + card.title(),
-                        List.of()));
+            for (final ModelCard card : cards) {
+                children.add(new TocEntry(target(card).anchor(), codeAndTitle(card), List.of()));
             }
             return new TocEntry(anchor, number + " " + text(title), children);
         }
@@ -455,7 +456,7 @@ public final class SpecificationRenderer {
                 placeholder(SpecificationTexts.NONE_ACTORS);
             }
             for (int index = 0; index < actors.size(); index++) {
-                appendActor(actors.get(index), "2.1." + (index + 1));
+                appendActor(actors.get(index));
             }
             out.append("<h3 id=\"").append(CH_ROLES).append("\"><span class=\"num\">2.2</span> ")
                     .append(esc(SpecificationTexts.CH_ROLES)).append("</h3>\n");
@@ -463,18 +464,18 @@ public final class SpecificationRenderer {
                 placeholder(SpecificationTexts.NONE_ROLES);
             }
             for (int index = 0; index < roles.size(); index++) {
-                appendRole(roles.get(index), "2.2." + (index + 1));
+                appendRole(roles.get(index));
             }
         }
 
-        private void appendActor(final ModelCard card, final String number) {
-            open("role", "h4", card, number);
+        private void appendActor(final ModelCard card) {
+            open("role", "h4", card);
             proseOf(card, CardLabels.DESCRIPTION).ifPresent(prose -> appendParts(prose.parts()));
             out.append("</section>\n");
         }
 
-        private void appendRole(final ModelCard card, final String number) {
-            open("role", "h4", card, number);
+        private void appendRole(final ModelCard card) {
+            open("role", "h4", card);
             proseOf(card, CardLabels.DESCRIPTION).ifPresent(prose -> appendParts(prose.parts()));
             proseOf(card, CardLabels.FILLED_BY)
                     .filter(prose -> !prose.source().equals(CardLabels.UNFILLED))
@@ -500,12 +501,12 @@ public final class SpecificationRenderer {
                 placeholder(SpecificationTexts.NONE_USE_CASES);
             }
             for (int index = 0; index < useCases.size(); index++) {
-                appendUseCase(useCases.get(index), "3." + (index + 1));
+                appendUseCase(useCases.get(index));
             }
         }
 
-        private void appendUseCase(final ModelCard card, final String number) {
-            open("uc", "h3", card, number);
+        private void appendUseCase(final ModelCard card) {
+            open("uc", "h3", card);
             proseOf(card, CardLabels.GOAL).ifPresent(prose -> labelled(SpecificationTexts.GOAL, prose));
             proseOf(card, CardLabels.SCOPE).ifPresent(prose -> labelled(SpecificationTexts.SCOPE, prose));
             proseOf(card, CardLabels.TRIGGER).ifPresent(prose -> labelled(SpecificationTexts.TRIGGER, prose));
@@ -598,7 +599,17 @@ public final class SpecificationRenderer {
          * requirements shown in full under it and those only pointed to.
          */
         private record FunctionalGroup(String anchor, String title, Optional<Target> process,
-                List<ModelCard> owned, List<ModelCard> referenced) {
+                List<ModelCard> owned, List<Reference> referenced) {
+
+            /** "CODE Title" of the process, or the bare title of the rules section. */
+            String heading() {
+                return process.filter(target -> !target.code().isBlank())
+                        .map(target -> target.code() + " " + title).orElse(title);
+            }
+        }
+
+        /** A requirement shown in full under {@code owner} and only pointed to from another process. */
+        private record Reference(ModelCard card, Target owner) {
         }
 
         /**
@@ -611,10 +622,11 @@ public final class SpecificationRenderer {
             final Map<String, ModelCard> byIri = new LinkedHashMap<>();
             functional.forEach(card -> byIri.put(card.iri(), card));
             final Set<String> placed = new HashSet<>();
+            final Map<String, Target> owners = new HashMap<>();
             final List<FunctionalGroup> groups = new ArrayList<>();
             useCases.stream().sorted(Comparator.comparing(ModelCard::code, Page::compareCodes)).forEach(useCase -> {
                 final List<ModelCard> owned = new ArrayList<>();
-                final List<ModelCard> referenced = new ArrayList<>();
+                final List<Reference> referenced = new ArrayList<>();
                 final Set<String> seen = new HashSet<>();
                 for (final Block block : useCase.blocks()) {
                     if (!(block instanceof Block.Flow flow)) {
@@ -623,7 +635,14 @@ public final class SpecificationRenderer {
                     flow.steps().stream().sorted(Comparator.comparingInt(FlowStep::position))
                             .flatMap(step -> step.realises().stream()).map(Ref::iri)
                             .filter(byIri::containsKey).filter(seen::add)
-                            .forEach(iri -> (placed.add(iri) ? owned : referenced).add(byIri.get(iri)));
+                            .forEach(iri -> {
+                                if (placed.add(iri)) {
+                                    owned.add(byIri.get(iri));
+                                    owners.put(iri, target(useCase));
+                                } else {
+                                    referenced.add(new Reference(byIri.get(iri), owners.get(iri)));
+                                }
+                            });
                 }
                 if (!owned.isEmpty() || !referenced.isEmpty()) {
                     final Target process = target(useCase);
@@ -660,24 +679,21 @@ public final class SpecificationRenderer {
             if (groups.isEmpty()) {
                 placeholder(SpecificationTexts.NONE_FUNCTIONAL);
             }
-            for (int groupIndex = 0; groupIndex < groups.size(); groupIndex++) {
-                final FunctionalGroup group = groups.get(groupIndex);
-                final String number = "4." + (groupIndex + 1);
-                out.append("<h3 id=\"").append(group.anchor()).append("\"><span class=\"num\">").append(number)
-                        .append("</span> ").append(escape(group.title()));
+            for (final FunctionalGroup group : groups) {
+                out.append("<h3 id=\"").append(group.anchor()).append("\">");
                 group.process().filter(process -> !process.code().isBlank()).ifPresent(process ->
-                        out.append(" <span class=\"code\">").append(escape(process.code())).append("</span>"));
-                out.append("</h3>\n");
-                group.process().ifPresent(process -> out.append("<p class=\"meta\">")
-                        .append(esc(SpecificationTexts.KIND_USE_CASE)).append(": ")
-                        .append(link(process, process.listText())).append("</p>\n"));
-                for (int index = 0; index < group.owned().size(); index++) {
-                    appendRequirement(group.owned().get(index), "h4", number + "." + (index + 1));
+                        out.append("<span class=\"hcode\">").append(escape(process.code())).append("</span> "));
+                out.append(escape(group.title())).append("</h3>\n");
+                for (final ModelCard card : group.owned()) {
+                    appendRequirement(card, "h4");
                 }
-                for (final ModelCard card : group.referenced()) {
-                    final Target target = target(card);
-                    out.append("<p class=\"seeunder\">").append(esc(SpecificationTexts.DESCRIBED_UNDER)).append(' ')
-                            .append(link(target, target.listText())).append("</p>\n");
+                for (final Reference reference : group.referenced()) {
+                    final Target target = target(reference.card());
+                    out.append("<p class=\"seeunder\">&rarr; ").append(link(target, target.listText())).append(" (")
+                            .append(esc(SpecificationTexts.DESCRIBED_UNDER)).append(' ')
+                            .append(escape(reference.owner().code().isBlank() ? reference.owner().title()
+                                    : reference.owner().code()))
+                            .append(")</p>\n");
                 }
             }
         }
@@ -689,13 +705,13 @@ public final class SpecificationRenderer {
             if (cards.isEmpty()) {
                 placeholder(none);
             }
-            for (int index = 0; index < cards.size(); index++) {
-                appendRequirement(cards.get(index), "h3", number + "." + (index + 1));
+            for (final ModelCard card : cards) {
+                appendRequirement(card, "h3");
             }
         }
 
-        private void appendRequirement(final ModelCard card, final String headingTag, final String number) {
-            open("req", headingTag, card, number);
+        private void appendRequirement(final ModelCard card, final String headingTag) {
+            open("req", headingTag, card);
             appendMeta(card);
             proseOf(card, CardLabels.DESCRIPTION).ifPresent(prose -> appendParts(prose.parts()));
             proseOf(card, CardLabels.RATIONALE).ifPresent(prose -> {
@@ -758,9 +774,8 @@ public final class SpecificationRenderer {
             if (constraints.isEmpty()) {
                 placeholder(SpecificationTexts.NONE_CONSTRAINTS);
             }
-            for (int index = 0; index < constraints.size(); index++) {
-                final ModelCard card = constraints.get(index);
-                open("req", "h3", card, "6." + (index + 1));
+            for (final ModelCard card : constraints) {
+                open("req", "h3", card);
                 proseOf(card, CardLabels.STATEMENT).ifPresent(prose -> appendParts(prose.parts()));
                 out.append("</section>\n");
             }
@@ -836,18 +851,18 @@ public final class SpecificationRenderer {
         // ---- building blocks -------------------------------------------------------------------
 
         /** Opens a card's element: anchor, the data the script builds pop-ups and the detail pane from, heading. */
-        private void open(final String cssClass, final String headingTag, final ModelCard card, final String number) {
+        private void open(final String cssClass, final String headingTag, final ModelCard card) {
             final Target target = target(card);
             linkedTerms.clear();
             out.append("<section class=\"").append(cssClass).append("\" id=\"").append(target.anchor())
                     .append("\" data-kind=\"").append(esc(target.kind().label))
                     .append("\" data-code=\"").append(target.kind().showsCode ? escape(card.code()) : "")
                     .append("\" data-title=\"").append(escape(card.title())).append("\"><")
-                    .append(headingTag).append("><span class=\"num\">").append(number).append("</span> ")
-                    .append(escape(card.title()));
+                    .append(headingTag).append('>');
             if (target.kind().showsCode && !card.code().isBlank()) {
-                out.append(" <span class=\"code\">").append(escape(card.code())).append("</span>");
+                out.append("<span class=\"hcode\">").append(escape(card.code())).append("</span> ");
             }
+            out.append(escape(card.title()));
             out.append("</").append(headingTag).append(">\n");
         }
 
@@ -935,9 +950,10 @@ public final class SpecificationRenderer {
                 final String id = anchor + "-c" + item.position();
                 final String number = (code.isBlank() ? "" : code + ".") + item.position();
                 out.append("<li id=\"").append(id).append('"').append(example ? " class=\"example\"" : "")
-                        .append("><a class=\"cid\" href=\"#")
-                        .append(id).append("\">").append(escape(number)).append("</a> ")
-                        .append(inline(item.text())).append("</li>");
+                        .append("><span class=\"cid\">").append(escape(number)).append("</span> ")
+                        .append(inline(item.text())).append(" <a class=\"perma\" href=\"#").append(id)
+                        .append("\" aria-label=\"").append(esc(SpecificationTexts.PERMALINK))
+                        .append("\">#</a></li>");
             }
             out.append("</ol>\n");
         }

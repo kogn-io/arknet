@@ -146,7 +146,8 @@ class SpecificationRendererTest {
         final int constraints = html.indexOf("</span> Constraints</h2>");
         assertThat(html.indexOf("id=\"a-fr-1\"")).isLessThan(quality);
         assertThat(html.indexOf("id=\"a-nfr-1\"")).isBetween(quality, constraints);
-        assertThat(html).contains("4.1.1</span> Record loans").contains("5.1</span> Fast lookups");
+        assertThat(html).contains("<span class=\"hcode\">FR-1</span> Record loans")
+                .contains("<span class=\"hcode\">NFR-1</span> Fast lookups");
     }
 
     @Test
@@ -282,7 +283,7 @@ class SpecificationRendererTest {
     void acceptanceCriteriaAndFlowStepsRenderAsLists() {
         final String html = render(fixture(), ENGLISH);
 
-        assertThat(html).contains("A loan has a due date.</li>")
+        assertThat(html).contains("A loan has a due date. <a class=\"perma\"")
                 .contains("<li>Hand out the book.</li></ol>");
     }
 
@@ -291,8 +292,16 @@ class SpecificationRendererTest {
         final String html = render(fixture(), ENGLISH);
 
         assertThat(html)
-                .contains("<li id=\"a-fr-1-c1\"><a class=\"cid\" href=\"#a-fr-1-c1\">FR-1.1</a> A loan has a due date.</li>")
-                .contains("<li id=\"a-fr-1-c2\"><a class=\"cid\" href=\"#a-fr-1-c2\">FR-1.2</a> A loan names the member.</li>");
+                .contains("<li id=\"a-fr-1-c1\"><span class=\"cid\">FR-1.1</span> A loan has a due date. ")
+                .contains("<li id=\"a-fr-1-c2\"><span class=\"cid\">FR-1.2</span> A loan names the member. ");
+    }
+
+    @Test
+    void theCriterionNumberIsNotALinkToItselfAndThePermalinkIsAKeyboardReachableHash() {
+        final String html = render(fixture(), ENGLISH);
+
+        assertThat(html).doesNotContain("<a class=\"cid\"")
+                .contains("<a class=\"perma\" href=\"#a-fr-1-c1\" aria-label=\"Permanent link to this criterion\">#</a>");
     }
 
     @Test
@@ -303,8 +312,8 @@ class SpecificationRendererTest {
         assertThat(examples).isPositive();
         assertThat(html.indexOf("id=\"a-fr-1-c3\"")).isGreaterThan(examples);
         assertThat(html.indexOf("id=\"a-fr-1-c2\"")).isLessThan(examples);
-        assertThat(html).contains("<li id=\"a-fr-1-c3\" class=\"example\"><a class=\"cid\" href=\"#a-fr-1-c3\">")
-                .contains("FR-1.3</a> Example: a loan")
+        assertThat(html).contains("<li id=\"a-fr-1-c3\" class=\"example\"><span class=\"cid\">")
+                .contains("FR-1.3</span> Example: a loan")
                 .contains("<li id=\"a-fr-1-c4\" class=\"example\">");
     }
 
@@ -417,7 +426,7 @@ class SpecificationRendererTest {
         for (final String anchor : anchors) {
             assertThat(count(html, anchor)).as(anchor).isGreaterThanOrEqualTo(2);
         }
-        assertThat(html).contains("3.1 Lend a book").contains("4.1.1 Record loans");
+        assertThat(html).contains(">UC-1 Lend a book<").contains(">FR-1 Record loans<").contains(">NFR-1 Fast lookups<");
     }
 
     // ---- functional requirements grouped by the process that realises them -----------------------
@@ -454,11 +463,13 @@ class SpecificationRendererTest {
         final int quality = html.indexOf("</span> Quality requirements</h2>");
         final String chapter = html.substring(functional, quality);
 
-        assertThat(chapter).contains("4.1</span> Lend a book").contains("4.2</span> Return a book")
-                .contains("4.1.1</span> Only in two").contains("4.1.2</span> Shared")
-                .contains("4.2.1</span> Only in ten")
+        assertThat(chapter).contains("<span class=\"hcode\">UC-2</span> Lend a book</h3>")
+                .contains("<span class=\"hcode\">UC-10</span> Return a book</h3>")
+                .contains("<span class=\"hcode\">FR-1</span> Only in two")
+                .contains("<span class=\"hcode\">FR-4</span> Only in ten")
                 .doesNotContain("Idle process");
-        assertThat(chapter.indexOf("4.1</span> Lend a book")).isLessThan(chapter.indexOf("4.2</span> Return a book"));
+        assertThat(chapter.indexOf("Lend a book</h3>")).isLessThan(chapter.indexOf("Return a book</h3>"));
+        assertThat(chapter.indexOf("Only in two")).isLessThan(chapter.indexOf("</span> Shared"));
     }
 
     @Test
@@ -469,12 +480,12 @@ class SpecificationRendererTest {
 
         assertThat(count(chapter, "id=\"a-fr-3\"")).isEqualTo(1);
         assertThat(count(chapter, "Text of FR-3")).isEqualTo(1);
-        final int lend = chapter.indexOf("4.1</span> Lend a book");
-        final int ret = chapter.indexOf("4.2</span> Return a book");
+        final int lend = chapter.indexOf("Lend a book</h3>");
+        final int ret = chapter.indexOf("Return a book</h3>");
         assertThat(chapter.indexOf("id=\"a-fr-3\"")).isBetween(lend, ret);
         final String second = chapter.substring(ret);
-        assertThat(second).contains("described under <a class=\"ref\" href=\"#a-fr-3\" data-ref=\"a-fr-3\">"
-                + "FR-3 Shared</a>");
+        assertThat(second).contains("&rarr; <a class=\"ref\" href=\"#a-fr-3\" data-ref=\"a-fr-3\">"
+                + "FR-3 Shared</a> (described under UC-2)");
     }
 
     @Test
@@ -488,10 +499,10 @@ class SpecificationRendererTest {
         final String chapter = html.substring(html.indexOf("</span> Functional requirements</h2>"),
                 html.indexOf("</span> Quality requirements</h2>"));
 
-        assertThat(chapter).contains("4.3</span> Rules and cross-cutting requirements")
-                .contains("4.3.1</span> Loose rule");
+        assertThat(chapter).contains(">Rules and cross-cutting requirements</h3>")
+                .contains("<span class=\"hcode\">FR-9</span> Loose rule");
         assertThat(chapter.indexOf("Rules and cross-cutting requirements"))
-                .isGreaterThan(chapter.indexOf("4.2</span> Return a book"));
+                .isGreaterThan(chapter.indexOf("Return a book</h3>"));
         assertThat(render(groupingFixture(), GERMAN)).contains("Regeln und \u00fcbergreifende Anforderungen");
     }
 
@@ -508,7 +519,7 @@ class SpecificationRendererTest {
     void qualityRequirementsStayInTheirOwnChapterEvenWhenAStepRealisesThem() {
         final String html = render(groupingFixture(), ENGLISH);
 
-        assertThat(html).contains("5.1</span> Fast");
+        assertThat(html).contains("<span class=\"hcode\">NFR-1</span> Fast");
         assertThat(html.substring(html.indexOf("</span> Functional requirements</h2>"),
                 html.indexOf("</span> Quality requirements</h2>"))).doesNotContain("Fast");
     }
@@ -517,13 +528,27 @@ class SpecificationRendererTest {
     void theTableOfContentsShowsTheProcessThenItsRequirements() {
         final String html = render(groupingFixture(), ENGLISH);
 
-        assertThat(html).contains("4.1 Lend a book").contains("4.1.2 Shared").contains("4.2 Return a book")
-                .contains("4.3 Rules and cross-cutting requirements").contains("4.3.1 Loose rule");
+        assertThat(html).contains(">UC-2 Lend a book<").contains(">FR-3 Shared<").contains(">UC-10 Return a book<")
+                .contains(">Rules and cross-cutting requirements<").contains(">FR-9 Loose rule<");
     }
 
     @Test
     void theReadingHelpDescribesTheGroupingOfFunctionalRequirements() {
         assertThat(render(groupingFixture(), ENGLISH)).contains("grouped by the process");
         assertThat(render(groupingFixture(), GERMAN)).contains("nach dem Ablauf");
+    }
+
+    @Test
+    void noHeadingBelowTheChapterLevelCarriesAPositionNumber() {
+        final String html = render(fixture(), ENGLISH);
+
+        assertThat(html).doesNotContain("<span class=\"num\">2.1.").doesNotContain("<span class=\"num\">2.2.")
+                .doesNotContain("<span class=\"num\">3.").doesNotContain("<span class=\"num\">4.")
+                .doesNotContain("<span class=\"num\">5.").doesNotContain("<span class=\"num\">6.")
+                .contains("<span class=\"num\">4</span> Functional requirements");
+        assertThat(html).contains("<span class=\"hcode\">UC-1</span> Lend a book")
+                .contains("<span class=\"hcode\">ROLE-1</span> Librarian")
+                .contains("<span class=\"hcode\">ACTOR-1</span> Library member")
+                .contains("<span class=\"hcode\">CON-1</span> Data protection");
     }
 }
