@@ -15,7 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Finds literal, case-insensitive, whole-word mentions of a fixed set of labels inside a text -
+ * Finds literal, whole-word mentions of a fixed set of labels inside a text -
  * the matching engine shared by two independent callers that each attach a label to a different
  * kind of thing: {@code de.hauschel.arknet.mcp.report.Glossary} labels a {@code
  * de.hauschel.arknet.ul.domain.Term}, {@code de.hauschel.arknet.analysis.adapter.mcp.TraceabilityRenderer}
@@ -24,9 +24,12 @@ import java.util.regex.Pattern;
  * read path reuse the report's matching rules without depending on the report
  * package or a bounded context's domain model.
  *
- * <p><strong>Matching is deliberately literal.</strong> Comparison is case-insensitive and only
- * at word boundaries; {@link Pattern#UNICODE_CHARACTER_CLASS} is what makes a word boundary treat
- * an umlaut as a word character. German inflections ({@code Kunden} for {@code Kunde}) are
+ * <p><strong>Matching is deliberately literal.</strong> Comparison is case-insensitive, except
+ * that a label starting with an upper-case letter matches only with that letter capitalised
+ * ({@code Soll} is not a mention of the modal verb {@code soll}), and only at word boundaries;
+ * {@link Pattern#UNICODE_CHARACTER_CLASS} is what makes a word boundary treat an umlaut as a word
+ * character, and a hyphen counts as a word character too, so a hyphenated compound ({@code
+ * Kontoauszug-Import}) is not a mention of its first part. German inflections ({@code Kunden} for {@code Kunde}) are
  * therefore missed - the alternative, matching on word stems, would silently claim {@code
  * Kundendienst} mentions {@code Kunde}, and a wrong link in an architecture model costs more than
  * a missed one.</p>
@@ -44,6 +47,10 @@ import java.util.regex.Pattern;
  * @param <T> what a label identifies
  */
 public final class LabelMentions<T> {
+
+    private static final char HYPHEN = '-';
+    private static final String NOT_AFTER_WORD_CHAR = "(?<![\\p{L}\\p{N}_-])";
+    private static final String NOT_BEFORE_WORD_CHAR = "(?![\\p{L}\\p{N}_-])";
 
     private final List<Entry<T>> entries;
 
@@ -118,21 +125,34 @@ public final class LabelMentions<T> {
     }
 
     /**
-     * A whole-word, case-insensitive matcher for one label.
+     * A whole-word matcher for one label, case-insensitive except for a capital initial.
      *
      * <p>The boundary assertion is only added on a side where the label itself starts or ends
-     * with a word character - {@code \b} before a label like {@code (draft)} would demand the
-     * opposite of what is meant and match nothing.</p>
+     * with a word character - a boundary before a label like {@code (draft)} would demand the
+     * opposite of what is meant and match nothing. A hyphen counts as a word character, so
+     * {@code Kontoauszug-Import} is not a mention of {@code Kontoauszug}. A label that starts
+     * with an upper-case letter keeps that first letter case-sensitive, so {@code Soll} does not
+     * match the modal verb {@code soll}.</p>
      */
     private static Pattern pattern(final String label) {
-        final String prefix = isWordChar(label.charAt(0)) ? "\\b" : "";
-        final String suffix = isWordChar(label.charAt(label.length() - 1)) ? "\\b" : "";
-        return Pattern.compile(prefix + Pattern.quote(label) + suffix,
+        final String prefix = isWordChar(label.charAt(0)) ? NOT_AFTER_WORD_CHAR : "";
+        final String suffix = isWordChar(label.charAt(label.length() - 1)) ? NOT_BEFORE_WORD_CHAR : "";
+        return Pattern.compile(prefix + body(label) + suffix,
                 Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS);
     }
 
+    private static String body(final String label) {
+        final int initial = label.codePointAt(0);
+        if (!Character.isUpperCase(initial)) {
+            return Pattern.quote(label);
+        }
+        final int initialLength = Character.charCount(initial);
+        return "(?-i:" + Pattern.quote(label.substring(0, initialLength)) + ")"
+                + Pattern.quote(label.substring(initialLength));
+    }
+
     private static boolean isWordChar(final char c) {
-        return Character.isLetterOrDigit(c) || c == '_';
+        return Character.isLetterOrDigit(c) || c == '_' || c == HYPHEN;
     }
 
     /** One item plus the compiled matcher for its label - compiled once, not per text. */

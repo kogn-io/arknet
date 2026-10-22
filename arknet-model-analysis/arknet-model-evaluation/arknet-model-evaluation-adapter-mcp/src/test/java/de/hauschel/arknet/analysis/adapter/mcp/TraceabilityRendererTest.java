@@ -311,6 +311,27 @@ class TraceabilityRendererTest {
     }
 
     @Test
+    void termCooccurrenceIgnoresAHyphenatedCompoundOfATermLabel() {
+        TraceabilityGraph graph = TraceabilityGraph.of(StoreSnapshot.of(List.of(
+                iri(TERM_A, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_A, PREF_LABEL, "Kontoauszug"),
+                lit(TERM_A, IDENTIFIER, "TERM-A"),
+
+                iri(TERM_B, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_B, PREF_LABEL, "Bestellung"),
+                lit(TERM_B, IDENTIFIER, "TERM-B"),
+
+                iri(FR_10, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(FR_10, TITLE, "Import"),
+                lit(FR_10, IDENTIFIER, "FR-10"),
+                lit(FR_10, DESCRIPTION, "Der Kontoauszug-Import legt eine Bestellung an."))), DisplayLocale.DEFAULT);
+
+        String report = renderer.termCooccurrence(PROJECT, graph);
+
+        assertThat(report).contains("## Term pairs named together in the same text (0)");
+    }
+
+    @Test
     void termCooccurrenceStillCountsAMentionThatStandsOnlyInAnAcceptanceCriterion() {
         TraceabilityGraph graph = TraceabilityGraph.of(StoreSnapshot.of(List.of(
                 iri(TERM_A, RDF_TYPE, SKOS + "Concept"),

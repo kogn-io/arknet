@@ -79,6 +79,16 @@ class CodeReferencesTest {
                 new Span.CodeRef("ADR-3", ID + "adr-3", "ADR-3", "Actor identity"));
     }
 
+    /** The hyphen is part of the code, and a code is a capitalised token: lowercase prose is not a reference. */
+    @Test
+    void aCodeIsMatchedWholeAndCaseSensitive() {
+        final List<ModelSection> marked = CodeReferences.markUp(List.of(
+                section("Architecture decisions", card("ADR-1", "Scope frame", "see adr-3 and ADR-30")),
+                section("More decisions", card("ADR-3", "Actor identity", "unrelated text"))));
+
+        assertThat(spansOf(marked.get(0))).containsExactly(new Span.Plain("see adr-3 and ADR-30"));
+    }
+
     private static List<Span> spansOf(final ModelSection section) {
         return ProseParts.soleParagraph(section.cards().get(0).blocks().get(0)).spans();
     }

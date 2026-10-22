@@ -57,14 +57,29 @@ class GlossaryTest {
         assertThatNullPointerException().isThrownBy(() -> GLOSSARY.ref(null)).withMessageContaining("id");
     }
 
+    /** A label with a capital initial matches capitalised only; a lowercase label matches either way. */
     @Test
-    void findsALabelRegardlessOfCase() {
-        final RichText text = GLOSSARY.markUp("kunde und Kunde", Set.of(KUNDE));
+    void capitaliseOnlyTheInitialOfALabelThatIsCapitalised() {
+        final ResourceId soll = ResourceId.of(ID + "term-4");
+        final ResourceId konto = ResourceId.of(ID + "term-5");
+        final Glossary glossary = Glossary.of(List.of(
+                term(soll, "TERM-4", "Soll"),
+                term(konto, "TERM-5", "konto")));
 
-        assertThat(text.spans()).containsExactly(
-                new Span.TermLink("kunde", KUNDE.value(), "TERM-1"),
+        assertThat(glossary.markUp("Er soll Konto und konto", Set.of(soll, konto)).spans()).containsExactly(
+                new Span.Plain("Er soll "),
+                new Span.TermLink("Konto", konto.value(), "TERM-5"),
                 new Span.Plain(" und "),
-                new Span.TermLink("Kunde", KUNDE.value(), "TERM-1"));
+                new Span.TermLink("konto", konto.value(), "TERM-5"));
+        assertThat(glossary.markUp("Soll", Set.of(soll)).spans())
+                .containsExactly(new Span.TermLink("Soll", soll.value(), "TERM-4"));
+    }
+
+    /** A hyphenated compound is running text, neither a link nor a gap for its first part. */
+    @Test
+    void leavesAHyphenatedCompoundAsPlainText() {
+        assertThat(GLOSSARY.markUp("Der Kunde-Import l\u00e4uft", Set.of()).spans())
+                .containsExactly(new Span.Plain("Der Kunde-Import l\u00e4uft"));
     }
 
     /**

@@ -65,7 +65,8 @@ public enum StoreCheckKind {
             + "a pair mentioned only in an acceptance criterion, or only directly next to the business "
             + "code of another resource that already links the term, is listed separately as a hint "
             + "and not counted.",
-            "the text-mention match (\"Mentioned in text but not linked\") is literal and whole-word, "
+            "the text-mention match (\"Mentioned in text but not linked\") is literal and whole-word (a hyphen counts as part of the word, and a label starting with a "
+                    + "capital letter only matches capitalised), "
                     + "not stem-based, so it also flags everyday words used in their ordinary sense (e.g. "
                     + "\"Rolle\", \"Begriff\", \"Projekt\") - a hit there is a reading hint for a human, "
                     + "not a finding that demands an edge; whether an existing edge is the right one; and the "

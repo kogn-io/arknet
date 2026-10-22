@@ -22,12 +22,94 @@ import de.hauschel.arknet.analysis.domain.LabelMentions.Mention;
 class LabelMentionsTest {
 
     @Test
-    void findsALabelRegardlessOfCase() {
+    void aLabelWithALowercaseInitialMatchesRegardlessOfCase() {
+        final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "kunde");
+
+        assertThat(matcher.in("Kunde und kunde und KUNDE")).containsExactly(
+                new Mention<>(0, 5, "term-1"),
+                new Mention<>(10, 15, "term-1"),
+                new Mention<>(20, 25, "term-1"));
+    }
+
+    @Test
+    void aLabelWithACapitalInitialOnlyMatchesCapitalised() {
+        final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "Soll");
+
+        assertThat(matcher.in("Er soll zahlen.")).isEmpty();
+        assertThat(matcher.in("Soll zahlen.")).containsExactly(new Mention<>(0, 4, "term-1"));
+    }
+
+    @Test
+    void onlyTheInitialIsCaseSensitive() {
         final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "Kunde");
 
-        assertThat(matcher.in("kunde und Kunde")).containsExactly(
-                new Mention<>(0, 5, "term-1"),
-                new Mention<>(10, 15, "term-1"));
+        assertThat(matcher.in("Der KUNDE und der kunde")).containsExactly(new Mention<>(4, 9, "term-1"));
+    }
+
+    @Test
+    void aCapitalUmlautInitialIsCaseSensitiveToo() {
+        final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "\u00c4nderung");
+
+        assertThat(matcher.in("die \u00e4nderung")).isEmpty();
+        assertThat(matcher.in("die \u00c4nderung")).containsExactly(new Mention<>(4, 12, "term-1"));
+    }
+
+    @Test
+    void aLabelStartingWithADigitOrSymbolStaysCaseInsensitive() {
+        final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "(Draft)");
+
+        assertThat(matcher.in("a (draft) b")).containsExactly(new Mention<>(2, 9, "term-1"));
+    }
+
+    @Test
+    void aHyphenatedCompoundDoesNotMentionItsFirstPart() {
+        final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "Kontoauszug");
+
+        assertThat(matcher.in("Kontoauszug-Import l\u00e4uft")).isEmpty();
+        assertThat(matcher.in("der Import-Kontoauszug")).isEmpty();
+    }
+
+    @Test
+    void aHyphenatedLabelMatchesItself() {
+        final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "Kontoauszug-Import");
+
+        assertThat(matcher.in("Der Kontoauszug-Import l\u00e4uft"))
+                .containsExactly(new Mention<>(4, 22, "term-1"));
+    }
+
+    @Test
+    void spacedDashesAndPunctuationAreStillWordBoundaries() {
+        final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "Kontoauszug");
+
+        assertThat(matcher.in("Kontoauszug - Import")).hasSize(1);
+        assertThat(matcher.in("Kontoauszug, Import")).hasSize(1);
+        assertThat(matcher.in("Kontoauszug.")).hasSize(1);
+        assertThat(matcher.in("(Kontoauszug)")).hasSize(1);
+    }
+
+    @Test
+    void aCodeWithAHyphenMatchesAsAWholeToken() {
+        final LabelMentions<String> matcher = LabelMentions.of(List.of("FR-7"), id -> id);
+
+        assertThat(matcher.in("Kunde (FR-7)")).hasSize(1);
+        assertThat(matcher.in("FR-7: Kunde")).hasSize(1);
+        assertThat(matcher.in("FR-7-Nachfolger")).isEmpty();
+        assertThat(LabelMentions.of(List.of("FR-1"), id -> id).in("siehe FR-12")).isEmpty();
+        assertThat(matcher.in("fr-7")).isEmpty();
+    }
+
+    /**
+     * A shorter mention lying completely inside a longer one is dropped, also when it does not
+     * sit at the longer label's start.
+     */
+    @Test
+    void aMentionEnclosedInALongerMentionIsDropped() {
+        final LabelMentions<String> matcher = LabelMentions.of(
+                List.of("term-1", "term-2"),
+                id -> "term-1".equals(id) ? "Konto Auszug Import" : "Auszug");
+
+        assertThat(matcher.in("Der Konto Auszug Import l\u00e4uft"))
+                .containsExactly(new Mention<>(4, 23, "term-1"));
     }
 
     @Test

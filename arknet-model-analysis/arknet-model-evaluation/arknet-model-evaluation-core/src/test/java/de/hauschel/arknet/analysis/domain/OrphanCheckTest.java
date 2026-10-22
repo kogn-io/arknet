@@ -196,6 +196,23 @@ class OrphanCheckTest {
                 lit(ID + "term-9", IDENTIFIER, "TERM-9"));
     }
 
+    @Test
+    void aLowercaseWordDoesNotMentionATermWhoseLabelIsCapitalised() {
+        final List<Triple> term = List.of(
+                iri(ID + "term-8", RDF_TYPE, SKOS + "Concept"),
+                lit(ID + "term-8", PREF_LABEL, "Soll"),
+                lit(ID + "term-8", IDENTIFIER, "TERM-8"));
+
+        assertThat(run(term, citingRequirement("Der Kunde soll zahlen.")).unlinkedMentions()).isEmpty();
+        assertThat(run(term, citingRequirement("Soll und Haben stehen sich gegenueber.")).unlinkedMentions())
+                .hasSize(1);
+    }
+
+    @Test
+    void aHyphenatedCompoundDoesNotMentionTheTermItStartsWith() {
+        assertThat(run(kundeTerm(), citingRequirement("Der Kunde-Import l\u00e4uft.")).unlinkedMentions()).isEmpty();
+    }
+
     private static OrphanCheck.Result run(final List<Triple> first, final List<Triple> second) {
         final List<Triple> all = new java.util.ArrayList<>(first);
         all.addAll(second);
