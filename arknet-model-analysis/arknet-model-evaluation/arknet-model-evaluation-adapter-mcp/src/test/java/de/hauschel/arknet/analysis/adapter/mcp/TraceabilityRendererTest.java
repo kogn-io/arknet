@@ -310,6 +310,30 @@ class TraceabilityRendererTest {
         assertThat(report).contains("TERM-A").contains("TERM-B").contains("1 text(s)");
     }
 
+    @Test
+    void termCooccurrenceStillCountsAMentionThatStandsOnlyInAnAcceptanceCriterion() {
+        TraceabilityGraph graph = TraceabilityGraph.of(StoreSnapshot.of(List.of(
+                iri(TERM_A, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_A, PREF_LABEL, "Kunde"),
+                lit(TERM_A, IDENTIFIER, "TERM-A"),
+
+                iri(TERM_B, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_B, PREF_LABEL, "Bestellung"),
+                lit(TERM_B, IDENTIFIER, "TERM-B"),
+
+                iri(FR_10, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(FR_10, TITLE, "Bestandsdaten"),
+                lit(FR_10, IDENTIFIER, "FR-10"),
+                lit(FR_10, DESCRIPTION, "Der Kunde meldet sich an."),
+                iri(FR_10, ACCEPTANCE_CRITERION, CRITERION_10),
+                iri(CRITERION_10, RDF_TYPE, ARKREQ + "AcceptanceCriterion"),
+                lit(CRITERION_10, CRITERION_TEXT, "Eine Bestellung wird angezeigt."))), DisplayLocale.DEFAULT);
+
+        String report = renderer.termCooccurrence(PROJECT, graph);
+
+        assertThat(report).contains("## Term pairs named together in the same text (1)");
+    }
+
     private static StoreSnapshot roleUseCaseFixtureSnapshot() {
         return StoreSnapshot.of(List.of(
                 iri(ROLE_A, RDF_TYPE, ROLE_TYPE),

@@ -30,18 +30,35 @@ public final class OrphanCheck {
     public record ResourceFinding(String iri, String handle, String typeLocalName, String label) {
     }
 
-    /** One prose mention of a term with no edge backing it up - mirrors {@link TraceabilityGraph.UnlinkedMention}. */
+    /**
+     * One prose mention of a term with no edge backing it up - mirrors {@link
+     * TraceabilityGraph.UnlinkedMention}: {@code fields} names where it stands, {@code hintReason}
+     * is {@code null} for a finding and the reason it is only a hint otherwise.
+     */
     public record MentionFinding(
             String sourceIri, String sourceHandle, String termIri, String termHandle, String termLabel,
-            String edgeLocalName) {
+            String edgeLocalName, List<String> fields, String hintReason) {
     }
 
-    /** The four findings lists {@code orphan_check}/{@code store_check ORPHAN} report. */
+    /**
+     * The four findings lists {@code orphan_check}/{@code store_check ORPHAN} report, plus the
+     * mention hints: pairs whose every mention stands in a non-normative field or next to a
+     * reference to a resource that already links the term. Hints are not findings and stay out of
+     * {@link #total()}.
+     */
     public record Result(
             List<ResourceFinding> orphanRequirements, List<ResourceFinding> orphanTerms,
-            List<MentionFinding> unlinkedMentions, List<ResourceFinding> orphanConstraints) {
+            List<MentionFinding> unlinkedMentions, List<ResourceFinding> orphanConstraints,
+            List<MentionFinding> mentionHints) {
 
-        /** @return the total number of findings across all four lists. */
+        /** A result without hints. */
+        public Result(
+                List<ResourceFinding> orphanRequirements, List<ResourceFinding> orphanTerms,
+                List<MentionFinding> unlinkedMentions, List<ResourceFinding> orphanConstraints) {
+            this(orphanRequirements, orphanTerms, unlinkedMentions, orphanConstraints, List.of());
+        }
+
+        /** @return the total number of findings across all four lists (hints excluded). */
         public int total() {
             return orphanRequirements.size() + orphanTerms.size() + unlinkedMentions.size()
                     + orphanConstraints.size();
@@ -62,17 +79,24 @@ public final class OrphanCheck {
                 .filter(iri -> !graph.isReferencedTerm(iri))
                 .map(iri -> resourceFinding(graph, iri))
                 .toList();
-        final List<MentionFinding> unlinkedMentions = graph.unlinkedMentions().stream()
-                .map(mention -> new MentionFinding(
-                        mention.sourceIri(), graph.identifierOf(mention.sourceIri()).orElse(null),
-                        mention.termIri(), graph.identifierOf(mention.termIri()).orElse(null),
-                        mention.termLabel(), mention.edgeLocalName()))
-                .toList();
+        final TraceabilityGraph.MentionScan scan = graph.mentionScan();
+        final List<MentionFinding> unlinkedMentions = mentionFindings(graph, scan.findings());
+        final List<MentionFinding> mentionHints = mentionFindings(graph, scan.hints());
         final List<ResourceFinding> orphanConstraints = graph.constraintIris().stream()
                 .filter(iri -> !graph.isConstraintReferenced(iri))
                 .map(iri -> resourceFinding(graph, iri))
                 .toList();
-        return new Result(orphanRequirements, orphanTerms, unlinkedMentions, orphanConstraints);
+        return new Result(orphanRequirements, orphanTerms, unlinkedMentions, orphanConstraints, mentionHints);
+    }
+
+    private static List<MentionFinding> mentionFindings(
+            final TraceabilityGraph graph, final List<TraceabilityGraph.UnlinkedMention> mentions) {
+        return mentions.stream()
+                .map(mention -> new MentionFinding(
+                        mention.sourceIri(), graph.identifierOf(mention.sourceIri()).orElse(null),
+                        mention.termIri(), graph.identifierOf(mention.termIri()).orElse(null),
+                        mention.termLabel(), mention.edgeLocalName(), mention.fields(), mention.hintReason()))
+                .toList();
     }
 
     private static ResourceFinding resourceFinding(final TraceabilityGraph graph, final String iri) {

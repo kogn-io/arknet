@@ -178,8 +178,14 @@ public final class StoreCheckRenderer {
     public String orphanSection(final OrphanCheck.Result result) {
         Objects.requireNonNull(result, "result");
         if (result.total() == 0) {
-            return "ORPHAN: no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
-                    + "constraints found.\n\n" + ORPHAN_BLIND_SPOT;
+            final StringBuilder none = new StringBuilder(
+                    "ORPHAN: no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
+                            + "constraints found.");
+            if (!result.mentionHints().isEmpty()) {
+                none.append(' ').append(hintCount(result)).append('.');
+                appendHintSection(none, result);
+            }
+            return none.append("\n\n").append(ORPHAN_BLIND_SPOT).toString();
         }
         final StringBuilder rendered = new StringBuilder("ORPHAN: ")
                 .append(result.orphanRequirements().size())
@@ -192,6 +198,9 @@ public final class StoreCheckRenderer {
                 .append(", ").append(result.orphanConstraints().size())
                 .append(result.orphanConstraints().size() == 1 ? " constraint" : " constraints")
                 .append(" not attached to any requirement or use case.");
+        if (!result.mentionHints().isEmpty()) {
+            rendered.append(' ').append(hintCount(result)).append('.');
+        }
         if (!result.orphanRequirements().isEmpty()) {
             rendered.append("\n\nRequirements no use case satisfies or realises:\n\n");
             appendResourceTable(rendered, result.orphanRequirements());
@@ -208,7 +217,28 @@ public final class StoreCheckRenderer {
             rendered.append("\n\nConstraints not attached to any requirement or use case:\n\n");
             appendResourceTable(rendered, result.orphanConstraints());
         }
+        appendHintSection(rendered, result);
         return rendered.append("\n\n").append(ORPHAN_BLIND_SPOT).toString();
+    }
+
+    private static String hintCount(final OrphanCheck.Result result) {
+        final int count = result.mentionHints().size();
+        return count + (count == 1 ? " mention hint" : " mention hints") + " (not counted)";
+    }
+
+    private void appendHintSection(final StringBuilder out, final OrphanCheck.Result result) {
+        if (result.mentionHints().isEmpty()) {
+            return;
+        }
+        out.append("\n\nMentioned only in an acceptance criterion or next to a reference (hint, not counted):\n\n")
+                .append("| Source | Term | Label | Where |\n| --- | --- | --- | --- |");
+        for (final MentionFinding hint : result.mentionHints()) {
+            out.append("\n| ").append(handleOf(hint.sourceIri(), hint.sourceHandle()))
+                    .append(" | ").append(handleOf(hint.termIri(), hint.termHandle()))
+                    .append(" | ").append(hint.termLabel())
+                    .append(" | ").append(hint.hintReason())
+                    .append(" |");
+        }
     }
 
     private void appendResourceTable(final StringBuilder out, final List<ResourceFinding> findings) {
@@ -222,12 +252,13 @@ public final class StoreCheckRenderer {
     }
 
     private void appendMentionTable(final StringBuilder out, final List<MentionFinding> mentions) {
-        out.append("| Source | Term | Label | Missing edge |\n| --- | --- | --- | --- |");
+        out.append("| Source | Term | Label | Missing edge | Field |\n| --- | --- | --- | --- | --- |");
         for (final MentionFinding mention : mentions) {
             out.append("\n| ").append(handleOf(mention.sourceIri(), mention.sourceHandle()))
                     .append(" | ").append(handleOf(mention.termIri(), mention.termHandle()))
                     .append(" | ").append(mention.termLabel())
                     .append(" | ").append(mention.edgeLocalName())
+                    .append(" | ").append(String.join(", ", mention.fields()))
                     .append(" |");
         }
     }

@@ -41,6 +41,9 @@ class OrphanCheckTest {
     private static final String USE_CASE = ARKREQ + "UseCase";
     private static final String DOMAIN_VISION = ARKDDD + "domainVision";
     private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
+    private static final String ACCEPTANCE_CRITERION = ARKREQ + "acceptanceCriterion";
+    private static final String CRITERION_TEXT = ARKREQ + "criterionText";
+    private static final String USES_TERM = ARKREQ + "usesTerm";
     private static final String CONSTRAINED_BY = "http://open-services.net/ns/rm#constrainedBy";
 
     @Test
@@ -134,7 +137,8 @@ class OrphanCheckTest {
         OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
 
         assertThat(result.unlinkedMentions()).containsExactly(
-                new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm"));
+                new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("description"), null));
     }
 
     /**
@@ -156,7 +160,8 @@ class OrphanCheckTest {
         OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
 
         assertThat(result.unlinkedMentions()).containsExactly(
-                new MentionFinding(ID + "bc-2", "BC-2", ID + "term-8", "TERM-8", "Bestellung", "ubiquitousLanguageTerm"));
+                new MentionFinding(ID + "bc-2", "BC-2", ID + "term-8", "TERM-8", "Bestellung", "ubiquitousLanguageTerm",
+                        List.of("domainVision"), null));
     }
 
     /**
@@ -181,6 +186,126 @@ class OrphanCheckTest {
 
         assertThat(result.orphanConstraints()).containsExactly(
                 new ResourceFinding(ID + "con-2", "CON-2", "TechnicalConstraint", "PostgreSQL only"));
+    }
+
+    private static List<Triple> kundeTerm() {
+        return List.of(
+                iri(ID + "term-9", RDF_TYPE, SKOS + "Concept"),
+                lit(ID + "term-9", PREF_LABEL, "Kunde"),
+                lit(ID + "term-9", IDENTIFIER, "TERM-9"));
+    }
+
+    private static OrphanCheck.Result run(final List<Triple> first, final List<Triple> second) {
+        final List<Triple> all = new java.util.ArrayList<>(first);
+        all.addAll(second);
+        return OrphanCheck.run(TraceabilityGraph.of(StoreSnapshot.of(all), DisplayLocale.DEFAULT));
+    }
+
+    @Test
+    void aMentionOnlyInAnAcceptanceCriterionIsAHintAndDoesNotCount() {
+        OrphanCheck.Result result = run(kundeTerm(), List.of(
+                iri(ID + "fr-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-3", IDENTIFIER, "FR-3"),
+                lit(ID + "fr-3", DESCRIPTION, "Das System zeigt Bestandsdaten."),
+                iri(ID + "fr-3", ACCEPTANCE_CRITERION, ID + "ac-1"),
+                lit(ID + "ac-1", CRITERION_TEXT, "Der Kunde sieht die Daten.")));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.mentionHints()).containsExactly(
+                new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("acceptanceCriterion"), "only in acceptanceCriterion"));
+        assertThat(result.total()).isEqualTo(result.orphanRequirements().size() + result.orphanTerms().size());
+    }
+
+    @Test
+    void aMentionInTheDescriptionStaysAFindingAndNamesTheFieldsEvenWithACriterionHit() {
+        OrphanCheck.Result result = run(kundeTerm(), List.of(
+                iri(ID + "fr-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-3", IDENTIFIER, "FR-3"),
+                lit(ID + "fr-3", DESCRIPTION, "Der Kunde sieht Daten."),
+                iri(ID + "fr-3", ACCEPTANCE_CRITERION, ID + "ac-1"),
+                lit(ID + "ac-1", CRITERION_TEXT, "Der Kunde sieht die Daten.")));
+
+        assertThat(result.unlinkedMentions()).containsExactly(
+                new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("description"), null));
+        assertThat(result.mentionHints()).isEmpty();
+    }
+
+    private static List<Triple> referencedRequirement(final boolean linksTheTerm) {
+        final List<Triple> triples = new java.util.ArrayList<>(List.of(
+                iri(ID + "fr-7", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-7", IDENTIFIER, "FR-7")));
+        if (linksTheTerm) {
+            triples.add(iri(ID + "fr-7", USES_TERM, ID + "term-9"));
+        }
+        return triples;
+    }
+
+    private static List<Triple> citingRequirement(final String description) {
+        return List.of(
+                iri(ID + "fr-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-3", IDENTIFIER, "FR-3"),
+                lit(ID + "fr-3", DESCRIPTION, description));
+    }
+
+    @Test
+    void aMentionNextToAReferenceToARequirementThatLinksTheTermIsAHint() {
+        for (final String description : List.of(
+                "Der Kontoauszug zeigt den Kunde (FR-7).", "FR-7: Kunde wird gezeigt.", "Kunde, FR-7 gilt.")) {
+            final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
+            base.addAll(referencedRequirement(true));
+
+            final OrphanCheck.Result result = run(base, citingRequirement(description));
+
+            assertThat(result.unlinkedMentions()).as(description).isEmpty();
+            assertThat(result.mentionHints()).as(description).singleElement().satisfies(hint -> {
+                assertThat(hint.sourceHandle()).isEqualTo("FR-3");
+                assertThat(hint.hintReason()).isEqualTo("next to FR-7, which links the term");
+            });
+        }
+    }
+
+    @Test
+    void theReferenceRuleDoesNotApplyWhenTheReferencedRequirementLacksTheEdge() {
+        final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
+        base.addAll(referencedRequirement(false));
+
+        final OrphanCheck.Result result = run(base, citingRequirement("Der Kunde (FR-7) sieht Daten."));
+
+        assertThat(result.unlinkedMentions()).hasSize(1);
+        assertThat(result.mentionHints()).isEmpty();
+    }
+
+    @Test
+    void theReferenceRuleDoesNotApplyWhenWordsSeparateMentionAndReference() {
+        final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
+        base.addAll(referencedRequirement(true));
+
+        final OrphanCheck.Result result = run(base, citingRequirement("Laut FR-7 muss der Kunde zahlen."));
+
+        assertThat(result.unlinkedMentions()).hasSize(1);
+        assertThat(result.mentionHints()).isEmpty();
+    }
+
+    @Test
+    void aSelfReferenceDoesNotExemptAMention() {
+        final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
+
+        final OrphanCheck.Result result = run(base, citingRequirement("Der Kunde (FR-3) zahlt."));
+
+        assertThat(result.unlinkedMentions()).hasSize(1);
+    }
+
+    @Test
+    void aSecondUnexemptedHitInTheSamePairKeepsTheFinding() {
+        final List<Triple> base = new java.util.ArrayList<>(kundeTerm());
+        base.addAll(referencedRequirement(true));
+
+        final OrphanCheck.Result result = run(base, citingRequirement("Kunde (FR-7). Der Kunde zahlt."));
+
+        assertThat(result.unlinkedMentions()).hasSize(1);
+        assertThat(result.mentionHints()).isEmpty();
     }
 
     private static Triple iri(String subject, String predicate, String objectIri) {

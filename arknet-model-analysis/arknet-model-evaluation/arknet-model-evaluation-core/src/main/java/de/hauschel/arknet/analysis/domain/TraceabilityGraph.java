@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.RdfNode;
@@ -737,12 +738,21 @@ public final class TraceabilityGraph {
      *         the edge's target IRIs, then each target's own {@code criterionText} literal(s).
      */
     public List<String> requirementProseTexts(String requirementIri) {
+        return texts(requirementProseFields(requirementIri));
+    }
+
+    /**
+     * The same texts as {@link #requirementProseTexts(String)}, each tagged with the stable name of
+     * the field it stands in ({@code description}, {@code acceptanceCriterion}).
+     */
+    public List<ProseField> requirementProseFields(String requirementIri) {
         Objects.requireNonNull(requirementIri, "requirementIri");
-        List<String> texts = new ArrayList<>(literals(requirementIri, DCTERMS_DESCRIPTION));
+        List<ProseField> fields = new ArrayList<>();
+        addLiterals(fields, "description", requirementIri, DCTERMS_DESCRIPTION);
         for (String criterionIri : resourceObjects(requirementIri, ACCEPTANCE_CRITERION)) {
-            texts.addAll(literals(criterionIri, CRITERION_TEXT));
+            addLiterals(fields, FIELD_ACCEPTANCE_CRITERION, criterionIri, CRITERION_TEXT);
         }
-        return texts;
+        return fields;
     }
 
     /**
@@ -750,7 +760,15 @@ public final class TraceabilityGraph {
      *         unlinked glossary mentions
      */
     public List<String> boundedContextProseTexts(String boundedContextIri) {
-        return literals(Objects.requireNonNull(boundedContextIri, "boundedContextIri"), DOMAIN_VISION);
+        return texts(boundedContextProseFields(boundedContextIri));
+    }
+
+    /** {@link #boundedContextProseTexts(String)} tagged with its field name ({@code domainVision}). */
+    public List<ProseField> boundedContextProseFields(String boundedContextIri) {
+        List<ProseField> fields = new ArrayList<>();
+        addLiterals(fields, "domainVision", Objects.requireNonNull(boundedContextIri, "boundedContextIri"),
+                DOMAIN_VISION);
+        return fields;
     }
 
     /**
@@ -765,19 +783,29 @@ public final class TraceabilityGraph {
      *         literal when unset
      */
     public List<String> useCaseProseTexts(String useCaseIri) {
+        return texts(useCaseProseFields(useCaseIri));
+    }
+
+    /**
+     * The same texts as {@link #useCaseProseTexts(String)}, each tagged with its field name
+     * ({@code goal}, {@code scope}, {@code trigger}, {@code precondition}, {@code postcondition},
+     * {@code mainStep}, {@code extensionStep}).
+     */
+    public List<ProseField> useCaseProseFields(String useCaseIri) {
         Objects.requireNonNull(useCaseIri, "useCaseIri");
-        List<String> texts = new ArrayList<>(literals(useCaseIri, USE_CASE_GOAL));
-        texts.addAll(literals(useCaseIri, DESIGN_SCOPE));
-        texts.addAll(literals(useCaseIri, TRIGGER));
-        texts.addAll(literals(useCaseIri, USE_CASE_PRECONDITION));
-        texts.addAll(literals(useCaseIri, USE_CASE_POSTCONDITION));
+        List<ProseField> fields = new ArrayList<>();
+        addLiterals(fields, "goal", useCaseIri, USE_CASE_GOAL);
+        addLiterals(fields, "scope", useCaseIri, DESIGN_SCOPE);
+        addLiterals(fields, "trigger", useCaseIri, TRIGGER);
+        addLiterals(fields, "precondition", useCaseIri, USE_CASE_PRECONDITION);
+        addLiterals(fields, "postcondition", useCaseIri, USE_CASE_POSTCONDITION);
         for (String stepIri : resourceObjects(useCaseIri, MAIN_STEP)) {
-            texts.addAll(literals(stepIri, STEP_TEXT));
+            addLiterals(fields, "mainStep", stepIri, STEP_TEXT);
         }
         for (String stepIri : resourceObjects(useCaseIri, EXTENSION_STEP)) {
-            texts.addAll(literals(stepIri, STEP_TEXT));
+            addLiterals(fields, "extensionStep", stepIri, STEP_TEXT);
         }
-        return texts;
+        return fields;
     }
 
     /**
@@ -785,7 +813,14 @@ public final class TraceabilityGraph {
      *         other glossary terms (issue #252) - mirrors {@link #boundedContextProseTexts(String)}
      */
     public List<String> termProseTexts(String termIri) {
-        return literals(Objects.requireNonNull(termIri, "termIri"), DEFINITION);
+        return texts(termProseFields(termIri));
+    }
+
+    /** {@link #termProseTexts(String)} tagged with its field name ({@code definition}). */
+    public List<ProseField> termProseFields(String termIri) {
+        List<ProseField> fields = new ArrayList<>();
+        addLiterals(fields, "definition", Objects.requireNonNull(termIri, "termIri"), DEFINITION);
+        return fields;
     }
 
     /**
@@ -801,18 +836,58 @@ public final class TraceabilityGraph {
      *         bounded context.
      */
     public List<String> adrProseTexts(String adrIri) {
+        return texts(adrProseFields(adrIri));
+    }
+
+    /**
+     * The same texts as {@link #adrProseTexts(String)}, each tagged with its field name ({@code
+     * name}, {@code context}, {@code decision}, {@code consequence}, {@code option}, {@code
+     * optionRationale}).
+     */
+    public List<ProseField> adrProseFields(String adrIri) {
         Objects.requireNonNull(adrIri, "adrIri");
-        List<String> texts = new ArrayList<>(literals(adrIri, NAME));
-        texts.addAll(literals(adrIri, ADR_CONTEXT));
-        texts.addAll(literals(adrIri, ADR_DECISION));
+        List<ProseField> fields = new ArrayList<>();
+        addLiterals(fields, "name", adrIri, NAME);
+        addLiterals(fields, "context", adrIri, ADR_CONTEXT);
+        addLiterals(fields, "decision", adrIri, ADR_DECISION);
         for (String consequenceIri : resourceObjects(adrIri, CONSEQUENCE)) {
-            texts.addAll(literals(consequenceIri, CONSEQUENCE_STATEMENT));
+            addLiterals(fields, "consequence", consequenceIri, CONSEQUENCE_STATEMENT);
         }
         for (String optionIri : resourceObjects(adrIri, CONSIDERED_OPTION)) {
-            texts.addAll(literals(optionIri, NAME));
-            texts.addAll(literals(optionIri, OPTION_RATIONALE));
+            addLiterals(fields, "option", optionIri, NAME);
+            addLiterals(fields, "optionRationale", optionIri, OPTION_RATIONALE);
         }
-        return texts;
+        return fields;
+    }
+
+    /**
+     * One prose text with the stable name of the field it stands in.
+     *
+     * @param field the field name, e.g. {@code description} or {@code acceptanceCriterion}
+     * @param text  the literal's text
+     */
+    public record ProseField(String field, String text) {
+
+        /**
+         * @return whether a mention in this field is normative text (a missing edge is a finding)
+         *         rather than illustrative text (an acceptance criterion's example), where a missing
+         *         edge is only a hint
+         */
+        public boolean normative() {
+            return !FIELD_ACCEPTANCE_CRITERION.equals(field);
+        }
+    }
+
+    private static final String FIELD_ACCEPTANCE_CRITERION = "acceptanceCriterion";
+
+    private static List<String> texts(List<ProseField> fields) {
+        return fields.stream().map(ProseField::text).toList();
+    }
+
+    private void addLiterals(List<ProseField> fields, String field, String subject, String predicate) {
+        for (String text : literals(subject, predicate)) {
+            fields.add(new ProseField(field, text));
+        }
     }
 
     /** @return the {@code prefLabel}/{@code title} label of every term IRI that carries one. */
@@ -878,65 +953,169 @@ public final class TraceabilityGraph {
      *         term and architecture decision
      */
     public List<UnlinkedMention> unlinkedMentions() {
+        return mentionScan().findings();
+    }
+
+    /**
+     * The pairs {@link #unlinkedMentions()} does not count: every mention of the pair stands in a
+     * non-normative field (an acceptance criterion) or directly next to a reference to another
+     * resource that already links the term. Same record shape as a finding, with {@link
+     * UnlinkedMention#hintReason()} set.
+     *
+     * @return the downgraded pairs, in the order of the sweeps
+     */
+    public List<UnlinkedMention> mentionHints() {
+        return mentionScan().hints();
+    }
+
+    /**
+     * Runs the sweeps of {@link #unlinkedMentions()} once and splits the pairs into findings and
+     * hints. A hit (one mention of a term in one field) is exempt when its field is non-normative
+     * or when it stands directly next to the business code of another resource that links the
+     * term - only non-letter, non-digit characters between mention and code, in either direction.
+     * A pair is a finding when at least one hit is not exempt, otherwise a hint.
+     *
+     * @return findings and hints
+     */
+    public MentionScan mentionScan() {
         Map<String, String> termLabels = termLabels();
         if (termLabels.isEmpty()) {
-            return List.of();
+            return new MentionScan(List.of(), List.of());
         }
         List<String> termIris = termLabels.keySet().stream()
                 .sorted(Comparator.comparing(iri -> identifierOf(iri).orElse(iri)))
                 .toList();
-        LabelMentions<String> matcher = LabelMentions.of(termIris, termLabels::get);
+        Sweep sweep = new Sweep(LabelMentions.of(termIris, termLabels::get), termLabels, codeReferences());
 
-        List<UnlinkedMention> found = new ArrayList<>();
         for (String requirementIri : requirementIris()) {
             Set<String> linked = new HashSet<>(usedTerms(requirementIri));
-            for (String termIri : matcher.mentionedIn(requirementProseTexts(requirementIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(requirementIri, termIri, termLabels.get(termIri), "usesTerm"));
-                }
-            }
+            sweep.run(requirementIri, requirementProseFields(requirementIri), linked, "usesTerm");
         }
         for (String useCaseIri : useCaseIris()) {
             Set<String> linked = new HashSet<>(usedTerms(useCaseIri));
             linked.addAll(rolesOf(useCaseIri));
-            for (String termIri : matcher.mentionedIn(useCaseProseTexts(useCaseIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(useCaseIri, termIri, termLabels.get(termIri), "usesTerm"));
-                }
-            }
+            sweep.run(useCaseIri, useCaseProseFields(useCaseIri), linked, "usesTerm");
         }
         for (String boundedContextIri : boundedContextIris()) {
             Set<String> linked = new HashSet<>(linkedTerms(boundedContextIri));
-            for (String termIri : matcher.mentionedIn(boundedContextProseTexts(boundedContextIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(
-                            boundedContextIri, termIri, termLabels.get(termIri), "ubiquitousLanguageTerm"));
-                }
-            }
+            sweep.run(boundedContextIri, boundedContextProseFields(boundedContextIri), linked,
+                    "ubiquitousLanguageTerm");
         }
         for (String termIri : termIris) {
             Set<String> linked = new HashSet<>(relatedTerms(termIri));
             broaderTerm(termIri).ifPresent(linked::add);
             linked.addAll(narrowerTerms(termIri));
-            for (String mentionedTermIri : matcher.mentionedIn(termProseTexts(termIri))) {
-                if (mentionedTermIri.equals(termIri)) {
-                    continue;
-                }
-                if (!linked.contains(mentionedTermIri)) {
-                    found.add(new UnlinkedMention(
-                            termIri, mentionedTermIri, termLabels.get(mentionedTermIri), GLOSSARY_EDGE_LOCAL_NAME));
-                }
-            }
+            linked.add(termIri);
+            sweep.run(termIri, termProseFields(termIri), linked, GLOSSARY_EDGE_LOCAL_NAME);
         }
         for (String adrIri : adrIris()) {
             Set<String> linked = new HashSet<>(adrUsedTerms(adrIri));
-            for (String termIri : matcher.mentionedIn(adrProseTexts(adrIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(adrIri, termIri, termLabels.get(termIri), "usesTerm"));
+            sweep.run(adrIri, adrProseFields(adrIri), linked, "usesTerm");
+        }
+        return new MentionScan(List.copyOf(sweep.findings), List.copyOf(sweep.hints));
+    }
+
+    /**
+     * @param findings the pairs with at least one normative, non-referencing mention
+     * @param hints    the pairs whose every mention is exempt
+     */
+    public record MentionScan(List<UnlinkedMention> findings, List<UnlinkedMention> hints) {
+    }
+
+    /** One mention of a term in one field, with the reason it is exempt (or {@code null}). */
+    private record Hit(String field, String exemption) {
+    }
+
+    /** Matcher over every business code of the graph, plus the code-to-resource lookup. */
+    private record CodeReferences(LabelMentions<String> matcher, Map<String, String> iriByCode) {
+    }
+
+    private CodeReferences codeReferences() {
+        Map<String, String> iriByCode = new LinkedHashMap<>();
+        identifierBySubject.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(e -> iriByCode.putIfAbsent(e.getValue(), e.getKey()));
+        return new CodeReferences(LabelMentions.of(List.copyOf(iriByCode.keySet()), code -> code), iriByCode);
+    }
+
+    /** The term IRIs a resource links, whatever its type - each type only carries its own edge. */
+    private Set<String> linkedTermsOf(String iri) {
+        Set<String> linked = new HashSet<>(usedTerms(iri));
+        linked.addAll(rolesOf(iri));
+        linked.addAll(adrUsedTerms(iri));
+        linked.addAll(linkedTerms(iri));
+        linked.addAll(relatedTerms(iri));
+        broaderTerm(iri).ifPresent(linked::add);
+        linked.addAll(narrowerTerms(iri));
+        return linked;
+    }
+
+    /** Collects findings and hints over the sweeps of {@link #mentionScan()}. */
+    private final class Sweep {
+        private final LabelMentions<String> termMatcher;
+        private final Map<String, String> termLabels;
+        private final CodeReferences codes;
+        private final List<UnlinkedMention> findings = new ArrayList<>();
+        private final List<UnlinkedMention> hints = new ArrayList<>();
+
+        Sweep(LabelMentions<String> termMatcher, Map<String, String> termLabels, CodeReferences codes) {
+            this.termMatcher = termMatcher;
+            this.termLabels = termLabels;
+            this.codes = codes;
+        }
+
+        void run(String sourceIri, List<ProseField> fields, Set<String> linked, String edgeLocalName) {
+            Map<String, List<Hit>> hitsByTerm = new LinkedHashMap<>();
+            for (ProseField field : fields) {
+                List<LabelMentions.Mention<String>> codeMentions = codes.matcher().in(field.text());
+                for (LabelMentions.Mention<String> mention : termMatcher.in(field.text())) {
+                    if (linked.contains(mention.item())) {
+                        continue;
+                    }
+                    String exemption = field.normative()
+                            ? referenceExemption(sourceIri, field.text(), mention, codeMentions)
+                            : "only in " + field.field();
+                    hitsByTerm.computeIfAbsent(mention.item(), k -> new ArrayList<>())
+                            .add(new Hit(field.field(), exemption));
                 }
             }
+            hitsByTerm.forEach((termIri, hits) -> {
+                List<String> counted = hits.stream().filter(h -> h.exemption() == null)
+                        .map(Hit::field).distinct().toList();
+                if (!counted.isEmpty()) {
+                    findings.add(new UnlinkedMention(
+                            sourceIri, termIri, termLabels.get(termIri), edgeLocalName, counted, null));
+                    return;
+                }
+                List<String> where = hits.stream().map(Hit::field).distinct().toList();
+                String reason = hits.stream().map(Hit::exemption).distinct().collect(Collectors.joining("; "));
+                hints.add(new UnlinkedMention(
+                        sourceIri, termIri, termLabels.get(termIri), edgeLocalName, where, reason));
+            });
         }
-        return List.copyOf(found);
+
+        /** @return the reason a mention is exempt because of an adjacent reference, or {@code null} */
+        private String referenceExemption(String sourceIri, String text, LabelMentions.Mention<String> mention,
+                List<LabelMentions.Mention<String>> codeMentions) {
+            for (LabelMentions.Mention<String> code : codeMentions) {
+                String referencedIri = codes.iriByCode().get(code.item());
+                if (referencedIri == null || referencedIri.equals(sourceIri)
+                        || !linkedTermsOf(referencedIri).contains(mention.item())) {
+                    continue;
+                }
+                boolean adjacent = code.start() >= mention.end()
+                        ? onlySeparators(text, mention.end(), code.start())
+                        : code.end() <= mention.start() && onlySeparators(text, code.end(), mention.start());
+                if (adjacent) {
+                    return "next to " + code.item() + ", which links the term";
+                }
+            }
+            return null;
+        }
+
+        private static boolean onlySeparators(String text, int from, int to) {
+            return text.substring(from, to).codePoints().noneMatch(Character::isLetterOrDigit);
+        }
     }
 
     /**
@@ -948,8 +1127,12 @@ public final class TraceabilityGraph {
      *                      {@code broader/narrower/related}), for the "no ... edge" message; the
      *                      term-to-term value names every glossary edge kind that would resolve the
      *                      finding rather than prescribing one (kogn-io/arknet#595)
+     * @param fields        the fields the counted mentions stand in (for a hint: every field the
+     *                      pair stands in), in the order the resource lists them
+     * @param hintReason    why the pair is only a hint, or {@code null} for a finding
      */
-    public record UnlinkedMention(String sourceIri, String termIri, String termLabel, String edgeLocalName) {
+    public record UnlinkedMention(String sourceIri, String termIri, String termLabel, String edgeLocalName,
+            List<String> fields, String hintReason) {
     }
 
     private List<String> literals(String subject, String predicate) {

@@ -113,10 +113,15 @@ public final class StoreCheckMcpTools {
             + "architecture decision's text naming a term without the matching "
             + "usesTerm/primaryRole/supportingRole/ubiquitousLanguageTerm edge, or a term's own "
             + "skos:definition naming another term without a skos:broader or skos:related edge - and "
-            + "a constraint no requirement or use case is bound by via constrainedBy. What ORPHAN does "
+            + "a constraint no requirement or use case is bound by via constrainedBy. Each mention "
+            + "finding names the field it stands in. A pair whose every mention stands in a "
+            + "requirement's acceptance criterion, or directly next to the business code of another "
+            + "resource that already links the term (\"Term (FR-7)\", \"FR-7: Term\"), is not a "
+            + "finding: it is listed in a separate hint table and not counted. What ORPHAN does "
             + "NOT see: the text-mention match is literal and whole-word, not stem-based, so it also "
             + "flags everyday words used in their ordinary sense - a hit there is a reading hint for a "
-            + "human, not a finding that demands an edge. orphan_check is a deprecated alias for this "
+            + "human, not a finding that demands an edge; the reference rule does not see a code with words "
+            + "between it and the mention (\"per FR-7 the term\"). orphan_check is a deprecated alias for this "
             + "check; further checks fold in here too rather than arriving as new tools.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String storeCheck(

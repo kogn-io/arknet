@@ -189,7 +189,8 @@ class StoreCheckRendererTest {
         String rendered = renderer.orphanSection(new OrphanCheck.Result(
                 List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
                 List.of(),
-                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm")),
+                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("description", "acceptanceCriterion"), null)),
                 List.of()));
 
         assertThat(rendered)
@@ -201,8 +202,8 @@ class StoreCheckRendererTest {
                 .contains("| Resource | Type | Label |")
                 .contains("| FR-2 | FunctionalRequirement | Logout |")
                 .contains("Mentioned in text but not linked:")
-                .contains("| Source | Term | Label | Missing edge |")
-                .contains("| FR-3 | TERM-9 | Kunde | usesTerm |")
+                .contains("| Source | Term | Label | Missing edge | Field |")
+                .contains("| FR-3 | TERM-9 | Kunde | usesTerm | description, acceptanceCriterion |")
                 .doesNotContain("Terms never referenced:")
                 .doesNotContain("Constraints not attached to any requirement or use case:");
     }
@@ -225,5 +226,41 @@ class StoreCheckRendererTest {
                 List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
                 List.of(), List.of(), List.of())))
                 .contains(StoreCheckRenderer.ORPHAN_BLIND_SPOT);
+    }
+
+    @Test
+    void rendersHintsInTheirOwnTableAndOutsideTheCount() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(), List.of(), List.of(),
+                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("acceptanceCriterion"), "only in acceptanceCriterion"))));
+
+        assertThat(rendered)
+                .contains("no orphaned requirements, unreferenced terms, unlinked mentions or unattached")
+                .contains("1 mention hint (not counted)")
+                .contains("Mentioned only in an acceptance criterion or next to a reference (hint, not counted):")
+                .contains("| Source | Term | Label | Where |")
+                .contains("| FR-3 | TERM-9 | Kunde | only in acceptanceCriterion |")
+                .doesNotContain("Mentioned in text but not linked:")
+                .contains(StoreCheckRenderer.ORPHAN_BLIND_SPOT);
+    }
+
+    @Test
+    void namesTheHintCountInTheHeaderNextToTheFindings() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
+                List.of(), List.of(), List.of(),
+                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("acceptanceCriterion"), "only in acceptanceCriterion"))));
+
+        assertThat(rendered).contains("0 unlinked mentions, 0 constraints").contains("1 mention hint (not counted)");
+    }
+
+    @Test
+    void rendersNoHintTableWithoutHints() {
+        assertThat(renderer.orphanSection(new OrphanCheck.Result(
+                List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
+                List.of(), List.of(), List.of())))
+                .doesNotContain("mention hint").doesNotContain("(hint, not counted)");
     }
 }
