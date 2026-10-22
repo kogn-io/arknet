@@ -77,6 +77,14 @@ class LabelMentionsTest {
     }
 
     @Test
+    void aLabelEndingInASuperscriptDigitHasARightBoundary() {
+        final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "m\u00b2");
+
+        assertThat(matcher.in("5 m\u00b2 Flaeche")).containsExactly(new Mention<>(2, 4, "term-1"));
+        assertThat(matcher.in("m\u00b2x")).isEmpty();
+    }
+
+    @Test
     void aHyphenatedLabelMatchesItself() {
         final LabelMentions<String> matcher = LabelMentions.of(List.of("term-1"), id -> "Kontoauszug-Import");
 

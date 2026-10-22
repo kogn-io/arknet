@@ -49,9 +49,11 @@ import java.util.regex.Pattern;
  */
 public final class LabelMentions<T> {
 
-    private static final int HYPHEN = '-';
-    private static final String NOT_AFTER_WORD_CHAR = "(?<![\\p{L}\\p{M}\\p{N}_-])";
-    private static final String NOT_BEFORE_WORD_CHAR = "(?![\\p{L}\\p{M}\\p{N}_-])";
+    private static final String WORD_CHAR_CLASS = "[\\p{L}\\p{M}\\p{N}_-]";
+    private static final int MATCH_FLAGS = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
+    private static final Pattern WORD_CHAR = Pattern.compile(WORD_CHAR_CLASS, MATCH_FLAGS);
+    private static final String NOT_AFTER_WORD_CHAR = "(?<!" + WORD_CHAR_CLASS + ")";
+    private static final String NOT_BEFORE_WORD_CHAR = "(?!" + WORD_CHAR_CLASS + ")";
 
     private final List<Entry<T>> entries;
 
@@ -138,8 +140,7 @@ public final class LabelMentions<T> {
     private static Pattern pattern(final String label) {
         final String prefix = isWordChar(label.codePointAt(0)) ? NOT_AFTER_WORD_CHAR : "";
         final String suffix = isWordChar(label.codePointBefore(label.length())) ? NOT_BEFORE_WORD_CHAR : "";
-        return Pattern.compile(prefix + body(label) + suffix,
-                Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+        return Pattern.compile(prefix + body(label) + suffix, MATCH_FLAGS);
     }
 
     private static String body(final String label) {
@@ -153,13 +154,7 @@ public final class LabelMentions<T> {
     }
 
     private static boolean isWordChar(final int codePoint) {
-        return Character.isLetterOrDigit(codePoint) || isMark(codePoint) || codePoint == '_' || codePoint == HYPHEN;
-    }
-
-    private static boolean isMark(final int codePoint) {
-        final int type = Character.getType(codePoint);
-        return type == Character.NON_SPACING_MARK || type == Character.COMBINING_SPACING_MARK
-                || type == Character.ENCLOSING_MARK;
+        return WORD_CHAR.matcher(Character.toString(codePoint)).matches();
     }
 
     /** One item plus the compiled matcher for its label - compiled once, not per text. */
