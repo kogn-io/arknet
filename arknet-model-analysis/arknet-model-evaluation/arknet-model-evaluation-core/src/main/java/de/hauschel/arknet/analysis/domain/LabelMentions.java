@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
  * <p><strong>Matching is deliberately literal.</strong> Comparison is case-insensitive, except
  * that a label starting with an upper-case letter matches only with that letter capitalised
  * ({@code Soll} is not a mention of the modal verb {@code soll}), and only at word boundaries.
- * The boundary is an explicit character class - letters, combining marks, digits, {@code _} and
+ * The boundary is an explicit character class - letters, combining marks, numbers, {@code _} and
  * {@code -} - so an umlaut is a word character, and a hyphen counts as one too: a hyphenated
  * compound ({@code Kontoauszug-Import}) is not a mention of its first part.
  * {@link Pattern#UNICODE_CASE} keeps the case-insensitive part umlaut-proof. German inflections
