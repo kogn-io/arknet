@@ -867,7 +867,7 @@ public final class TraceabilityGraph {
     public record ProseField(String field, String text) {
     }
 
-    private static final String FIELD_ACCEPTANCE_CRITERION = "acceptanceCriterion";
+    static final String FIELD_ACCEPTANCE_CRITERION = "acceptanceCriterion";
 
     private static List<String> texts(List<ProseField> fields) {
         return fields.stream().map(ProseField::text).toList();
