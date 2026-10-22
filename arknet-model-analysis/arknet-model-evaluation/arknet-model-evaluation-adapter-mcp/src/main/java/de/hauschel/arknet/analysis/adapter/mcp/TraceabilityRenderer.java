@@ -234,13 +234,15 @@ public final class TraceabilityRenderer {
     }
 
     /**
-     * Scans every requirement's prose ({@link TraceabilityGraph#requirementProseTexts(String)})
-     * and every use case's goal ({@link TraceabilityGraph#useCaseProseTexts(String)}) for term
+     * Scans every requirement's prose ({@link TraceabilityGraph#requirementFieldTexts(String)})
+     * and every use case's goal ({@link TraceabilityGraph#useCaseFieldTexts(String)}) for term
      * mentions via the same {@link LabelMentions} engine {@code orphan_check} uses, and pairs up
      * every two terms found anywhere across one resource's prose fields - the resource is the
      * unit of "co-occurrence" (issue #108), not the individual field: a requirement's description
      * naming one term and its acceptance criterion naming another still counts as that
-     * requirement mentioning both.
+     * requirement mentioning both. Each text is matched under its own language tag, so the
+     * capitalisation and hyphen rules of {@link LabelMentions} (kogn-io/arknet#696) are the
+     * ones {@code store_check ORPHAN} applies.
      *
      * <p>Two same-length competing labels (a homonym, e.g. two terms sharing one
      * {@code skos:prefLabel}) break their matching tie by business code ({@link
@@ -264,10 +266,10 @@ public final class TraceabilityRenderer {
 
         Map<TermPair, Set<String>> sourcesByPair = new LinkedHashMap<>();
         for (String requirementIri : graph.requirementIris()) {
-            recordCooccurrences(matcher, graph.requirementProseTexts(requirementIri), requirementIri, sourcesByPair);
+            recordCooccurrences(matcher, graph.requirementFieldTexts(requirementIri), requirementIri, sourcesByPair);
         }
         for (String useCaseIri : graph.useCaseIris()) {
-            recordCooccurrences(matcher, graph.useCaseProseTexts(useCaseIri), useCaseIri, sourcesByPair);
+            recordCooccurrences(matcher, graph.useCaseFieldTexts(useCaseIri), useCaseIri, sourcesByPair);
         }
 
         return sourcesByPair.entrySet().stream()
@@ -278,8 +280,13 @@ public final class TraceabilityRenderer {
     }
 
     private void recordCooccurrences(
-            LabelMentions<String> matcher, List<String> texts, String sourceIri, Map<TermPair, Set<String>> sourcesByPair) {
-        List<String> mentioned = matcher.mentionedIn(texts).stream().sorted().toList();
+            LabelMentions<String> matcher, List<TraceabilityGraph.FieldText> texts, String sourceIri,
+            Map<TermPair, Set<String>> sourcesByPair) {
+        Set<String> found = new LinkedHashSet<>();
+        for (TraceabilityGraph.FieldText text : texts) {
+            matcher.in(text.text(), text.languageTag()).forEach(mention -> found.add(mention.item()));
+        }
+        List<String> mentioned = found.stream().sorted().toList();
         for (int i = 0; i < mentioned.size(); i++) {
             for (int j = i + 1; j < mentioned.size(); j++) {
                 TermPair pair = new TermPair(mentioned.get(i), mentioned.get(j));

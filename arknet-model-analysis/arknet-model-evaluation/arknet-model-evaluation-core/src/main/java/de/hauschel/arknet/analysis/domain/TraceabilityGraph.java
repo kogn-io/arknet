@@ -745,12 +745,15 @@ public final class TraceabilityGraph {
      *         since issue #266 (pointing at its own {@code arkreq:AcceptanceCriterion} resource,
      *         mirroring {@code arkreq:mainStep}/{@code arkreq:Step}), so this is a two-hop read:
      *         the edge's target IRIs, then each target's own {@code criterionText} literal(s).
+     *
+     * <p>The flat view of {@link #requirementFieldTexts(String)}: the texts without field or language tag.</p>
      */
     public List<String> requirementProseTexts(String requirementIri) {
         return texts(requirementFieldTexts(requirementIri));
     }
 
-    private List<FieldText> requirementFieldTexts(String requirementIri) {
+    /** @return the prose texts of {@link #requirementProseTexts(String)} with their field and language tag */
+    public List<FieldText> requirementFieldTexts(String requirementIri) {
         Objects.requireNonNull(requirementIri, "requirementIri");
         List<FieldText> texts = new ArrayList<>();
         addFieldTexts(texts, requirementIri, DCTERMS_DESCRIPTION);
@@ -763,6 +766,8 @@ public final class TraceabilityGraph {
     /**
      * @return the {@code arkddd:domainVision} text of a bounded context, for scanning it for
      *         unlinked glossary mentions
+     *
+     * <p>The flat view of {@link #boundedContextFieldTexts(String)}: the texts without field or language tag.</p>
      */
     public List<String> boundedContextProseTexts(String boundedContextIri) {
         return texts(boundedContextFieldTexts(boundedContextIri));
@@ -784,12 +789,15 @@ public final class TraceabilityGraph {
      *         Used by both {@code term_cooccurrence} (issue #108, originally just the goal) and
      *         {@link #unlinkedMentions()} (issue #333); an optional field simply contributes no
      *         literal when unset
+     *
+     * <p>The flat view of {@link #useCaseFieldTexts(String)}: the texts without field or language tag.</p>
      */
     public List<String> useCaseProseTexts(String useCaseIri) {
         return texts(useCaseFieldTexts(useCaseIri));
     }
 
-    private List<FieldText> useCaseFieldTexts(String useCaseIri) {
+    /** @return the prose texts of {@link #useCaseProseTexts(String)} with their field and language tag */
+    public List<FieldText> useCaseFieldTexts(String useCaseIri) {
         Objects.requireNonNull(useCaseIri, "useCaseIri");
         List<FieldText> texts = new ArrayList<>();
         addFieldTexts(texts, useCaseIri, USE_CASE_GOAL);
@@ -809,6 +817,8 @@ public final class TraceabilityGraph {
     /**
      * @return the {@code skos:definition} text of a term, for scanning it for unlinked mentions of
      *         other glossary terms (issue #252) - mirrors {@link #boundedContextProseTexts(String)}
+     *
+     * <p>The flat view of {@link #termFieldTexts(String)}: the texts without field or language tag.</p>
      */
     public List<String> termProseTexts(String termIri) {
         return texts(termFieldTexts(termIri));
@@ -831,6 +841,8 @@ public final class TraceabilityGraph {
      *         naming a glossary term without the matching {@code arkarch:usesTerm} edge was invisible
      *         to {@code orphan_check} before this, unlike the same gap for a requirement, use case or
      *         bounded context.
+     *
+     * <p>The flat view of {@link #adrFieldTexts(String)}: the texts without field or language tag.</p>
      */
     public List<String> adrProseTexts(String adrIri) {
         return texts(adrFieldTexts(adrIri));
@@ -852,8 +864,16 @@ public final class TraceabilityGraph {
         return texts;
     }
 
-    /** One scanned text plus the local name of the predicate it was read from (issue #697). */
-    private record FieldText(String field, String text) {
+    /**
+     * One scanned text plus the local name of the predicate it was read from (issue #697) and the
+     * language tag of its literal (kogn-io/arknet#696), which decides whether the capitalisation
+     * rule of {@link LabelMentions#in(String, String)} applies to it.
+     *
+     * @param field       the predicate's local name, for example {@code description}
+     * @param text        the literal's lexical form
+     * @param languageTag the literal's language tag, or {@code null} if it is untagged
+     */
+    public record FieldText(String field, String text, String languageTag) {
     }
 
     private static List<String> texts(List<FieldText> fieldTexts) {
@@ -862,8 +882,8 @@ public final class TraceabilityGraph {
 
     private void addFieldTexts(List<FieldText> out, String subject, String predicate) {
         String field = StoreResource.localName(predicate);
-        for (String text : literals(subject, predicate)) {
-            out.add(new FieldText(field, text));
+        for (RdfNode.Literal literal : literals(subject, predicate)) {
+            out.add(new FieldText(field, literal.lexicalForm(), literal.languageTag()));
         }
     }
 
@@ -1056,7 +1076,7 @@ public final class TraceabilityGraph {
             for (FieldText fieldText : texts) {
                 String text = fieldText.text();
                 List<LabelMentions.Mention<String>> refs = null;
-                for (LabelMentions.Mention<String> hit : terms.in(text)) {
+                for (LabelMentions.Mention<String> hit : terms.in(text, fieldText.languageTag())) {
                     if (linked.contains(hit.item())) {
                         continue;
                     }
@@ -1126,12 +1146,12 @@ public final class TraceabilityGraph {
             List<String> fields, WeakReason weakReason, List<String> coveredBy) {
     }
 
-    private List<String> literals(String subject, String predicate) {
+    private List<RdfNode.Literal> literals(String subject, String predicate) {
         return outgoingBySubject.getOrDefault(subject, List.of()).stream()
                 .filter(t -> predicate.equals(t.predicate()))
                 .map(Triple::object)
                 .filter(RdfNode.Literal.class::isInstance)
-                .map(o -> ((RdfNode.Literal) o).lexicalForm())
+                .map(RdfNode.Literal.class::cast)
                 .toList();
     }
 

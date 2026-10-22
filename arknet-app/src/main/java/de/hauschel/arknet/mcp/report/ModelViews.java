@@ -131,7 +131,7 @@ public final class ModelViews {
      */
     private Glossary glossary(final ProjectId projectId, final String displayLocale, final List<String> failures) {
         try {
-            return Glossary.of(terms.list(projectId, displayLocale));
+            return Glossary.of(terms.list(projectId, displayLocale), displayLocale);
         } catch (final RuntimeException e) {
             failures.add("Glossary: could not be read (" + e.getClass().getSimpleName() + ": " + e.getMessage()
                     + ") - its terms appear under \"Other resources\" below, and references to them show as"

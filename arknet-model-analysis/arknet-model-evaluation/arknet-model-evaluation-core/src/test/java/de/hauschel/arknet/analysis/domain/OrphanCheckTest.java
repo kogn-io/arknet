@@ -415,6 +415,116 @@ class OrphanCheckTest {
         assertThat(result.weakMentions()).extracting(WeakMention::coveredBy).containsExactly(List.of("FR-3"));
     }
 
+    /** kogn-io/arknet#696: the modal verb "soll" in German text is not the term "Soll". */
+    @Test
+    void doesNotReportALowercaseModalVerbAsTheCapitalisedTermInGermanText() {
+        OrphanCheck.Result result = run(
+                requirement("fr-1", "FR-1", "Der Wert soll positiv sein.", "de"),
+                term("term-9", "TERM-9", "Soll"));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.weakMentions()).isEmpty();
+    }
+
+    @Test
+    void stillReportsTheCapitalisedTermInGermanText() {
+        OrphanCheck.Result result = run(
+                requirement("fr-1", "FR-1", "Das Soll wird gebucht.", "de"),
+                term("term-9", "TERM-9", "Soll"));
+
+        assertThat(result.unlinkedMentions()).extracting(MentionFinding::termHandle).containsExactly("TERM-9");
+    }
+
+    /** kogn-io/arknet#696: a hyphenated compound is its own word, it does not name its first part. */
+    @Test
+    void doesNotReportAHyphenatedCompoundAsItsPartTerm() {
+        OrphanCheck.Result result = run(
+                requirement("fr-1", "FR-1", "Der Kontoauszug-Import laeuft nachts."),
+                term("term-9", "TERM-9", "Kontoauszug"));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.weakMentions()).isEmpty();
+    }
+
+    @Test
+    void keepsReportingATermStandingAloneNextToAHyphenatedCompound() {
+        OrphanCheck.Result result = run(
+                requirement("fr-1", "FR-1", "Der Kontoauszug-Import liest den Kontoauszug."),
+                term("term-9", "TERM-9", "Kontoauszug"));
+
+        assertThat(result.unlinkedMentions()).extracting(MentionFinding::termHandle).containsExactly("TERM-9");
+    }
+
+    @Test
+    void keepsReportingACapitalisedLabelInEnglishTaggedText() {
+        OrphanCheck.Result result = run(
+                requirement("fr-1", "FR-1", "the customer pays", "en"),
+                term("term-9", "TERM-9", "Customer"));
+
+        assertThat(result.unlinkedMentions()).extracting(MentionFinding::termHandle).containsExactly("TERM-9");
+    }
+
+    @Test
+    void keepsTheCaseInsensitiveMatchForUntaggedText() {
+        OrphanCheck.Result result = run(
+                requirement("fr-1", "FR-1", "Der Wert soll positiv sein."),
+                term("term-9", "TERM-9", "Soll"));
+
+        assertThat(result.unlinkedMentions()).extracting(MentionFinding::termHandle).containsExactly("TERM-9");
+    }
+
+    @Test
+    void appliesTheCaseRuleToAnAcceptanceCriterionByItsOwnLanguageTag() {
+        OrphanCheck.Result result = run(
+                requirement("fr-1", "FR-1", "Eine Abfrage."),
+                List.of(iri(ID + "fr-1", ACCEPTANCE_CRITERION, ID + "ac-1"),
+                        iri(ID + "ac-1", RDF_TYPE, ARKREQ + "AcceptanceCriterion"),
+                        litTagged(ID + "ac-1", CRITERION_TEXT, "Es soll gehen.", "de")),
+                term("term-9", "TERM-9", "Soll"));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.weakMentions()).isEmpty();
+    }
+
+    @Test
+    void doesNotReportTheShortTermInsideALinkedMultiWordTermWithLowercaseAdjective() {
+        OrphanCheck.Result result = run(
+                requirement("fr-1", "FR-1", "Wir nutzen erneuerbare Energie.", "de"),
+                iri(ID + "fr-1", USES_TERM, ID + "term-1"),
+                term("term-1", "TERM-1", "Erneuerbare Energie"),
+                term("term-2", "TERM-2", "Energie"));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.weakMentions()).isEmpty();
+    }
+
+    /** The reference scan matches codes, which are no nouns: it stays case-insensitive. */
+    @Test
+    void keepsReferenceCodesCaseInsensitiveInGermanText() {
+        OrphanCheck.Result result = run(
+                litTagged(ID + "fr-1", DESCRIPTION, "Der Kunde (fr-3) zahlt.", "de"),
+                iri(ID + "fr-1", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-1", IDENTIFIER, "FR-1"),
+                requirement("fr-3", "FR-3", "Anlage."),
+                iri(ID + "fr-3", USES_TERM, ID + "term-9"),
+                term("term-9", "TERM-9", "Kunde"));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.weakMentions()).extracting(WeakMention::coveredBy).containsExactly(List.of("FR-3"));
+    }
+
+    private static List<Triple> requirement(String local, String code, String description, String languageTag) {
+        return List.of(
+                iri(ID + local, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + local, IDENTIFIER, code),
+                litTagged(ID + local, DESCRIPTION, description, languageTag));
+    }
+
+    private static Triple litTagged(String subject, String predicate, String lexical, String languageTag) {
+        return new Triple(subject, predicate,
+                new RdfNode.Literal(lexical, "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString", languageTag));
+    }
+
     private static List<Triple> useCase(String local, String code, String goal, String stepText) {
         List<Triple> triples = new ArrayList<>(List.of(
                 iri(ID + local, RDF_TYPE, USE_CASE),

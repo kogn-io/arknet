@@ -316,6 +316,55 @@ class TraceabilityRendererTest {
         assertThat(report).contains("TERM-A").contains("TERM-B").contains("1 text(s)");
     }
 
+    /** kogn-io/arknet#696: the same capitalisation and hyphen rules as {@code store_check ORPHAN}. */
+    @Test
+    void termCooccurrenceIgnoresALowercaseModalVerbAsTheCapitalisedTermInGermanText() {
+        String report = renderer.termCooccurrence(PROJECT,
+                twoTermGraph("Soll", "Kunde", "Der Kunde soll zahlen.", "de"));
+
+        assertThat(report).contains("## Term pairs named together in the same text (0)");
+    }
+
+    @Test
+    void termCooccurrenceCountsTheCapitalisedTermInGermanText() {
+        String report = renderer.termCooccurrence(PROJECT,
+                twoTermGraph("Soll", "Kunde", "Der Kunde und das Soll.", "de"));
+
+        assertThat(report).contains("## Term pairs named together in the same text (1)");
+    }
+
+    @Test
+    void termCooccurrenceKeepsCaseInsensitiveMatchingForEnglishAndUntaggedText() {
+        assertThat(renderer.termCooccurrence(PROJECT,
+                twoTermGraph("Customer", "Order", "the customer places an order", "en")))
+                .contains("## Term pairs named together in the same text (1)");
+        assertThat(renderer.termCooccurrence(PROJECT,
+                twoTermGraph("Customer", "Order", "the customer places an order", null)))
+                .contains("## Term pairs named together in the same text (1)");
+    }
+
+    @Test
+    void termCooccurrenceIgnoresAHyphenatedCompoundAsItsPartTerm() {
+        String report = renderer.termCooccurrence(PROJECT,
+                twoTermGraph("Kontoauszug", "Kunde", "Der Kunde startet den Kontoauszug-Import.", null));
+
+        assertThat(report).contains("## Term pairs named together in the same text (0)");
+    }
+
+    private static TraceabilityGraph twoTermGraph(String labelA, String labelB, String description, String tag) {
+        return TraceabilityGraph.of(StoreSnapshot.of(List.of(
+                iri(TERM_A, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_A, PREF_LABEL, labelA),
+                lit(TERM_A, IDENTIFIER, "TERM-A"),
+                iri(TERM_B, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_B, PREF_LABEL, labelB),
+                lit(TERM_B, IDENTIFIER, "TERM-B"),
+                iri(FR_10, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(FR_10, IDENTIFIER, "FR-10"),
+                new Triple(FR_10, DESCRIPTION, new RdfNode.Literal(description,
+                        "http://www.w3.org/2001/XMLSchema#string", tag)))), DisplayLocale.DEFAULT);
+    }
+
     private static StoreSnapshot roleUseCaseFixtureSnapshot() {
         return StoreSnapshot.of(List.of(
                 iri(ROLE_A, RDF_TYPE, ROLE_TYPE),
