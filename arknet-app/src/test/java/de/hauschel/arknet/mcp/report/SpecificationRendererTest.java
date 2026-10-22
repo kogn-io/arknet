@@ -146,7 +146,7 @@ class SpecificationRendererTest {
         final int constraints = html.indexOf("</span> Constraints</h2>");
         assertThat(html.indexOf("id=\"a-fr-1\"")).isLessThan(quality);
         assertThat(html.indexOf("id=\"a-nfr-1\"")).isBetween(quality, constraints);
-        assertThat(html).contains("4.1</span> Record loans").contains("5.1</span> Fast lookups");
+        assertThat(html).contains("4.1.1</span> Record loans").contains("5.1</span> Fast lookups");
     }
 
     @Test
@@ -417,6 +417,113 @@ class SpecificationRendererTest {
         for (final String anchor : anchors) {
             assertThat(count(html, anchor)).as(anchor).isGreaterThanOrEqualTo(2);
         }
-        assertThat(html).contains("3.1 Lend a book").contains("4.1 Record loans");
+        assertThat(html).contains("3.1 Lend a book").contains("4.1.1 Record loans");
+    }
+
+    // ---- functional requirements grouped by the process that realises them -----------------------
+
+    private static ModelCard fr(final String code, final String title) {
+        return card(code, title, List.of(type("FR")), Block.Prose.plain(CardLabels.DESCRIPTION, "Text of " + code));
+    }
+
+    private static ModelCard process(final String code, final String title, final String... realised) {
+        final List<FlowStep> steps = new ArrayList<>();
+        for (int index = 0; index < realised.length; index++) {
+            steps.add(new FlowStep(index + 1, RichText.plain("Step " + (index + 1)),
+                    List.of(Ref.of(realised[index], IRI_PREFIX + realised[index]))));
+        }
+        return card(code, title, List.of(), new Block.Flow(CardLabels.MAIN_FLOW, steps));
+    }
+
+    /** UC-10 listed before UC-2; FR-3 is realised by both, FR-9 by none, NFR-1 by UC-2. */
+    private ModelViews.Views groupingFixture() {
+        return new ModelViews.Views(List.of(
+                section(RequirementCards.SECTION_TITLE, fr("FR-9", "Loose rule"), fr("FR-3", "Shared"),
+                        fr("FR-4", "Only in ten"), fr("FR-1", "Only in two"),
+                        card("NFR-1", "Fast", List.of(type("NFR")))),
+                section(UseCaseCards.SECTION_TITLE,
+                        process("UC-10", "Return a book", "FR-4", "FR-3"),
+                        process("UC-2", "Lend a book", "FR-1", "FR-3", "NFR-1"),
+                        process("UC-3", "Idle process"))), List.of());
+    }
+
+    @Test
+    void functionalRequirementsAreGroupedUnderTheProcessThatRealisesThemInCodeOrder() {
+        final String html = render(groupingFixture(), ENGLISH);
+        final int functional = html.indexOf("</span> Functional requirements</h2>");
+        final int quality = html.indexOf("</span> Quality requirements</h2>");
+        final String chapter = html.substring(functional, quality);
+
+        assertThat(chapter).contains("4.1</span> Lend a book").contains("4.2</span> Return a book")
+                .contains("4.1.1</span> Only in two").contains("4.1.2</span> Shared")
+                .contains("4.2.1</span> Only in ten")
+                .doesNotContain("Idle process");
+        assertThat(chapter.indexOf("4.1</span> Lend a book")).isLessThan(chapter.indexOf("4.2</span> Return a book"));
+    }
+
+    @Test
+    void aSharedRequirementIsShownInFullOnceUnderTheLowestProcessAndReferencedUnderTheOthers() {
+        final String html = render(groupingFixture(), ENGLISH);
+        final String chapter = html.substring(html.indexOf("</span> Functional requirements</h2>"),
+                html.indexOf("</span> Quality requirements</h2>"));
+
+        assertThat(count(chapter, "id=\"a-fr-3\"")).isEqualTo(1);
+        assertThat(count(chapter, "Text of FR-3")).isEqualTo(1);
+        final int lend = chapter.indexOf("4.1</span> Lend a book");
+        final int ret = chapter.indexOf("4.2</span> Return a book");
+        assertThat(chapter.indexOf("id=\"a-fr-3\"")).isBetween(lend, ret);
+        final String second = chapter.substring(ret);
+        assertThat(second).contains("described under <a class=\"ref\" href=\"#a-fr-3\" data-ref=\"a-fr-3\">"
+                + "FR-3 Shared</a>");
+    }
+
+    @Test
+    void theReferenceLineFollowsTheLanguage() {
+        assertThat(render(groupingFixture(), GERMAN)).contains("beschrieben unter");
+    }
+
+    @Test
+    void requirementsWithoutAProcessFormTheirOwnSectionAfterTheProcessSections() {
+        final String html = render(groupingFixture(), ENGLISH);
+        final String chapter = html.substring(html.indexOf("</span> Functional requirements</h2>"),
+                html.indexOf("</span> Quality requirements</h2>"));
+
+        assertThat(chapter).contains("4.3</span> Rules and cross-cutting requirements")
+                .contains("4.3.1</span> Loose rule");
+        assertThat(chapter.indexOf("Rules and cross-cutting requirements"))
+                .isGreaterThan(chapter.indexOf("4.2</span> Return a book"));
+        assertThat(render(groupingFixture(), GERMAN)).contains("Regeln und \u00fcbergreifende Anforderungen");
+    }
+
+    @Test
+    void everyFunctionalRequirementAppearsExactlyOnceInFull() {
+        final String html = render(groupingFixture(), ENGLISH);
+
+        for (final String code : List.of("fr-1", "fr-3", "fr-4", "fr-9")) {
+            assertThat(count(html, "<section class=\"req\" id=\"a-" + code + "\"")).as(code).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void qualityRequirementsStayInTheirOwnChapterEvenWhenAStepRealisesThem() {
+        final String html = render(groupingFixture(), ENGLISH);
+
+        assertThat(html).contains("5.1</span> Fast");
+        assertThat(html.substring(html.indexOf("</span> Functional requirements</h2>"),
+                html.indexOf("</span> Quality requirements</h2>"))).doesNotContain("Fast");
+    }
+
+    @Test
+    void theTableOfContentsShowsTheProcessThenItsRequirements() {
+        final String html = render(groupingFixture(), ENGLISH);
+
+        assertThat(html).contains("4.1 Lend a book").contains("4.1.2 Shared").contains("4.2 Return a book")
+                .contains("4.3 Rules and cross-cutting requirements").contains("4.3.1 Loose rule");
+    }
+
+    @Test
+    void theReadingHelpDescribesTheGroupingOfFunctionalRequirements() {
+        assertThat(render(groupingFixture(), ENGLISH)).contains("grouped by the process");
+        assertThat(render(groupingFixture(), GERMAN)).contains("nach dem Ablauf");
     }
 }

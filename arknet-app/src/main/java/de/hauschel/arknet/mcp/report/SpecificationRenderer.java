@@ -6,6 +6,7 @@ package de.hauschel.arknet.mcp.report;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -18,6 +19,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 
@@ -58,6 +61,7 @@ public final class SpecificationRenderer {
     private static final int POPUP_DEFINITION_LIMIT = 340;
     private static final String GERMAN = "de";
     private static final String NFR_TYPE = "NFR";
+    private static final Pattern TRAILING_NUMBER = Pattern.compile("^(.*?)(\\d+)$");
     private static final String CSS = resource("/report/specification.css");
     private static final String JS = resource("/report/specification.js");
 
@@ -67,6 +71,7 @@ public final class SpecificationRenderer {
     private static final String CH_ROLES = "k22";
     private static final String CH_USE_CASES = "k3";
     private static final String CH_FUNCTIONAL = "k4";
+    private static final String CH_RULES = "k4r";
     private static final String CH_QUALITY = "k5";
     private static final String CH_CONSTRAINTS = "k6";
     private static final String CH_GLOSSARY = "k7";
@@ -297,8 +302,7 @@ public final class SpecificationRenderer {
             appendIntroduction();
             appendParticipants();
             appendUseCases();
-            appendRequirements(CH_FUNCTIONAL, "4", SpecificationTexts.CH_FUNCTIONAL, functional,
-                    SpecificationTexts.NONE_FUNCTIONAL);
+            appendFunctionalRequirements();
             appendRequirements(CH_QUALITY, "5", SpecificationTexts.CH_QUALITY, quality,
                     SpecificationTexts.NONE_QUALITY);
             appendConstraints();
@@ -349,11 +353,27 @@ public final class SpecificationRenderer {
                     new TocEntry(CH_ACTORS, "2.1 " + text(SpecificationTexts.CH_ACTORS), List.of()),
                     new TocEntry(CH_ROLES, "2.2 " + text(SpecificationTexts.CH_ROLES), List.of()))));
             entries.add(chapterEntry(CH_USE_CASES, "3", SpecificationTexts.CH_USE_CASES, useCases));
-            entries.add(chapterEntry(CH_FUNCTIONAL, "4", SpecificationTexts.CH_FUNCTIONAL, functional));
+            entries.add(functionalEntry());
             entries.add(chapterEntry(CH_QUALITY, "5", SpecificationTexts.CH_QUALITY, quality));
             entries.add(chapterEntry(CH_CONSTRAINTS, "6", SpecificationTexts.CH_CONSTRAINTS, constraints));
             entries.add(new TocEntry(CH_GLOSSARY, "7 " + text(SpecificationTexts.CH_GLOSSARY), List.of()));
             return entries;
+        }
+
+        private TocEntry functionalEntry() {
+            final List<TocEntry> groups = new ArrayList<>();
+            int number = 0;
+            for (final FunctionalGroup group : functionalGroups()) {
+                number++;
+                final List<TocEntry> children = new ArrayList<>();
+                for (int index = 0; index < group.owned().size(); index++) {
+                    final ModelCard card = group.owned().get(index);
+                    children.add(new TocEntry(target(card).anchor(),
+                            "4." + number + "." + (index + 1) + " " + card.title(), List.of()));
+                }
+                groups.add(new TocEntry(group.anchor(), "4." + number + " " + group.title(), children));
+            }
+            return new TocEntry(CH_FUNCTIONAL, "4 " + text(SpecificationTexts.CH_FUNCTIONAL), groups);
         }
 
         private TocEntry chapterEntry(
@@ -573,6 +593,95 @@ public final class SpecificationRenderer {
             appendReferenceList(SpecificationTexts.REALISED_BY, items);
         }
 
+        /**
+         * One section of the functional chapter: a process (or the closing rules section) with the
+         * requirements shown in full under it and those only pointed to.
+         */
+        private record FunctionalGroup(String anchor, String title, Optional<Target> process,
+                List<ModelCard> owned, List<ModelCard> referenced) {
+        }
+
+        /**
+         * Functional requirements by the process whose step realises them: processes in code order,
+         * a requirement in full under the first of them, a reference line under the others, and
+         * the requirements no process realises last. A process realising no functional requirement
+         * has no section.
+         */
+        private List<FunctionalGroup> functionalGroups() {
+            final Map<String, ModelCard> byIri = new LinkedHashMap<>();
+            functional.forEach(card -> byIri.put(card.iri(), card));
+            final Set<String> placed = new HashSet<>();
+            final List<FunctionalGroup> groups = new ArrayList<>();
+            useCases.stream().sorted(Comparator.comparing(ModelCard::code, Page::compareCodes)).forEach(useCase -> {
+                final List<ModelCard> owned = new ArrayList<>();
+                final List<ModelCard> referenced = new ArrayList<>();
+                final Set<String> seen = new HashSet<>();
+                for (final Block block : useCase.blocks()) {
+                    if (!(block instanceof Block.Flow flow)) {
+                        continue;
+                    }
+                    flow.steps().stream().sorted(Comparator.comparingInt(FlowStep::position))
+                            .flatMap(step -> step.realises().stream()).map(Ref::iri)
+                            .filter(byIri::containsKey).filter(seen::add)
+                            .forEach(iri -> (placed.add(iri) ? owned : referenced).add(byIri.get(iri)));
+                }
+                if (!owned.isEmpty() || !referenced.isEmpty()) {
+                    final Target process = target(useCase);
+                    groups.add(new FunctionalGroup(process.anchor() + "-requirements", process.title(),
+                            Optional.of(process), owned, referenced));
+                }
+            });
+            final List<ModelCard> rules = functional.stream().filter(card -> !placed.contains(card.iri()))
+                    .sorted(Comparator.comparing(ModelCard::code, Page::compareCodes)).toList();
+            if (!rules.isEmpty()) {
+                groups.add(new FunctionalGroup(CH_RULES, text(SpecificationTexts.CH_RULES), Optional.empty(),
+                        rules, List.of()));
+            }
+            return groups;
+        }
+
+        /** Codes by their prefix, then their trailing number as a number: UC-2 before UC-10. */
+        private static int compareCodes(final String left, final String right) {
+            final Matcher a = TRAILING_NUMBER.matcher(left);
+            final Matcher b = TRAILING_NUMBER.matcher(right);
+            if (a.matches() && b.matches()) {
+                final int prefix = a.group(1).compareToIgnoreCase(b.group(1));
+                if (prefix != 0) {
+                    return prefix;
+                }
+                return new BigInteger(a.group(2)).compareTo(new BigInteger(b.group(2)));
+            }
+            return left.compareToIgnoreCase(right);
+        }
+
+        private void appendFunctionalRequirements() {
+            heading(CH_FUNCTIONAL, "4", SpecificationTexts.CH_FUNCTIONAL, false);
+            final List<FunctionalGroup> groups = functionalGroups();
+            if (groups.isEmpty()) {
+                placeholder(SpecificationTexts.NONE_FUNCTIONAL);
+            }
+            for (int groupIndex = 0; groupIndex < groups.size(); groupIndex++) {
+                final FunctionalGroup group = groups.get(groupIndex);
+                final String number = "4." + (groupIndex + 1);
+                out.append("<h3 id=\"").append(group.anchor()).append("\"><span class=\"num\">").append(number)
+                        .append("</span> ").append(escape(group.title()));
+                group.process().filter(process -> !process.code().isBlank()).ifPresent(process ->
+                        out.append(" <span class=\"code\">").append(escape(process.code())).append("</span>"));
+                out.append("</h3>\n");
+                group.process().ifPresent(process -> out.append("<p class=\"meta\">")
+                        .append(esc(SpecificationTexts.KIND_USE_CASE)).append(": ")
+                        .append(link(process, process.listText())).append("</p>\n"));
+                for (int index = 0; index < group.owned().size(); index++) {
+                    appendRequirement(group.owned().get(index), "h4", number + "." + (index + 1));
+                }
+                for (final ModelCard card : group.referenced()) {
+                    final Target target = target(card);
+                    out.append("<p class=\"seeunder\">").append(esc(SpecificationTexts.DESCRIBED_UNDER)).append(' ')
+                            .append(link(target, target.listText())).append("</p>\n");
+                }
+            }
+        }
+
         private void appendRequirements(
                 final String anchor, final String number, final SpecificationTexts title,
                 final List<ModelCard> cards, final SpecificationTexts none) {
@@ -581,12 +690,12 @@ public final class SpecificationRenderer {
                 placeholder(none);
             }
             for (int index = 0; index < cards.size(); index++) {
-                appendRequirement(cards.get(index), number + "." + (index + 1));
+                appendRequirement(cards.get(index), "h3", number + "." + (index + 1));
             }
         }
 
-        private void appendRequirement(final ModelCard card, final String number) {
-            open("req", "h3", card, number);
+        private void appendRequirement(final ModelCard card, final String headingTag, final String number) {
+            open("req", headingTag, card, number);
             appendMeta(card);
             proseOf(card, CardLabels.DESCRIPTION).ifPresent(prose -> appendParts(prose.parts()));
             proseOf(card, CardLabels.RATIONALE).ifPresent(prose -> {
