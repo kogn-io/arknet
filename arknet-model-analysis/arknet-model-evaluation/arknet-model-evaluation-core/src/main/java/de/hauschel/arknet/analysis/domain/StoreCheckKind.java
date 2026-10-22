@@ -60,12 +60,17 @@ public enum StoreCheckKind {
      * naming a term without the matching edge, and a constraint no requirement or use case is
      * bound by. See {@link OrphanCheck}.
      */
-    ORPHAN("the presence of edges: requirements no use case satisfies (oslc_rm:satisfies) or realises (arkreq:stepRealises), terms never referenced, text naming a "
-            + "term without the matching edge, constraints bound by nothing.",
+    ORPHAN("the presence of edges: requirements no use case satisfies (oslc_rm:satisfies) or realises (arkreq:stepRealises), terms never referenced, normative text naming a "
+            + "term without the matching edge (a term named only in a requirement's rationale or acceptance "
+            + "criterion, or only next to a reference to a resource that already carries the edge, is listed "
+            + "separately and not counted), constraints bound by nothing.",
             "the text-mention match (\"Mentioned in text but not linked\") is literal and whole-word, "
                     + "not stem-based, so it also flags everyday words used in their ordinary sense (e.g. "
                     + "\"Rolle\", \"Begriff\", \"Projekt\") - a hit there is a reading hint for a human, "
-                    + "not a finding that demands an edge; whether an existing edge is the right one.");
+                    + "not a finding that demands an edge; an inflected form (\"Kunden\" for \"Kunde\"), a "
+                    + "hyphenated compound (\"Kontoauszug-Import\" for \"Kontoauszug\") and, in a "
+                    + "German-language project, a lower-case form of a capitalised label (\"soll\" for "
+                    + "\"Soll\") are not mentions; whether an existing edge is the right one.");
 
     private final String scope;
     private final String notSeen;

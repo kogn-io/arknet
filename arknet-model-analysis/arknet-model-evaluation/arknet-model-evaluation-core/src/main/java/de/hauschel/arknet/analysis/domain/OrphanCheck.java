@@ -6,6 +6,8 @@ package de.hauschel.arknet.analysis.domain;
 import java.util.List;
 import java.util.Objects;
 
+import de.hauschel.arknet.analysis.domain.TraceabilityGraph.Demotion;
+import de.hauschel.arknet.analysis.domain.TraceabilityGraph.UnlinkedMention;
 import de.hauschel.arknet.persistence.StoreResource;
 
 /**
@@ -30,18 +32,39 @@ public final class OrphanCheck {
     public record ResourceFinding(String iri, String handle, String typeLocalName, String label) {
     }
 
-    /** One prose mention of a term with no edge backing it up - mirrors {@link TraceabilityGraph.UnlinkedMention}. */
+    /**
+     * One prose mention of a term with no edge backing it up - mirrors {@link UnlinkedMention},
+     * with handles resolved.
+     *
+     * @param fields            the fields the term was found in, in first-appearance order
+     *                          (kogn-io/arknet#697)
+     * @param referencedHandles for a demoted mention standing next to a reference to a resource
+     *                          that already links the term: those resources' handles; empty for a
+     *                          finding and for a mention demoted because it lies in non-normative
+     *                          fields only
+     */
     public record MentionFinding(
             String sourceIri, String sourceHandle, String termIri, String termHandle, String termLabel,
-            String edgeLocalName) {
+            String edgeLocalName, List<String> fields, List<String> referencedHandles) {
+
+        public MentionFinding {
+            fields = List.copyOf(fields);
+            referencedHandles = List.copyOf(referencedHandles);
+        }
     }
 
-    /** The four findings lists {@code orphan_check}/{@code store_check ORPHAN} report. */
+    /**
+     * The findings lists {@code orphan_check}/{@code store_check ORPHAN} report: the four that
+     * count ({@link #total()}), plus the demoted mentions (kogn-io/arknet#697) - term mentions only
+     * in a rationale or acceptance criterion, or next to a reference to a resource that carries
+     * the edge - which are shown but never counted.
+     */
     public record Result(
             List<ResourceFinding> orphanRequirements, List<ResourceFinding> orphanTerms,
-            List<MentionFinding> unlinkedMentions, List<ResourceFinding> orphanConstraints) {
+            List<MentionFinding> unlinkedMentions, List<MentionFinding> demotedMentions,
+            List<ResourceFinding> orphanConstraints) {
 
-        /** @return the total number of findings across all four lists. */
+        /** @return the total number of findings across the four counted lists. */
         public int total() {
             return orphanRequirements.size() + orphanTerms.size() + unlinkedMentions.size()
                     + orphanConstraints.size();
@@ -50,7 +73,7 @@ public final class OrphanCheck {
 
     /**
      * @param graph the traceability graph to report on
-     * @return the four findings lists, in the order the tool has always reported them
+     * @return the findings lists, in the order the tool has always reported them
      */
     public static Result run(final TraceabilityGraph graph) {
         Objects.requireNonNull(graph, "graph");
@@ -62,17 +85,20 @@ public final class OrphanCheck {
                 .filter(iri -> !graph.isReferencedTerm(iri))
                 .map(iri -> resourceFinding(graph, iri))
                 .toList();
-        final List<MentionFinding> unlinkedMentions = graph.unlinkedMentions().stream()
-                .map(mention -> new MentionFinding(
-                        mention.sourceIri(), graph.identifierOf(mention.sourceIri()).orElse(null),
-                        mention.termIri(), graph.identifierOf(mention.termIri()).orElse(null),
-                        mention.termLabel(), mention.edgeLocalName()))
+        final List<UnlinkedMention> mentions = graph.unlinkedMentions();
+        final List<MentionFinding> unlinkedMentions = mentions.stream()
+                .filter(UnlinkedMention::isFinding)
+                .map(mention -> mentionFinding(graph, mention))
+                .toList();
+        final List<MentionFinding> demotedMentions = mentions.stream()
+                .filter(mention -> !mention.isFinding())
+                .map(mention -> mentionFinding(graph, mention))
                 .toList();
         final List<ResourceFinding> orphanConstraints = graph.constraintIris().stream()
                 .filter(iri -> !graph.isConstraintReferenced(iri))
                 .map(iri -> resourceFinding(graph, iri))
                 .toList();
-        return new Result(orphanRequirements, orphanTerms, unlinkedMentions, orphanConstraints);
+        return new Result(orphanRequirements, orphanTerms, unlinkedMentions, demotedMentions, orphanConstraints);
     }
 
     private static ResourceFinding resourceFinding(final TraceabilityGraph graph, final String iri) {
@@ -80,5 +106,15 @@ public final class OrphanCheck {
                 .findFirst().map(StoreResource::localName).orElse(null);
         return new ResourceFinding(iri, graph.identifierOf(iri).orElse(null), typeLocalName,
                 graph.labelOf(iri).orElse(null));
+    }
+
+    private static MentionFinding mentionFinding(final TraceabilityGraph graph, final UnlinkedMention mention) {
+        final List<String> referencedHandles = mention.demotion() instanceof Demotion.NextToReference reference
+                ? reference.referencedIris().stream().map(iri -> graph.identifierOf(iri).orElse(iri)).toList()
+                : List.of();
+        return new MentionFinding(
+                mention.sourceIri(), graph.identifierOf(mention.sourceIri()).orElse(null),
+                mention.termIri(), graph.identifierOf(mention.termIri()).orElse(null),
+                mention.termLabel(), mention.edgeLocalName(), mention.fields(), referencedHandles);
     }
 }

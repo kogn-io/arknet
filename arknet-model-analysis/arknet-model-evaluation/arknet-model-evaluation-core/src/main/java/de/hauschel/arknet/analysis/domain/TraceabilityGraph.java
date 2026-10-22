@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.RdfNode;
@@ -91,6 +92,13 @@ public final class TraceabilityGraph {
     private static final String STEP_REALISES = ArkreqVocabulary.STEP_REALISES;
     private static final String ACCEPTANCE_CRITERION = ArkreqVocabulary.ACCEPTANCE_CRITERION;
     private static final String CRITERION_TEXT = ArkreqVocabulary.CRITERION_TEXT;
+
+    /**
+     * {@code arkreq:rationale} - a requirement's "why" (kogn-io/arknet#697). Scanned by {@link
+     * #unlinkedMentions()} like the description, but as a non-normative field: a term named only
+     * here is a hint, not a finding.
+     */
+    private static final String RATIONALE = ArkreqVocabulary.RATIONALE;
     private static final String USE_CASE_GOAL = ArkreqVocabulary.USE_CASE_GOAL;
     private static final String DESIGN_SCOPE = ArkreqVocabulary.DESIGN_SCOPE;
     private static final String TRIGGER = ArkreqVocabulary.TRIGGER;
@@ -364,7 +372,17 @@ public final class TraceabilityGraph {
     private final Map<String, String> identifierBySubject;
     private final Map<String, String> labelBySubject;
 
+    /**
+     * How a term label's letter case takes part in the mention scan, derived from the display
+     * language this graph was built under: German prose keeps a label's leading capital
+     * significant ({@code soll} is not the term {@code Soll}), every other language ignores case
+     * (kogn-io/arknet#696). The same locale that selects which label variant is matched also
+     * selects the casing rule, so both decisions follow the project's language together.
+     */
+    private final LabelMentions.Casing casing;
+
     private TraceabilityGraph(List<StoreResource> resources, DisplayLocale displayLocale) {
+        this.casing = LabelMentions.Casing.forLocale(displayLocale.requested());
         Map<String, List<Triple>> outgoing = new LinkedHashMap<>();
         Map<String, List<Triple>> incoming = new LinkedHashMap<>();
         Map<String, Set<String>> types = new LinkedHashMap<>();
@@ -737,12 +755,28 @@ public final class TraceabilityGraph {
      *         the edge's target IRIs, then each target's own {@code criterionText} literal(s).
      */
     public List<String> requirementProseTexts(String requirementIri) {
+        return textsOf(requirementProse(requirementIri));
+    }
+
+    /**
+     * {@link #requirementProseTexts(String)} with each text's field kept (kogn-io/arknet#697):
+     * the {@code dcterms:description} is the requirement's normative text; its {@code
+     * arkreq:rationale} and every acceptance criterion's text are not - they explain and
+     * exemplify the requirement rather than state it, so a glossary term named only there is a
+     * reading hint rather than a missing edge. The rationale joins the scan here for the first
+     * time, as a non-normative field from the start.
+     *
+     * @return the requirement's prose fields, description first
+     */
+    public List<ProseText> requirementProse(String requirementIri) {
         Objects.requireNonNull(requirementIri, "requirementIri");
-        List<String> texts = new ArrayList<>(literals(requirementIri, DCTERMS_DESCRIPTION));
+        List<ProseText> texts = new ArrayList<>();
+        addProse(texts, requirementIri, DCTERMS_DESCRIPTION, true);
+        addProse(texts, requirementIri, RATIONALE, false);
         for (String criterionIri : resourceObjects(requirementIri, ACCEPTANCE_CRITERION)) {
-            texts.addAll(literals(criterionIri, CRITERION_TEXT));
+            addProse(texts, criterionIri, CRITERION_TEXT, StoreResource.localName(ACCEPTANCE_CRITERION), false);
         }
-        return texts;
+        return List.copyOf(texts);
     }
 
     /**
@@ -750,7 +784,15 @@ public final class TraceabilityGraph {
      *         unlinked glossary mentions
      */
     public List<String> boundedContextProseTexts(String boundedContextIri) {
-        return literals(Objects.requireNonNull(boundedContextIri, "boundedContextIri"), DOMAIN_VISION);
+        return textsOf(boundedContextProse(boundedContextIri));
+    }
+
+    /** {@link #boundedContextProseTexts(String)} with the field kept; the vision is normative text. */
+    public List<ProseText> boundedContextProse(String boundedContextIri) {
+        Objects.requireNonNull(boundedContextIri, "boundedContextIri");
+        List<ProseText> texts = new ArrayList<>();
+        addProse(texts, boundedContextIri, DOMAIN_VISION, true);
+        return List.copyOf(texts);
     }
 
     /**
@@ -765,19 +807,33 @@ public final class TraceabilityGraph {
      *         literal when unset
      */
     public List<String> useCaseProseTexts(String useCaseIri) {
+        return textsOf(useCaseProse(useCaseIri));
+    }
+
+    /**
+     * {@link #useCaseProseTexts(String)} with each text's field kept. Every use-case field is
+     * normative - a goal, a scope, a trigger, a condition or a step all state what the use case
+     * does; a step's text is reported under its owning edge ({@code mainStep}/{@code
+     * extensionStep}), the same way an acceptance criterion is reported under {@code
+     * acceptanceCriterion}.
+     *
+     * @return the use case's prose fields, in the order {@link #useCaseProseTexts(String)} lists them
+     */
+    public List<ProseText> useCaseProse(String useCaseIri) {
         Objects.requireNonNull(useCaseIri, "useCaseIri");
-        List<String> texts = new ArrayList<>(literals(useCaseIri, USE_CASE_GOAL));
-        texts.addAll(literals(useCaseIri, DESIGN_SCOPE));
-        texts.addAll(literals(useCaseIri, TRIGGER));
-        texts.addAll(literals(useCaseIri, USE_CASE_PRECONDITION));
-        texts.addAll(literals(useCaseIri, USE_CASE_POSTCONDITION));
+        List<ProseText> texts = new ArrayList<>();
+        addProse(texts, useCaseIri, USE_CASE_GOAL, true);
+        addProse(texts, useCaseIri, DESIGN_SCOPE, true);
+        addProse(texts, useCaseIri, TRIGGER, true);
+        addProse(texts, useCaseIri, USE_CASE_PRECONDITION, true);
+        addProse(texts, useCaseIri, USE_CASE_POSTCONDITION, true);
         for (String stepIri : resourceObjects(useCaseIri, MAIN_STEP)) {
-            texts.addAll(literals(stepIri, STEP_TEXT));
+            addProse(texts, stepIri, STEP_TEXT, StoreResource.localName(MAIN_STEP), true);
         }
         for (String stepIri : resourceObjects(useCaseIri, EXTENSION_STEP)) {
-            texts.addAll(literals(stepIri, STEP_TEXT));
+            addProse(texts, stepIri, STEP_TEXT, StoreResource.localName(EXTENSION_STEP), true);
         }
-        return texts;
+        return List.copyOf(texts);
     }
 
     /**
@@ -785,7 +841,15 @@ public final class TraceabilityGraph {
      *         other glossary terms (issue #252) - mirrors {@link #boundedContextProseTexts(String)}
      */
     public List<String> termProseTexts(String termIri) {
-        return literals(Objects.requireNonNull(termIri, "termIri"), DEFINITION);
+        return textsOf(termProse(termIri));
+    }
+
+    /** {@link #termProseTexts(String)} with the field kept; a definition is normative text. */
+    public List<ProseText> termProse(String termIri) {
+        Objects.requireNonNull(termIri, "termIri");
+        List<ProseText> texts = new ArrayList<>();
+        addProse(texts, termIri, DEFINITION, true);
+        return List.copyOf(texts);
     }
 
     /**
@@ -801,18 +865,65 @@ public final class TraceabilityGraph {
      *         bounded context.
      */
     public List<String> adrProseTexts(String adrIri) {
+        return textsOf(adrProse(adrIri));
+    }
+
+    /**
+     * {@link #adrProseTexts(String)} with each text's field kept. Every decision field is
+     * normative - the record exists to state a decision and its consequences, and a considered
+     * option's name and rationale are part of that statement, not an aside to it; the two-hop
+     * texts are reported under their owning edge ({@code consequence}/{@code consideredOption}).
+     *
+     * @return the decision's prose fields, in the order {@link #adrProseTexts(String)} lists them
+     */
+    public List<ProseText> adrProse(String adrIri) {
         Objects.requireNonNull(adrIri, "adrIri");
-        List<String> texts = new ArrayList<>(literals(adrIri, NAME));
-        texts.addAll(literals(adrIri, ADR_CONTEXT));
-        texts.addAll(literals(adrIri, ADR_DECISION));
+        List<ProseText> texts = new ArrayList<>();
+        addProse(texts, adrIri, NAME, true);
+        addProse(texts, adrIri, ADR_CONTEXT, true);
+        addProse(texts, adrIri, ADR_DECISION, true);
         for (String consequenceIri : resourceObjects(adrIri, CONSEQUENCE)) {
-            texts.addAll(literals(consequenceIri, CONSEQUENCE_STATEMENT));
+            addProse(texts, consequenceIri, CONSEQUENCE_STATEMENT, StoreResource.localName(CONSEQUENCE), true);
         }
         for (String optionIri : resourceObjects(adrIri, CONSIDERED_OPTION)) {
-            texts.addAll(literals(optionIri, NAME));
-            texts.addAll(literals(optionIri, OPTION_RATIONALE));
+            addProse(texts, optionIri, NAME, StoreResource.localName(CONSIDERED_OPTION), true);
+            addProse(texts, optionIri, OPTION_RATIONALE, StoreResource.localName(CONSIDERED_OPTION), true);
         }
-        return texts;
+        return List.copyOf(texts);
+    }
+
+    /**
+     * One prose literal of a resource together with the field it was read from (kogn-io/arknet#697).
+     *
+     * @param field     the local name of the predicate the literal sits under or, for a text read
+     *                  two hops away on an owned sub-resource (an acceptance criterion, a step, a
+     *                  consequence, a considered option), the local name of the owning edge - the
+     *                  same naming {@code store_check LANGUAGE} uses for such a child
+     * @param normative whether the field states what the resource is or does (a description, a
+     *                  step, a decision), as opposed to explaining or exemplifying it (a
+     *                  rationale, an acceptance criterion) - a glossary term named only in a
+     *                  non-normative field is reported as a hint, not as a missing edge
+     * @param text      the literal's lexical form
+     */
+    public record ProseText(String field, boolean normative, String text) {
+        public ProseText {
+            Objects.requireNonNull(field, "field");
+            Objects.requireNonNull(text, "text");
+        }
+    }
+
+    private static List<String> textsOf(List<ProseText> prose) {
+        return prose.stream().map(ProseText::text).toList();
+    }
+
+    private void addProse(List<ProseText> into, String subject, String predicate, boolean normative) {
+        addProse(into, subject, predicate, StoreResource.localName(predicate), normative);
+    }
+
+    private void addProse(List<ProseText> into, String subject, String predicate, String field, boolean normative) {
+        for (String text : literals(subject, predicate)) {
+            into.add(new ProseText(field, normative, text));
+        }
     }
 
     /** @return the {@code prefLabel}/{@code title} label of every term IRI that carries one. */
@@ -874,8 +985,20 @@ public final class TraceabilityGraph {
      * same {@code "usesTerm"} edge-local-name as that sweep: both name the term the source text
      * mentions without the matching link, only the concrete predicate namespace differs.</p>
      *
+     * <p>Since kogn-io/arknet#697 every mention carries the fields it was found in, and a pair
+     * (source, term) is <em>demoted</em> - still returned, but with a {@link Demotion} instead of
+     * counting as a finding - in two cases: every hit lies in a non-normative field (a
+     * requirement's rationale or acceptance criterion, see {@link #requirementProse(String)}), or
+     * every hit in a normative field stands right next to a business code naming another resource
+     * that already carries the edge to the term ("Kontoauszug (FR-3)", "laut FR-3 ... Kontoauszug"
+     * - see {@link #MAX_REFERENCE_GAP_WORDS}): the term then belongs to the referenced resource,
+     * not to the one quoting it. Demoted rather than dropped, because a description can name the
+     * term in an inflected form the literal matcher misses while a criterion names it verbatim -
+     * the one hit the scan sees is then in the weak field, but the gap is real.</p>
+     *
      * @return the unlinked mentions found across every requirement, use case, bounded context,
-     *         term and architecture decision
+     *         term and architecture decision - findings and demoted mentions alike, told apart by
+     *         {@link UnlinkedMention#isFinding()}
      */
     public List<UnlinkedMention> unlinkedMentions() {
         Map<String, String> termLabels = termLabels();
@@ -885,62 +1008,202 @@ public final class TraceabilityGraph {
         List<String> termIris = termLabels.keySet().stream()
                 .sorted(Comparator.comparing(iri -> identifierOf(iri).orElse(iri)))
                 .toList();
-        LabelMentions<String> matcher = LabelMentions.of(termIris, termLabels::get);
+        LabelMentions<String> matcher = LabelMentions.of(termIris, termLabels::get, casing);
+        LabelMentions<String> codes = codeMatcher();
 
         List<UnlinkedMention> found = new ArrayList<>();
         for (String requirementIri : requirementIris()) {
-            Set<String> linked = new HashSet<>(usedTerms(requirementIri));
-            for (String termIri : matcher.mentionedIn(requirementProseTexts(requirementIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(requirementIri, termIri, termLabels.get(termIri), "usesTerm"));
-                }
-            }
+            found.addAll(sweep(requirementIri, requirementProse(requirementIri),
+                    new HashSet<>(usedTerms(requirementIri)), "usesTerm", matcher, codes, termLabels));
         }
         for (String useCaseIri : useCaseIris()) {
             Set<String> linked = new HashSet<>(usedTerms(useCaseIri));
             linked.addAll(rolesOf(useCaseIri));
-            for (String termIri : matcher.mentionedIn(useCaseProseTexts(useCaseIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(useCaseIri, termIri, termLabels.get(termIri), "usesTerm"));
-                }
-            }
+            found.addAll(sweep(useCaseIri, useCaseProse(useCaseIri), linked, "usesTerm", matcher, codes, termLabels));
         }
         for (String boundedContextIri : boundedContextIris()) {
-            Set<String> linked = new HashSet<>(linkedTerms(boundedContextIri));
-            for (String termIri : matcher.mentionedIn(boundedContextProseTexts(boundedContextIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(
-                            boundedContextIri, termIri, termLabels.get(termIri), "ubiquitousLanguageTerm"));
-                }
-            }
+            found.addAll(sweep(boundedContextIri, boundedContextProse(boundedContextIri),
+                    new HashSet<>(linkedTerms(boundedContextIri)), "ubiquitousLanguageTerm", matcher, codes, termLabels));
         }
         for (String termIri : termIris) {
             Set<String> linked = new HashSet<>(relatedTerms(termIri));
             broaderTerm(termIri).ifPresent(linked::add);
             linked.addAll(narrowerTerms(termIri));
-            for (String mentionedTermIri : matcher.mentionedIn(termProseTexts(termIri))) {
-                if (mentionedTermIri.equals(termIri)) {
-                    continue;
-                }
-                if (!linked.contains(mentionedTermIri)) {
-                    found.add(new UnlinkedMention(
-                            termIri, mentionedTermIri, termLabels.get(mentionedTermIri), GLOSSARY_EDGE_LOCAL_NAME));
-                }
-            }
+            // A term's mention of its own label within its own definition is never reported.
+            linked.add(termIri);
+            found.addAll(sweep(termIri, termProse(termIri), linked, GLOSSARY_EDGE_LOCAL_NAME, matcher, codes, termLabels));
         }
         for (String adrIri : adrIris()) {
-            Set<String> linked = new HashSet<>(adrUsedTerms(adrIri));
-            for (String termIri : matcher.mentionedIn(adrProseTexts(adrIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(adrIri, termIri, termLabels.get(termIri), "usesTerm"));
-                }
-            }
+            found.addAll(sweep(adrIri, adrProse(adrIri),
+                    new HashSet<>(adrUsedTerms(adrIri)), "usesTerm", matcher, codes, termLabels));
         }
         return List.copyOf(found);
     }
 
     /**
-     * @param sourceIri     the requirement, bounded context or term whose prose names the term
+     * How many words may stand between a term mention and a business code for the code to count
+     * as the reference the mention belongs to (kogn-io/arknet#697): zero for "Kontoauszug (FR-3)",
+     * one for "Kontoauszug laut FR-3", two for "laut FR-3 muss der Kontoauszug". A sentence
+     * boundary ({@code .;!?} or a line break) between the two always breaks the adjacency, however
+     * few words lie between them.
+     */
+    static final int MAX_REFERENCE_GAP_WORDS = 2;
+
+    private static final Pattern SENTENCE_BOUNDARY = Pattern.compile("[.;!?\\n\\r]");
+    private static final Pattern NON_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
+
+    /**
+     * One sweep over one source's prose: every unlinked term it mentions, with the fields the
+     * mentions were found in and the demotion the hits earn, if any.
+     */
+    private List<UnlinkedMention> sweep(
+            String sourceIri, List<ProseText> prose, Set<String> linked, String edgeLocalName,
+            LabelMentions<String> terms, LabelMentions<String> codes, Map<String, String> termLabels) {
+        Map<String, Tally> tallies = new LinkedHashMap<>();
+        for (ProseText text : prose) {
+            List<LabelMentions.Mention<String>> codeHits = null;
+            for (LabelMentions.Mention<String> hit : terms.in(text.text())) {
+                String termIri = hit.item();
+                if (linked.contains(termIri)) {
+                    continue;
+                }
+                Tally tally = tallies.computeIfAbsent(termIri, iri -> new Tally());
+                tally.fields.add(text.field());
+                if (!text.normative()) {
+                    continue;
+                }
+                tally.normativeHit = true;
+                if (codeHits == null) {
+                    codeHits = codes.in(text.text());
+                }
+                Optional<String> reference = linkingReferenceNextTo(hit, codeHits, text.text(), sourceIri, termIri);
+                if (reference.isPresent()) {
+                    tally.references.add(reference.get());
+                } else {
+                    tally.unreferencedNormativeHit = true;
+                }
+            }
+        }
+        List<UnlinkedMention> out = new ArrayList<>();
+        tallies.forEach((termIri, tally) -> out.add(new UnlinkedMention(
+                sourceIri, termIri, termLabels.get(termIri), edgeLocalName, List.copyOf(tally.fields), tally.demotion())));
+        return out;
+    }
+
+    /** What one source's prose says about one term, accumulated across its fields. */
+    private static final class Tally {
+        final Set<String> fields = new LinkedHashSet<>();
+        final Set<String> references = new LinkedHashSet<>();
+        boolean normativeHit;
+        boolean unreferencedNormativeHit;
+
+        Demotion demotion() {
+            if (unreferencedNormativeHit) {
+                return null;
+            }
+            if (!normativeHit) {
+                return new Demotion.NonNormativeFieldsOnly();
+            }
+            return new Demotion.NextToReference(List.copyOf(references));
+        }
+    }
+
+    /**
+     * A matcher over every business code ({@code dcterms:identifier}) in the project, mapping a
+     * code found in prose back to the resource carrying it - the "Begriff (FR-3)" half of the
+     * reference rule. Case-insensitive like {@code CodeReferences} in the HTML report.
+     */
+    private LabelMentions<String> codeMatcher() {
+        List<String> subjects = identifierBySubject.keySet().stream()
+                .sorted(Comparator.comparing(identifierBySubject::get))
+                .toList();
+        return LabelMentions.of(subjects, identifierBySubject::get);
+    }
+
+    /**
+     * @return the IRI of a resource whose code stands next to {@code termHit} in {@code text} and
+     *         which already links {@code termIri} - never the source itself
+     */
+    private Optional<String> linkingReferenceNextTo(
+            LabelMentions.Mention<String> termHit, List<LabelMentions.Mention<String>> codeHits,
+            String text, String sourceIri, String termIri) {
+        for (LabelMentions.Mention<String> codeHit : codeHits) {
+            if (codeHit.item().equals(sourceIri) || !adjacent(text, termHit, codeHit)) {
+                continue;
+            }
+            if (termsLinkedBy(codeHit.item()).contains(termIri)) {
+                return Optional.of(codeHit.item());
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Whether at most {@link #MAX_REFERENCE_GAP_WORDS} words and no sentence boundary separate the two hits. */
+    private static boolean adjacent(
+            String text, LabelMentions.Mention<String> a, LabelMentions.Mention<String> b) {
+        String gap;
+        if (a.end() <= b.start()) {
+            gap = text.substring(a.end(), b.start());
+        } else if (b.end() <= a.start()) {
+            gap = text.substring(b.end(), a.start());
+        } else {
+            return false;
+        }
+        if (SENTENCE_BOUNDARY.matcher(gap).find()) {
+            return false;
+        }
+        long words = NON_WORD.splitAsStream(gap).filter(token -> !token.isEmpty()).count();
+        return words <= MAX_REFERENCE_GAP_WORDS;
+    }
+
+    /**
+     * @return every term {@code iri} links through an edge the mention scan accepts as "carries
+     *         the term": {@code arkreq:usesTerm} (requirement, use case), {@code arkarch:usesTerm}
+     *         (decision), {@code arkddd:ubiquitousLanguageTerm}/{@code delimitsTerm} (bounded
+     *         context) - the union the reference rule checks on a referenced resource
+     */
+    private Set<String> termsLinkedBy(String iri) {
+        Set<String> linked = new HashSet<>();
+        for (Triple triple : outgoingBySubject.getOrDefault(iri, List.of())) {
+            String predicate = triple.predicate();
+            if ((USES_TERM.equals(predicate) || ADR_USES_TERM.equals(predicate)
+                    || UBIQUITOUS_LANGUAGE_TERM.equals(predicate) || DELIMITS_TERM.equals(predicate))
+                    && triple.object() instanceof RdfNode.Resource resource) {
+                linked.add(resource.iri());
+            }
+        }
+        return linked;
+    }
+
+    /**
+     * Why a mention is returned by {@link #unlinkedMentions()} without counting as a finding
+     * (kogn-io/arknet#697).
+     */
+    public sealed interface Demotion {
+
+        /**
+         * Every hit lies in a non-normative field ({@link ProseText#normative()} false): the term
+         * is named only in a rationale or an acceptance criterion.
+         */
+        record NonNormativeFieldsOnly() implements Demotion {
+        }
+
+        /**
+         * Every hit in a normative field stands next to a business code naming another resource
+         * that already carries the edge to the term.
+         *
+         * @param referencedIris the resources those codes name, in first-appearance order
+         */
+        record NextToReference(List<String> referencedIris) implements Demotion {
+            public NextToReference {
+                referencedIris = List.copyOf(referencedIris);
+            }
+        }
+    }
+
+    /**
+     * @param sourceIri     the requirement, use case, bounded context, term or decision whose
+     *                      prose names the term
      * @param termIri       the mentioned term
      * @param termLabel     the term's {@code skos:prefLabel}, as named in the prose
      * @param edgeLocalName the missing edge's local name ({@code usesTerm},
@@ -948,8 +1211,23 @@ public final class TraceabilityGraph {
      *                      {@code broader/narrower/related}), for the "no ... edge" message; the
      *                      term-to-term value names every glossary edge kind that would resolve the
      *                      finding rather than prescribing one (kogn-io/arknet#595)
+     * @param fields        the fields the term was found in ({@link ProseText#field()}), in
+     *                      first-appearance order, never empty
+     * @param demotion      {@code null} for a finding; otherwise why this mention does not count
+     *                      as one (kogn-io/arknet#697)
      */
-    public record UnlinkedMention(String sourceIri, String termIri, String termLabel, String edgeLocalName) {
+    public record UnlinkedMention(
+            String sourceIri, String termIri, String termLabel, String edgeLocalName,
+            List<String> fields, Demotion demotion) {
+
+        public UnlinkedMention {
+            fields = List.copyOf(fields);
+        }
+
+        /** @return whether this mention counts as a finding rather than a hint */
+        public boolean isFinding() {
+            return demotion == null;
+        }
     }
 
     private List<String> literals(String subject, String predicate) {

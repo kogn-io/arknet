@@ -396,7 +396,7 @@ class TraceabilityMcpToolsTest {
             String report = tools.orphanCheck(null, ANCHOR);
 
             assertThat(report).contains("Mentioned in text but not linked:");
-            assertThat(report).contains("| Business-Code | usesTerm |");
+            assertThat(report).contains("| Business-Code | usesTerm | description |");
         });
     }
 }

@@ -205,7 +205,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String ACCEPTED_STATUS = ARKREQ_NAMESPACE + "Accepted";
     private static final String TITLE_PROPERTY = VocabDct.NAMESPACE + "title";
     private static final String DESCRIPTION_PROPERTY = VocabDct.NAMESPACE + "description";
-    private static final String RATIONALE_PROPERTY = ARKREQ_NAMESPACE + "rationale";
+    private static final String RATIONALE_PROPERTY = ArkreqVocabulary.RATIONALE;
     private static final String PRIORITY_PROPERTY = ARKREQ_NAMESPACE + "priority";
     private static final String QUALITY_CATEGORY_PROPERTY = ARKREQ_NAMESPACE + "qualityCategory";
     private static final String ACCEPTANCE_CRITERION_PROPERTY = ArkreqVocabulary.ACCEPTANCE_CRITERION;

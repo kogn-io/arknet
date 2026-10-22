@@ -83,7 +83,7 @@ class StoreCheckRendererTest {
                 .contains(StoreCheckRenderer.ROLE_TERM_BLIND_SPOT);
         assertThat(renderer.stepAcceptanceSection(List.of()))
                 .contains("Checked here: " + StoreCheckKind.STEP_ACCEPTANCE.scope());
-        assertThat(renderer.orphanSection(new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of())))
+        assertThat(renderer.orphanSection(new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of(), List.of())))
                 .contains("Checked here: " + StoreCheckKind.ORPHAN.scope());
     }
 
@@ -171,13 +171,40 @@ class StoreCheckRendererTest {
     @Test
     void saysNoOrphansFoundWhenAllFourListsAreEmpty() {
         String rendered = renderer.orphanSection(
-                new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of()));
+                new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of(), List.of()));
 
         assertThat(rendered)
                 .contains("ORPHAN")
                 .contains("no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
                         + "constraints found.")
                 .doesNotContain("|");
+    }
+
+    /**
+     * kogn-io/arknet#697: a demoted mention is shown in its own table with the field and the
+     * reason, counted nowhere - the clean-result sentence stays, the summary names it as "not
+     * counted".
+     */
+    @Test
+    void listsDemotedMentionsInTheirOwnTableWithoutCountingThem() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(), List.of(),
+                List.of(
+                        new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                                List.of("rationale", "acceptanceCriterion"), List.of()),
+                        new MentionFinding(ID + "fr-4", "FR-4", ID + "term-7", "TERM-7", "Kontoauszug", "usesTerm",
+                                List.of("description"), List.of("FR-1"))),
+                List.of()));
+
+        assertThat(rendered)
+                .contains("no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
+                        + "constraints found. 2 further mentions only in a rationale or acceptance criterion, "
+                        + "or next to a reference that carries the edge, listed below and not counted.")
+                .contains(StoreCheckRenderer.DEMOTED_MENTIONS_HEADING)
+                .contains("| Source | Term | Label | Field | Why |")
+                .contains("| FR-3 | TERM-9 | Kunde | rationale, acceptanceCriterion | only in a non-normative field |")
+                .contains("| FR-4 | TERM-7 | Kontoauszug | description | next to FR-1, which links the term |")
+                .doesNotContain("Mentioned in text but not linked:");
     }
 
     /**
@@ -189,7 +216,9 @@ class StoreCheckRendererTest {
         String rendered = renderer.orphanSection(new OrphanCheck.Result(
                 List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
                 List.of(),
-                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm")),
+                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("description", "acceptanceCriterion"), List.of())),
+                List.of(),
                 List.of()));
 
         assertThat(rendered)
@@ -201,8 +230,9 @@ class StoreCheckRendererTest {
                 .contains("| Resource | Type | Label |")
                 .contains("| FR-2 | FunctionalRequirement | Logout |")
                 .contains("Mentioned in text but not linked:")
-                .contains("| Source | Term | Label | Missing edge |")
-                .contains("| FR-3 | TERM-9 | Kunde | usesTerm |")
+                .contains("| Source | Term | Label | Missing edge | Field |")
+                .contains("| FR-3 | TERM-9 | Kunde | usesTerm | description, acceptanceCriterion |")
+                .doesNotContain("further mention")
                 .doesNotContain("Terms never referenced:")
                 .doesNotContain("Constraints not attached to any requirement or use case:");
     }
@@ -212,18 +242,18 @@ class StoreCheckRendererTest {
     void fallsBackToTheShortenedIriForAnOrphanWithoutAHandle() {
         String rendered = renderer.orphanSection(new OrphanCheck.Result(
                 List.of(), List.of(new ResourceFinding(ID + "term-9", null, "Concept", null)),
-                List.of(), List.of()));
+                List.of(), List.of(), List.of()));
 
         assertThat(rendered).contains("| " + ID + "term-9 | Concept | - |");
     }
 
     @Test
     void alwaysNamesTheOrphanChecksBlindSpotWhetherItFoundSomethingOrNot() {
-        assertThat(renderer.orphanSection(new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of())))
+        assertThat(renderer.orphanSection(new OrphanCheck.Result(List.of(), List.of(), List.of(), List.of(), List.of())))
                 .contains(StoreCheckRenderer.ORPHAN_BLIND_SPOT);
         assertThat(renderer.orphanSection(new OrphanCheck.Result(
                 List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
-                List.of(), List.of(), List.of())))
+                List.of(), List.of(), List.of(), List.of())))
                 .contains(StoreCheckRenderer.ORPHAN_BLIND_SPOT);
     }
 }

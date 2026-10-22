@@ -6,6 +6,7 @@ package de.hauschel.arknet.analysis.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +43,10 @@ class OrphanCheckTest {
     private static final String DOMAIN_VISION = ARKDDD + "domainVision";
     private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
     private static final String CONSTRAINED_BY = "http://open-services.net/ns/rm#constrainedBy";
+    private static final String USES_TERM = ARKREQ + "usesTerm";
+    private static final String RATIONALE = ARKREQ + "rationale";
+    private static final String ACCEPTANCE_CRITERION = ARKREQ + "acceptanceCriterion";
+    private static final String CRITERION_TEXT = ARKREQ + "criterionText";
 
     @Test
     void reportsNothingWhenEveryRequirementIsRealisedAndEveryTermIsReferenced() {
@@ -59,6 +64,7 @@ class OrphanCheckTest {
         assertThat(result.orphanRequirements()).isEmpty();
         assertThat(result.orphanTerms()).isEmpty();
         assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.demotedMentions()).isEmpty();
         assertThat(result.orphanConstraints()).isEmpty();
     }
 
@@ -133,8 +139,160 @@ class OrphanCheckTest {
 
         OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
 
-        assertThat(result.unlinkedMentions()).containsExactly(
-                new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm"));
+        assertThat(result.unlinkedMentions()).containsExactly(new MentionFinding(
+                ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm", List.of("description"), List.of()));
+        assertThat(result.demotedMentions()).isEmpty();
+    }
+
+    /**
+     * kogn-io/arknet#697: a term named only in a requirement's rationale or acceptance criterion is
+     * demoted - returned in its own list with the field it was found in, outside the count.
+     */
+    @Test
+    void demotesAMentionFoundOnlyInARationaleOrAnAcceptanceCriterion() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(ID + "fr-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-3", IDENTIFIER, "FR-3"),
+                lit(ID + "fr-3", DESCRIPTION, "Das System zeigt die Bestandsdaten an."),
+                lit(ID + "fr-3", RATIONALE, "Der Kunde fragt danach."),
+                iri(ID + "fr-3", ACCEPTANCE_CRITERION, ID + "ac-1"),
+                lit(ID + "ac-1", CRITERION_TEXT, "Beispiel: Eine Bestellung wird angezeigt."),
+
+                iri(ID + "term-9", RDF_TYPE, SKOS + "Concept"),
+                lit(ID + "term-9", PREF_LABEL, "Kunde"),
+                lit(ID + "term-9", IDENTIFIER, "TERM-9"),
+                iri(ID + "term-8", RDF_TYPE, SKOS + "Concept"),
+                lit(ID + "term-8", PREF_LABEL, "Bestellung"),
+                lit(ID + "term-8", IDENTIFIER, "TERM-8")));
+
+        OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.demotedMentions()).containsExactly(
+                new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("rationale"), List.of()),
+                new MentionFinding(ID + "fr-3", "FR-3", ID + "term-8", "TERM-8", "Bestellung", "usesTerm",
+                        List.of("acceptanceCriterion"), List.of()));
+    }
+
+    /** One hit in the description is enough to keep the pair a finding; the criterion field is still listed. */
+    @Test
+    void keepsAMentionAFindingWhenTheDescriptionNamesTheTermToo() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(ID + "fr-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-3", IDENTIFIER, "FR-3"),
+                lit(ID + "fr-3", DESCRIPTION, "Der Kunde sieht seine Bestandsdaten ein."),
+                iri(ID + "fr-3", ACCEPTANCE_CRITERION, ID + "ac-1"),
+                lit(ID + "ac-1", CRITERION_TEXT, "Ein Kunde ohne Daten sieht eine leere Liste."),
+
+                iri(ID + "term-9", RDF_TYPE, SKOS + "Concept"),
+                lit(ID + "term-9", PREF_LABEL, "Kunde"),
+                lit(ID + "term-9", IDENTIFIER, "TERM-9")));
+
+        OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
+
+        assertThat(result.unlinkedMentions()).containsExactly(new MentionFinding(
+                ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                List.of("description", "acceptanceCriterion"), List.of()));
+        assertThat(result.demotedMentions()).isEmpty();
+    }
+
+    /**
+     * kogn-io/arknet#697, the reference rule: "Kontoauszug (FR-1)" quotes FR-1, and FR-1 already
+     * carries the edge to the term - the term belongs to FR-1, so FR-3's mention is demoted and
+     * names FR-1 as the reason. The same sentence with a reference to a requirement that does
+     * <em>not</em> link the term stays a finding.
+     */
+    @Test
+    void demotesAMentionStandingNextToAReferenceToAResourceThatLinksTheTerm() {
+        List<Triple> common = List.of(
+                iri(ID + "fr-1", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-1", IDENTIFIER, "FR-1"),
+                lit(ID + "fr-1", DESCRIPTION, "Das System importiert den Kontoauszug."),
+                iri(ID + "fr-1", USES_TERM, ID + "term-7"),
+                iri(ID + "fr-2", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-2", IDENTIFIER, "FR-2"),
+                lit(ID + "fr-2", DESCRIPTION, "Das System archiviert Belege."),
+                iri(ID + "fr-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-3", IDENTIFIER, "FR-3"),
+                iri(ID + "term-7", RDF_TYPE, SKOS + "Concept"),
+                lit(ID + "term-7", PREF_LABEL, "Kontoauszug"),
+                lit(ID + "term-7", IDENTIFIER, "TERM-7"));
+
+        OrphanCheck.Result quotingLinker = OrphanCheck.run(TraceabilityGraph.of(StoreSnapshot.of(with(common,
+                lit(ID + "fr-3", DESCRIPTION, "Nach dem Kontoauszug (FR-1) folgt die Zuordnung."))),
+                DisplayLocale.DEFAULT));
+        OrphanCheck.Result quotingOther = OrphanCheck.run(TraceabilityGraph.of(StoreSnapshot.of(with(common,
+                lit(ID + "fr-3", DESCRIPTION, "Nach dem Kontoauszug (FR-2) folgt die Zuordnung."))),
+                DisplayLocale.DEFAULT));
+        OrphanCheck.Result referenceAhead = OrphanCheck.run(TraceabilityGraph.of(StoreSnapshot.of(with(common,
+                lit(ID + "fr-3", DESCRIPTION, "Laut FR-1 muss der Kontoauszug zugeordnet werden."))),
+                DisplayLocale.DEFAULT));
+        OrphanCheck.Result referenceFarAway = OrphanCheck.run(TraceabilityGraph.of(StoreSnapshot.of(with(common,
+                lit(ID + "fr-3", DESCRIPTION, "Der Kontoauszug wird jeder Buchung zugeordnet, siehe FR-1."))),
+                DisplayLocale.DEFAULT));
+
+        assertThat(quotingLinker.unlinkedMentions()).isEmpty();
+        assertThat(quotingLinker.demotedMentions()).containsExactly(new MentionFinding(
+                ID + "fr-3", "FR-3", ID + "term-7", "TERM-7", "Kontoauszug", "usesTerm",
+                List.of("description"), List.of("FR-1")));
+        assertThat(quotingOther.demotedMentions()).isEmpty();
+        assertThat(quotingOther.unlinkedMentions()).extracting(MentionFinding::sourceHandle).containsExactly("FR-3");
+        assertThat(referenceAhead.demotedMentions()).extracting(MentionFinding::referencedHandles)
+                .containsExactly(List.of("FR-1"));
+        assertThat(referenceFarAway.demotedMentions()).isEmpty();
+        assertThat(referenceFarAway.unlinkedMentions()).extracting(MentionFinding::sourceHandle).containsExactly("FR-3");
+    }
+
+    /**
+     * kogn-io/arknet#696: under a German display language a capitalised label keeps its capital -
+     * the modal verb "soll" is not the term "Soll" - while an English display language, the
+     * default, still matches regardless of case.
+     */
+    @Test
+    void matchesALabelsInitialCapitalOnlyUnderAGermanDisplayLanguage() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(ID + "fr-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-3", IDENTIFIER, "FR-3"),
+                lit(ID + "fr-3", DESCRIPTION, "Das System soll die Bestandsdaten anzeigen."),
+                iri(ID + "fr-4", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-4", IDENTIFIER, "FR-4"),
+                lit(ID + "fr-4", DESCRIPTION, "Das Soll wird dem Ist gegenuebergestellt."),
+
+                iri(ID + "term-6", RDF_TYPE, SKOS + "Concept"),
+                lit(ID + "term-6", PREF_LABEL, "Soll"),
+                lit(ID + "term-6", IDENTIFIER, "TERM-6")));
+
+        OrphanCheck.Result german = OrphanCheck.run(TraceabilityGraph.of(
+                snapshot, new DisplayLocale(Locale.GERMAN, Locale.ENGLISH)));
+        OrphanCheck.Result english = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
+
+        assertThat(german.unlinkedMentions()).extracting(MentionFinding::sourceHandle).containsExactly("FR-4");
+        assertThat(english.unlinkedMentions()).extracting(MentionFinding::sourceHandle).containsExactly("FR-3", "FR-4");
+    }
+
+    /** kogn-io/arknet#696: a hyphenated compound does not mention its part. */
+    @Test
+    void doesNotReportATermInsideAHyphenatedCompound() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(ID + "fr-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + "fr-3", IDENTIFIER, "FR-3"),
+                lit(ID + "fr-3", DESCRIPTION, "Der Kontoauszug-Import laeuft naechtlich."),
+
+                iri(ID + "term-7", RDF_TYPE, SKOS + "Concept"),
+                lit(ID + "term-7", PREF_LABEL, "Kontoauszug"),
+                lit(ID + "term-7", IDENTIFIER, "TERM-7")));
+
+        OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.demotedMentions()).isEmpty();
+    }
+
+    private static List<Triple> with(List<Triple> base, Triple extra) {
+        List<Triple> all = new java.util.ArrayList<>(base);
+        all.add(extra);
+        return all;
     }
 
     /**
@@ -155,8 +313,9 @@ class OrphanCheckTest {
 
         OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
 
-        assertThat(result.unlinkedMentions()).containsExactly(
-                new MentionFinding(ID + "bc-2", "BC-2", ID + "term-8", "TERM-8", "Bestellung", "ubiquitousLanguageTerm"));
+        assertThat(result.unlinkedMentions()).containsExactly(new MentionFinding(
+                ID + "bc-2", "BC-2", ID + "term-8", "TERM-8", "Bestellung", "ubiquitousLanguageTerm",
+                List.of("domainVision"), List.of()));
     }
 
     /**

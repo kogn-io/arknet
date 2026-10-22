@@ -177,21 +177,28 @@ public final class StoreCheckRenderer {
      */
     public String orphanSection(final OrphanCheck.Result result) {
         Objects.requireNonNull(result, "result");
+        final StringBuilder rendered = new StringBuilder("ORPHAN: ");
         if (result.total() == 0) {
-            return "ORPHAN: no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
-                    + "constraints found.\n\n" + ORPHAN_BLIND_SPOT;
+            rendered.append("no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
+                    + "constraints found.");
+        } else {
+            rendered.append(result.orphanRequirements().size())
+                    .append(result.orphanRequirements().size() == 1 ? " requirement without" : " requirements without")
+                    .append(" a satisfying or realising use case, ")
+                    .append(result.orphanTerms().size())
+                    .append(result.orphanTerms().size() == 1 ? " term" : " terms").append(" never referenced, ")
+                    .append(result.unlinkedMentions().size())
+                    .append(result.unlinkedMentions().size() == 1 ? " unlinked mention" : " unlinked mentions")
+                    .append(", ").append(result.orphanConstraints().size())
+                    .append(result.orphanConstraints().size() == 1 ? " constraint" : " constraints")
+                    .append(" not attached to any requirement or use case.");
         }
-        final StringBuilder rendered = new StringBuilder("ORPHAN: ")
-                .append(result.orphanRequirements().size())
-                .append(result.orphanRequirements().size() == 1 ? " requirement without" : " requirements without")
-                .append(" a satisfying or realising use case, ")
-                .append(result.orphanTerms().size())
-                .append(result.orphanTerms().size() == 1 ? " term" : " terms").append(" never referenced, ")
-                .append(result.unlinkedMentions().size())
-                .append(result.unlinkedMentions().size() == 1 ? " unlinked mention" : " unlinked mentions")
-                .append(", ").append(result.orphanConstraints().size())
-                .append(result.orphanConstraints().size() == 1 ? " constraint" : " constraints")
-                .append(" not attached to any requirement or use case.");
+        if (!result.demotedMentions().isEmpty()) {
+            rendered.append(' ').append(result.demotedMentions().size())
+                    .append(result.demotedMentions().size() == 1 ? " further mention" : " further mentions")
+                    .append(" only in a rationale or acceptance criterion, or next to a reference that carries "
+                            + "the edge, listed below and not counted.");
+        }
         if (!result.orphanRequirements().isEmpty()) {
             rendered.append("\n\nRequirements no use case satisfies or realises:\n\n");
             appendResourceTable(rendered, result.orphanRequirements());
@@ -204,12 +211,25 @@ public final class StoreCheckRenderer {
             rendered.append("\n\nMentioned in text but not linked:\n\n");
             appendMentionTable(rendered, result.unlinkedMentions());
         }
+        if (!result.demotedMentions().isEmpty()) {
+            rendered.append("\n\n").append(DEMOTED_MENTIONS_HEADING).append("\n\n");
+            appendDemotedMentionTable(rendered, result.demotedMentions());
+        }
         if (!result.orphanConstraints().isEmpty()) {
             rendered.append("\n\nConstraints not attached to any requirement or use case:\n\n");
             appendResourceTable(rendered, result.orphanConstraints());
         }
         return rendered.append("\n\n").append(ORPHAN_BLIND_SPOT).toString();
     }
+
+    /**
+     * Heading of the demoted-mentions table (kogn-io/arknet#697): shown, so a real gap the scan
+     * only saw in a weak field is not lost, but outside the count, so a project need not keep an
+     * exception list next to the store for every example that names a term.
+     */
+    static final String DEMOTED_MENTIONS_HEADING =
+            "Mentioned only in a rationale or acceptance criterion, or next to a reference that already "
+                    + "carries the edge (not counted):";
 
     private void appendResourceTable(final StringBuilder out, final List<ResourceFinding> findings) {
         out.append("| Resource | Type | Label |\n| --- | --- | --- |");
@@ -222,12 +242,31 @@ public final class StoreCheckRenderer {
     }
 
     private void appendMentionTable(final StringBuilder out, final List<MentionFinding> mentions) {
-        out.append("| Source | Term | Label | Missing edge |\n| --- | --- | --- | --- |");
+        out.append("| Source | Term | Label | Missing edge | Field |\n| --- | --- | --- | --- | --- |");
         for (final MentionFinding mention : mentions) {
             out.append("\n| ").append(handleOf(mention.sourceIri(), mention.sourceHandle()))
                     .append(" | ").append(handleOf(mention.termIri(), mention.termHandle()))
                     .append(" | ").append(mention.termLabel())
                     .append(" | ").append(mention.edgeLocalName())
+                    .append(" | ").append(String.join(", ", mention.fields()))
+                    .append(" |");
+        }
+    }
+
+    /**
+     * The demoted mentions, with the field column and a "Why" column in place of the missing edge:
+     * a reader decides from the field alone whether to open the resource (kogn-io/arknet#697).
+     */
+    private void appendDemotedMentionTable(final StringBuilder out, final List<MentionFinding> mentions) {
+        out.append("| Source | Term | Label | Field | Why |\n| --- | --- | --- | --- | --- |");
+        for (final MentionFinding mention : mentions) {
+            out.append("\n| ").append(handleOf(mention.sourceIri(), mention.sourceHandle()))
+                    .append(" | ").append(handleOf(mention.termIri(), mention.termHandle()))
+                    .append(" | ").append(mention.termLabel())
+                    .append(" | ").append(String.join(", ", mention.fields()))
+                    .append(" | ").append(mention.referencedHandles().isEmpty()
+                            ? "only in a non-normative field"
+                            : "next to " + String.join(", ", mention.referencedHandles()) + ", which links the term")
                     .append(" |");
         }
     }

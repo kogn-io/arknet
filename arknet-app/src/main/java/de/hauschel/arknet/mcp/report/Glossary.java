@@ -31,10 +31,11 @@ import de.hauschel.arknet.ul.domain.Term;
  * One store round trip fewer than before, not one more.</p>
  *
  * <p>A mention is a term's {@code skos:prefLabel} found in prose; the matching rules themselves
- * (case-insensitive, word-boundary, left-to-right greedy over each match's start position - the
- * longer of two same-start matches wins) are not repeated here - they live once, for every
- * caller, at {@link LabelMentions}. A {@link Term} holds exactly one label and no synonyms, so
- * there is nothing else to match against.</p>
+ * (word-boundary with the hyphen as a word character, a label's leading capital kept significant
+ * for a German-language project, a shorter label inside a longer label's mention never reported,
+ * otherwise left-to-right greedy over each match's start position) are not repeated here - they
+ * live once, for every caller, at {@link LabelMentions}. A {@link Term} holds exactly one label
+ * and no synonyms, so there is nothing else to match against.</p>
  */
 public final class Glossary {
 
@@ -42,7 +43,7 @@ public final class Glossary {
     private final List<Term> all;
     private final LabelMentions<Term> mentions;
 
-    private Glossary(final List<Term> terms) {
+    private Glossary(final List<Term> terms, final LabelMentions.Casing casing) {
         final Map<ResourceId, Term> ids = new LinkedHashMap<>();
         for (final Term term : terms) {
             ids.putIfAbsent(term.id().value(), term);
@@ -53,17 +54,33 @@ public final class Glossary {
         // deterministically - LabelMentions.of only guarantees a stable sort of what it is given.
         final List<Term> forMatching = new ArrayList<>(ids.values());
         forMatching.sort(Comparator.comparing(term -> term.code().value()));
-        this.mentions = LabelMentions.of(forMatching, Term::prefLabel);
+        this.mentions = LabelMentions.of(forMatching, Term::prefLabel, casing);
     }
 
     /**
+     * A glossary matching case-insensitively ({@link LabelMentions.Casing#IGNORE}).
+     *
      * @param terms every term of the project, in any order
      * @return the glossary; a duplicate identity keeps its first occurrence, so a malformed
      *         store degrades the report rather than failing it
      */
     public static Glossary of(final List<Term> terms) {
+        return of(terms, LabelMentions.Casing.IGNORE);
+    }
+
+    /**
+     * @param terms  every term of the project, in any order
+     * @param casing how a label's letter case takes part in matching - the report passes the rule
+     *               for the project's display language, so a German store keeps {@code soll} from
+     *               mentioning {@code Soll} here exactly as {@code store_check ORPHAN} does
+     *               (kogn-io/arknet#696)
+     * @return the glossary; a duplicate identity keeps its first occurrence, so a malformed
+     *         store degrades the report rather than failing it
+     */
+    public static Glossary of(final List<Term> terms, final LabelMentions.Casing casing) {
         Objects.requireNonNull(terms, "terms");
-        return new Glossary(terms);
+        Objects.requireNonNull(casing, "casing");
+        return new Glossary(terms, casing);
     }
 
     /**
@@ -73,7 +90,7 @@ public final class Glossary {
      * @return an empty glossary
      */
     public static Glossary empty() {
-        return new Glossary(List.of());
+        return new Glossary(List.of(), LabelMentions.Casing.IGNORE);
     }
 
     /**

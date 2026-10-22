@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
 
+import de.hauschel.arknet.analysis.domain.LabelMentions;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 
@@ -131,7 +132,7 @@ public final class ModelViews {
      */
     private Glossary glossary(final ProjectId projectId, final String displayLocale, final List<String> failures) {
         try {
-            return Glossary.of(terms.list(projectId, displayLocale));
+            return Glossary.of(terms.list(projectId, displayLocale), LabelMentions.Casing.forLanguageTag(displayLocale));
         } catch (final RuntimeException e) {
             failures.add("Glossary: could not be read (" + e.getClass().getSimpleName() + ": " + e.getMessage()
                     + ") - its terms appear under \"Other resources\" below, and references to them show as"

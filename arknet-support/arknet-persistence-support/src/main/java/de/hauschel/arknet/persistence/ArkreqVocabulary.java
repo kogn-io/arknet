@@ -132,6 +132,14 @@ public final class ArkreqVocabulary {
     public static final String CRITERION_TEXT = NAMESPACE + "criterionText";
 
     /**
+     * {@code arkreq:rationale} - a Requirement's "why" text. Shared here since kogn-io/arknet#697,
+     * when {@code store_check ORPHAN}'s mention scan became a second reader of it: a glossary
+     * term named only in a rationale is reported as a hint, not a finding, so the scan has to know
+     * which literal came from this field - the same reason {@link #CRITERION_TEXT} is shared.
+     */
+    public static final String RATIONALE = NAMESPACE + "rationale";
+
+    /**
      * {@code arkreq:position} - the 1-based number a Step or an AcceptanceCriterion carries.
      * Shared here since issue #319, when it became the key by which the HTML report pairs a
      * rendered flow step or bullet with the sub-resource it came from - text equality cannot,

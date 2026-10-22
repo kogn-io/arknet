@@ -11,6 +11,7 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.analysis.domain.LabelMentions;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.dm.shared.TermCode;
@@ -138,6 +139,35 @@ class GlossaryTest {
     void reportsWhichTermsATextMentions() {
         assertThat(GLOSSARY.mentionedIn(List.of("Der Kunde wartet.", "Nichts hier.")))
                 .containsExactly(KUNDE);
+    }
+
+    /**
+     * kogn-io/arknet#696: with the German casing rule the report keeps a label's leading capital
+     * significant, so "soll" is prose and "Soll" the term - the same rule {@code store_check
+     * ORPHAN} applies, so a gap marked in the report is a gap the check reports and vice versa.
+     * The default factory stays case-insensitive.
+     */
+    @Test
+    void keepsALabelsInitialCapitalSignificantUnderTheGermanCasingRule() {
+        final ResourceId soll = ResourceId.of(ID + "term-6");
+        final List<Term> terms = List.of(term(soll, "TERM-6", "Soll"));
+        final String text = "Das Soll soll stimmen.";
+
+        assertThat(Glossary.of(terms, LabelMentions.Casing.KEEP_INITIAL_CAPITAL).markUp(text, Set.of(soll)).spans())
+                .containsExactly(
+                        new Span.Plain("Das "),
+                        new Span.TermLink("Soll", soll.value(), "TERM-6"),
+                        new Span.Plain(" soll stimmen."));
+        assertThat(Glossary.of(terms).markUp(text, Set.of(soll)).spans())
+                .filteredOn(Span.TermLink.class::isInstance)
+                .hasSize(2);
+    }
+
+    /** kogn-io/arknet#696: a hyphenated compound is not a mention of its part, in the report as in the check. */
+    @Test
+    void doesNotMarkUpATermInsideAHyphenatedCompound() {
+        assertThat(GLOSSARY.markUp("Der Kunden-Export laeuft.", Set.of(KUNDE)).spans())
+                .containsExactly(new Span.Plain("Der Kunden-Export laeuft."));
     }
 
     /** An unreadable glossary must not take the report with it: nothing matches, nothing throws. */
