@@ -5,6 +5,8 @@ package de.hauschel.arknet.analysis.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -203,13 +205,13 @@ class OrphanCheckTest {
     }
 
     private static OrphanCheck.Result run(Triple... own) {
-        java.util.ArrayList<Triple> all = new java.util.ArrayList<>(kundeTerm());
+        ArrayList<Triple> all = new ArrayList<>(kundeTerm());
         all.addAll(List.of(own));
         return OrphanCheck.run(TraceabilityGraph.of(StoreSnapshot.of(all), DisplayLocale.DEFAULT));
     }
 
     private static Triple[] requirement(String name, String code, Triple... more) {
-        java.util.ArrayList<Triple> all = new java.util.ArrayList<>(List.of(
+        ArrayList<Triple> all = new ArrayList<>(List.of(
                 iri(ID + name, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
                 lit(ID + name, IDENTIFIER, code)));
         all.addAll(List.of(more));
@@ -217,7 +219,7 @@ class OrphanCheckTest {
     }
 
     private static Triple[] concat(Triple[]... parts) {
-        return java.util.Arrays.stream(parts).flatMap(java.util.Arrays::stream).toArray(Triple[]::new);
+        return Arrays.stream(parts).flatMap(Arrays::stream).toArray(Triple[]::new);
     }
 
     @Test
@@ -316,15 +318,6 @@ class OrphanCheckTest {
     }
 
     @Test
-    void doesNotCountAReferenceToTheSourceItselfAsExplanation() {
-        OrphanCheck.Result result = run(requirement("fr-3", "FR-3",
-                iri(ID + "fr-3", ACCEPTANCE_CRITERION, ID + "ac-9"),
-                lit(ID + "fr-3", DESCRIPTION, "Der Kunde (FR-3) wird angezeigt.")));
-
-        assertThat(result.unlinkedMentions()).hasSize(1);
-    }
-
-    @Test
     void keepsAUseCaseStepMentionAFindingNamingTheStepField() {
         OrphanCheck.Result result = run(
                 iri(ID + "uc-1", RDF_TYPE, USE_CASE),
@@ -335,6 +328,124 @@ class OrphanCheckTest {
 
         assertThat(result.unlinkedMentions()).extracting(MentionFinding::fields)
                 .containsExactly(List.of("mainStep#3"));
+        assertThat(result.downgradedMentions()).isEmpty();
+    }
+
+    private static final String ARKARCH = "https://w3id.org/arknet/architecture#";
+    private static final String USE_CASE_GOAL = ARKREQ + "useCaseGoal";
+    private static final String EXTENSION_STEP = ARKREQ + "extensionStep";
+
+    @Test
+    void ordersFieldsByPositionRegardlessOfTripleOrder() {
+        OrphanCheck.Result criteria = run(requirement("fr-3", "FR-3",
+                iri(ID + "fr-3", ACCEPTANCE_CRITERION, ID + "ac-2"),
+                iri(ID + "fr-3", ACCEPTANCE_CRITERION, ID + "ac-1"),
+                lit(ID + "ac-2", CRITERION_TEXT, "Der Kunde b."), lit(ID + "ac-2", POSITION, "2"),
+                lit(ID + "ac-1", CRITERION_TEXT, "Der Kunde a."), lit(ID + "ac-1", POSITION, "1")));
+        OrphanCheck.Result steps = run(
+                iri(ID + "uc-1", RDF_TYPE, USE_CASE),
+                lit(ID + "uc-1", IDENTIFIER, "UC-1"),
+                iri(ID + "uc-1", MAIN_STEP, ID + "step-2"),
+                iri(ID + "uc-1", MAIN_STEP, ID + "step-1"),
+                lit(ID + "step-2", STEP_TEXT, "Der Kunde b."), lit(ID + "step-2", POSITION, "2"),
+                lit(ID + "step-1", STEP_TEXT, "Der Kunde a."), lit(ID + "step-1", POSITION, "1"));
+
+        assertThat(criteria.downgradedMentions()).extracting(DowngradedMention::fields)
+                .containsExactly(List.of("acceptanceCriterion#1", "acceptanceCriterion#2"));
+        assertThat(steps.unlinkedMentions()).extracting(MentionFinding::fields)
+                .containsExactly(List.of("mainStep#1", "mainStep#2"));
+    }
+
+    @Test
+    void namesExtensionStepsByPosition() {
+        OrphanCheck.Result result = run(
+                iri(ID + "uc-1", RDF_TYPE, USE_CASE),
+                lit(ID + "uc-1", IDENTIFIER, "UC-1"),
+                iri(ID + "uc-1", EXTENSION_STEP, ID + "ext-1"),
+                lit(ID + "ext-1", STEP_TEXT, "Der Kunde bricht ab."),
+                lit(ID + "ext-1", POSITION, "4"));
+
+        assertThat(result.unlinkedMentions()).extracting(MentionFinding::fields)
+                .containsExactly(List.of("extensionStep#4"));
+    }
+
+    @Test
+    void doesNotMistakeFr1ForTheCodeFr12() {
+        OrphanCheck.Result result = run(concat(
+                requirement("fr-1", "FR-1", iri(ID + "fr-1", USES_TERM, ID + "term-9")),
+                requirement("fr-3", "FR-3", lit(ID + "fr-3", DESCRIPTION, "Der Kunde (FR-12) wird angezeigt."))));
+
+        assertThat(result.unlinkedMentions()).extracting(MentionFinding::sourceHandle).containsExactly("FR-3");
+        assertThat(result.downgradedMentions()).isEmpty();
+    }
+
+    @Test
+    void appliesTheReferenceWindowInclusivelyAtFortyCharacters() {
+        Triple[] fr2 = requirement("fr-2", "FR-2", iri(ID + "fr-2", USES_TERM, ID + "term-9"));
+        OrphanCheck.Result exactly = run(concat(fr2,
+                requirement("fr-3", "FR-3", lit(ID + "fr-3", DESCRIPTION, "Kunde" + " ".repeat(1)
+                        + "x".repeat(38) + " " + "FR-2"))));
+        OrphanCheck.Result tooFar = run(concat(fr2,
+                requirement("fr-3", "FR-3", lit(ID + "fr-3", DESCRIPTION, "Kunde" + " "
+                        + "x".repeat(39) + " " + "FR-2"))));
+
+        assertThat(exactly.unlinkedMentions()).isEmpty();
+        assertThat(exactly.downgradedMentions()).hasSize(1);
+        assertThat(tooFar.unlinkedMentions()).hasSize(1);
+        assertThat(tooFar.downgradedMentions()).isEmpty();
+    }
+
+    @Test
+    void aNewlineBetweenMentionAndReferenceKeepsTheFinding() {
+        OrphanCheck.Result result = run(concat(
+                requirement("fr-2", "FR-2", iri(ID + "fr-2", USES_TERM, ID + "term-9")),
+                requirement("fr-3", "FR-3", lit(ID + "fr-3", DESCRIPTION, "- Kunde\n- FR-2"))));
+
+        assertThat(result.unlinkedMentions()).hasSize(1);
+        assertThat(result.downgradedMentions()).isEmpty();
+    }
+
+    @Test
+    void aReferencedDecisionCarryingTheEdgeExplainsAUseCaseGoalMention() {
+        OrphanCheck.Result result = run(
+                iri(ID + "adr-1", RDF_TYPE, ARKARCH + "ArchitectureDecisionRecord"),
+                lit(ID + "adr-1", IDENTIFIER, "ADR-1"),
+                iri(ID + "adr-1", ARKARCH + "usesTerm", ID + "term-9"),
+                iri(ID + "uc-1", RDF_TYPE, USE_CASE),
+                lit(ID + "uc-1", IDENTIFIER, "UC-1"),
+                lit(ID + "uc-1", USE_CASE_GOAL, "Der Kunde (ADR-1) bestellt."));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.downgradedMentions()).extracting(DowngradedMention::referencedCodes)
+                .containsExactly(List.of("ADR-1"));
+    }
+
+    @Test
+    void aReferenceExplainedNormativeHitPlusARationaleHitIsNextToReferenceListingBothFields() {
+        OrphanCheck.Result result = run(concat(
+                requirement("fr-2", "FR-2", iri(ID + "fr-2", USES_TERM, ID + "term-9")),
+                requirement("fr-3", "FR-3",
+                        lit(ID + "fr-3", DESCRIPTION, "Der Kunde (FR-2) wird angezeigt."),
+                        lit(ID + "fr-3", RATIONALE, "Der Kunde will es."))));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.downgradedMentions()).hasSize(1);
+        DowngradedMention hint = result.downgradedMentions().get(0);
+        assertThat(hint.reason()).isEqualTo(TraceabilityGraph.MentionClassification.NEXT_TO_REFERENCE);
+        assertThat(hint.fields()).containsExactly("description", "rationale");
+    }
+
+    @Test
+    void theTermDefinitionSweepNeverAppliesTheReferenceRule() {
+        OrphanCheck.Result result = run(concat(
+                requirement("fr-2", "FR-2", iri(ID + "fr-2", USES_TERM, ID + "term-9")),
+                new Triple[] {
+                    iri(ID + "term-8", RDF_TYPE, SKOS + "Concept"),
+                    lit(ID + "term-8", PREF_LABEL, "Konto"),
+                    lit(ID + "term-8", IDENTIFIER, "TERM-8"),
+                    lit(ID + "term-8", SKOS + "definition", "Ein Konto gehoert dem Kunde (FR-2).")}));
+
+        assertThat(result.unlinkedMentions()).extracting(MentionFinding::sourceHandle).containsExactly("TERM-8");
         assertThat(result.downgradedMentions()).isEmpty();
     }
 

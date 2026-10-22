@@ -313,9 +313,10 @@ class TraceabilityRendererTest {
     /**
      * kogn-io/arknet#697 pin: {@code arkreq:rationale} is scanned by ORPHAN (as a weak field) but must
      * not feed {@code term_cooccurrence}, whose prose source ({@code requirementProseTexts}) is unchanged.
+     * Criterion text still does - see {@link #termCooccurrenceFindsTermsAcrossDifferentProseFieldsOfTheSameRequirement()}.
      */
     @Test
-    void termCooccurrenceIgnoresARationaleMentionButStillCountsCriterionText() {
+    void termCooccurrenceIgnoresARationaleMention() {
         TraceabilityGraph graph = TraceabilityGraph.of(StoreSnapshot.of(List.of(
                 iri(TERM_A, RDF_TYPE, SKOS + "Concept"),
                 lit(TERM_A, PREF_LABEL, "Kunde"),

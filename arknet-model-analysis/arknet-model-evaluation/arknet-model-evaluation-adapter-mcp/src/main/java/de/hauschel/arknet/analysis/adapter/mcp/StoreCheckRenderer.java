@@ -11,7 +11,6 @@ import de.hauschel.arknet.analysis.domain.LanguageGapCheck.Gap;
 import de.hauschel.arknet.analysis.domain.OrphanCheck;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.DowngradedMention;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.MentionFinding;
-import de.hauschel.arknet.analysis.domain.TraceabilityGraph;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.ResourceFinding;
 import de.hauschel.arknet.analysis.domain.RoleTermDuplicateCheck.Finding;
 import de.hauschel.arknet.analysis.domain.StepAcceptanceCheck.Kind;

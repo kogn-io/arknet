@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -48,7 +49,9 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/use-case/bounded-context/ADR
  * prose ({@code dcterms:description}/{@code arkreq:acceptanceCriterion}, {@link
  * #useCaseProseTexts(String)}, {@code arkddd:domainVision}, {@link #adrProseTexts(String)}, issue
- * #406) that {@code orphan_check}'s unlinked-mention check scans for a glossary term nothing links to.
+ * #406) that {@code orphan_check}'s unlinked-mention check scans for a glossary term nothing links to -
+ * field by field, so a mention can be classified as a finding or a downgraded hint
+ * ({@link #unlinkedMentions()}, kogn-io/arknet#697).
  * {@code role_usecase_matrix} (ADR-37/kogn-io/arknet#405 Part C, formerly {@code
  * actor_usecase_matrix}) needs the {@code primaryRole}/{@code
  * supportingRole} edges in the <em>forward</em> direction too ({@link #rolesOf(String)}/{@link
@@ -93,14 +96,6 @@ public final class TraceabilityGraph {
     private static final String CRITERION_TEXT = ArkreqVocabulary.CRITERION_TEXT;
     private static final String RATIONALE = ArkreqVocabulary.RATIONALE;
 
-    /**
-     * How many characters may separate a term mention from a reference code ("(FR-12)") for the
-     * mention to count as standing next to it (kogn-io/arknet#697).
-     */
-    private static final int REFERENCE_WINDOW = 40;
-
-    /** A sentence boundary between mention and reference code breaks the adjacency. */
-    private static final String SENTENCE_BOUNDARIES = ".!?;\n";
     private static final String USE_CASE_GOAL = ArkreqVocabulary.USE_CASE_GOAL;
     private static final String DESIGN_SCOPE = ArkreqVocabulary.DESIGN_SCOPE;
     private static final String TRIGGER = ArkreqVocabulary.TRIGGER;
@@ -108,6 +103,17 @@ public final class TraceabilityGraph {
     private static final String USE_CASE_POSTCONDITION = ArkreqVocabulary.USE_CASE_POSTCONDITION;
     private static final String STEP_TEXT = ArkreqVocabulary.STEP_TEXT;
     private static final String DOMAIN_VISION = ArkdddVocabulary.DOMAIN_VISION;
+
+    // Reference-rule tuning of unlinkedMentions() (kogn-io/arknet#697) - heuristics, not vocabulary.
+
+    /**
+     * How many characters may separate a term mention from a reference code ("(FR-12)") for the
+     * mention to count as standing next to it, in either direction (kogn-io/arknet#697).
+     */
+    private static final int REFERENCE_WINDOW = 40;
+
+    /** A sentence boundary between mention and reference code breaks the adjacency. */
+    private static final String SENTENCE_BOUNDARIES = ".!?;\n";
 
     /**
      * {@code arkddd:upstream}/{@code arkddd:downstream} - ContextRelationship -&gt; BoundedContext
@@ -884,8 +890,26 @@ public final class TraceabilityGraph {
      * same {@code "usesTerm"} edge-local-name as that sweep: both name the term the source text
      * mentions without the matching link, only the concrete predicate namespace differs.</p>
      *
+     * <p><strong>Field-aware classification</strong> (kogn-io/arknet#697): each prose field is
+     * scanned on its own and every mention carries the names of the fields it was found in. A
+     * requirement's {@code arkreq:rationale} (read here, unlike by {@link
+     * #requirementProseTexts(String)}) and an acceptance criterion's text are non-normative; every
+     * other scanned field is normative. A (source, term) pair is a {@link
+     * MentionClassification#FINDING} if at least one normative hit is not explained by the
+     * reference rule; if every hit is non-normative it is {@link
+     * MentionClassification#ONLY_NON_NORMATIVE_FIELDS}. The reference rule (requirements, use
+     * cases, bounded contexts and decisions, not term definitions): a normative hit within {@link
+     * #REFERENCE_WINDOW} characters of another resource's business code, with no sentence boundary
+     * between, is explained when that resource already carries the edge to the term; if all
+     * normative hits are explained the pair is {@link MentionClassification#NEXT_TO_REFERENCE}.
+     * Field and referenced-code lists are ordered deterministically (positioned sub-resources by
+     * their {@code arkreq:position}).</p>
+     *
+     * <p><strong>Callers must filter on {@link UnlinkedMention#classification()}</strong>: the
+     * downgraded pairs are returned too, and only {@code FINDING} entries are findings.</p>
+     *
      * @return the unlinked mentions found across every requirement, use case, bounded context,
-     *         term and architecture decision
+     *         term and architecture decision, findings and downgraded hints together
      */
     public List<UnlinkedMention> unlinkedMentions() {
         Map<String, String> termLabels = termLabels();
@@ -991,7 +1015,7 @@ public final class TraceabilityGraph {
                         Set<String> carried = new HashSet<>(usedTerms(entry.getKey()));
                         carried.addAll(adrUsedTerms(entry.getKey()));
                         carried.addAll(linkedTerms(entry.getKey()));
-                        String key = entry.getValue().toLowerCase(java.util.Locale.ROOT);
+                        String key = entry.getValue().toLowerCase(Locale.ROOT);
                         if (!carried.isEmpty() && iriByCode.putIfAbsent(key, entry.getKey()) == null) {
                             carriedTermsByCode.put(key, carried);
                             carriers.add(entry.getValue());
@@ -1025,7 +1049,9 @@ public final class TraceabilityGraph {
                 List<LabelMentions.Mention<String>> references) {
             List<String> explaining = new ArrayList<>();
             for (LabelMentions.Mention<String> reference : references) {
-                String key = reference.item().toLowerCase(java.util.Locale.ROOT);
+                String key = reference.item().toLowerCase(Locale.ROOT);
+                // Defensive: a source carrying the term edge is already "linked" and never reaches this
+                // point, so a self-reference cannot explain anything away; kept so it never could.
                 if (sourceIri.equals(iriByCode.get(key))
                         || !carriedTermsByCode.get(key).contains(mention.item())
                         || !adjacent(text, mention, reference)) {
@@ -1048,7 +1074,7 @@ public final class TraceabilityGraph {
                 classification = MentionClassification.FINDING;
             } else if (anyNormative) {
                 classification = MentionClassification.NEXT_TO_REFERENCE;
-                referenced = hits.stream().flatMap(h -> h.explainedBy().stream()).distinct().toList();
+                referenced = hits.stream().flatMap(h -> h.explainedBy().stream()).distinct().sorted().toList();
             } else {
                 classification = MentionClassification.ONLY_NON_NORMATIVE_FIELDS;
             }
@@ -1083,7 +1109,35 @@ public final class TraceabilityGraph {
     }
 
     private List<ProseField> proseFields(String subject, String predicate, String field, boolean normative) {
-        return literals(subject, predicate).stream().map(text -> new ProseField(field, text, normative)).toList();
+        // Sorted by language tag then text: store triple order is not deterministic.
+        return outgoingBySubject.getOrDefault(subject, List.of()).stream()
+                .filter(t -> predicate.equals(t.predicate()))
+                .map(Triple::object)
+                .filter(RdfNode.Literal.class::isInstance)
+                .map(RdfNode.Literal.class::cast)
+                .sorted(Comparator.comparing((RdfNode.Literal l) -> l.languageTag() == null ? "" : l.languageTag())
+                        .thenComparing(RdfNode.Literal::lexicalForm))
+                .map(literal -> new ProseField(field, literal.lexicalForm(), normative))
+                .toList();
+    }
+
+    /**
+     * The sub-resources behind {@code predicate}, ordered by numeric {@code position} (those without
+     * one last) and then by IRI, so field order never depends on the store's triple order.
+     */
+    private List<String> positionedObjects(String subject, String predicate) {
+        return resourceObjects(subject, predicate).stream()
+                .sorted(Comparator.comparingInt((String iri) -> positionNumber(iri)).thenComparing(Comparator.naturalOrder()))
+                .toList();
+    }
+
+    private int positionNumber(String subjectIri) {
+        String suffix = positionSuffix(subjectIri);
+        try {
+            return suffix.isEmpty() ? Integer.MAX_VALUE : Integer.parseInt(suffix.substring(1));
+        } catch (NumberFormatException e) {
+            return Integer.MAX_VALUE;
+        }
     }
 
     /** The {@code #n} suffix of a positioned sub-resource, or empty when it carries no position. */
@@ -1100,7 +1154,7 @@ public final class TraceabilityGraph {
     private List<ProseField> requirementProseFields(String requirementIri) {
         List<ProseField> fields = new ArrayList<>(proseFields(requirementIri, DCTERMS_DESCRIPTION, "description", true));
         fields.addAll(proseFields(requirementIri, RATIONALE, "rationale", false));
-        for (String criterionIri : resourceObjects(requirementIri, ACCEPTANCE_CRITERION)) {
+        for (String criterionIri : positionedObjects(requirementIri, ACCEPTANCE_CRITERION)) {
             fields.addAll(proseFields(criterionIri, CRITERION_TEXT,
                     "acceptanceCriterion" + positionSuffix(criterionIri), false));
         }
@@ -1114,10 +1168,10 @@ public final class TraceabilityGraph {
         fields.addAll(proseFields(useCaseIri, TRIGGER, "trigger", true));
         fields.addAll(proseFields(useCaseIri, USE_CASE_PRECONDITION, "useCasePrecondition", true));
         fields.addAll(proseFields(useCaseIri, USE_CASE_POSTCONDITION, "useCasePostcondition", true));
-        for (String stepIri : resourceObjects(useCaseIri, MAIN_STEP)) {
+        for (String stepIri : positionedObjects(useCaseIri, MAIN_STEP)) {
             fields.addAll(proseFields(stepIri, STEP_TEXT, "mainStep" + positionSuffix(stepIri), true));
         }
-        for (String stepIri : resourceObjects(useCaseIri, EXTENSION_STEP)) {
+        for (String stepIri : positionedObjects(useCaseIri, EXTENSION_STEP)) {
             fields.addAll(proseFields(stepIri, STEP_TEXT, "extensionStep" + positionSuffix(stepIri), true));
         }
         return fields;
@@ -1128,11 +1182,11 @@ public final class TraceabilityGraph {
         List<ProseField> fields = new ArrayList<>(proseFields(adrIri, NAME, "name", true));
         fields.addAll(proseFields(adrIri, ADR_CONTEXT, "adrContext", true));
         fields.addAll(proseFields(adrIri, ADR_DECISION, "adrDecision", true));
-        for (String consequenceIri : resourceObjects(adrIri, CONSEQUENCE)) {
+        for (String consequenceIri : positionedObjects(adrIri, CONSEQUENCE)) {
             fields.addAll(proseFields(consequenceIri, CONSEQUENCE_STATEMENT,
                     "consequenceStatement" + positionSuffix(consequenceIri), true));
         }
-        for (String optionIri : resourceObjects(adrIri, CONSIDERED_OPTION)) {
+        for (String optionIri : positionedObjects(adrIri, CONSIDERED_OPTION)) {
             String suffix = positionSuffix(optionIri);
             fields.addAll(proseFields(optionIri, NAME, "optionName" + suffix, true));
             fields.addAll(proseFields(optionIri, OPTION_RATIONALE, "optionRationale" + suffix, true));
