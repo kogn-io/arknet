@@ -9,6 +9,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.analysis.domain.OrphanCheck.DowngradedMention;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.MentionFinding;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.ResourceFinding;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -134,7 +135,8 @@ class OrphanCheckTest {
         OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
 
         assertThat(result.unlinkedMentions()).containsExactly(
-                new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm"));
+                new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("description")));
     }
 
     /**
@@ -156,7 +158,8 @@ class OrphanCheckTest {
         OrphanCheck.Result result = OrphanCheck.run(TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT));
 
         assertThat(result.unlinkedMentions()).containsExactly(
-                new MentionFinding(ID + "bc-2", "BC-2", ID + "term-8", "TERM-8", "Bestellung", "ubiquitousLanguageTerm"));
+                new MentionFinding(ID + "bc-2", "BC-2", ID + "term-8", "TERM-8", "Bestellung", "ubiquitousLanguageTerm",
+                        List.of("domainVision")));
     }
 
     /**
@@ -181,6 +184,158 @@ class OrphanCheckTest {
 
         assertThat(result.orphanConstraints()).containsExactly(
                 new ResourceFinding(ID + "con-2", "CON-2", "TechnicalConstraint", "PostgreSQL only"));
+    }
+
+    // ---- kogn-io/arknet#697: field-aware classification of text mentions ----
+
+    private static final String RATIONALE = ARKREQ + "rationale";
+    private static final String ACCEPTANCE_CRITERION = ARKREQ + "acceptanceCriterion";
+    private static final String CRITERION_TEXT = ARKREQ + "criterionText";
+    private static final String POSITION = ARKREQ + "position";
+    private static final String USES_TERM = ARKREQ + "usesTerm";
+    private static final String STEP_TEXT = ARKREQ + "stepText";
+
+    private static List<Triple> kundeTerm() {
+        return List.of(
+                iri(ID + "term-9", RDF_TYPE, SKOS + "Concept"),
+                lit(ID + "term-9", PREF_LABEL, "Kunde"),
+                lit(ID + "term-9", IDENTIFIER, "TERM-9"));
+    }
+
+    private static OrphanCheck.Result run(Triple... own) {
+        java.util.ArrayList<Triple> all = new java.util.ArrayList<>(kundeTerm());
+        all.addAll(List.of(own));
+        return OrphanCheck.run(TraceabilityGraph.of(StoreSnapshot.of(all), DisplayLocale.DEFAULT));
+    }
+
+    private static Triple[] requirement(String name, String code, Triple... more) {
+        java.util.ArrayList<Triple> all = new java.util.ArrayList<>(List.of(
+                iri(ID + name, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(ID + name, IDENTIFIER, code)));
+        all.addAll(List.of(more));
+        return all.toArray(new Triple[0]);
+    }
+
+    private static Triple[] concat(Triple[]... parts) {
+        return java.util.Arrays.stream(parts).flatMap(java.util.Arrays::stream).toArray(Triple[]::new);
+    }
+
+    @Test
+    void downgradesATermMentionedOnlyInAnAcceptanceCriterion() {
+        OrphanCheck.Result result = run(requirement("fr-3", "FR-3",
+                iri(ID + "fr-3", ACCEPTANCE_CRITERION, ID + "ac-1"),
+                lit(ID + "ac-1", CRITERION_TEXT, "Fertig, wenn der Kunde bestaetigt."),
+                lit(ID + "ac-1", POSITION, "2")));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        // total() counts the finding lists only; the orphan requirement/term of this fixture are the 2.
+        assertThat(result.total()).isEqualTo(result.orphanRequirements().size() + result.orphanTerms().size());
+        assertThat(result.downgradedMentions()).containsExactly(new DowngradedMention(
+                ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                List.of("acceptanceCriterion#2"), TraceabilityGraph.MentionClassification.ONLY_NON_NORMATIVE_FIELDS,
+                List.of()));
+    }
+
+    @Test
+    void downgradesATermMentionedOnlyInTheRationale() {
+        OrphanCheck.Result result = run(requirement("fr-3", "FR-3",
+                lit(ID + "fr-3", RATIONALE, "Weil der Kunde es will.")));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.downgradedMentions()).extracting(DowngradedMention::fields)
+                .containsExactly(List.of("rationale"));
+        assertThat(result.downgradedMentions().get(0).reason())
+                .isEqualTo(TraceabilityGraph.MentionClassification.ONLY_NON_NORMATIVE_FIELDS);
+    }
+
+    @Test
+    void keepsAFindingListingEveryFieldWhenTheDescriptionMentionsTheTermToo() {
+        OrphanCheck.Result result = run(requirement("fr-3", "FR-3",
+                lit(ID + "fr-3", DESCRIPTION, "Der Kunde sieht Daten."),
+                lit(ID + "fr-3", RATIONALE, "Der Kunde will es."),
+                iri(ID + "fr-3", ACCEPTANCE_CRITERION, ID + "ac-1"),
+                lit(ID + "ac-1", CRITERION_TEXT, "Der Kunde sieht es."),
+                lit(ID + "ac-1", POSITION, "1")));
+
+        assertThat(result.unlinkedMentions()).extracting(MentionFinding::fields)
+                .containsExactly(List.of("description", "rationale", "acceptanceCriterion#1"));
+        assertThat(result.downgradedMentions()).isEmpty();
+        assertThat(result.total()).isEqualTo(
+                1 + result.orphanRequirements().size() + result.orphanTerms().size());
+    }
+
+    @Test
+    void downgradesAMentionNextToAReferenceWhoseTargetCarriesTheEdge() {
+        OrphanCheck.Result result = run(concat(
+                requirement("fr-2", "FR-2", iri(ID + "fr-2", USES_TERM, ID + "term-9")),
+                requirement("fr-3", "FR-3",
+                        lit(ID + "fr-3", DESCRIPTION, "Der Kunde (FR-2) wird angezeigt."))));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.downgradedMentions()).hasSize(1);
+        DowngradedMention hint = result.downgradedMentions().get(0);
+        assertThat(hint.reason()).isEqualTo(TraceabilityGraph.MentionClassification.NEXT_TO_REFERENCE);
+        assertThat(hint.referencedCodes()).containsExactly("FR-2");
+        assertThat(hint.fields()).containsExactly("description");
+    }
+
+    @Test
+    void downgradesAMentionPrecededByLautAndAReference() {
+        OrphanCheck.Result result = run(concat(
+                requirement("fr-2", "FR-2", iri(ID + "fr-2", USES_TERM, ID + "term-9")),
+                requirement("fr-3", "FR-3", lit(ID + "fr-3", DESCRIPTION, "Laut FR-2 gilt: der Kunde zahlt."))));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.downgradedMentions()).hasSize(1);
+    }
+
+    @Test
+    void keepsAFindingWhenTheReferencedRequirementDoesNotCarryTheEdge() {
+        OrphanCheck.Result result = run(concat(
+                requirement("fr-2", "FR-2"),
+                requirement("fr-3", "FR-3", lit(ID + "fr-3", DESCRIPTION, "Der Kunde (FR-2) wird angezeigt."))));
+
+        assertThat(result.unlinkedMentions()).extracting(MentionFinding::sourceHandle).containsExactly("FR-3");
+        assertThat(result.downgradedMentions()).isEmpty();
+    }
+
+    @Test
+    void keepsAFindingWhenTheReferenceIsOutsideTheWindowOrAcrossASentenceBoundary() {
+        OrphanCheck.Result far = run(concat(
+                requirement("fr-2", "FR-2", iri(ID + "fr-2", USES_TERM, ID + "term-9")),
+                requirement("fr-3", "FR-3", lit(ID + "fr-3", DESCRIPTION,
+                        "Der Kunde sieht dabei eine ganze Menge an sehr vielen Daten laut FR-2."))));
+        OrphanCheck.Result sentence = run(concat(
+                requirement("fr-2", "FR-2", iri(ID + "fr-2", USES_TERM, ID + "term-9")),
+                requirement("fr-3", "FR-3", lit(ID + "fr-3", DESCRIPTION, "Der Kunde. Siehe FR-2."))));
+
+        assertThat(far.unlinkedMentions()).hasSize(1);
+        assertThat(far.downgradedMentions()).isEmpty();
+        assertThat(sentence.unlinkedMentions()).hasSize(1);
+        assertThat(sentence.downgradedMentions()).isEmpty();
+    }
+
+    @Test
+    void doesNotCountAReferenceToTheSourceItselfAsExplanation() {
+        OrphanCheck.Result result = run(requirement("fr-3", "FR-3",
+                iri(ID + "fr-3", ACCEPTANCE_CRITERION, ID + "ac-9"),
+                lit(ID + "fr-3", DESCRIPTION, "Der Kunde (FR-3) wird angezeigt.")));
+
+        assertThat(result.unlinkedMentions()).hasSize(1);
+    }
+
+    @Test
+    void keepsAUseCaseStepMentionAFindingNamingTheStepField() {
+        OrphanCheck.Result result = run(
+                iri(ID + "uc-1", RDF_TYPE, USE_CASE),
+                lit(ID + "uc-1", IDENTIFIER, "UC-1"),
+                iri(ID + "uc-1", MAIN_STEP, ID + "step-1"),
+                lit(ID + "step-1", STEP_TEXT, "Der Kunde meldet sich an."),
+                lit(ID + "step-1", POSITION, "3"));
+
+        assertThat(result.unlinkedMentions()).extracting(MentionFinding::fields)
+                .containsExactly(List.of("mainStep#3"));
+        assertThat(result.downgradedMentions()).isEmpty();
     }
 
     private static Triple iri(String subject, String predicate, String objectIri) {

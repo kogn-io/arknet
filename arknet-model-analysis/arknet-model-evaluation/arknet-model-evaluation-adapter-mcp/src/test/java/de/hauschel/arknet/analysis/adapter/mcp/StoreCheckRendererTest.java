@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.analysis.domain.LanguageGapCheck.Gap;
 import de.hauschel.arknet.analysis.domain.OrphanCheck;
+import de.hauschel.arknet.analysis.domain.OrphanCheck.DowngradedMention;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.MentionFinding;
+import de.hauschel.arknet.analysis.domain.TraceabilityGraph.MentionClassification;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.ResourceFinding;
 import de.hauschel.arknet.analysis.domain.RoleTermDuplicateCheck.Finding;
 import de.hauschel.arknet.analysis.domain.StepAcceptanceCheck.Kind;
@@ -189,7 +191,8 @@ class StoreCheckRendererTest {
         String rendered = renderer.orphanSection(new OrphanCheck.Result(
                 List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
                 List.of(),
-                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm")),
+                List.of(new MentionFinding(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("description", "acceptanceCriterion#2"))),
                 List.of()));
 
         assertThat(rendered)
@@ -201,10 +204,43 @@ class StoreCheckRendererTest {
                 .contains("| Resource | Type | Label |")
                 .contains("| FR-2 | FunctionalRequirement | Logout |")
                 .contains("Mentioned in text but not linked:")
-                .contains("| Source | Term | Label | Missing edge |")
-                .contains("| FR-3 | TERM-9 | Kunde | usesTerm |")
+                .contains("| Source | Term | Label | Missing edge | Field(s) |")
+                .contains("| FR-3 | TERM-9 | Kunde | usesTerm | description, acceptanceCriterion#2 |")
+                .doesNotContain("downgraded hint")
                 .doesNotContain("Terms never referenced:")
                 .doesNotContain("Constraints not attached to any requirement or use case:");
+    }
+
+    /** kogn-io/arknet#697: the weaker list is its own table, never counted, and shown only when non-empty. */
+    @Test
+    void rendersDowngradedMentionsInAWeakerTableThatDoesNotCount() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(), List.of(), List.of(),
+                List.of(
+                        new DowngradedMention(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                                List.of("rationale"), MentionClassification.ONLY_NON_NORMATIVE_FIELDS, List.of()),
+                        new DowngradedMention(ID + "fr-4", "FR-4", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                                List.of("description"), MentionClassification.NEXT_TO_REFERENCE,
+                                List.of("FR-2")))));
+
+        assertThat(rendered)
+                .contains("0 unlinked mentions")
+                .contains("2 downgraded hints")
+                .contains("Mentioned only in rationale/criterion or next to a reference (hint, not counted):")
+                .contains("| Source | Term | Label | Missing edge | Where | Why |")
+                .contains("| FR-3 | TERM-9 | Kunde | usesTerm | rationale | only in rationale/criterion text |")
+                .contains("| FR-4 | TERM-9 | Kunde | usesTerm | description | next to FR-2 (linked there) |")
+                .doesNotContain("Mentioned in text but not linked:");
+    }
+
+    @Test
+    void aModelWithOnlyDowngradedHintsStillReportsThemInsteadOfTheAllClearSentence() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(), List.of(), List.of(),
+                List.of(new DowngradedMention(ID + "fr-3", "FR-3", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                        List.of("rationale"), MentionClassification.ONLY_NON_NORMATIVE_FIELDS, List.of()))));
+
+        assertThat(rendered).contains("1 downgraded hint").contains("FR-3");
     }
 
     /** A resource with no business code of its own is shown by its shortened IRI, not dropped. */

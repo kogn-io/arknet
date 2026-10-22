@@ -30,18 +30,46 @@ public final class OrphanCheck {
     public record ResourceFinding(String iri, String handle, String typeLocalName, String label) {
     }
 
-    /** One prose mention of a term with no edge backing it up - mirrors {@link TraceabilityGraph.UnlinkedMention}. */
+    /**
+     * One prose mention of a term with no edge backing it up - mirrors {@link
+     * TraceabilityGraph.UnlinkedMention}. {@code fields} names where the term was found
+     * (kogn-io/arknet#697), e.g. {@code description}, {@code acceptanceCriterion#2}.
+     */
     public record MentionFinding(
             String sourceIri, String sourceHandle, String termIri, String termHandle, String termLabel,
-            String edgeLocalName) {
+            String edgeLocalName, List<String> fields) {
     }
 
-    /** The four findings lists {@code orphan_check}/{@code store_check ORPHAN} report. */
+    /**
+     * A mention that is listed as a hint but is not a finding and not part of {@link Result#total()}
+     * (kogn-io/arknet#697): the term appears only in non-normative text, or only next to a reference
+     * to a resource that already carries the edge.
+     *
+     * @param reason          why it was downgraded, never {@link TraceabilityGraph.MentionClassification#FINDING}
+     * @param referencedCodes for {@code NEXT_TO_REFERENCE}, the business codes of the referenced resources
+     */
+    public record DowngradedMention(
+            String sourceIri, String sourceHandle, String termIri, String termHandle, String termLabel,
+            String edgeLocalName, List<String> fields, TraceabilityGraph.MentionClassification reason,
+            List<String> referencedCodes) {
+    }
+
+    /**
+     * The findings lists {@code orphan_check}/{@code store_check ORPHAN} report, plus the weaker
+     * {@code downgradedMentions} hints, which are not findings and not counted by {@link #total()}.
+     */
     public record Result(
             List<ResourceFinding> orphanRequirements, List<ResourceFinding> orphanTerms,
-            List<MentionFinding> unlinkedMentions, List<ResourceFinding> orphanConstraints) {
+            List<MentionFinding> unlinkedMentions, List<ResourceFinding> orphanConstraints,
+            List<DowngradedMention> downgradedMentions) {
 
-        /** @return the total number of findings across all four lists. */
+        /** A result without downgraded hints. */
+        public Result(List<ResourceFinding> orphanRequirements, List<ResourceFinding> orphanTerms,
+                List<MentionFinding> unlinkedMentions, List<ResourceFinding> orphanConstraints) {
+            this(orphanRequirements, orphanTerms, unlinkedMentions, orphanConstraints, List.of());
+        }
+
+        /** @return the total number of findings across the four finding lists (hints excluded). */
         public int total() {
             return orphanRequirements.size() + orphanTerms.size() + unlinkedMentions.size()
                     + orphanConstraints.size();
@@ -50,7 +78,7 @@ public final class OrphanCheck {
 
     /**
      * @param graph the traceability graph to report on
-     * @return the four findings lists, in the order the tool has always reported them
+     * @return the four findings lists plus the downgraded hints, in the order the tool has always reported them
      */
     public static Result run(final TraceabilityGraph graph) {
         Objects.requireNonNull(graph, "graph");
@@ -62,17 +90,27 @@ public final class OrphanCheck {
                 .filter(iri -> !graph.isReferencedTerm(iri))
                 .map(iri -> resourceFinding(graph, iri))
                 .toList();
-        final List<MentionFinding> unlinkedMentions = graph.unlinkedMentions().stream()
+        final List<TraceabilityGraph.UnlinkedMention> mentions = graph.unlinkedMentions();
+        final List<MentionFinding> unlinkedMentions = mentions.stream()
+                .filter(mention -> mention.classification() == TraceabilityGraph.MentionClassification.FINDING)
                 .map(mention -> new MentionFinding(
                         mention.sourceIri(), graph.identifierOf(mention.sourceIri()).orElse(null),
                         mention.termIri(), graph.identifierOf(mention.termIri()).orElse(null),
-                        mention.termLabel(), mention.edgeLocalName()))
+                        mention.termLabel(), mention.edgeLocalName(), mention.fields()))
+                .toList();
+        final List<DowngradedMention> downgradedMentions = mentions.stream()
+                .filter(mention -> mention.classification() != TraceabilityGraph.MentionClassification.FINDING)
+                .map(mention -> new DowngradedMention(
+                        mention.sourceIri(), graph.identifierOf(mention.sourceIri()).orElse(null),
+                        mention.termIri(), graph.identifierOf(mention.termIri()).orElse(null),
+                        mention.termLabel(), mention.edgeLocalName(), mention.fields(),
+                        mention.classification(), mention.referencedCodes()))
                 .toList();
         final List<ResourceFinding> orphanConstraints = graph.constraintIris().stream()
                 .filter(iri -> !graph.isConstraintReferenced(iri))
                 .map(iri -> resourceFinding(graph, iri))
                 .toList();
-        return new Result(orphanRequirements, orphanTerms, unlinkedMentions, orphanConstraints);
+        return new Result(orphanRequirements, orphanTerms, unlinkedMentions, orphanConstraints, downgradedMentions);
     }
 
     private static ResourceFinding resourceFinding(final TraceabilityGraph graph, final String iri) {

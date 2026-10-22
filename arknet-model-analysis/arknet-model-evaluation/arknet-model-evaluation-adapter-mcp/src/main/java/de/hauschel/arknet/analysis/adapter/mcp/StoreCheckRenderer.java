@@ -9,7 +9,9 @@ import java.util.stream.Collectors;
 
 import de.hauschel.arknet.analysis.domain.LanguageGapCheck.Gap;
 import de.hauschel.arknet.analysis.domain.OrphanCheck;
+import de.hauschel.arknet.analysis.domain.OrphanCheck.DowngradedMention;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.MentionFinding;
+import de.hauschel.arknet.analysis.domain.TraceabilityGraph;
 import de.hauschel.arknet.analysis.domain.OrphanCheck.ResourceFinding;
 import de.hauschel.arknet.analysis.domain.RoleTermDuplicateCheck.Finding;
 import de.hauschel.arknet.analysis.domain.StepAcceptanceCheck.Kind;
@@ -169,7 +171,7 @@ public final class StoreCheckRenderer {
 
     /**
      * Renders the orphan section (kogn-io/arknet#473, folding the former {@code orphan_check} tool
-     * in here): four sub-tables, one per finding list, each shown only when it is non-empty - the
+     * in here): four finding tables plus the weaker downgraded-hint table (kogn-io/arknet#697), each shown only when it is non-empty - the
      * same discipline {@link #stepAcceptanceSection} follows for its two cases.
      *
      * @param result the four findings lists, already computed by {@link OrphanCheck#run}
@@ -177,7 +179,7 @@ public final class StoreCheckRenderer {
      */
     public String orphanSection(final OrphanCheck.Result result) {
         Objects.requireNonNull(result, "result");
-        if (result.total() == 0) {
+        if (result.total() == 0 && result.downgradedMentions().isEmpty()) {
             return "ORPHAN: no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
                     + "constraints found.\n\n" + ORPHAN_BLIND_SPOT;
         }
@@ -188,8 +190,13 @@ public final class StoreCheckRenderer {
                 .append(result.orphanTerms().size())
                 .append(result.orphanTerms().size() == 1 ? " term" : " terms").append(" never referenced, ")
                 .append(result.unlinkedMentions().size())
-                .append(result.unlinkedMentions().size() == 1 ? " unlinked mention" : " unlinked mentions")
-                .append(", ").append(result.orphanConstraints().size())
+                .append(result.unlinkedMentions().size() == 1 ? " unlinked mention" : " unlinked mentions");
+        if (!result.downgradedMentions().isEmpty()) {
+            rendered.append(" (plus ").append(result.downgradedMentions().size())
+                    .append(result.downgradedMentions().size() == 1 ? " downgraded hint" : " downgraded hints")
+                    .append(", not counted)");
+        }
+        rendered.append(", ").append(result.orphanConstraints().size())
                 .append(result.orphanConstraints().size() == 1 ? " constraint" : " constraints")
                 .append(" not attached to any requirement or use case.");
         if (!result.orphanRequirements().isEmpty()) {
@@ -203,6 +210,11 @@ public final class StoreCheckRenderer {
         if (!result.unlinkedMentions().isEmpty()) {
             rendered.append("\n\nMentioned in text but not linked:\n\n");
             appendMentionTable(rendered, result.unlinkedMentions());
+        }
+        if (!result.downgradedMentions().isEmpty()) {
+            rendered.append("\n\nMentioned only in rationale/criterion or next to a reference "
+                    + "(hint, not counted):\n\n");
+            appendDowngradedTable(rendered, result.downgradedMentions());
         }
         if (!result.orphanConstraints().isEmpty()) {
             rendered.append("\n\nConstraints not attached to any requirement or use case:\n\n");
@@ -222,14 +234,34 @@ public final class StoreCheckRenderer {
     }
 
     private void appendMentionTable(final StringBuilder out, final List<MentionFinding> mentions) {
-        out.append("| Source | Term | Label | Missing edge |\n| --- | --- | --- | --- |");
+        out.append("| Source | Term | Label | Missing edge | Field(s) |\n| --- | --- | --- | --- | --- |");
         for (final MentionFinding mention : mentions) {
             out.append("\n| ").append(handleOf(mention.sourceIri(), mention.sourceHandle()))
                     .append(" | ").append(handleOf(mention.termIri(), mention.termHandle()))
                     .append(" | ").append(mention.termLabel())
                     .append(" | ").append(mention.edgeLocalName())
+                    .append(" | ").append(fieldsOf(mention.fields()))
                     .append(" |");
         }
+    }
+
+    private void appendDowngradedTable(final StringBuilder out, final List<DowngradedMention> mentions) {
+        out.append("| Source | Term | Label | Missing edge | Where | Why |\n| --- | --- | --- | --- | --- | --- |");
+        for (final DowngradedMention mention : mentions) {
+            out.append("\n| ").append(handleOf(mention.sourceIri(), mention.sourceHandle()))
+                    .append(" | ").append(handleOf(mention.termIri(), mention.termHandle()))
+                    .append(" | ").append(mention.termLabel())
+                    .append(" | ").append(mention.edgeLocalName())
+                    .append(" | ").append(fieldsOf(mention.fields()))
+                    .append(" | ").append(mention.reason() == TraceabilityGraph.MentionClassification.NEXT_TO_REFERENCE
+                            ? "next to " + String.join(", ", mention.referencedCodes()) + " (linked there)"
+                            : "only in rationale/criterion text")
+                    .append(" |");
+        }
+    }
+
+    private static String fieldsOf(final List<String> fields) {
+        return fields == null || fields.isEmpty() ? "-" : String.join(", ", fields);
     }
 
     /**

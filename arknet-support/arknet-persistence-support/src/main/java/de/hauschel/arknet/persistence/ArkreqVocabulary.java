@@ -132,6 +132,13 @@ public final class ArkreqVocabulary {
     public static final String CRITERION_TEXT = NAMESPACE + "criterionText";
 
     /**
+     * {@code arkreq:rationale} - Requirement -&gt; why it exists (language-tagged). Shared since
+     * kogn-io/arknet#697, when the ORPHAN mention scan began reading it as a non-normative field -
+     * the requirements out-adapter serialises it under the same constant.
+     */
+    public static final String RATIONALE = NAMESPACE + "rationale";
+
+    /**
      * {@code arkreq:position} - the 1-based number a Step or an AcceptanceCriterion carries.
      * Shared here since issue #319, when it became the key by which the HTML report pairs a
      * rendered flow step or bullet with the sub-resource it came from - text equality cannot,

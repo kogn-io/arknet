@@ -91,6 +91,16 @@ public final class TraceabilityGraph {
     private static final String STEP_REALISES = ArkreqVocabulary.STEP_REALISES;
     private static final String ACCEPTANCE_CRITERION = ArkreqVocabulary.ACCEPTANCE_CRITERION;
     private static final String CRITERION_TEXT = ArkreqVocabulary.CRITERION_TEXT;
+    private static final String RATIONALE = ArkreqVocabulary.RATIONALE;
+
+    /**
+     * How many characters may separate a term mention from a reference code ("(FR-12)") for the
+     * mention to count as standing next to it (kogn-io/arknet#697).
+     */
+    private static final int REFERENCE_WINDOW = 40;
+
+    /** A sentence boundary between mention and reference code breaks the adjacency. */
+    private static final String SENTENCE_BOUNDARIES = ".!?;\n";
     private static final String USE_CASE_GOAL = ArkreqVocabulary.USE_CASE_GOAL;
     private static final String DESIGN_SCOPE = ArkreqVocabulary.DESIGN_SCOPE;
     private static final String TRIGGER = ArkreqVocabulary.TRIGGER;
@@ -885,71 +895,249 @@ public final class TraceabilityGraph {
         List<String> termIris = termLabels.keySet().stream()
                 .sorted(Comparator.comparing(iri -> identifierOf(iri).orElse(iri)))
                 .toList();
-        LabelMentions<String> matcher = LabelMentions.of(termIris, termLabels::get);
+        MentionScan scan = new MentionScan(LabelMentions.of(termIris, termLabels::get), termLabels);
 
         List<UnlinkedMention> found = new ArrayList<>();
         for (String requirementIri : requirementIris()) {
-            Set<String> linked = new HashSet<>(usedTerms(requirementIri));
-            for (String termIri : matcher.mentionedIn(requirementProseTexts(requirementIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(requirementIri, termIri, termLabels.get(termIri), "usesTerm"));
-                }
-            }
+            scan.add(requirementIri, requirementProseFields(requirementIri),
+                    new HashSet<>(usedTerms(requirementIri)), true, "usesTerm", found);
         }
         for (String useCaseIri : useCaseIris()) {
             Set<String> linked = new HashSet<>(usedTerms(useCaseIri));
             linked.addAll(rolesOf(useCaseIri));
-            for (String termIri : matcher.mentionedIn(useCaseProseTexts(useCaseIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(useCaseIri, termIri, termLabels.get(termIri), "usesTerm"));
-                }
-            }
+            scan.add(useCaseIri, useCaseProseFields(useCaseIri), linked, true, "usesTerm", found);
         }
         for (String boundedContextIri : boundedContextIris()) {
-            Set<String> linked = new HashSet<>(linkedTerms(boundedContextIri));
-            for (String termIri : matcher.mentionedIn(boundedContextProseTexts(boundedContextIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(
-                            boundedContextIri, termIri, termLabels.get(termIri), "ubiquitousLanguageTerm"));
-                }
-            }
+            scan.add(boundedContextIri, proseFields(boundedContextIri, DOMAIN_VISION, "domainVision", true),
+                    new HashSet<>(linkedTerms(boundedContextIri)), true, "ubiquitousLanguageTerm", found);
         }
         for (String termIri : termIris) {
             Set<String> linked = new HashSet<>(relatedTerms(termIri));
             broaderTerm(termIri).ifPresent(linked::add);
             linked.addAll(narrowerTerms(termIri));
-            for (String mentionedTermIri : matcher.mentionedIn(termProseTexts(termIri))) {
-                if (mentionedTermIri.equals(termIri)) {
-                    continue;
-                }
-                if (!linked.contains(mentionedTermIri)) {
-                    found.add(new UnlinkedMention(
-                            termIri, mentionedTermIri, termLabels.get(mentionedTermIri), GLOSSARY_EDGE_LOCAL_NAME));
-                }
-            }
+            linked.add(termIri); // a term naming itself in its own definition is never a gap
+            scan.add(termIri, proseFields(termIri, DEFINITION, "definition", true),
+                    linked, false, GLOSSARY_EDGE_LOCAL_NAME, found);
         }
         for (String adrIri : adrIris()) {
-            Set<String> linked = new HashSet<>(adrUsedTerms(adrIri));
-            for (String termIri : matcher.mentionedIn(adrProseTexts(adrIri))) {
-                if (!linked.contains(termIri)) {
-                    found.add(new UnlinkedMention(adrIri, termIri, termLabels.get(termIri), "usesTerm"));
-                }
-            }
+            scan.add(adrIri, adrProseFields(adrIri), new HashSet<>(adrUsedTerms(adrIri)), true, "usesTerm", found);
         }
         return List.copyOf(found);
     }
 
     /**
-     * @param sourceIri     the requirement, bounded context or term whose prose names the term
-     * @param termIri       the mentioned term
-     * @param termLabel     the term's {@code skos:prefLabel}, as named in the prose
-     * @param edgeLocalName the missing edge's local name ({@code usesTerm},
-     *                      {@code ubiquitousLanguageTerm} or, for the term-to-term sweep,
-     *                      {@code broader/narrower/related}), for the "no ... edge" message; the
-     *                      term-to-term value names every glossary edge kind that would resolve the
-     *                      finding rather than prescribing one (kogn-io/arknet#595)
+     * How {@link #unlinkedMentions()} classifies one (source, term) pair (kogn-io/arknet#697).
      */
-    public record UnlinkedMention(String sourceIri, String termIri, String termLabel, String edgeLocalName) {
+    public enum MentionClassification {
+        /** At least one hit lies in a normative field and is not explained by a reference. */
+        FINDING,
+        /** Every hit lies in a non-normative field (requirement rationale, acceptance criterion text). */
+        ONLY_NON_NORMATIVE_FIELDS,
+        /**
+         * Every normative hit stands next to a code of another resource that already carries the
+         * edge to the term - the term belongs to the referenced resource.
+         */
+        NEXT_TO_REFERENCE
+    }
+
+    /**
+     * @param sourceIri       the requirement, use case, bounded context, term or decision whose prose names the term
+     * @param termIri         the mentioned term
+     * @param termLabel       the term's {@code skos:prefLabel}, as named in the prose
+     * @param edgeLocalName   the missing edge's local name ({@code usesTerm},
+     *                        {@code ubiquitousLanguageTerm} or, for the term-to-term sweep,
+     *                        {@code broader/narrower/related}), for the "no ... edge" message; the
+     *                        term-to-term value names every glossary edge kind that would resolve the
+     *                        finding rather than prescribing one (kogn-io/arknet#595)
+     * @param fields          the fields the term was found in, in scan order, without duplicates -
+     *                        short local names, positioned sub-resources suffixed {@code #n}
+     *                        (kogn-io/arknet#697)
+     * @param classification  whether the pair is a finding or a downgraded hint
+     * @param referencedCodes for {@link MentionClassification#NEXT_TO_REFERENCE}, the business codes
+     *                        of the referenced resources that explain the mention; otherwise empty
+     */
+    public record UnlinkedMention(
+            String sourceIri, String termIri, String termLabel, String edgeLocalName,
+            List<String> fields, MentionClassification classification, List<String> referencedCodes) {
+    }
+
+    /** One scanned text with the name of the field it came from and whether that field is normative. */
+    private record ProseField(String field, String text, boolean normative) {
+    }
+
+    /** One mention of a term: where, and which referenced codes (if any) explain it away. */
+    private record Hit(String field, boolean normative, List<String> explainedBy) {
+    }
+
+    /**
+     * The per-call state of {@link #unlinkedMentions()}: the term matcher plus, for the reference
+     * rule, a matcher over the codes of every resource that itself carries a term edge (only those
+     * can explain a mention away, so no other code is worth matching).
+     */
+    private final class MentionScan {
+        private final LabelMentions<String> terms;
+        private final Map<String, String> termLabels;
+        private final Map<String, Set<String>> carriedTermsByCode = new HashMap<>();
+        private final Map<String, String> iriByCode = new HashMap<>();
+        private final LabelMentions<String> codes;
+
+        MentionScan(LabelMentions<String> terms, Map<String, String> termLabels) {
+            this.terms = terms;
+            this.termLabels = termLabels;
+            List<String> carriers = new ArrayList<>();
+            identifierBySubject.entrySet().stream()
+                    .sorted(Map.Entry.comparingByValue())
+                    .forEach(entry -> {
+                        Set<String> carried = new HashSet<>(usedTerms(entry.getKey()));
+                        carried.addAll(adrUsedTerms(entry.getKey()));
+                        carried.addAll(linkedTerms(entry.getKey()));
+                        String key = entry.getValue().toLowerCase(java.util.Locale.ROOT);
+                        if (!carried.isEmpty() && iriByCode.putIfAbsent(key, entry.getKey()) == null) {
+                            carriedTermsByCode.put(key, carried);
+                            carriers.add(entry.getValue());
+                        }
+                    });
+            this.codes = LabelMentions.of(carriers, code -> code);
+        }
+
+        void add(String sourceIri, List<ProseField> fields, Set<String> linked, boolean referenceRule,
+                String edge, List<UnlinkedMention> out) {
+            Map<String, List<Hit>> hitsByTerm = new LinkedHashMap<>();
+            for (ProseField field : fields) {
+                List<LabelMentions.Mention<String>> mentions = terms.in(field.text()).stream()
+                        .filter(mention -> !linked.contains(mention.item()))
+                        .toList();
+                if (mentions.isEmpty()) {
+                    continue;
+                }
+                List<LabelMentions.Mention<String>> references =
+                        referenceRule && field.normative() ? codes.in(field.text()) : List.of();
+                for (LabelMentions.Mention<String> mention : mentions) {
+                    hitsByTerm.computeIfAbsent(mention.item(), k -> new ArrayList<>()).add(new Hit(
+                            field.field(), field.normative(),
+                            explainedBy(sourceIri, field.text(), mention, references)));
+                }
+            }
+            hitsByTerm.forEach((termIri, hits) -> out.add(classify(sourceIri, termIri, edge, hits)));
+        }
+
+        private List<String> explainedBy(String sourceIri, String text, LabelMentions.Mention<String> mention,
+                List<LabelMentions.Mention<String>> references) {
+            List<String> explaining = new ArrayList<>();
+            for (LabelMentions.Mention<String> reference : references) {
+                String key = reference.item().toLowerCase(java.util.Locale.ROOT);
+                if (sourceIri.equals(iriByCode.get(key))
+                        || !carriedTermsByCode.get(key).contains(mention.item())
+                        || !adjacent(text, mention, reference)) {
+                    continue;
+                }
+                if (!explaining.contains(reference.item())) {
+                    explaining.add(reference.item());
+                }
+            }
+            return explaining;
+        }
+
+        private UnlinkedMention classify(String sourceIri, String termIri, String edge, List<Hit> hits) {
+            List<String> fields = hits.stream().map(Hit::field).distinct().toList();
+            boolean unexplainedNormative = hits.stream().anyMatch(h -> h.normative() && h.explainedBy().isEmpty());
+            boolean anyNormative = hits.stream().anyMatch(Hit::normative);
+            MentionClassification classification;
+            List<String> referenced = List.of();
+            if (unexplainedNormative) {
+                classification = MentionClassification.FINDING;
+            } else if (anyNormative) {
+                classification = MentionClassification.NEXT_TO_REFERENCE;
+                referenced = hits.stream().flatMap(h -> h.explainedBy().stream()).distinct().toList();
+            } else {
+                classification = MentionClassification.ONLY_NON_NORMATIVE_FIELDS;
+            }
+            return new UnlinkedMention(sourceIri, termIri, termLabels.get(termIri), edge, fields,
+                    classification, referenced);
+        }
+    }
+
+    /**
+     * Whether a reference code stands right before or after a mention: at most {@link
+     * #REFERENCE_WINDOW} characters between them and no sentence boundary in that gap.
+     */
+    private static boolean adjacent(String text, LabelMentions.Mention<String> mention,
+            LabelMentions.Mention<String> reference) {
+        String gap;
+        if (reference.end() <= mention.start()) {
+            gap = text.substring(reference.end(), mention.start());
+        } else if (reference.start() >= mention.end()) {
+            gap = text.substring(mention.end(), reference.start());
+        } else {
+            return false;
+        }
+        if (gap.length() > REFERENCE_WINDOW) {
+            return false;
+        }
+        for (int i = 0; i < gap.length(); i++) {
+            if (SENTENCE_BOUNDARIES.indexOf(gap.charAt(i)) >= 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private List<ProseField> proseFields(String subject, String predicate, String field, boolean normative) {
+        return literals(subject, predicate).stream().map(text -> new ProseField(field, text, normative)).toList();
+    }
+
+    /** The {@code #n} suffix of a positioned sub-resource, or empty when it carries no position. */
+    private String positionSuffix(String subjectIri) {
+        return outgoingBySubject.getOrDefault(subjectIri, List.of()).stream()
+                .filter(t -> "position".equals(StoreResource.localName(t.predicate())))
+                .map(Triple::object)
+                .filter(RdfNode.Literal.class::isInstance)
+                .map(o -> "#" + ((RdfNode.Literal) o).lexicalForm())
+                .findFirst().orElse("");
+    }
+
+    /** Field-aware sibling of {@link #requirementProseTexts(String)} plus the (weak) rationale. */
+    private List<ProseField> requirementProseFields(String requirementIri) {
+        List<ProseField> fields = new ArrayList<>(proseFields(requirementIri, DCTERMS_DESCRIPTION, "description", true));
+        fields.addAll(proseFields(requirementIri, RATIONALE, "rationale", false));
+        for (String criterionIri : resourceObjects(requirementIri, ACCEPTANCE_CRITERION)) {
+            fields.addAll(proseFields(criterionIri, CRITERION_TEXT,
+                    "acceptanceCriterion" + positionSuffix(criterionIri), false));
+        }
+        return fields;
+    }
+
+    /** Field-aware sibling of {@link #useCaseProseTexts(String)}; every field is normative. */
+    private List<ProseField> useCaseProseFields(String useCaseIri) {
+        List<ProseField> fields = new ArrayList<>(proseFields(useCaseIri, USE_CASE_GOAL, "useCaseGoal", true));
+        fields.addAll(proseFields(useCaseIri, DESIGN_SCOPE, "designScope", true));
+        fields.addAll(proseFields(useCaseIri, TRIGGER, "trigger", true));
+        fields.addAll(proseFields(useCaseIri, USE_CASE_PRECONDITION, "useCasePrecondition", true));
+        fields.addAll(proseFields(useCaseIri, USE_CASE_POSTCONDITION, "useCasePostcondition", true));
+        for (String stepIri : resourceObjects(useCaseIri, MAIN_STEP)) {
+            fields.addAll(proseFields(stepIri, STEP_TEXT, "mainStep" + positionSuffix(stepIri), true));
+        }
+        for (String stepIri : resourceObjects(useCaseIri, EXTENSION_STEP)) {
+            fields.addAll(proseFields(stepIri, STEP_TEXT, "extensionStep" + positionSuffix(stepIri), true));
+        }
+        return fields;
+    }
+
+    /** Field-aware sibling of {@link #adrProseTexts(String)}; every field stays normative. */
+    private List<ProseField> adrProseFields(String adrIri) {
+        List<ProseField> fields = new ArrayList<>(proseFields(adrIri, NAME, "name", true));
+        fields.addAll(proseFields(adrIri, ADR_CONTEXT, "adrContext", true));
+        fields.addAll(proseFields(adrIri, ADR_DECISION, "adrDecision", true));
+        for (String consequenceIri : resourceObjects(adrIri, CONSEQUENCE)) {
+            fields.addAll(proseFields(consequenceIri, CONSEQUENCE_STATEMENT,
+                    "consequenceStatement" + positionSuffix(consequenceIri), true));
+        }
+        for (String optionIri : resourceObjects(adrIri, CONSIDERED_OPTION)) {
+            String suffix = positionSuffix(optionIri);
+            fields.addAll(proseFields(optionIri, NAME, "optionName" + suffix, true));
+            fields.addAll(proseFields(optionIri, OPTION_RATIONALE, "optionRationale" + suffix, true));
+        }
+        return fields;
     }
 
     private List<String> literals(String subject, String predicate) {

@@ -61,11 +61,15 @@ public enum StoreCheckKind {
      * bound by. See {@link OrphanCheck}.
      */
     ORPHAN("the presence of edges: requirements no use case satisfies (oslc_rm:satisfies) or realises (arkreq:stepRealises), terms never referenced, text naming a "
-            + "term without the matching edge, constraints bound by nothing.",
+            + "term without the matching edge (classified by the field it was found in), constraints bound by nothing.",
             "the text-mention match (\"Mentioned in text but not linked\") is literal and whole-word, "
                     + "not stem-based, so it also flags everyday words used in their ordinary sense (e.g. "
                     + "\"Rolle\", \"Begriff\", \"Projekt\") - a hit there is a reading hint for a human, "
-                    + "not a finding that demands an edge; whether an existing edge is the right one.");
+                    + "not a finding that demands an edge. A term found only in a requirement's rationale or "
+                    + "acceptance-criterion text, or only next to a reference code (\"(FR-12)\", \"laut FR-12\") "
+                    + "of a resource that already carries the edge, is listed as a hint and not counted - that "
+                    + "classification is a heuristic (a 40-character window, no sentence boundary), not a proof; "
+                    + "whether an existing edge is the right one.");
 
     private final String scope;
     private final String notSeen;

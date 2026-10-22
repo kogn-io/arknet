@@ -98,7 +98,10 @@ public final class TraceabilityMcpTools {
                     + " without a backing edge - a requirement's, use case's, bounded context's or architecture"
                     + " decision's text naming a term without the matching"
                     + " usesTerm/primaryRole/supportingRole/ubiquitousLanguageTerm edge - and constraints no"
-                    + " requirement or use case is bound by via constrainedBy. Same answer store_check returns"
+                    + " requirement or use case is bound by via constrainedBy. Mentions are classified by the"
+                    + " field they were found in: a pair found only in a requirement's rationale or"
+                    + " acceptance-criterion text, or only next to a reference code of another resource that"
+                    + " already carries the edge, is listed as a hint and not counted. Same answer store_check returns"
                     + " for checks=[ORPHAN], plus this notice.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String orphanCheck(

@@ -230,6 +230,8 @@ class StoreCheckMcpToolsTest {
         assertThat(tool.description())
                 .contains("ORPHAN")
                 .contains("requirement no use case satisfies")
-                .contains("orphan_check is a deprecated alias");
+                .contains("orphan_check is a deprecated alias")
+                .contains("classified by the field they were found in")
+                .contains("listed as a hint and not counted");
     }
 }
