@@ -311,6 +311,24 @@ class SpecificationRendererTest {
     }
 
     @Test
+    void visibleNumberIsTheReadingPositionEvenWhenAnExampleSitsBetweenRules() {
+        final ModelCard card = card("FR-9", "Mixed", List.of(type("FR")),
+                new Block.Bullets(RequirementCards.ACCEPTANCE_CRITERIA_LABEL, List.of(
+                        new BulletItem(1, RichText.plain("Rule one.")),
+                        new BulletItem(2, RichText.plain("Rule two.")),
+                        new BulletItem(3, RichText.plain("Example: an instance.")),
+                        new BulletItem(4, RichText.plain("Rule three.")))));
+
+        final String html = render(new ModelViews.Views(List.of(section(RequirementCards.SECTION_TITLE, card)),
+                List.of()), ENGLISH);
+
+        assertThat(html).contains("<li id=\"a-fr-9-c1\"><span class=\"cnum\">1.</span> Rule one.")
+                .contains("<li id=\"a-fr-9-c2\"><span class=\"cnum\">2.</span> Rule two.")
+                .contains("<li id=\"a-fr-9-c4\"><span class=\"cnum\">3.</span> Rule three.")
+                .contains("<li id=\"a-fr-9-c3\" class=\"example\"><span class=\"cnum\">1.</span> Example: an instance.");
+    }
+
+    @Test
     void helpTextDescribesTheCriterionNumbering() {
         assertThat(render(fixture(), GERMAN)).contains("Die Abnahmekriterien sind fortlaufend mit 1., 2., 3.")
                 .doesNotContain("FR-4.2");
