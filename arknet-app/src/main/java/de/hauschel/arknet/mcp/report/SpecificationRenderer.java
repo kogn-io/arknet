@@ -599,7 +599,7 @@ public final class SpecificationRenderer {
                 final String anchor = target(card).anchor();
                 final long rules = criteria.items().stream().filter(item -> !isExample(item)).count();
                 openFold(SpecificationTexts.ACCEPTANCE, Optional.of((int) rules), anchor + "-criteria");
-                appendCriteria(criteria, anchor, card.code());
+                appendCriteria(criteria, anchor);
                 out.append("</details>\n");
             });
             final List<String> usedIn = useCasesByRequirement.getOrDefault(card.iri(), List.of()).stream()
@@ -798,36 +798,39 @@ public final class SpecificationRenderer {
         }
 
         /**
-         * Acceptance criteria as a numbered list: the number is "CODE.position", the position being the
-         * stored one, so it stays the same between runs on an unchanged store. A criterion whose text starts
-         * with "Beispiel:" or "Example:" is an example and goes into its own closed group.
+         * Acceptance criteria as a list numbered 1., 2., 3. in plain text, so the number cannot be mistaken for a
+         * requirement code. The anchor of a criterion is built from the stored position and stays the same
+         * between runs on an unchanged store; a permalink shows on hover or focus. A criterion whose text
+         * starts with "Beispiel:" or "Example:" is an example and goes into its own closed group, numbered
+         * on its own.
          */
-        private void appendCriteria(final Block.Bullets criteria, final String anchor, final String code) {
+        private void appendCriteria(final Block.Bullets criteria, final String anchor) {
             final List<BulletItem> sorted = criteria.items().stream()
                     .sorted(Comparator.comparingInt(BulletItem::position)).toList();
             final List<BulletItem> rules = sorted.stream().filter(item -> !isExample(item)).toList();
             final List<BulletItem> examples = sorted.stream().filter(Page::isExample).toList();
-            appendCriteriaList(rules, anchor, code, false);
+            appendCriteriaList(rules, anchor, false);
             if (!examples.isEmpty()) {
                 openFold(SpecificationTexts.EXAMPLES, Optional.of(examples.size()), anchor + "-examples");
-                appendCriteriaList(examples, anchor, code, true);
+                appendCriteriaList(examples, anchor, true);
                 out.append("</details>");
             }
         }
 
-        private void appendCriteriaList(final List<BulletItem> items, final String anchor, final String code,
-                final boolean example) {
+        private void appendCriteriaList(final List<BulletItem> items, final String anchor, final boolean example) {
             if (items.isEmpty()) {
                 return;
             }
             out.append("<ol class=\"criteria\">");
+            int number = 0;
             for (final BulletItem item : items) {
+                number++;
                 final String id = anchor + "-c" + item.position();
-                final String number = (code.isBlank() ? "" : code + ".") + item.position();
                 out.append("<li id=\"").append(id).append('"').append(example ? " class=\"example\"" : "")
-                        .append("><a class=\"cid\" href=\"#")
-                        .append(id).append("\">").append(escape(number)).append("</a> ")
-                        .append(inline(item.text())).append("</li>");
+                        .append("><span class=\"cnum\">").append(number).append(".</span> ")
+                        .append(inline(item.text())).append("<a class=\"perma\" href=\"#").append(id)
+                        .append("\" aria-label=\"").append(esc(SpecificationTexts.CRITERION_LINK))
+                        .append("\">#</a></li>");
             }
             out.append("</ol>\n");
         }
