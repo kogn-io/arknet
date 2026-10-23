@@ -283,30 +283,39 @@ class SpecificationRendererTest {
     void acceptanceCriteriaAndFlowStepsRenderAsLists() {
         final String html = render(fixture(), ENGLISH);
 
-        assertThat(html).contains("A loan has a due date.</li>")
+        assertThat(html).contains("A loan has a due date.<a class=\"perma\"")
                 .contains("<li>Hand out the book.</li></ol>");
     }
 
     @Test
-    void acceptanceCriteriaAreNumberedByPositionAndEachCarriesAnAnchor() {
+    void acceptanceCriteriaAreNumberedAsPlainTextAndEachCarriesAnAnchorAndAPermalink() {
         final String html = render(fixture(), ENGLISH);
 
         assertThat(html)
-                .contains("<li id=\"a-fr-1-c1\"><a class=\"cid\" href=\"#a-fr-1-c1\">FR-1.1</a> A loan has a due date.</li>")
-                .contains("<li id=\"a-fr-1-c2\"><a class=\"cid\" href=\"#a-fr-1-c2\">FR-1.2</a> A loan names the member.</li>");
+                .contains("<li id=\"a-fr-1-c1\"><span class=\"cnum\">1.</span> A loan has a due date."
+                        + "<a class=\"perma\" href=\"#a-fr-1-c1\" aria-label=\"Link to this criterion\">#</a></li>")
+                .contains("<li id=\"a-fr-1-c2\"><span class=\"cnum\">2.</span> A loan names the member.");
+        assertThat(html).doesNotContain("<a class=\"cid\"").doesNotContain("FR-1.1").doesNotContain("FR-1.2");
     }
 
     @Test
-    void exampleCriteriaAreGroupedApartAndKeepTheirNumber() {
+    void exampleCriteriaAreGroupedApartAndNumberedWithinTheirGroup() {
         final String html = render(fixture(), ENGLISH);
 
         final int examples = html.indexOf("<summary>Examples (2)</summary>");
         assertThat(examples).isPositive();
         assertThat(html.indexOf("id=\"a-fr-1-c3\"")).isGreaterThan(examples);
         assertThat(html.indexOf("id=\"a-fr-1-c2\"")).isLessThan(examples);
-        assertThat(html).contains("<li id=\"a-fr-1-c3\" class=\"example\"><a class=\"cid\" href=\"#a-fr-1-c3\">")
-                .contains("FR-1.3</a> Example: a loan")
-                .contains("<li id=\"a-fr-1-c4\" class=\"example\">");
+        assertThat(html).contains("<li id=\"a-fr-1-c3\" class=\"example\"><span class=\"cnum\">1.</span> Example: a loan")
+                .contains("<li id=\"a-fr-1-c4\" class=\"example\"><span class=\"cnum\">2.</span>");
+    }
+
+    @Test
+    void helpTextDescribesTheCriterionNumbering() {
+        assertThat(render(fixture(), GERMAN)).contains("Die Abnahmekriterien sind fortlaufend mit 1., 2., 3.")
+                .doesNotContain("FR-4.2");
+        assertThat(render(fixture(), ENGLISH)).contains("Acceptance criteria are numbered 1., 2., 3.")
+                .doesNotContain("FR-4.2");
     }
 
     @Test
