@@ -68,7 +68,9 @@ public enum StoreCheckKind {
             "the text-mention match (\"Mentioned in text but not linked\") is literal and whole-word, "
                     + "not stem-based, so it also flags everyday words used in their ordinary sense (e.g. "
                     + "\"Rolle\", \"Begriff\", \"Projekt\") - a hit there is a reading hint for a human, "
-                    + "not a finding that demands an edge; whether an existing edge is the right one.");
+                    + "not a finding that demands an edge; a hyphenated compound does not name its part and a "
+                    + "capitalised single-word term matches case-aware in German-tagged text, but a hyphen after a "
+                    + "business code still separates (\"FR-3-Regel\" references FR-3); whether an existing edge is the right one.");
 
     private final String scope;
     private final String notSeen;

@@ -156,7 +156,7 @@ public final class ArkreqVocabulary {
 
     /**
      * {@code arkreq:designScope} - the system/boundary under design a use case is scoped to;
-     * optional. Shared here since issue #333, when {@code TraceabilityGraph#useCaseProseTexts}
+     * optional. Shared here since issue #333, when {@code TraceabilityGraph#useCaseFieldTexts}
      * became a second reader beyond the use-cases out-adapter.
      */
     public static final String DESIGN_SCOPE = NAMESPACE + "designScope";

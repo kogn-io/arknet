@@ -251,13 +251,13 @@ class TraceabilityGraphAdrEdgesTest {
     }
 
     /**
-     * {@link TraceabilityGraph#adrProseTexts(String)} must read every prose field the issue names:
+     * {@link TraceabilityGraph#adrFieldTexts(String)} must read every prose field the issue names:
      * name, context, decision, each consequence's statement, each considered option's own name and
      * rationale.
      */
     @Test
-    void adrProseTextsOfAdr5CoversNameContextDecisionConsequenceAndConsideredOption() {
-        assertThat(graph.adrProseTexts(ADR_5_IRI)).containsExactlyInAnyOrder(
+    void adrFieldTextsOfAdr5CoversNameContextDecisionConsequenceAndConsideredOption() {
+        assertThat(graph.adrFieldTexts(ADR_5_IRI).stream().map(TraceabilityGraph.FieldText::text).toList()).containsExactlyInAnyOrder(
                 "Add checkpoints",
                 "Recovery needs a way to resume from a Checkpoint after a crash.",
                 "Introduce periodic checkpoints.",

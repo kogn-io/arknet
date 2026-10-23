@@ -158,7 +158,8 @@ public final class TraceabilityMcpTools {
 
     @McpTool(name = "term_cooccurrence",
             description = "Which glossary terms are named together in the same requirement or use-case"
-                    + " text - literal text co-occurrence only, not a model-edge comparison. Raw data for"
+                    + " text - literal text co-occurrence only (whole-word, a hyphen is part of the word, a capitalised"
+                    + " single-word term is case-aware in German-tagged text), not a model-edge comparison. Raw data for"
                     + " deciding whether two contexts use the same term the same way or a homonym with two"
                     + " meanings; draws no conclusion itself.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))

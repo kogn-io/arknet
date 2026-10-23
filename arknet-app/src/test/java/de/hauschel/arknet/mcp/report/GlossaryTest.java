@@ -68,6 +68,41 @@ class GlossaryTest {
     }
 
     /**
+     * kogn-io/arknet#696: in text of a noun-capitalising language a lowercase occurrence is not
+     * the capitalised term. The report passes its display language; without one the old,
+     * fully case-insensitive match stays (see {@link #findsALabelRegardlessOfCase()}).
+     */
+    @Test
+    void ignoresALowercaseOccurrenceOfACapitalisedLabelInGermanText() {
+        final Glossary german = Glossary.of(List.of(
+                term(KUNDE, "TERM-1", "Kunde"), term(BESTELLUNG, "TERM-2", "Bestellung")), "de");
+
+        assertThat(german.markUp("kunde und Kunde", Set.of(KUNDE)).spans()).containsExactly(
+                new Span.Plain("kunde und "),
+                new Span.TermLink("Kunde", KUNDE.value(), "TERM-1"));
+        assertThat(german.mentionedIn(List.of("kunde"))).isEmpty();
+        assertThat(german.mentionedIn(List.of("DER KUNDE"))).containsExactly(KUNDE);
+    }
+
+    @Test
+    void keepsCaseInsensitiveMatchingWhenTheReportLanguageIsEnglishOrUnknown() {
+        for (final String language : new String[] {"en", null}) {
+            final Glossary glossary = Glossary.of(List.of(term(KUNDE, "TERM-1", "Customer")), language);
+
+            assertThat(glossary.markUp("the customer", Set.of(KUNDE)).spans())
+                    .containsExactly(new Span.Plain("the "), new Span.TermLink("customer", KUNDE.value(), "TERM-1"));
+        }
+    }
+
+    @Test
+    void doesNotLinkAHyphenatedCompoundAsItsPartTerm() {
+        assertThat(GLOSSARY.markUp("Der Kunde-Import und der Import-Kunde", Set.of(KUNDE)).spans())
+                .containsExactly(new Span.Plain("Der Kunde-Import und der Import-Kunde"));
+        assertThat(GLOSSARY.markUp("Kunde - Import", Set.of(KUNDE)).spans())
+                .contains(new Span.TermLink("Kunde", KUNDE.value(), "TERM-1"));
+    }
+
+    /**
      * The deliberate limit of literal matching: an inflected form is missed. Accepting stems
      * instead would make "Kundendienst" a mention of "Kunde" - a link the model never agreed
      * to, and a wrong edge in an architecture model costs more than a missing one.

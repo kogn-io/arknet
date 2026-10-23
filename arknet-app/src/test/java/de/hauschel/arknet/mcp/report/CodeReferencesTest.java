@@ -83,6 +83,41 @@ class CodeReferencesTest {
         return ProseParts.soleParagraph(section.cards().get(0).blocks().get(0)).spans();
     }
 
+    /** kogn-io/arknet#696: codes are no nouns - the capitalisation rule never reaches this pass. */
+    @Test
+    void keepsCodesCaseInsensitiveAndLinksACodeInParentheses() {
+        final List<ModelSection> marked = CodeReferences.markUp(List.of(
+                section("Architecture decisions", card("ADR-1", "Scope frame", "siehe adr-3 und (ADR-3)")),
+                section("More decisions", card("ADR-3", "Actor identity", "unrelated text"))));
+
+        assertThat(spansOf(marked.get(0))).containsExactly(
+                new Span.Plain("siehe "),
+                new Span.CodeRef("adr-3", ID + "adr-3", "ADR-3", "Actor identity"),
+                new Span.Plain(" und ("),
+                new Span.CodeRef("ADR-3", ID + "adr-3", "ADR-3", "Actor identity"),
+                new Span.Plain(")"));
+    }
+
+    @Test
+    void doesNotLinkACodeInsideALongerCode() {
+        final List<ModelSection> marked = CodeReferences.markUp(List.of(
+                section("Architecture decisions", card("ADR-1", "Scope frame", "ADR-30 und ADR-3x")),
+                section("More decisions", card("ADR-3", "Actor identity", "unrelated text"))));
+
+        assertThat(spansOf(marked.get(0))).containsExactly(new Span.Plain("ADR-30 und ADR-3x"));
+    }
+
+    @Test
+    void linksACodeFollowedByAHyphenAsInAGermanCompound() {
+        final List<ModelSection> marked = CodeReferences.markUp(List.of(
+                section("Architecture decisions", card("ADR-1", "Scope frame", "ADR-3-Review und ADR-12-Regel")),
+                section("More decisions", card("ADR-3", "Actor identity", "unrelated text"))));
+
+        assertThat(spansOf(marked.get(0))).containsExactly(
+                new Span.CodeRef("ADR-3", ID + "adr-3", "ADR-3", "Actor identity"),
+                new Span.Plain("-Review und ADR-12-Regel"));
+    }
+
     private static ModelSection section(final String title, final ModelCard card) {
         return new ModelSection(title, title.toLowerCase().replace(' ', '-'), "", List.of(card));
     }

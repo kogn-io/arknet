@@ -49,7 +49,7 @@ final class CodeReferences {
         if (targets.isEmpty()) {
             return sections;
         }
-        final LabelMentions<Target> mentions = LabelMentions.of(targets.values(), Target::code);
+        final LabelMentions<Target> mentions = LabelMentions.ofCodes(targets.values(), Target::code);
         return sections.stream().map(section -> new ModelSection(section.title(), section.id(), section.subtitle(),
                 section.cards().stream().map(card -> markUp(card, mentions)).toList())).toList();
     }

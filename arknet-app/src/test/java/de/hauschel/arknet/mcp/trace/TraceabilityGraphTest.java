@@ -322,8 +322,8 @@ class TraceabilityGraphTest {
         }
 
         @Test
-        void termProseTextsOfATermContainsItsDefinition() {
-            assertThat(graph.termProseTexts(TERM_1_IRI)).containsExactly("The act of proving one's identity.");
+        void termFieldTextsOfATermContainsItsDefinition() {
+            assertThat(graph.termFieldTexts(TERM_1_IRI).stream().map(TraceabilityGraph.FieldText::text).toList()).containsExactly("The act of proving one's identity.");
         }
 
         @Test
@@ -337,13 +337,13 @@ class TraceabilityGraphTest {
         }
 
         @Test
-        void boundedContextProseTextsOfBc1ContainsItsDomainVision() {
-            assertThat(graph.boundedContextProseTexts(BC_1_IRI)).containsExactly("Wir verarbeiten Bestellungen.");
+        void boundedContextFieldTextsOfBc1ContainsItsDomainVision() {
+            assertThat(graph.boundedContextFieldTexts(BC_1_IRI).stream().map(TraceabilityGraph.FieldText::text).toList()).containsExactly("Wir verarbeiten Bestellungen.");
         }
 
         @Test
-        void requirementProseTextsOfFr1ContainsDescriptionAndAcceptanceCriteria() {
-            assertThat(graph.requirementProseTexts(FR_1_IRI)).containsExactlyInAnyOrder(
+        void requirementFieldTextsOfFr1ContainsDescriptionAndAcceptanceCriteria() {
+            assertThat(graph.requirementFieldTexts(FR_1_IRI).stream().map(TraceabilityGraph.FieldText::text).toList()).containsExactlyInAnyOrder(
                     "The system shall authenticate a user.", "Login succeeds with valid credentials");
         }
 
@@ -506,11 +506,11 @@ class TraceabilityGraphTest {
 
         /**
          * UC1's only populated prose fields are the goal and its single main-flow step (issue #333
-         * widened {@link TraceabilityGraph#useCaseProseTexts(String)} beyond just the goal).
+         * widened {@link TraceabilityGraph#useCaseFieldTexts(String)} beyond just the goal).
          */
         @Test
-        void useCaseProseTextsOfUc1ContainsItsGoalAndStepText() {
-            assertThat(graph.useCaseProseTexts(UC_1_IRI))
+        void useCaseFieldTextsOfUc1ContainsItsGoalAndStepText() {
+            assertThat(graph.useCaseFieldTexts(UC_1_IRI).stream().map(TraceabilityGraph.FieldText::text).toList())
                     .containsExactlyInAnyOrder("Customer authenticates", "Customer enters credentials");
         }
 
@@ -1075,7 +1075,7 @@ class TraceabilityGraphTest {
          * (issue #333).
          */
         @Test
-        void useCaseProseTextsCoversEveryOptionalFieldAndEveryStepAndExtension() {
+        void useCaseFieldTextsCoversEveryOptionalFieldAndEveryStepAndExtension() {
             UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
                     lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
             useCases.create(PROJECT, new UseCase(
@@ -1087,7 +1087,7 @@ class TraceabilityGraphTest {
             StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
             TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
 
-            assertThat(freshGraph.useCaseProseTexts(UC_2_IRI)).containsExactlyInAnyOrder(
+            assertThat(freshGraph.useCaseFieldTexts(UC_2_IRI).stream().map(TraceabilityGraph.FieldText::text).toList()).containsExactlyInAnyOrder(
                     "Customer manages the cart", "Checkout subsystem", "Customer opens the cart",
                     "Cart is empty", "Cart is saved", "Customer adds an item", "Customer cancels");
         }

@@ -31,7 +31,8 @@ import de.hauschel.arknet.ul.domain.Term;
  * One store round trip fewer than before, not one more.</p>
  *
  * <p>A mention is a term's {@code skos:prefLabel} found in prose; the matching rules themselves
- * (case-insensitive, word-boundary, left-to-right greedy over each match's start position - the
+ * (case-insensitive except for capitalised single-word labels in German prose, word-boundary with a hyphen
+ * counting as part of the word, left-to-right greedy over each match's start position - the
  * longer of two same-start matches wins) are not repeated here - they live once, for every
  * caller, at {@link LabelMentions}. A {@link Term} holds exactly one label and no synonyms, so
  * there is nothing else to match against.</p>
@@ -41,8 +42,10 @@ public final class Glossary {
     private final Map<ResourceId, Term> byId;
     private final List<Term> all;
     private final LabelMentions<Term> mentions;
+    private final String textLanguage;
 
-    private Glossary(final List<Term> terms) {
+    private Glossary(final List<Term> terms, final String textLanguage) {
+        this.textLanguage = textLanguage;
         final Map<ResourceId, Term> ids = new LinkedHashMap<>();
         for (final Term term : terms) {
             ids.putIfAbsent(term.id().value(), term);
@@ -62,8 +65,22 @@ public final class Glossary {
      *         store degrades the report rather than failing it
      */
     public static Glossary of(final List<Term> terms) {
+        return of(terms, null);
+    }
+
+    /**
+     * @param terms        every term of the project, in any order
+     * @param textLanguage the language the report's prose is shown in (BCP-47 tag), or {@code null}
+     *                     if unknown; the card builders hand over resolved strings without the tag
+     *                     of the literal they came from, so this is the report's display language.
+     *                     It decides the capitalisation rule of {@link LabelMentions} (kogn-io/
+     *                     arknet#696): in German prose {@code kunde} is not a mention of the term
+     *                     {@code Kunde}
+     * @return the glossary
+     */
+    public static Glossary of(final List<Term> terms, final String textLanguage) {
         Objects.requireNonNull(terms, "terms");
-        return new Glossary(terms);
+        return new Glossary(terms, textLanguage);
     }
 
     /**
@@ -73,7 +90,7 @@ public final class Glossary {
      * @return an empty glossary
      */
     public static Glossary empty() {
-        return new Glossary(List.of());
+        return new Glossary(List.of(), null);
     }
 
     /**
@@ -133,7 +150,7 @@ public final class Glossary {
     public RichText markUp(final String text, final Set<ResourceId> linked) {
         Objects.requireNonNull(text, "text");
         final Set<ResourceId> edges = linked == null ? Set.of() : linked;
-        final List<LabelMentions.Mention<Term>> found = mentions.in(text);
+        final List<LabelMentions.Mention<Term>> found = mentions.in(text, textLanguage);
         if (found.isEmpty()) {
             return RichText.plain(text);
         }
@@ -165,7 +182,7 @@ public final class Glossary {
      * @return the mentioned identities, in first-appearance order
      */
     public Set<ResourceId> mentionedIn(final Collection<String> texts) {
-        return mentions.mentionedIn(texts).stream()
+        return mentions.mentionedIn(texts, textLanguage).stream()
                 .map(term -> term.id().value())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
