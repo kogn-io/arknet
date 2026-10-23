@@ -47,7 +47,7 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * two-hop {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
  * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/use-case/bounded-context/ADR
  * prose ({@code dcterms:description}/{@code arkreq:acceptanceCriterion}, {@link
- * #useCaseProseTexts(String)}, {@code arkddd:domainVision}, {@link #adrProseTexts(String)}, issue
+ * #useCaseFieldTexts(String)}, {@code arkddd:domainVision}, {@link #adrFieldTexts(String)}, issue
  * #406) that {@code orphan_check}'s unlinked-mention check scans for a glossary term nothing links to.
  * {@code role_usecase_matrix} (ADR-37/kogn-io/arknet#405 Part C, formerly {@code
  * actor_usecase_matrix}) needs the {@code primaryRole}/{@code
@@ -55,7 +55,7 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * #useCasesOf(String)}), plus {@code filledBy} in reverse ({@link #rolesFilledBy(String)},
  * kogn-io/arknet#524) for its "Actors" section, and {@code term_cooccurrence} reuses the same
  * prose-scanning idea for a use case's {@code arkreq:useCaseGoal} ({@link
- * #useCaseProseTexts(String)}, issue #108).
+ * #useCaseFieldTexts(String)}, issue #108).
  *
  * <p>Built once per read from a {@link StoreSnapshot} - the same generic {@code SELECT ?s ?p
  * ?o} {@link de.hauschel.arknet.persistence.StoreReader} already reads for {@code
@@ -204,7 +204,7 @@ public final class TraceabilityGraph {
     /**
      * {@code arknet:name} - an ADR's own decision name, and (reused, kogn-io/arknet#357) a
      * {@link #CONSIDERED_OPTION}'s short option name - see {@link ArkarchVocabulary#NAME}'s own
-     * javadoc for why one predicate serves both. {@link #adrProseTexts(String)} (issue #406) reads
+     * javadoc for why one predicate serves both. {@link #adrFieldTexts(String)} (issue #406) reads
      * it from both places.
      */
     private static final String NAME = ArkarchVocabulary.NAME;
@@ -217,7 +217,7 @@ public final class TraceabilityGraph {
 
     /**
      * {@code arkarch:consequence} - ADR -&gt; one of its {@code arkarch:Consequence} resources, the
-     * two-hop edge {@link #adrProseTexts(String)} follows to each consequence's
+     * two-hop edge {@link #adrFieldTexts(String)} follows to each consequence's
      * {@link #CONSEQUENCE_STATEMENT} (issue #406) - mirrors {@link #ACCEPTANCE_CRITERION}'s hop.
      */
     private static final String CONSEQUENCE = ArkarchVocabulary.CONSEQUENCE;
@@ -227,7 +227,7 @@ public final class TraceabilityGraph {
 
     /**
      * {@code arkarch:consideredOption} - ADR -&gt; one of its {@code arkarch:ConsideredOption}
-     * resources, the two-hop edge {@link #adrProseTexts(String)} follows to each option's
+     * resources, the two-hop edge {@link #adrFieldTexts(String)} follows to each option's
      * {@link #NAME}/{@link #OPTION_RATIONALE} (issue #406).
      */
     private static final String CONSIDERED_OPTION = ArkarchVocabulary.CONSIDERED_OPTION;
@@ -745,14 +745,7 @@ public final class TraceabilityGraph {
      *         since issue #266 (pointing at its own {@code arkreq:AcceptanceCriterion} resource,
      *         mirroring {@code arkreq:mainStep}/{@code arkreq:Step}), so this is a two-hop read:
      *         the edge's target IRIs, then each target's own {@code criterionText} literal(s).
-     *
-     * <p>The flat view of {@link #requirementFieldTexts(String)}: the texts without field or language tag.</p>
      */
-    public List<String> requirementProseTexts(String requirementIri) {
-        return texts(requirementFieldTexts(requirementIri));
-    }
-
-    /** @return the prose texts of {@link #requirementProseTexts(String)} with their field and language tag */
     public List<FieldText> requirementFieldTexts(String requirementIri) {
         Objects.requireNonNull(requirementIri, "requirementIri");
         List<FieldText> texts = new ArrayList<>();
@@ -766,14 +759,8 @@ public final class TraceabilityGraph {
     /**
      * @return the {@code arkddd:domainVision} text of a bounded context, for scanning it for
      *         unlinked glossary mentions
-     *
-     * <p>The flat view of {@link #boundedContextFieldTexts(String)}: the texts without field or language tag.</p>
      */
-    public List<String> boundedContextProseTexts(String boundedContextIri) {
-        return texts(boundedContextFieldTexts(boundedContextIri));
-    }
-
-    private List<FieldText> boundedContextFieldTexts(String boundedContextIri) {
+    public List<FieldText> boundedContextFieldTexts(String boundedContextIri) {
         List<FieldText> texts = new ArrayList<>();
         addFieldTexts(texts, Objects.requireNonNull(boundedContextIri, "boundedContextIri"), DOMAIN_VISION);
         return texts;
@@ -785,18 +772,11 @@ public final class TraceabilityGraph {
      *         useCasePrecondition}/{@code useCasePostcondition} literals, plus the {@code
      *         arkreq:stepText} of every main-flow and extension step reached via {@code
      *         arkreq:mainStep}/{@code extensionStep} - the same two-hop read {@link
-     *         #requirementProseTexts(String)} already does for an acceptance criterion's text.
+     *         #requirementFieldTexts(String)} already does for an acceptance criterion's text.
      *         Used by both {@code term_cooccurrence} (issue #108, originally just the goal) and
      *         {@link #unlinkedMentions()} (issue #333); an optional field simply contributes no
      *         literal when unset
-     *
-     * <p>The flat view of {@link #useCaseFieldTexts(String)}: the texts without field or language tag.</p>
      */
-    public List<String> useCaseProseTexts(String useCaseIri) {
-        return texts(useCaseFieldTexts(useCaseIri));
-    }
-
-    /** @return the prose texts of {@link #useCaseProseTexts(String)} with their field and language tag */
     public List<FieldText> useCaseFieldTexts(String useCaseIri) {
         Objects.requireNonNull(useCaseIri, "useCaseIri");
         List<FieldText> texts = new ArrayList<>();
@@ -816,15 +796,9 @@ public final class TraceabilityGraph {
 
     /**
      * @return the {@code skos:definition} text of a term, for scanning it for unlinked mentions of
-     *         other glossary terms (issue #252) - mirrors {@link #boundedContextProseTexts(String)}
-     *
-     * <p>The flat view of {@link #termFieldTexts(String)}: the texts without field or language tag.</p>
+     *         other glossary terms (issue #252) - mirrors {@link #boundedContextFieldTexts(String)}
      */
-    public List<String> termProseTexts(String termIri) {
-        return texts(termFieldTexts(termIri));
-    }
-
-    private List<FieldText> termFieldTexts(String termIri) {
+    public List<FieldText> termFieldTexts(String termIri) {
         List<FieldText> texts = new ArrayList<>();
         addFieldTexts(texts, Objects.requireNonNull(termIri, "termIri"), DEFINITION);
         return texts;
@@ -836,19 +810,13 @@ public final class TraceabilityGraph {
      *         plus each {@code arkarch:Consequence}'s {@link #CONSEQUENCE_STATEMENT} and each
      *         {@code arkarch:ConsideredOption}'s {@link #NAME}/{@link #OPTION_RATIONALE} - reached via
      *         the two-hop {@link #CONSEQUENCE}/{@link #CONSIDERED_OPTION} edges, the same pattern
-     *         {@link #requirementProseTexts(String)} already uses for an acceptance criterion's text.
+     *         {@link #requirementFieldTexts(String)} already uses for an acceptance criterion's text.
      *         Used by {@link #unlinkedMentions()}'s fourth sweep (issue #406): a decision's own text
      *         naming a glossary term without the matching {@code arkarch:usesTerm} edge was invisible
      *         to {@code orphan_check} before this, unlike the same gap for a requirement, use case or
      *         bounded context.
-     *
-     * <p>The flat view of {@link #adrFieldTexts(String)}: the texts without field or language tag.</p>
      */
-    public List<String> adrProseTexts(String adrIri) {
-        return texts(adrFieldTexts(adrIri));
-    }
-
-    private List<FieldText> adrFieldTexts(String adrIri) {
+    public List<FieldText> adrFieldTexts(String adrIri) {
         Objects.requireNonNull(adrIri, "adrIri");
         List<FieldText> texts = new ArrayList<>();
         addFieldTexts(texts, adrIri, NAME);
@@ -876,10 +844,6 @@ public final class TraceabilityGraph {
     public record FieldText(String field, String text, String languageTag) {
     }
 
-    private static List<String> texts(List<FieldText> fieldTexts) {
-        return fieldTexts.stream().map(FieldText::text).toList();
-    }
-
     private void addFieldTexts(List<FieldText> out, String subject, String predicate) {
         String field = StoreResource.localName(predicate);
         for (RdfNode.Literal literal : literals(subject, predicate)) {
@@ -900,7 +864,7 @@ public final class TraceabilityGraph {
      * Every requirement/use-case/bounded-context prose mention of a glossary term the source does
      * not link to: a requirement's {@code dcterms:description}/{@code
      * arkreq:acceptanceCriterion} checked against its {@code arkreq:usesTerm} edges, a use case's
-     * {@link #useCaseProseTexts(String)} checked against its own {@code arkreq:usesTerm} edges
+     * {@link #useCaseFieldTexts(String)} checked against its own {@code arkreq:usesTerm} edges
      * plus its {@code arkreq:primaryRole}/{@code supportingRole} edges (issue #333 - a goal or
      * step naming the use case's own role is not an unlinked mention, since that relationship is
      * already recorded, just under a different predicate than {@code usesTerm}), and a
@@ -940,7 +904,7 @@ public final class TraceabilityGraph {
      * {@link de.hauschel.arknet.ul.domain.TermCycleException}).</p>
      *
      * <p>A fourth sweep (issue #406) checks an architecture decision's {@link
-     * #adrProseTexts(String)} against its own {@link #adrUsedTerms(String)} - the {@code
+     * #adrFieldTexts(String)} against its own {@link #adrUsedTerms(String)} - the {@code
      * arkarch:usesTerm} counterpart to the requirement/use-case sweep above, which only ever
      * traverses the shared {@code arkreq:usesTerm} property an ADR never carries. Reported with the
      * same {@code "usesTerm"} edge-local-name as that sweep: both name the term the source text
@@ -1027,7 +991,7 @@ public final class TraceabilityGraph {
         referable.addAll(useCaseIris());
         referable.addAll(boundedContextIris());
         referable.addAll(adrIris());
-        return LabelMentions.of(referable.stream().sorted().toList(), iri -> identifierOf(iri).orElse(null));
+        return LabelMentions.ofCodes(referable.stream().sorted().toList(), iri -> identifierOf(iri).orElse(null));
     }
 
     /** Whether {@code resourceIri} itself already carries the edge to {@code termIri}. */
@@ -1157,7 +1121,7 @@ public final class TraceabilityGraph {
 
     /**
      * {@link #literals(String, String)}, for a resource-object edge instead of a literal-valued
-     * one - backs {@link #requirementProseTexts(String)}'s hop from an {@code
+     * one - backs {@link #requirementFieldTexts(String)}'s hop from an {@code
      * arkreq:acceptanceCriterion} edge to its target {@code arkreq:AcceptanceCriterion} resource
      * (issue #266).
      */

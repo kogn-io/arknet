@@ -43,6 +43,11 @@ import java.util.regex.Pattern;
  * E-Mail}, {@code FR-12}) matches as before, and {@code FR-1} still does not match inside
  * {@code FR-12}.</p>
  *
+ * <p><strong>Exception: business codes.</strong> A matcher built with {@link #ofCodes(Collection, Function)}
+ * lets a hyphen directly after the code separate, because a German compound with a code is hyphenated
+ * ({@code FR-3-Regel}, {@code ADR-59-Entscheidung}) and names the code unambiguously; a hyphen before the code
+ * still binds.</p>
+ *
  * <p><strong>Nouns are capitalised in some languages</strong> (kogn-io/arknet#696). In
  * {@link #in(String, String)} and {@link #mentionedIn(Collection, String)} a text tagged with a
  * language that capitalises nouns - see {@link #capitalisesNouns(String)} - matches
@@ -89,14 +94,35 @@ public final class LabelMentions<T> {
      * @return the matcher, with entries ordered longest-label-first
      */
     public static <T> LabelMentions<T> of(final Collection<T> items, final Function<T, String> label) {
+        return build(items, label, false);
+    }
+
+    /**
+     * Like {@link #of(Collection, Function)}, for business codes ({@code FR-3}, {@code ADR-59}) instead of
+     * glossary labels: a hyphen directly <em>after</em> a code separates it, because a German compound
+     * with a code is written hyphenated ({@code FR-3-Regel}, {@code ADR-59-Entscheidung}) and names the
+     * code unambiguously. A hyphen directly before a code still binds it to the preceding word, and
+     * {@code FR-1} still does not match inside {@code FR-12}. Codes are not nouns, so the case rule
+     * never applies.
+     *
+     * @param items the items to make findable, in the order length ties should break
+     * @param code  each item's code to search for; a {@code null} or blank code is skipped
+     * @return the matcher, with entries ordered longest-code-first
+     */
+    public static <T> LabelMentions<T> ofCodes(final Collection<T> items, final Function<T, String> code) {
+        return build(items, code, true);
+    }
+
+    private static <T> LabelMentions<T> build(final Collection<T> items, final Function<T, String> label,
+            final boolean codes) {
         Objects.requireNonNull(items, "items");
         Objects.requireNonNull(label, "label");
         final List<Entry<T>> built = new ArrayList<>();
         for (final T item : items) {
             final String text = label.apply(item);
             if (text != null && !text.isBlank()) {
-                built.add(new Entry<>(item, text, pattern(text),
-                        capitalisedSingleWord(text)));
+                built.add(new Entry<>(item, text, pattern(text, codes),
+                        !codes && capitalisedSingleWord(text)));
             }
         }
         built.sort(Comparator.comparingInt((Entry<T> entry) -> entry.label().length()).reversed());
@@ -209,9 +235,10 @@ public final class LabelMentions<T> {
      * opposite of what is meant and match nothing. It is a lookaround rather than {@code \b} so
      * that a hyphen counts as a word character there ({@link #JOINERS}).</p>
      */
-    private static Pattern pattern(final String label) {
+    private static Pattern pattern(final String label, final boolean code) {
         final String prefix = isWordChar(label.charAt(0)) ? "(?<![\\w" + JOINERS + "])" : "";
-        final String suffix = isWordChar(label.charAt(label.length() - 1)) ? "(?![\\w" + JOINERS + "])" : "";
+        final String after = code ? "" : JOINERS;
+        final String suffix = isWordChar(label.charAt(label.length() - 1)) ? "(?![\\w" + after + "])" : "";
         return Pattern.compile(prefix + Pattern.quote(label) + suffix,
                 Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS);
     }

@@ -236,6 +236,20 @@ class OrphanCheckTest {
     }
 
     @Test
+    void aHyphenAfterAReferencedCodeStillCountsAsAReference() {
+        OrphanCheck.Result result = run(
+                requirement("fr-1", "FR-1", "Gemäß FR-3-Regel zahlt der Kunde."),
+                requirement("fr-3", "FR-3", "Anlage."),
+                iri(ID + "fr-3", USES_TERM, ID + "term-9"),
+                term("term-9", "TERM-9", "Kunde"));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.weakMentions()).containsExactly(new WeakMention(
+                ID + "fr-1", "FR-1", ID + "term-9", "TERM-9", "Kunde", "usesTerm",
+                List.of("description"), WeakReason.COVERED_BY_REFERENCE, List.of("FR-3")));
+    }
+
+    @Test
     void keepsAMentionAFindingWhenTheReferencedResourceLacksTheEdge() {
         OrphanCheck.Result result = run(
                 requirement("fr-1", "FR-1", "Der Kunde (FR-2) wird informiert."),

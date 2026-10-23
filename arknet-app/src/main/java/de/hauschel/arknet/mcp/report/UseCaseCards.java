@@ -57,7 +57,7 @@ import de.hauschel.arknet.uc.domain.UseCase;
  * (glossary) or {@code arkreq:primaryRole}/{@code supportingRole} (the use case's own roles)
  * edges - the same gap {@link RequirementCards} closed for requirement prose. Every one of those
  * fields is therefore marked up through {@link Glossary}, mirroring {@link
- * TraceabilityGraph#useCaseProseTexts(String)} (the mention scan behind {@code orphan_check}'s
+ * TraceabilityGraph#useCaseFieldTexts(String)} (the mention scan behind {@code orphan_check}'s
  * "mentioned in text but not linked" list, which now covers the same fields): a mention backed
  * by a {@code usesTerm} edge, or naming the use case's own primary/supporting role, is a link,
  * any other mention a gap. The {@code Uses terms} chip list survives only for edges whose term

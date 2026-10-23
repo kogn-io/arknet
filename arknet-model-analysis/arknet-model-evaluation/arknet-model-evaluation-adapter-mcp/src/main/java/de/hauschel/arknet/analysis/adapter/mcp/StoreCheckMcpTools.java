@@ -122,12 +122,11 @@ public final class StoreCheckMcpTools {
             + "requirement, use case, bounded context or decision (its business code, e.g. FR-12) "
             + "that already carries the edge to that term (every . ends a sentence, so lt. FR-12 or vgl. FR-12 "
             + "does not cover; a term's own definition is exempt from this rule); a hit elsewhere keeps the finding. What ORPHAN does "
-            + "NOT see: the text-mention match is literal and whole-word, not stem-based, and treats a "
-            + "hyphen as part of the word (Kontoauszug-Import does not name Kontoauszug) and, in German-tagged "
-            + "text, matches a capitalised single-word term only at a capitalised occurrence (the verb soll does not name "
-            + "Soll), so it also "
+            + "NOT see: the text-mention match is literal and whole-word, not stem-based, so it also "
             + "flags everyday words used in their ordinary sense - a hit there is a reading hint for a "
-            + "human, not a finding that demands an edge. orphan_check is a deprecated alias for this "
+            + "human, not a finding that demands an edge. A hyphenated compound does not name its part and, "
+            + "in German-tagged text, a capitalised single-word term matches only capitalised; a hyphen "
+            + "after a business code still separates (FR-3-Regel references FR-3). orphan_check is a deprecated alias for this "
             + "check; further checks fold in here too rather than arriving as new tools.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String storeCheck(

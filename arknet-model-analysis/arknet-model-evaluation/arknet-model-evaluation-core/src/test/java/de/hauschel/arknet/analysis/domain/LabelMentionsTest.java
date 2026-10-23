@@ -169,6 +169,20 @@ class LabelMentionsTest {
     }
 
     @Test
+    void aCodeMatcherLetsAHyphenAfterTheCodeSeparateButNotBeforeOrInsideALongerCode() {
+        final LabelMentions<String> codes = LabelMentions.ofCodes(List.of("fr-1", "fr-12"), id -> id.toUpperCase());
+        assertThat(codes.in("FR-1-Regel")).containsExactly(new Mention<>(0, 4, "fr-1"));
+        assertThat(codes.in("FR-12-Regel")).containsExactly(new Mention<>(0, 5, "fr-12"));
+        assertThat(codes.in("NFR-1 und Sub-FR-1")).isEmpty();
+        assertThat(LabelMentions.ofCodes(List.of("fr-1"), id -> id.toUpperCase()).in("FR-12")).isEmpty();
+    }
+
+    @Test
+    void aTermLabelKeepsTheStrictHyphenRuleAfterItsLastWord() {
+        assertThat(single("FR").in("FR-12 und FR-Regel")).isEmpty();
+    }
+
+    @Test
     void aLabelWithRegexMetacharactersIsStillMatchedLiterally() {
         assertThat(single("(draft)").in("ein (draft) hier")).containsExactly(new Mention<>(4, 11, "term-1"));
         assertThat(single("a.b").in("axb a.b")).containsExactly(new Mention<>(4, 7, "term-1"));
