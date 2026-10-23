@@ -148,7 +148,11 @@ public final class TraceabilityGraph {
     /** The local name of the acceptance-criterion text predicate - the one non-normative field. */
     private static final String CRITERION_FIELD = StoreResource.localName(CRITERION_TEXT);
 
-    /** Characters that end a sentence for the reference rule of {@link #classifiedMentions()}. */
+    /**
+     * Characters that end a sentence for the reference rule of {@link #classifiedMentions()}. Every
+     * {@code .} counts, abbreviation dots included: "Kunde, lt. FR-2" stays a finding (known blind
+     * spot, conservative direction).
+     */
     private static final String SENTENCE_BREAKS = ".!?;:\n\r";
 
     /**
@@ -1067,6 +1071,8 @@ public final class TraceabilityGraph {
                         refs = referenceRule ? references.in(text) : List.of();
                     }
                     for (LabelMentions.Mention<String> ref : refs) {
+                        // The own-code exclusion is a guard unreachable with valid data: a source that
+                        // carries the edge has the term in 'linked' and never gets here.
                         if (!ref.item().equals(sourceIri) && carriesTerm(ref.item(), hit.item())
                                 && sameSentence(text, hit.start(), hit.end(), ref.start(), ref.end())) {
                             covering.add(ref.item());
