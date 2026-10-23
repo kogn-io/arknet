@@ -17,7 +17,7 @@ main{padding:2rem 24px 5rem;min-width:0}.doc{max-width:70ch;margin:0 auto}
 .ptoc{display:none}
 h1{font-size:2rem;margin:.2em 0 1rem}h2{font-size:1.5rem;margin:3rem 0 .8rem;border-bottom:1px solid var(--line);padding-bottom:.2em}h3{font-size:1.2rem;margin:2rem 0 .4rem}h4{font-size:1.05rem;margin:1.6rem 0 .3rem}
 h2,h3,h4,section[id],dt[id]{scroll-margin-top:60px}
-.num{color:var(--mute);margin-right:.3em}.code{font:.75em system-ui,sans-serif;color:var(--mute);margin-left:.4em;font-weight:normal}
+.num{color:var(--mute);margin-right:.3em}.code{font:600 .8em system-ui,sans-serif;color:var(--acc);margin-right:.35em;letter-spacing:.01em}
 .meta{color:var(--mute);margin:.1rem 0 .8rem}a{color:var(--acc)}a.term{text-decoration:none;border-bottom:1px dotted var(--acc);color:inherit;cursor:help}
 code{font-size:.9em;background:#f0ede6;padding:0 .2em}.lead{margin-bottom:.2rem}ol,ul{padding-left:1.5rem}ul.refs{list-style:none;padding-left:.5rem;margin-top:.2rem}
 dt{font-weight:bold;margin-top:1rem}dd{margin:0}.empty{color:var(--mute);font-style:italic}

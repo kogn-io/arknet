@@ -362,8 +362,7 @@ public final class SpecificationRenderer {
             final List<TocEntry> children = new ArrayList<>();
             for (int index = 0; index < cards.size(); index++) {
                 final ModelCard card = cards.get(index);
-                children.add(new TocEntry(target(card).anchor(), number + "." + (index + 1) + " " + card.title(),
-                        List.of()));
+                children.add(new TocEntry(target(card).anchor(), target(card).listText(), List.of()));
             }
             return new TocEntry(anchor, number + " " + text(title), children);
         }
@@ -435,7 +434,7 @@ public final class SpecificationRenderer {
                 placeholder(SpecificationTexts.NONE_ACTORS);
             }
             for (int index = 0; index < actors.size(); index++) {
-                appendActor(actors.get(index), "2.1." + (index + 1));
+                appendActor(actors.get(index));
             }
             out.append("<h3 id=\"").append(CH_ROLES).append("\"><span class=\"num\">2.2</span> ")
                     .append(esc(SpecificationTexts.CH_ROLES)).append("</h3>\n");
@@ -443,18 +442,18 @@ public final class SpecificationRenderer {
                 placeholder(SpecificationTexts.NONE_ROLES);
             }
             for (int index = 0; index < roles.size(); index++) {
-                appendRole(roles.get(index), "2.2." + (index + 1));
+                appendRole(roles.get(index));
             }
         }
 
-        private void appendActor(final ModelCard card, final String number) {
-            open("role", "h4", card, number);
+        private void appendActor(final ModelCard card) {
+            open("role", "h4", card);
             proseOf(card, CardLabels.DESCRIPTION).ifPresent(prose -> appendParts(prose.parts()));
             out.append("</section>\n");
         }
 
-        private void appendRole(final ModelCard card, final String number) {
-            open("role", "h4", card, number);
+        private void appendRole(final ModelCard card) {
+            open("role", "h4", card);
             proseOf(card, CardLabels.DESCRIPTION).ifPresent(prose -> appendParts(prose.parts()));
             proseOf(card, CardLabels.FILLED_BY)
                     .filter(prose -> !prose.source().equals(CardLabels.UNFILLED))
@@ -480,12 +479,12 @@ public final class SpecificationRenderer {
                 placeholder(SpecificationTexts.NONE_USE_CASES);
             }
             for (int index = 0; index < useCases.size(); index++) {
-                appendUseCase(useCases.get(index), "3." + (index + 1));
+                appendUseCase(useCases.get(index));
             }
         }
 
-        private void appendUseCase(final ModelCard card, final String number) {
-            open("uc", "h3", card, number);
+        private void appendUseCase(final ModelCard card) {
+            open("uc", "h3", card);
             proseOf(card, CardLabels.GOAL).ifPresent(prose -> labelled(SpecificationTexts.GOAL, prose));
             proseOf(card, CardLabels.SCOPE).ifPresent(prose -> labelled(SpecificationTexts.SCOPE, prose));
             proseOf(card, CardLabels.TRIGGER).ifPresent(prose -> labelled(SpecificationTexts.TRIGGER, prose));
@@ -581,12 +580,12 @@ public final class SpecificationRenderer {
                 placeholder(none);
             }
             for (int index = 0; index < cards.size(); index++) {
-                appendRequirement(cards.get(index), number + "." + (index + 1));
+                appendRequirement(cards.get(index));
             }
         }
 
-        private void appendRequirement(final ModelCard card, final String number) {
-            open("req", "h3", card, number);
+        private void appendRequirement(final ModelCard card) {
+            open("req", "h3", card);
             appendMeta(card);
             proseOf(card, CardLabels.DESCRIPTION).ifPresent(prose -> appendParts(prose.parts()));
             proseOf(card, CardLabels.RATIONALE).ifPresent(prose -> {
@@ -651,7 +650,7 @@ public final class SpecificationRenderer {
             }
             for (int index = 0; index < constraints.size(); index++) {
                 final ModelCard card = constraints.get(index);
-                open("req", "h3", card, "6." + (index + 1));
+                open("req", "h3", card);
                 proseOf(card, CardLabels.STATEMENT).ifPresent(prose -> appendParts(prose.parts()));
                 out.append("</section>\n");
             }
@@ -727,18 +726,18 @@ public final class SpecificationRenderer {
         // ---- building blocks -------------------------------------------------------------------
 
         /** Opens a card's element: anchor, the data the script builds pop-ups and the detail pane from, heading. */
-        private void open(final String cssClass, final String headingTag, final ModelCard card, final String number) {
+        private void open(final String cssClass, final String headingTag, final ModelCard card) {
             final Target target = target(card);
             linkedTerms.clear();
             out.append("<section class=\"").append(cssClass).append("\" id=\"").append(target.anchor())
                     .append("\" data-kind=\"").append(esc(target.kind().label))
                     .append("\" data-code=\"").append(target.kind().showsCode ? escape(card.code()) : "")
                     .append("\" data-title=\"").append(escape(card.title())).append("\"><")
-                    .append(headingTag).append("><span class=\"num\">").append(number).append("</span> ")
-                    .append(escape(card.title()));
+                    .append(headingTag).append('>');
             if (target.kind().showsCode && !card.code().isBlank()) {
-                out.append(" <span class=\"code\">").append(escape(card.code())).append("</span>");
+                out.append("<span class=\"code\">").append(escape(card.code())).append("</span> ");
             }
+            out.append(escape(card.title()));
             out.append("</").append(headingTag).append(">\n");
         }
 

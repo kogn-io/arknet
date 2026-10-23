@@ -146,7 +146,8 @@ class SpecificationRendererTest {
         final int constraints = html.indexOf("</span> Constraints</h2>");
         assertThat(html.indexOf("id=\"a-fr-1\"")).isLessThan(quality);
         assertThat(html.indexOf("id=\"a-nfr-1\"")).isBetween(quality, constraints);
-        assertThat(html).contains("4.1</span> Record loans").contains("5.1</span> Fast lookups");
+        assertThat(html).contains("<span class=\"code\">FR-1</span> Record loans")
+                .contains("<span class=\"code\">NFR-1</span> Fast lookups");
     }
 
     @Test
@@ -417,6 +418,56 @@ class SpecificationRendererTest {
         for (final String anchor : anchors) {
             assertThat(count(html, anchor)).as(anchor).isGreaterThanOrEqualTo(2);
         }
-        assertThat(html).contains("3.1 Lend a book").contains("4.1 Record loans");
+        assertThat(html).contains(">UC-1 Lend a book</a>").contains(">FR-1 Record loans</a>");
+    }
+
+    @Test
+    void resourceHeadingsBelowChapterLevelCarryNoPositionNumber() {
+        final String html = render(fixture(), ENGLISH);
+
+        final java.util.regex.Matcher numbered =
+                java.util.regex.Pattern.compile("<h[34][^>]*><span class=\"num\">([^<]*)</span>").matcher(html);
+        final List<String> numbers = new ArrayList<>();
+        while (numbered.find()) {
+            numbers.add(numbered.group(1));
+        }
+        assertThat(numbers).containsExactly("2.1", "2.2");
+    }
+
+    @Test
+    void everyResourceHeadingStartsWithItsCode() {
+        final String html = render(fixture(), ENGLISH);
+
+        final java.util.Map<String, String> headings = java.util.Map.of(
+                "ACTOR-1", "Library member", "ROLE-1", "Librarian", "UC-1", "Lend a book",
+                "FR-1", "Record loans", "NFR-1", "Fast lookups", "CON-1", "Data protection");
+        headings.forEach((code, title) -> assertThat(html)
+                .as(code).containsPattern("<h[34]><span class=\"code\">" + code + "</span> " + title + "</h[34]>"));
+    }
+
+    @Test
+    void glossaryTermsStayLedByTheirWord() {
+        final String html = render(fixture(), ENGLISH);
+
+        assertThat(html).contains(">Loan</dt>").doesNotContain("TERM-1</span> Loan");
+    }
+
+    @Test
+    void tableOfContentsLabelsMatchTheHeadings() {
+        final String html = render(fixture(), ENGLISH);
+
+        for (final String label : List.of("UC-1 Lend a book",
+                "FR-1 Record loans", "NFR-1 Fast lookups", "CON-1 Data protection")) {
+            final String code = label.substring(0, label.indexOf(' '));
+            final String title = label.substring(label.indexOf(' ') + 1);
+            assertThat(html).as(label).contains(">" + label + "</a>")
+                    .contains("<span class=\"code\">" + code + "</span> " + title + "</h");
+        }
+    }
+
+    @Test
+    void readingHelpSaysOnlyChaptersAreNumbered() {
+        assertThat(render(fixture(), GERMAN)).contains("Nur die Kapitel sind nummeriert");
+        assertThat(render(fixture(), ENGLISH)).contains("Only the chapters are numbered");
     }
 }
