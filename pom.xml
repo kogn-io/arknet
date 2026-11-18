@@ -58,9 +58,9 @@
              Die Spring-AI-BOM managed den kompletten MCP-Stack transitiv (u.a. mcp-core 2.0.0),
              deshalb wird die MCP-SDK-Version hier NICHT mehr separat gepinnt (loest #27:
              frueher pinnte arknet mcp-core auf 1.1.0 -> Doppelversion im Reaktor). -->
-        <spring-ai.version>2.0.1</spring-ai.version>
+        <spring-ai.version>2.0.2</spring-ai.version>
         <!-- Spring Boot 4.1 = Baseline von Spring AI 2.0 (arknet-app Composition Root). -->
-        <spring-boot.version>4.1.1</spring-boot.version>
+        <spring-boot.version>4.1.2</spring-boot.version>
         <!-- kognio-rdf (io.kogn.rdf): embeddable RDF-Substrat hinter den Out-Ports.
              OSS auf github.com/kogn-io/rdf-core; kein BOM-Artefakt -> Version hier gepinnt.
              0.1.1 brachte kogn-io/rdf-core#18: Transaktionen oeffnen jetzt explizit mit
@@ -73,7 +73,7 @@
              Serialisierungs-Port) fuer #154 - Uebergangspin bis das gleichnamige 0.3.0-Release auf
              Central synct, dann Wechsel auf das Release. -->
         <kognio-rdf.version>0.3.0</kognio-rdf.version>
-        <spotless-maven-plugin.version>3.10.3</spotless-maven-plugin.version>
+        <spotless-maven-plugin.version>3.10.4</spotless-maven-plugin.version>
     </properties>
 
     <modules>
@@ -257,7 +257,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.6.0</version>
+                    <version>3.6.1</version>
                     <configuration>
                         <properties>
                             <!-- ONE project-wide hang backstop for every test, instead of a
