@@ -595,28 +595,30 @@ class ProjectMcpToolsTest {
         adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", true, null);
 
         assertEquals("arknet-plugin", deleteProject.lastReference);
-        assertEquals(new Anchor("/home/f/DEV/arknet", AnchorType.PATH), deleteProject.lastCallerAnchor);
+        assertEquals(List.of(new Anchor("/home/f/DEV/arknet", AnchorType.PATH)), deleteProject.lastCallerAnchors);
         assertTrue(deleteProject.lastConfirmed);
     }
 
     /**
-     * The explicit {@code projectAnchor} overrides the header for every other tool, so it names
-     * the project the session works on here too: a header pointing at an unregistered folder must
-     * not open a way around the own-project guard (review of kogn-io/arknet#712).
+     * Both anchors a call can carry name a project the session may be working in - the header and
+     * the {@code projectAnchor} override - so both reach the own-project guard (reviews of
+     * kogn-io/arknet#712).
      */
     @Test
-    void deleteGuardsTheProjectAnchorOverrideRatherThanTheHeader() {
-        adapter.delete(contextWithOrigin("/home/f/DEV/unregistered"), "arknet-plugin", true,
-                "/home/f/DEV/arknet-plugin");
+    void deleteGuardsBothTheHeaderAndTheProjectAnchorOverride() {
+        adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", true,
+                "/home/f/DEV/elsewhere");
 
-        assertEquals(new Anchor("/home/f/DEV/arknet-plugin", AnchorType.PATH), deleteProject.lastCallerAnchor);
+        assertEquals(List.of(new Anchor("/home/f/DEV/arknet", AnchorType.PATH),
+                new Anchor("/home/f/DEV/elsewhere", AnchorType.PATH)), deleteProject.lastCallerAnchors);
     }
 
     @Test
     void deleteWithOnlyAProjectAnchorOverrideStillGuardsIt() {
         adapter.delete(contextWithOrigin(null), "arknet-plugin", true, "/home/f/DEV/arknet-plugin");
 
-        assertEquals(new Anchor("/home/f/DEV/arknet-plugin", AnchorType.PATH), deleteProject.lastCallerAnchor);
+        assertEquals(List.of(new Anchor("/home/f/DEV/arknet-plugin", AnchorType.PATH)),
+                deleteProject.lastCallerAnchors);
     }
 
     /** An omitted confirmation is no confirmation. */
@@ -636,7 +638,7 @@ class ProjectMcpToolsTest {
         adapter.delete(contextWithOrigin(null), "arknet-plugin", false, null);
 
         assertEquals("arknet-plugin", deleteProject.lastReference);
-        assertNull(deleteProject.lastCallerAnchor);
+        assertEquals(List.of(), deleteProject.lastCallerAnchors);
     }
 
     @Test
@@ -664,14 +666,14 @@ class ProjectMcpToolsTest {
     /** Structural fake implementing {@link DeleteProject}. */
     private static final class FakeDeleteProject implements DeleteProject {
         private String lastReference;
-        private Anchor lastCallerAnchor;
+        private List<Anchor> lastCallerAnchors;
         private boolean lastConfirmed;
         private Deletion result = new Deletion(PLUGIN, Map.of());
 
         @Override
-        public Deletion delete(final String project, final Anchor callerAnchor, final boolean confirmed) {
+        public Deletion delete(final String project, final List<Anchor> callerAnchors, final boolean confirmed) {
             lastReference = project;
-            lastCallerAnchor = callerAnchor;
+            lastCallerAnchors = callerAnchors;
             lastConfirmed = confirmed;
             return result;
         }

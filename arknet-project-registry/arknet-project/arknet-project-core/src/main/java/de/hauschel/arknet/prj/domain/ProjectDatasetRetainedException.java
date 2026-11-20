@@ -6,8 +6,8 @@ package de.hauschel.arknet.prj.domain;
 import java.util.Objects;
 
 /**
- * Thrown when a project's registry entry was removed but its dataset could not be, because a
- * concurrent call still held the dataset open.
+ * Thrown when a project's registry entry was removed but its dataset could not be - because a
+ * concurrent call still held the dataset open, or because removing it failed for another reason.
  *
  * <p>Deletion runs registry first, dataset second, and the two live in different datasets with no
  * transaction spanning both. This is the one state that order can leave behind: the project is no
@@ -29,15 +29,21 @@ public class ProjectDatasetRetainedException extends RuntimeException {
      * Creates the exception.
      *
      * @param project the project whose registry entry is gone but whose dataset remains
-     * @param inUse   the store's refusal to remove the dataset
+     * @param failure the store's refusal or failure to remove the dataset
      */
-    public ProjectDatasetRetainedException(Project project, DatasetInUseException inUse) {
+    public ProjectDatasetRetainedException(Project project, RuntimeException failure) {
         super("Project '" + Objects.requireNonNull(project, "project").label() + "' is no longer registered, "
-                + "but its dataset '" + project.id().value() + "' is still in use by a concurrent call and was "
-                + "kept. project_list now shows it as an unregistered dataset. To remove it, adopt it with "
-                + "project_adopt and call project_delete on that project again.");
+                + "but its dataset '" + project.id().value() + "' " + reason(Objects.requireNonNull(failure,
+                        "failure")) + " and was kept. project_list now shows it as an unregistered dataset. To "
+                + "remove it, adopt it with project_adopt and call project_delete on that project again.");
         this.project = project;
-        addSuppressed(Objects.requireNonNull(inUse, "inUse"));
+        addSuppressed(failure);
+    }
+
+    private static String reason(RuntimeException failure) {
+        return failure instanceof DatasetInUseException
+                ? "is still in use by a concurrent call"
+                : "could not be removed (" + failure.getMessage() + ")";
     }
 
     /** @return the project whose registry entry is gone but whose dataset remains */

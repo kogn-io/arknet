@@ -27,6 +27,7 @@ import de.hauschel.arknet.prj.adapter.mcp.ProjectMcpTools;
 import de.hauschel.arknet.prj.application.ProjectService;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
+import de.hauschel.arknet.prj.domain.OwnProjectDeletionException;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.prj.domain.UnconfirmedProjectDeletionException;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
@@ -274,7 +275,8 @@ class ArknetMcpConfigurationTest {
     /**
      * {@code project_delete} end to end over the real store (kogn-io/arknet#576): a project whose
      * anchor directory no longer exists on disk, holding one requirement, is refused without
-     * confirmation and deleted with it - afterwards {@code project_list} shows neither the project
+     * confirmation and deleted with it from a session working in another project, which itself is
+     * refused as a target - afterwards {@code project_list} shows neither the project
      * nor its dataset as unregistered, and a call with its anchor fails as not registered.
      */
     @Test
@@ -304,7 +306,12 @@ class ArknetMcpConfigurationTest {
                             .hasMessageContaining("1 arkreq:");
                     assertThat(projects.findById(doomed.id())).isPresent();
 
-                    String answer = tools.delete(null, "arknet-plugin", true, null);
+                    assertThatThrownBy(() -> tools.delete(null, "arknet", true, "/home/a/DEV/arknet"))
+                            .as("the project the call itself works in is never deleted, confirmed or not")
+                            .isInstanceOf(OwnProjectDeletionException.class);
+                    assertThat(projects.findById(kept.id())).isPresent();
+
+                    String answer = tools.delete(null, "arknet-plugin", true, "/home/a/DEV/arknet");
 
                     assertThat(answer).contains("Deleted project arknet-plugin", doomed.id().value());
                     assertThat(projects.list()).containsExactly(kept);

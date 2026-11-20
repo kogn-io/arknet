@@ -33,7 +33,6 @@ import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.DatasetAlreadyAdoptedException;
-import de.hauschel.arknet.prj.domain.DatasetInUseException;
 import de.hauschel.arknet.prj.domain.OwnProjectDeletionException;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -368,15 +367,16 @@ public class ProjectService
      * <p>The count and both removals run under {@link #withProjectLock}, so no attach, rename or
      * update of the same project through this service interleaves with them. A call already past
      * its anchor resolution when the registry entry goes can still touch the dataset afterwards;
-     * the store refuses to remove a dataset such a call holds open ({@link
-     * ProjectDatasetRetainedException}), and one that opens it only after the removal brings back
+     * the store refuses to remove a dataset such a call holds open, and any refusal of the dataset
+     * removal is reported as {@link ProjectDatasetRetainedException}, and one that opens it only after the removal brings back
      * a dataset no project points to - the same orphan, visible and adoptable in {@code
      * project_list}.</p>
      */
     @Override
-    public Deletion delete(String project, Anchor callerAnchor, boolean confirmed) {
+    public Deletion delete(String project, List<Anchor> callerAnchors, boolean confirmed) {
+        Objects.requireNonNull(callerAnchors, "callerAnchors");
         Project target = findByReference(project);
-        if (callerAnchor != null) {
+        for (Anchor callerAnchor : callerAnchors) {
             registry.findByAnchor(callerAnchor)
                     .filter(own -> own.id().equals(target.id()))
                     .ifPresent(own -> {
@@ -388,10 +388,18 @@ public class ProjectService
             if (!resources.isEmpty() && !confirmed) {
                 throw new UnconfirmedProjectDeletionException(target, resources);
             }
-            registry.delete(target.id());
+            try {
+                registry.delete(target.id());
+            } catch (ProjectNotFoundException e) {
+                // A concurrent call deleted it between the lookup above and this removal - the
+                // same answer as a reference that never named a project, in the port's own terms.
+                throw new UnknownProjectException(project.strip());
+            }
             try {
                 projectDatasets.delete(target.id());
-            } catch (DatasetInUseException e) {
+            } catch (RuntimeException e) {
+                // Whatever stopped the removal - an open lease or a storage failure - the registry
+                // entry is already gone, so the state and its remedy are the same.
                 throw new ProjectDatasetRetainedException(target, e);
             }
             return new Deletion(target, resources);

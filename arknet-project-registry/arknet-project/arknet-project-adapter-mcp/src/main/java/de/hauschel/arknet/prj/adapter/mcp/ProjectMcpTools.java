@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -119,9 +120,9 @@ import de.hauschel.arknet.prj.domain.Project;
  * <p><strong>{@link #delete} is the one writing tool that does not act on the caller's own
  * project.</strong> It takes the project to delete as an explicit {@code project} parameter (id or
  * label, as {@link #list} renders them), and the caller's own anchor reaches the in-port only so
- * that deleting the caller's own project can be refused - never to choose the target. The caller's
- * anchor is the one every other tool would route on: the optional {@code projectAnchor} if given,
- * otherwise the header. A call with neither is not refused: it has no project to protect. Its answer closes with the deleted
+ * that deleting the caller's own project can be refused - never to choose the target. Both anchors
+ * a call can carry count: the header and the optional {@code projectAnchor}; the project either
+ * resolves to is refused. A call with neither is not refused: it has no project to protect. Its answer closes with the deleted
  * project's name, the project the call actually hit.</p>
  */
 public final class ProjectMcpTools {
@@ -505,14 +506,16 @@ public final class ProjectMcpTools {
             final Boolean confirm,
             @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        // The same precedence every other tool's projectAnchor has: the explicit value overrides the
-        // header. It names the project this session works on, so it is what the own-project guard
-        // has to protect - guarding the header alone would let an unregistered header plus a
-        // projectAnchor delete the very project the session is working in.
-        final String origin = isBlank(projectAnchor) ? contextAnchor(context) : projectAnchor;
-        final Anchor callerAnchor = isBlank(origin) ? null : new Anchor(origin, AnchorType.PATH);
+        // Both anchors a call can carry name a project the session may be working in - the header
+        // and the projectAnchor override - so both go to the own-project guard; guarding only one
+        // would let the other one delete the project the session works in.
+        final List<Anchor> callerAnchors = Stream.of(contextAnchor(context), projectAnchor)
+                .filter(value -> !isBlank(value))
+                .map(value -> new Anchor(value, AnchorType.PATH))
+                .distinct()
+                .toList();
         final DeleteProject.Deletion deletion =
-                deleteProject.delete(project, callerAnchor, Boolean.TRUE.equals(confirm));
+                deleteProject.delete(project, callerAnchors, Boolean.TRUE.equals(confirm));
         final Project deleted = deletion.project();
         final String removed = deletion.removedResources().isEmpty()
                 ? "It held no model resources."

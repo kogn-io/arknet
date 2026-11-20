@@ -27,6 +27,8 @@ final class InMemoryProjectDatasets implements ProjectDatasets {
     private final Map<ProjectId, Map<String, Long>> resources = new LinkedHashMap<>();
     private final Set<ProjectId> deleted = new LinkedHashSet<>();
     private final Set<ProjectId> inUse = new LinkedHashSet<>();
+    private final Map<ProjectId, RuntimeException> failures = new LinkedHashMap<>();
+    private Runnable beforeCounting = () -> { };
 
     /**
      * Declares that a project's dataset holds {@code count} model resources of {@code type}.
@@ -44,6 +46,18 @@ final class InMemoryProjectDatasets implements ProjectDatasets {
         return this;
     }
 
+    /** Makes every later {@link #delete} of this project's dataset fail with {@code failure}. */
+    InMemoryProjectDatasets failing(ProjectId projectId, RuntimeException failure) {
+        failures.put(projectId, failure);
+        return this;
+    }
+
+    /** Runs {@code action} before every count - a stand-in for a concurrent caller. */
+    InMemoryProjectDatasets beforeCounting(Runnable action) {
+        beforeCounting = action;
+        return this;
+    }
+
     /** @return whether {@link #delete} removed this project's dataset */
     boolean wasDeleted(ProjectId projectId) {
         return deleted.contains(projectId);
@@ -51,6 +65,7 @@ final class InMemoryProjectDatasets implements ProjectDatasets {
 
     @Override
     public synchronized Map<String, Long> modelResourceCounts(ProjectId projectId) {
+        beforeCounting.run();
         return Map.copyOf(resources.getOrDefault(projectId, Map.of()));
     }
 
@@ -58,6 +73,9 @@ final class InMemoryProjectDatasets implements ProjectDatasets {
     public synchronized void delete(ProjectId projectId) {
         if (inUse.contains(projectId)) {
             throw new DatasetInUseException(projectId, new IllegalStateException("open lease"));
+        }
+        if (failures.containsKey(projectId)) {
+            throw failures.get(projectId);
         }
         resources.remove(projectId);
         deleted.add(projectId);

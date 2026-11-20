@@ -5,6 +5,7 @@ package de.hauschel.arknet.prj.application.port.in;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -24,8 +25,9 @@ import de.hauschel.arknet.prj.domain.UnknownProjectException;
  *
  * <p><strong>Addressed by name, never by the caller's anchor.</strong> Every other writing project
  * tool acts on the project the call comes from. Deletion deliberately does not: the project is
- * named explicitly, by its id or its label, and the one project that cannot be named is the
- * caller's own ({@link OwnProjectDeletionException}). A call cannot delete the project it is
+ * named explicitly, by its id or its label, and the projects that cannot be named are the
+ * caller's own ({@link OwnProjectDeletionException}) - every project any anchor of the call
+ * resolves to. A call cannot delete the project it is
  * working in by accident, because it cannot delete it at all.</p>
  *
  * <p><strong>Registry first, dataset second.</strong> The two live in different datasets, and no
@@ -44,25 +46,27 @@ public interface DeleteProject {
      *
      * @param project      the project's opaque id or its label, exactly as {@code project_list}
      *                     shows them
-     * @param callerAnchor the anchor the call itself arrives with, or {@code null} if it carries
-     *                     none; only used to refuse deleting the caller's own project, never to
-     *                     pick the project to delete
+     * @param callerAnchors every anchor the call itself carries - a call can carry more than one,
+     *                      e.g. a transport header and an explicit override - empty if it carries
+     *                      none; only used to refuse deleting a project any of them resolves to,
+     *                      never to pick the project to delete
      * @param confirmed    whether the caller explicitly accepts losing the model resources the
      *                     project still holds; irrelevant for a project that holds none
      * @return the deleted project and what was removed with it
-     * @throws UnknownProjectException             if no registered project has this id or label
+     * @throws UnknownProjectException             if no registered project has this id or label,
+     *                                             including when a concurrent call deleted it first
      * @throws IllegalArgumentException            if {@code project} is blank, or is the id of one
      *                                             registered project and the label of another
-     * @throws OwnProjectDeletionException         if {@code callerAnchor} belongs to the very
-     *                                             project to be deleted
+     * @throws OwnProjectDeletionException         if any of {@code callerAnchors} belongs to the
+     *                                             very project to be deleted
      * @throws UnconfirmedProjectDeletionException if the project still holds model resources and
      *                                             {@code confirmed} is {@code false}; nothing is
      *                                             removed
-     * @throws ProjectDatasetRetainedException     if the registry entry was removed but a
-     *                                             concurrent call kept the dataset from being
-     *                                             removed
+     * @throws ProjectDatasetRetainedException     if the registry entry was removed but the
+     *                                             dataset was not - held open by a concurrent call
+     *                                             or failing to be removed for any other reason
      */
-    Deletion delete(String project, Anchor callerAnchor, boolean confirmed);
+    Deletion delete(String project, List<Anchor> callerAnchors, boolean confirmed);
 
     /**
      * What a {@link #delete} removed.
