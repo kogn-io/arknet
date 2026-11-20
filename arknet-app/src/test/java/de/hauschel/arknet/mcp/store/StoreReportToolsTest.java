@@ -179,7 +179,7 @@ class StoreReportToolsTest {
 
     @AfterEach
     void tearDown() {
-        lifecycle.close(new DatasetId(PROJECT.value()));
+        lifecycle.shutDown(new DatasetId(PROJECT.value()));
     }
 
     @Test
@@ -358,7 +358,7 @@ class StoreReportToolsTest {
             assertThat(html).exists();
             assertThat(result).contains("# HTML report: " + html.toAbsolutePath());
         } finally {
-            lifecycle.close(new DatasetId(unsafeProject.value()));
+            lifecycle.shutDown(new DatasetId(unsafeProject.value()));
         }
     }
 
@@ -395,7 +395,7 @@ class StoreReportToolsTest {
             assertThat(html).exists();
             assertThat(html.startsWith(reportDir)).isTrue();
         } finally {
-            lifecycle.close(new DatasetId(escapingProject.value()));
+            lifecycle.shutDown(new DatasetId(escapingProject.value()));
         }
     }
 
@@ -451,7 +451,7 @@ class StoreReportToolsTest {
             assertThat(underscoreReport).exists();
             assertThat(Files.readString(slashReport)).doesNotContain("Zweitprojekt");
         } finally {
-            lifecycle.close(new DatasetId(underscoreProject.value()));
+            lifecycle.shutDown(new DatasetId(underscoreProject.value()));
         }
     }
 
@@ -668,7 +668,7 @@ class StoreReportToolsTest {
             assertThat(Files.readString(ownReport)).contains("FR-1");
             assertThat(Files.readString(otherReport)).doesNotContain("FR-1");
         } finally {
-            lifecycle.close(new DatasetId(OTHER_PROJECT.value()));
+            lifecycle.shutDown(new DatasetId(OTHER_PROJECT.value()));
         }
     }
 
@@ -756,7 +756,7 @@ class StoreReportToolsTest {
             assertThat(fromDefaultProject).contains("dcterms:title").contains("\"Login\"");
             assertThat(fromDefaultProject).doesNotContain("\"Andere Anmeldung\"");
         } finally {
-            lifecycle.close(new DatasetId(OTHER_PROJECT.value()));
+            lifecycle.shutDown(new DatasetId(OTHER_PROJECT.value()));
         }
     }
 

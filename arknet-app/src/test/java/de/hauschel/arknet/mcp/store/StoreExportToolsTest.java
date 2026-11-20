@@ -81,7 +81,7 @@ class StoreExportToolsTest {
 
     @AfterEach
     void tearDown() {
-        lifecycle.close(new DatasetId(PROJECT_1.value()));
+        lifecycle.shutDown(new DatasetId(PROJECT_1.value()));
     }
 
     private static Requirement requirementTitled(String title) {
@@ -182,7 +182,7 @@ class StoreExportToolsTest {
                             "team_main__" + FileNameSanitizer.uniqueSegment(PROJECT_1.value()) + ".trig",
                             "team_main__" + FileNameSanitizer.uniqueSegment(PROJECT_2.value()) + ".trig");
         } finally {
-            lifecycle.close(new DatasetId(PROJECT_2.value()));
+            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
         }
     }
 
@@ -220,8 +220,8 @@ class StoreExportToolsTest {
                             "team__" + FileNameSanitizer.uniqueSegment(idA.value()) + ".trig",
                             "team__" + FileNameSanitizer.uniqueSegment(idB.value()) + ".trig");
         } finally {
-            lifecycle.close(new DatasetId(idA.value()));
-            lifecycle.close(new DatasetId(idB.value()));
+            lifecycle.shutDown(new DatasetId(idA.value()));
+            lifecycle.shutDown(new DatasetId(idB.value()));
         }
     }
 
@@ -248,7 +248,7 @@ class StoreExportToolsTest {
             assertThat(written).hasSize(2);
             assertThat(written.get(0).getParent()).isEqualTo(written.get(1).getParent());
         } finally {
-            lifecycle.close(new DatasetId(PROJECT_2.value()));
+            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
         }
     }
 
@@ -318,7 +318,7 @@ class StoreExportToolsTest {
             assertThat(written.get(0).getFileName().toString())
                     .isEqualTo("working__" + FileNameSanitizer.uniqueSegment(PROJECT_1.value()) + ".trig");
         } finally {
-            lifecycle.close(new DatasetId(PROJECT_2.value()));
+            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
         }
     }
 
@@ -459,7 +459,7 @@ class StoreExportToolsTest {
             assertThat(written.get(0).getFileName().toString())
                     .isEqualTo("second__" + FileNameSanitizer.uniqueSegment(PROJECT_2.value()) + ".trig");
         } finally {
-            lifecycle.close(new DatasetId(PROJECT_2.value()));
+            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
         }
     }
 
@@ -486,7 +486,7 @@ class StoreExportToolsTest {
                     .as("the explicit parameter is used INSTEAD of the header, not merged with it")
                     .contains("# Exported second: ").doesNotContain("# Exported first: ");
         } finally {
-            lifecycle.close(new DatasetId(PROJECT_2.value()));
+            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
         }
     }
 
@@ -560,7 +560,7 @@ class StoreExportToolsTest {
             assertThat(result).contains("# Exported first: ").contains("# Exported second: ");
             assertThat(findTrigFiles(exportDir)).hasSize(2);
         } finally {
-            lifecycle.close(new DatasetId(PROJECT_2.value()));
+            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
         }
     }
 

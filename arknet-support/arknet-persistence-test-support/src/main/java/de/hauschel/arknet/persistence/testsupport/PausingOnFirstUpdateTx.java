@@ -95,8 +95,8 @@ public final class PausingOnFirstUpdateTx implements DatasetTx {
     }
 
     @Override
-    public ReadableGraph export(IRI graph) {
-        return delegate.export(graph);
+    public ReadableGraph snapshot(IRI graph) {
+        return delegate.snapshot(graph);
     }
 
     @Override
@@ -127,5 +127,11 @@ public final class PausingOnFirstUpdateTx implements DatasetTx {
     @Override
     public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
         return delegate.construct(query, bindings);
+    }
+
+    @Override
+    public io.kogn.rdf.terms.ReadableGraph match(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
+            io.kogn.rdf.terms.RDFTerm object) {
+        return delegate.match(graph, subject, predicate, object);
     }
 }

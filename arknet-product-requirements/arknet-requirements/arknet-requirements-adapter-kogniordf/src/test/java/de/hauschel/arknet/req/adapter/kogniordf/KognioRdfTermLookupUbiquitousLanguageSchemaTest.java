@@ -66,7 +66,7 @@ class KognioRdfTermLookupUbiquitousLanguageSchemaTest {
     @BeforeEach
     void setUp() {
         lifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), storageRoot);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         ulTermRepository = KognioRdfTermRepositoryFactory.over(lifecycle);
         reqTermLookup = new KognioRdfTermLookup(lifecycle);
     }

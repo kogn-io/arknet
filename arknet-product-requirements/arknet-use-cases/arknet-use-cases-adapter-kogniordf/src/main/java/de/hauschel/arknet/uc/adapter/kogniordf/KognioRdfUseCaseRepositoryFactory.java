@@ -20,7 +20,7 @@ import org.eclipse.rdf4j.rio.Rio;
 
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
-import io.kogn.rdf.rdf4j.RDF4JGraph;
+import io.kogn.rdf.rdf4j.RDF4JFactory;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
@@ -155,7 +155,7 @@ public final class KognioRdfUseCaseRepositoryFactory {
                 .filter(st -> !isUseCaseOrStep(st.getObject()))
                 .toList();
         model.removeAll(foreignTargets);
-        return new RDF4JGraph(model);
+        return toGraph(model);
     }
 
     private static boolean isUseCaseOrStep(Value target) {
@@ -163,7 +163,7 @@ public final class KognioRdfUseCaseRepositoryFactory {
     }
 
     private static ReadableGraph loadGraph(String classpathResource) {
-        return new RDF4JGraph(parse(classpathResource));
+        return toGraph(parse(classpathResource));
     }
 
     private static Model parse(String classpathResource) {
@@ -173,5 +173,34 @@ public final class KognioRdfUseCaseRepositoryFactory {
         } catch (IOException e) {
             throw new IllegalStateException("failed to load " + classpathResource, e);
         }
+    }
+
+    /**
+     * Copies a parsed RDF4J model into a kognio-rdf graph through the public term factory
+     * (RDF4JGraph has no public Model constructor since kognio-rdf 0.4.0-M1).
+     */
+    static io.kogn.rdf.terms.Graph toGraph(org.eclipse.rdf4j.model.Model model) {
+        final RDF4JFactory factory = new RDF4JFactory();
+        final io.kogn.rdf.terms.Graph graph = factory.createGraph();
+        for (org.eclipse.rdf4j.model.Statement st : model) {
+            graph.add(
+                    (io.kogn.rdf.terms.BlankNodeOrIRI) toTerm(factory, st.getSubject()),
+                    factory.createIRI(st.getPredicate().stringValue()),
+                    toTerm(factory, st.getObject()));
+        }
+        return graph;
+    }
+
+    private static io.kogn.rdf.terms.RDFTerm toTerm(RDF4JFactory factory, org.eclipse.rdf4j.model.Value value) {
+        if (value instanceof org.eclipse.rdf4j.model.BNode bnode) {
+            return factory.createBlankNode(bnode.getID());
+        }
+        if (value instanceof org.eclipse.rdf4j.model.Literal literal) {
+            if (literal.getLanguage().isPresent()) {
+                return factory.createLiteral(literal.getLabel(), literal.getLanguage().get());
+            }
+            return factory.createLiteral(literal.getLabel(), factory.createIRI(literal.getDatatype().stringValue()));
+        }
+        return factory.createIRI(value.stringValue());
     }
 }

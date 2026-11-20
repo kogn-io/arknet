@@ -58,7 +58,7 @@ class KognioRdfRoleLookupTest {
     @BeforeEach
     void setUp() {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), storageRoot);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         roleLookup = new KognioRdfRoleLookup(datasetLifecycle);
     }

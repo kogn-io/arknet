@@ -93,7 +93,7 @@ class KognioRdfTermRepositoryTest {
     @BeforeEach
     void setUp() {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), storageRoot);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         repository = KognioRdfTermRepositoryFactory.over(datasetLifecycle);
     }
@@ -863,8 +863,13 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public void close(DatasetId id) {
-            delegate.close(id);
+        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+            return delegate.shutDown(id);
+        }
+
+        @Override
+        public void shutDownAll() {
+            delegate.shutDownAll();
         }
 
         @Override
@@ -964,8 +969,8 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
+        public ReadableGraph snapshot(IRI graph) {
+            return delegate.snapshot(graph);
         }
 
         @Override
@@ -976,6 +981,12 @@ class KognioRdfTermRepositoryTest {
         @Override
         public long count() {
             return delegate.count();
+        }
+
+        @Override
+        public io.kogn.rdf.terms.ReadableGraph match(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
+                io.kogn.rdf.terms.RDFTerm object) {
+            return delegate.match(graph, subject, predicate, object);
         }
 
         @Override
@@ -1778,8 +1789,13 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public void close(DatasetId id) {
-            delegate.close(id);
+        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+            return delegate.shutDown(id);
+        }
+
+        @Override
+        public void shutDownAll() {
+            delegate.shutDownAll();
         }
 
         @Override
@@ -1914,8 +1930,13 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public void close(DatasetId id) {
-            delegate.close(id);
+        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+            return delegate.shutDown(id);
+        }
+
+        @Override
+        public void shutDownAll() {
+            delegate.shutDownAll();
         }
 
         @Override

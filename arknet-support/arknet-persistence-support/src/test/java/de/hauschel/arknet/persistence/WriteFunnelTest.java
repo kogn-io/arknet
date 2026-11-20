@@ -361,7 +361,7 @@ class WriteFunnelTest {
     @Test
     void gateViolationPreventsAcquisition() {
         ShaclReport violation = new ShaclReport(false,
-                List.of(new ShaclResult(SUBJECT_IRI, null, Severity.VIOLATION,
+                List.of(shaclResult(SUBJECT_IRI, null, Severity.VIOLATION,
                         List.of(ShaclMessage.untagged("bad")))));
         Fixture fixture = new Fixture(List.of(), violation, null, e -> false);
 
@@ -1243,7 +1243,12 @@ class WriteFunnelTest {
         }
 
         @Override
-        public void close(DatasetId id) {
+        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void shutDownAll() {
             throw new UnsupportedOperationException();
         }
 
@@ -1419,7 +1424,7 @@ class WriteFunnelTest {
         }
 
         @Override
-        public ReadableGraph export(IRI namedGraph) {
+        public ReadableGraph snapshot(IRI namedGraph) {
             throw new UnsupportedOperationException();
         }
 
@@ -1430,6 +1435,11 @@ class WriteFunnelTest {
 
         @Override
         public long count() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ReadableGraph match(IRI namedGraph, BlankNodeOrIRI subject, IRI predicate, RDFTerm object) {
             throw new UnsupportedOperationException();
         }
 
@@ -1543,5 +1553,14 @@ class WriteFunnelTest {
             this.data = data;
             return report;
         }
+    }
+
+    private static ShaclResult shaclResult(String focus, String path, Severity severity, List<ShaclMessage> messages) {
+        return new ShaclResult(new io.kogn.rdf.terms.SimpleIRI(focus), path, severity,
+                new io.kogn.rdf.terms.SimpleIRI("http://www.w3.org/ns/shacl#" + switch (severity) {
+                    case VIOLATION -> "Violation";
+                    case WARNING -> "Warning";
+                    case INFO -> "Info";
+                }), messages);
     }
 }

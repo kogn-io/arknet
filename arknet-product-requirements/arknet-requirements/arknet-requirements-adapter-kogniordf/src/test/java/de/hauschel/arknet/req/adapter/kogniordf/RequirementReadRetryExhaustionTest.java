@@ -100,8 +100,14 @@ class RequirementReadRetryExhaustionTest {
         }
 
         @Override
-        public void close(DatasetId id) {
+        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
             // no-op: never reached by this test
+            return io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome.SHUT_DOWN;
+        }
+
+        @Override
+        public void shutDownAll() {
+            // nothing to shut down
         }
 
         @Override

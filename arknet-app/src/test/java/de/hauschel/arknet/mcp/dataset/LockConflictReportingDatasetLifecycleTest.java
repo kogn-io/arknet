@@ -95,7 +95,7 @@ class LockConflictReportingDatasetLifecycleTest {
                     .satisfies(e -> assertThat(e.getSuppressed()).isNotEmpty());
         } finally {
             firstHandle.close();
-            first.close(id);
+            first.shutDown(id);
         }
     }
 
@@ -115,7 +115,7 @@ class LockConflictReportingDatasetLifecycleTest {
         acquired.close();
         assertThat(handle.closed).isTrue();
 
-        guarded.close(id);
+        guarded.shutDown(id);
         guarded.delete(id);
         assertThat(guarded.list()).isEqualTo(Set.of(id));
 
@@ -303,8 +303,14 @@ class LockConflictReportingDatasetLifecycleTest {
         }
 
         @Override
-        public void close(DatasetId id) {
+        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
             closed.add(id);
+            return io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome.SHUT_DOWN;
+        }
+
+        @Override
+        public void shutDownAll() {
+            // nothing to shut down
         }
 
         @Override
@@ -327,8 +333,14 @@ class LockConflictReportingDatasetLifecycleTest {
         }
 
         @Override
-        public void close(DatasetId id) {
+        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
             // unused in this test
+            return io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome.SHUT_DOWN;
+        }
+
+        @Override
+        public void shutDownAll() {
+            // nothing to shut down
         }
 
         @Override
@@ -365,11 +377,17 @@ class LockConflictReportingDatasetLifecycleTest {
         }
 
         @Override
-        public void close(DatasetId id) {
+        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
             closeAttempts.add(id);
             if (id.equals(failing)) {
                 throw new RuntimeException("simulated close failure for " + id);
             }
+            return io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome.SHUT_DOWN;
+        }
+
+        @Override
+        public void shutDownAll() {
+            // nothing to shut down
         }
 
         @Override

@@ -368,8 +368,13 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
         }
 
         @Override
-        public void close(DatasetId id) {
-            delegate.close(id);
+        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+            return delegate.shutDown(id);
+        }
+
+        @Override
+        public void shutDownAll() {
+            delegate.shutDownAll();
         }
 
         @Override
@@ -541,8 +546,8 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
         }
 
         @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
+        public ReadableGraph snapshot(IRI graph) {
+            return delegate.snapshot(graph);
         }
 
         @Override
@@ -553,6 +558,11 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
         @Override
         public long count() {
             return delegate.count();
+        }
+
+        @Override
+        public io.kogn.rdf.terms.ReadableGraph match(IRI graph, BlankNodeOrIRI subject, IRI predicate, RDFTerm object) {
+            return delegate.match(graph, subject, predicate, object);
         }
 
         @Override

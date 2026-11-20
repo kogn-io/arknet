@@ -62,7 +62,7 @@ class KognioRdfRequirementLookupRequirementsSchemaTest {
     void setUp() throws IOException {
         Path tmp = Files.createTempDirectory("arknet-adr-req-schema-it");
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         requirementRepository =
                 KognioRdfRequirementRepositoryFactory.over(datasetLifecycle, DisplayLocale.DEFAULT);

@@ -356,8 +356,8 @@ class WriteFunnelCompareAndUpdateRealStoreConcurrencyTest {
         }
 
         @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
+        public ReadableGraph snapshot(IRI graph) {
+            return delegate.snapshot(graph);
         }
 
         @Override
@@ -368,6 +368,12 @@ class WriteFunnelCompareAndUpdateRealStoreConcurrencyTest {
         @Override
         public long count() {
             return delegate.count();
+        }
+
+        @Override
+        public io.kogn.rdf.terms.ReadableGraph match(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject,
+                IRI predicate, RDFTerm object) {
+            return delegate.match(graph, subject, predicate, object);
         }
 
         @Override

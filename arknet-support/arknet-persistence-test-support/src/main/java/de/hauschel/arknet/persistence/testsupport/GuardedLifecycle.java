@@ -75,8 +75,13 @@ public final class GuardedLifecycle implements DatasetLifecycle {
     }
 
     @Override
-    public void close(DatasetId id) {
-        delegate.close(id);
+    public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+        return delegate.shutDown(id);
+    }
+
+    @Override
+    public void shutDownAll() {
+        delegate.shutDownAll();
     }
 
     @Override

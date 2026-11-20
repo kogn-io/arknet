@@ -529,6 +529,12 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
+        public io.kogn.rdf.terms.ReadableGraph match(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
+                io.kogn.rdf.terms.RDFTerm object) {
+            return delegate.match(graph, subject, predicate, object);
+        }
+
+        @Override
         public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
                 io.kogn.rdf.terms.RDFTerm object) {
             return delegate.contains(graph, subject, predicate, object);
@@ -555,8 +561,8 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
+        public ReadableGraph snapshot(IRI graph) {
+            return delegate.snapshot(graph);
         }
 
         @Override
@@ -664,6 +670,12 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
+        public io.kogn.rdf.terms.ReadableGraph match(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
+                io.kogn.rdf.terms.RDFTerm object) {
+            return delegate.match(graph, subject, predicate, object);
+        }
+
+        @Override
         public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
                 io.kogn.rdf.terms.RDFTerm object) {
             return delegate.contains(graph, subject, predicate, object);
@@ -690,8 +702,8 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
+        public ReadableGraph snapshot(IRI graph) {
+            return delegate.snapshot(graph);
         }
 
         @Override

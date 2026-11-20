@@ -147,19 +147,24 @@ public final class LockConflictReportingDatasetLifecycle implements DatasetLifec
      *
      * <p><strong>Must not be used to release a lease obtained through {@link #acquire}.</strong> A
      * caller holding a {@link DatasetHandle} from {@link #acquire} has to close that handle, not
-     * call this method with its {@link DatasetId} - per {@link DatasetLifecycle#close(DatasetId)}'s
+     * call this method with its {@link DatasetId} - per {@link DatasetLifecycle#shutDown(DatasetId)}'s
      * own contract this is a silent no-op while any lease on {@code id} is open, including one this
      * same caller still holds. Since {@link #openLeases} is only ever decremented by
      * {@link LeaseTrackingHandle#close()}, calling this method instead leaves the tracked count
      * exactly where it was: the lease is never released, and the mismatch surfaces, if at all, only
      * later as a "still open" warning from {@link #close()} - the same symptom class {@link #close()}
      * itself fixes (issue #294), reachable through this method instead. This method is meant for the
-     * eviction-policy caller {@link DatasetLifecycle#close(DatasetId)} documents, one that does not
+     * eviction-policy caller {@link DatasetLifecycle#shutDown(DatasetId)} documents, one that does not
      * hold a lease on {@code id} itself.
      */
     @Override
-    public void close(DatasetId id) {
-        delegate.close(id);
+    public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+        return delegate.shutDown(id);
+    }
+
+    @Override
+    public void shutDownAll() {
+        delegate.shutDownAll();
     }
 
     @Override
@@ -193,7 +198,7 @@ public final class LockConflictReportingDatasetLifecycle implements DatasetLifec
     public void close() {
         for (DatasetId id : delegate.list()) {
             try {
-                delegate.close(id);
+                delegate.shutDown(id);
             } catch (RuntimeException e) {
                 LOG.warn("close(): failed to close dataset '{}' during shutdown, continuing with the "
                         + "remaining datasets: {}", id, e.toString(), e);
