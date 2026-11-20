@@ -586,4 +586,64 @@ class KognioRdfProjectRegistryTest {
             assertEquals(countAfterFirst, countAfterSecond, "describing twice must not change the triple count");
         }
     }
+
+    @Test
+    void deleteRemovesTheWholeRegistryEntryIncludingDescriptionLanguagesAndAnchorNodes() {
+        Anchor main = pathAnchor("/home/dev/arknet-plugin");
+        Anchor worktree = pathAnchor("/home/dev/arknet-plugin-worktree");
+        Project project = new Project(freshId(), "arknet-plugin", List.of(main, worktree));
+        registry.register(project, "The plugin", "en", "en", List.of("en", "de"));
+        registry.updateAttributes(project.id(), registry.findCurrentById(project.id()).orElseThrow().head(),
+                "Das Plugin", "de", null, null);
+
+        registry.delete(project.id());
+
+        assertEquals(Optional.empty(), registry.findById(project.id()));
+        assertEquals(Optional.empty(), registry.findByAnchor(main));
+        assertEquals(Optional.empty(), registry.findByAnchor(worktree));
+        assertEquals(List.of(), registry.findAll());
+        String leftovers = "SELECT ?s ?p ?o WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { ?s ?p ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(ProjectId.RESERVED_SYSTEM_DATASET))) {
+            assertEquals(0, handle.sparqlQuery().select(leftovers).count(),
+                    "neither the project subject nor any of its anchor nodes may survive in the registry");
+        }
+    }
+
+    @Test
+    void deleteLeavesEveryOtherProjectRegistered() {
+        Project kept = new Project(freshId(), "arknet", List.of(pathAnchor("/home/dev/arknet")));
+        Project deleted = new Project(freshId(), "arknet-plugin", List.of(pathAnchor("/home/dev/arknet-plugin")));
+        registry.register(kept, "The service", "en", "en", List.of("en"));
+        registry.register(deleted, null, null, null, null);
+
+        registry.delete(deleted.id());
+
+        Project stillThere = registry.findById(kept.id()).orElseThrow();
+        assertEquals(List.of(pathAnchor("/home/dev/arknet")), stillThere.anchors());
+        assertEquals("The service", stillThere.description());
+        assertEquals(List.of("en"), stillThere.maintainedLanguages());
+    }
+
+    /** Once the entry is gone, its label and its anchors are free for a new registration. */
+    @Test
+    void aDeletedProjectsLabelAndAnchorCanBeRegisteredAgain() {
+        Anchor anchor = pathAnchor("/home/dev/arknet-plugin");
+        Project first = new Project(freshId(), "arknet-plugin", List.of(anchor));
+        registry.register(first, null, null, null, null);
+        registry.delete(first.id());
+
+        Project second = new Project(freshId(), "arknet-plugin", List.of(anchor));
+        registry.register(second, null, null, null, null);
+
+        assertEquals(Optional.of(second), registry.findByAnchor(anchor));
+    }
+
+    @Test
+    void deleteOfAnUnregisteredProjectIsRejected() {
+        ProjectId unknown = freshId();
+
+        ProjectNotFoundException ex = assertThrows(ProjectNotFoundException.class, () -> registry.delete(unknown));
+
+        assertEquals(unknown, ex.id());
+    }
 }

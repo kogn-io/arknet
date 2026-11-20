@@ -6,6 +6,7 @@ package de.hauschel.arknet.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -26,7 +27,9 @@ import de.hauschel.arknet.prj.adapter.mcp.ProjectMcpTools;
 import de.hauschel.arknet.prj.application.ProjectService;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
+import de.hauschel.arknet.prj.domain.OwnProjectDeletionException;
 import de.hauschel.arknet.prj.domain.Project;
+import de.hauschel.arknet.prj.domain.UnconfirmedProjectDeletionException;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -62,6 +65,13 @@ class ArknetMcpConfigurationTest {
 
     @TempDir
     Path storageDir;
+
+    /**
+     * Where a test keeps directories it registers as anchors - apart from {@link #storageDir},
+     * whose subdirectories the store itself lists as datasets.
+     */
+    @TempDir
+    Path workspace;
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(ArknetMcpConfiguration.class);
@@ -259,6 +269,59 @@ class ArknetMcpConfigurationTest {
                     assertThat(requirements.get(routed, before.code(), null))
                             .as("the data written before adoption reads back through the routing path")
                             .isEqualTo(Optional.of(before));
+                });
+    }
+
+    /**
+     * {@code project_delete} end to end over the real store (kogn-io/arknet#576): a project whose
+     * anchor directory no longer exists on disk, holding one requirement, is refused without
+     * confirmation and deleted with it from a session working in another project, which itself is
+     * refused as a target - afterwards {@code project_list} shows neither the project
+     * nor its dataset as unregistered, and a call with its anchor fails as not registered.
+     */
+    @Test
+    void projectDeleteRemovesAProjectWhoseAnchorIsGoneFromDiskTogetherWithItsDataset() {
+        contextRunner
+                .withPropertyValues("arknet.rdf.storage=" + storageDir)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    ProjectService projects = context.getBean(ProjectService.class);
+                    ProjectMcpTools tools = context.getBean(ProjectMcpTools.class);
+                    ProjectResolver resolver = context.getBean(ProjectResolver.class);
+                    DatasetLifecycle lifecycle = context.getBean(DatasetLifecycle.class);
+                    Path checkout = Files.createDirectories(workspace.resolve("arknet-plugin"));
+                    Project doomed = projects.register("arknet-plugin",
+                            new Anchor(checkout.toString(), AnchorType.PATH), null, null, null, null);
+                    Project kept = projects.register("arknet",
+                            new Anchor("/home/a/DEV/arknet", AnchorType.PATH), null, null, null, null);
+                    context.getBean(RequirementService.class).add(doomed.id(),
+                            new NewRequirement("Doomed", "This requirement goes with its project.", null,
+                                    RequirementType.FUNCTIONAL, null, null, List.of("It is gone afterwards"), null),
+                            "en");
+                    Files.delete(checkout);
+
+                    assertThatThrownBy(() -> tools.delete(null, "arknet-plugin", null, null))
+                            .as("a project holding model resources needs an explicit confirmation")
+                            .isInstanceOf(UnconfirmedProjectDeletionException.class)
+                            .hasMessageContaining("1 arkreq:");
+                    assertThat(projects.findById(doomed.id())).isPresent();
+
+                    assertThatThrownBy(() -> tools.delete(null, "arknet", true, "/home/a/DEV/arknet"))
+                            .as("the project the call itself works in is never deleted, confirmed or not")
+                            .isInstanceOf(OwnProjectDeletionException.class);
+                    assertThat(projects.findById(kept.id())).isPresent();
+
+                    String answer = tools.delete(null, "arknet-plugin", true, "/home/a/DEV/arknet");
+
+                    assertThat(answer).contains("Deleted project arknet-plugin", doomed.id().value());
+                    assertThat(projects.list()).containsExactly(kept);
+                    assertThat(tools.list())
+                            .doesNotContain("arknet-plugin")
+                            .doesNotContain(doomed.id().value());
+                    assertThat(lifecycle.list()).doesNotContain(new DatasetId(doomed.id().value()));
+                    assertThatThrownBy(() -> resolver.resolve(checkout.toString()))
+                            .as("the deleted project's anchor is no longer registered")
+                            .isInstanceOf(UnresolvedProjectAnchorException.class);
                 });
     }
 

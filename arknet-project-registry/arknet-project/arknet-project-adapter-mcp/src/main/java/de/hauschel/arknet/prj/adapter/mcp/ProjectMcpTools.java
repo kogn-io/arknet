@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -18,9 +19,11 @@ import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
+import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
 import de.hauschel.arknet.mcpsupport.WriteResponse;
 import de.hauschel.arknet.prj.application.port.in.AdoptProject;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
+import de.hauschel.arknet.prj.application.port.in.DeleteProject;
 import de.hauschel.arknet.prj.application.port.in.ListAdoptableDatasets;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.application.port.in.RegisterProject;
@@ -34,8 +37,8 @@ import de.hauschel.arknet.prj.domain.Project;
 /**
  * Driving (in) adapter of the project component: exposes the project-registry use-cases as MCP
  * tools ({@code project_add}, {@code project_adopt}, {@code project_attach_anchor},
- * {@code project_rename}, {@code project_list}) and delegates each tool call to the corresponding
- * in-port.
+ * {@code project_rename}, {@code project_update}, {@code project_delete}, {@code project_list}) and
+ * delegates each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the project hexagon (symmetric to the out-adapter
  * {@code arknet-project-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -56,7 +59,10 @@ import de.hauschel.arknet.prj.domain.Project;
  * (never by a short code a human could mistype into someone else's project), and rendered with
  * their full opaque {@link de.hauschel.arknet.kernel.ProjectId} so a later surface without an
  * anchor of its own (a web UI without a client working directory of its own) still has a stable,
- * tool-addressable value to hold onto.</p>
+ * tool-addressable value to hold onto. {@link #adopt} and {@link #delete} are the two tools that
+ * take such a value - a dataset id, respectively a full id or a label - because what they act on is
+ * not the project the caller's anchor resolves to: an unclaimed dataset, respectively any project
+ * but the caller's own. Neither accepts a short code.</p>
  *
  * <p><strong>No {@link ProjectResolver} here, on purpose.</strong> Every other bounded context's
  * MCP adapter turns the caller's anchor into a {@code ProjectId} through {@link ProjectResolver},
@@ -110,6 +116,14 @@ import de.hauschel.arknet.prj.domain.Project;
  * ({@link #add}, {@link #adopt}, {@link #attachAnchor}) and {@link #rename}/{@link #update} render
  * this the same way {@link WriteResponse} renders it for every other bounded context;
  * {@link #list} is read-only and carries no project line.</p>
+ *
+ * <p><strong>{@link #delete} is the one writing tool that does not act on the caller's own
+ * project.</strong> It takes the project to delete as an explicit {@code project} parameter (id or
+ * label, as {@link #list} renders them), and the caller's own anchor reaches the in-port only so
+ * that deleting the caller's own project can be refused - never to choose the target. Both anchors
+ * a call can carry count: the header and the optional {@code projectAnchor}; the project either
+ * resolves to is refused. A call with neither is not refused: it has no project to protect. Its answer closes with the deleted
+ * project's name, the project the call actually hit.</p>
  */
 public final class ProjectMcpTools {
 
@@ -210,19 +224,21 @@ public final class ProjectMcpTools {
     private final AttachAnchor attachAnchor;
     private final RenameProject renameProject;
     private final UpdateProject updateProject;
+    private final DeleteProject deleteProject;
     private final ListProjects listProjects;
     private final ListAdoptableDatasets listAdoptableDatasets;
     private final ResolveProject resolveProject;
     private final StaleTranslationHint staleTranslations;
 
     /**
-     * Creates the adapter with its eight driving in-ports.
+     * Creates the adapter with its nine driving in-ports.
      *
      * @param registerProject       in-port backing {@code project_add}
      * @param adoptProject          in-port backing {@code project_adopt}
      * @param attachAnchor          in-port backing {@code project_attach_anchor}
      * @param renameProject         in-port backing {@code project_rename}
      * @param updateProject         in-port backing {@code project_update}
+     * @param deleteProject         in-port backing {@code project_delete}
      * @param listProjects          in-port backing {@code project_list}
      * @param listAdoptableDatasets in-port backing {@code project_list}'s second section
      * @param resolveProject        in-port used to resolve the caller's own project from its context
@@ -238,6 +254,7 @@ public final class ProjectMcpTools {
             final AttachAnchor attachAnchor,
             final RenameProject renameProject,
             final UpdateProject updateProject,
+            final DeleteProject deleteProject,
             final ListProjects listProjects,
             final ListAdoptableDatasets listAdoptableDatasets,
             final ResolveProject resolveProject,
@@ -247,6 +264,7 @@ public final class ProjectMcpTools {
         this.attachAnchor = Objects.requireNonNull(attachAnchor, "attachAnchor");
         this.renameProject = Objects.requireNonNull(renameProject, "renameProject");
         this.updateProject = Objects.requireNonNull(updateProject, "updateProject");
+        this.deleteProject = Objects.requireNonNull(deleteProject, "deleteProject");
         this.listProjects = Objects.requireNonNull(listProjects, "listProjects");
         this.listAdoptableDatasets = Objects.requireNonNull(listAdoptableDatasets, "listAdoptableDatasets");
         this.resolveProject = Objects.requireNonNull(resolveProject, "resolveProject");
@@ -468,6 +486,45 @@ public final class ProjectMcpTools {
                 : new Anchor(anchor, parseAnchorType(anchorType));
         final Project adopted = adoptProject.adopt(new ProjectId(datasetId), label, resolvedAnchor);
         return WriteResponse.withProject(format(adopted), toResolvedProject(adopted));
+    }
+
+    @McpTool(name = "project_delete", description = "Delete a registered project completely: its "
+            + "registry entry, all its anchors and its dataset with the whole model in it - requirements, "
+            + "use cases, glossary, decisions and their revision history. Name the project explicitly by "
+            + "its id or label as project_list shows them; the project the call itself comes from cannot "
+            + "be deleted. A project that still holds model resources is only deleted with confirm=true - "
+            + "without it, the call is refused and names how many resources of which type would be lost. "
+            + "This cannot be undone.")
+    public String delete(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "The project to delete: its id or its label, exactly as "
+                    + "project_list shows them. Never the calling project itself.")
+            final String project,
+            @McpToolParam(description = "Set to true to delete a project that still holds model resources, "
+                    + "after a call without it has named what would be lost. Omitted or false: such a "
+                    + "project is not deleted. An empty project needs no confirmation.", required = false)
+            final Boolean confirm,
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        // Both anchors a call can carry name a project the session may be working in - the header
+        // and the projectAnchor override - so both go to the own-project guard; guarding only one
+        // would let the other one delete the project the session works in.
+        final List<Anchor> callerAnchors = Stream.of(contextAnchor(context), projectAnchor)
+                .filter(value -> !isBlank(value))
+                .map(value -> new Anchor(value, AnchorType.PATH))
+                .distinct()
+                .toList();
+        final DeleteProject.Deletion deletion =
+                deleteProject.delete(project, callerAnchors, Boolean.TRUE.equals(confirm));
+        final Project deleted = deletion.project();
+        final String removed = deletion.removedResources().isEmpty()
+                ? "It held no model resources."
+                : "Removed with it: " + deletion.removedResources().entrySet().stream()
+                        .map(entry -> entry.getValue() + " " + entry.getKey())
+                        .collect(Collectors.joining(", ")) + ".";
+        final String body = "Deleted project %s (id: %s) with its anchors and its dataset. %s"
+                .formatted(deleted.label(), deleted.id().value(), removed);
+        return WriteResponse.withProject(body, toResolvedProject(deleted));
     }
 
     @McpTool(name = "project_list", description = "List all registered projects, and any datasets "

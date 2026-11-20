@@ -69,9 +69,10 @@ class ProjectServiceDescribeRaceTest {
         // DelayedSelfDescription delays only the first describe() call it ever sees, so the
         // project used to race must be created through an undelayed service first - otherwise
         // that setup registration, not either racing writer, would be "the first call".
-        ProjectService setup = new ProjectService(registry, recordedDescriptions, new InMemoryDatasetInventory());
+        ProjectService setup = new ProjectService(registry, recordedDescriptions, new InMemoryDatasetInventory(),
+                new InMemoryProjectDatasets());
         service = new ProjectService(registry, new DelayedSelfDescription(recordedDescriptions),
-                new InMemoryDatasetInventory());
+                new InMemoryDatasetInventory(), new InMemoryProjectDatasets());
         seedProject = setup.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
     }
 
