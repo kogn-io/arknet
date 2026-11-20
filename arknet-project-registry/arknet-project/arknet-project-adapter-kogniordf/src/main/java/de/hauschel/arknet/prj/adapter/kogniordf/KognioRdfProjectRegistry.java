@@ -359,6 +359,25 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * <p>Runs through {@link WriteFunnel#delete} like every other {@code *_delete} in this
+     * codebase: the existence check sits inside the write transaction, and the entry's last
+     * revision in the system dataset's provenance graph is tombstoned rather than erased. No
+     * business code is retained - a project has none, and its label is free for reuse the moment
+     * the entry is gone.</p>
+     */
+    @Override
+    public void delete(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+        String projectIriString = ProjectGraphs.projectIri(projectId);
+        String projectSubject = SparqlTerms.iriRef(projectIriString);
+        funnel.delete(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString,
+                () -> new ProjectNotFoundException(projectId),
+                tx -> deleteEntirely(tx, projectSubject));
+    }
+
+    /**
      * Names what a registration that lost a commit race actually collided with.
      *
      * <p>{@link WriteFunnel#create}'s own conflict translation cannot do this: a lost commit tells
@@ -469,9 +488,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * predicates either, so they stay symmetric: neither deleted here nor re-added there.</p>
      */
     private void deleteProjectAndItsAnchors(DatasetTx tx, IRI graphIri, String projectSubject) {
-        String selectAnchors = "SELECT ?a WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
-                + projectSubject + " <" + ArkprjVocabulary.ANCHOR + "> ?a } }";
-        List<IRI> previousAnchors = tx.select(selectAnchors).map(row -> iriOf(row, "a")).toList();
+        List<IRI> previousAnchors = anchorsOf(tx, projectSubject);
 
         // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
         // DELETE {...} WHERE {...} form is required to exclude
@@ -482,7 +499,32 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
                 + "FILTER(?p != <" + ArkprjVocabulary.DESCRIPTION + "> && ?p != <"
                 + ArkprjVocabulary.DEFAULT_LANGUAGE + "> && ?p != <"
                 + ArkprjVocabulary.MAINTAINED_LANGUAGE + ">) } }");
-        for (IRI anchor : previousAnchors) {
+        deleteAnchorNodes(tx, previousAnchors);
+    }
+
+    /**
+     * Removes a project's registry entry without exception: every triple of the project subject -
+     * unlike {@link #deleteProjectAndItsAnchors}, description, default language and maintained
+     * language set included, since nothing is re-added afterwards - and every anchor node it held.
+     * Runs as the body of {@link WriteFunnel#delete}, so the funnel's existence check has already
+     * passed and its tombstone of the entry's last revision follows in the same transaction.
+     */
+    private void deleteEntirely(DatasetTx tx, String projectSubject) {
+        List<IRI> anchors = anchorsOf(tx, projectSubject);
+        tx.update("DELETE WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { " + projectSubject
+                + " ?p ?o } }");
+        deleteAnchorNodes(tx, anchors);
+    }
+
+    /** Reads the anchor nodes a project holds - before its {@code arkprj:anchor} edges are deleted. */
+    private static List<IRI> anchorsOf(DatasetTx tx, String projectSubject) {
+        String selectAnchors = "SELECT ?a WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
+                + projectSubject + " <" + ArkprjVocabulary.ANCHOR + "> ?a } }";
+        return tx.select(selectAnchors).map(row -> iriOf(row, "a")).toList();
+    }
+
+    private static void deleteAnchorNodes(DatasetTx tx, List<IRI> anchors) {
+        for (IRI anchor : anchors) {
             tx.update("DELETE WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
                     + SparqlTerms.iriRef(anchor.getIRIString()) + " ?p ?o } }");
         }

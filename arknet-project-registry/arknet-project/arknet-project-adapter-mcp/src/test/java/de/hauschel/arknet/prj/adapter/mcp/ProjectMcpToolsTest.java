@@ -25,6 +25,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.prj.application.port.in.AdoptProject;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
+import de.hauschel.arknet.prj.application.port.in.DeleteProject;
 import de.hauschel.arknet.prj.application.port.in.ListAdoptableDatasets;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.application.port.in.RegisterProject;
@@ -40,7 +41,7 @@ import de.hauschel.arknet.mcpsupport.FieldLanguageLookup;
 import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
 
 /**
- * Scaffold-level check that the adapter declares exactly the six project tools, resolves the
+ * Scaffold-level check that the adapter declares exactly the seven project tools, resolves the
  * caller's own project from its transport-context anchor rather than from any derived {@link
  * ProjectResolver} workspace, and never turns an unknown-anchor situation into a silent default.
  */
@@ -72,51 +73,55 @@ class ProjectMcpToolsTest {
     private final FakeAttachAnchor attachAnchor = new FakeAttachAnchor();
     private final FakeRenameProject renameProject = new FakeRenameProject();
     private final FakeUpdateProject updateProject = new FakeUpdateProject();
+    private final FakeDeleteProject deleteProject = new FakeDeleteProject();
     private final FakeListProjects listProjects = new FakeListProjects();
     private final FakeAdoptProject adoptProject = new FakeAdoptProject();
     private final FakeListAdoptableDatasets listAdoptable = new FakeListAdoptableDatasets();
     private final FakeResolveProject resolveProject = new FakeResolveProject();
     private final ProjectMcpTools adapter = new ProjectMcpTools(registerProject, adoptProject,
-            attachAnchor, renameProject, updateProject, listProjects, listAdoptable, resolveProject, NO_TRANSLATIONS);
+            attachAnchor, renameProject, updateProject, deleteProject, listProjects, listAdoptable, resolveProject, NO_TRANSLATIONS);
 
     @Test
-    void declaresTheSixProjectTools() {
+    void declaresTheSevenProjectTools() {
         final List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(6, names.size());
+        assertEquals(7, names.size());
         assertTrue(names.containsAll(List.of("project_add", "project_adopt", "project_attach_anchor",
-                "project_rename", "project_update", "project_list")));
+                "project_rename", "project_update", "project_delete", "project_list")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                null, adoptProject, attachAnchor, renameProject, updateProject, listProjects, listAdoptable,
+                null, adoptProject, attachAnchor, renameProject, updateProject, deleteProject, listProjects, listAdoptable,
                 resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, null, attachAnchor, renameProject, updateProject, listProjects, listAdoptable,
+                registerProject, null, attachAnchor, renameProject, updateProject, deleteProject, listProjects, listAdoptable,
                 resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, adoptProject, null, renameProject, updateProject, listProjects, listAdoptable,
+                registerProject, adoptProject, null, renameProject, updateProject, deleteProject, listProjects, listAdoptable,
                 resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, adoptProject, attachAnchor, null, updateProject, listProjects, listAdoptable,
+                registerProject, adoptProject, attachAnchor, null, updateProject, deleteProject, listProjects, listAdoptable,
                 resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, adoptProject, attachAnchor, renameProject, null, listProjects, listAdoptable,
+                registerProject, adoptProject, attachAnchor, renameProject, null, deleteProject, listProjects, listAdoptable,
                 resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, adoptProject, attachAnchor, renameProject, updateProject, null, listAdoptable,
+                registerProject, adoptProject, attachAnchor, renameProject, updateProject, null, listProjects,
+                listAdoptable, resolveProject, NO_TRANSLATIONS));
+        assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
+                registerProject, adoptProject, attachAnchor, renameProject, updateProject, deleteProject, null, listAdoptable,
                 resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, adoptProject, attachAnchor, renameProject, updateProject, listProjects, null,
+                registerProject, adoptProject, attachAnchor, renameProject, updateProject, deleteProject, listProjects, null,
                 resolveProject, NO_TRANSLATIONS));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, adoptProject, attachAnchor, renameProject, updateProject, listProjects,
+                registerProject, adoptProject, attachAnchor, renameProject, updateProject, deleteProject, listProjects,
                 listAdoptable, null, NO_TRANSLATIONS));
     }
 
@@ -469,7 +474,7 @@ class ProjectMcpToolsTest {
         resolveProject.register(callerAnchor, target);
         updateProject.result = target;
         final ProjectMcpTools bilingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
-                renameProject, updateProject, listProjects, listAdoptable, resolveProject,
+                renameProject, updateProject, deleteProject, listProjects, listAdoptable, resolveProject,
                 hints(Map.of("description", Set.of("de", "en"))));
 
         final String rendered = bilingual.update(contextWithOrigin("/home/f/DEV/arknet"),
@@ -492,7 +497,7 @@ class ProjectMcpToolsTest {
         updateProject.result = new Project(target.id(), target.label(), target.anchors(),
                 "Ein Beispielprojekt.", "de", List.of("de", "en"));
         final ProjectMcpTools bilingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
-                renameProject, updateProject, listProjects, listAdoptable, resolveProject,
+                renameProject, updateProject, deleteProject, listProjects, listAdoptable, resolveProject,
                 hints(Map.of("description", Set.of("de", "en"))));
 
         final String rendered = bilingual.update(contextWithOrigin("/home/f/DEV/arknet"),
@@ -515,7 +520,7 @@ class ProjectMcpToolsTest {
         resolveProject.register(callerAnchor, target);
         updateProject.result = target;
         final ProjectMcpTools bilingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
-                renameProject, updateProject, listProjects, listAdoptable, resolveProject,
+                renameProject, updateProject, deleteProject, listProjects, listAdoptable, resolveProject,
                 new StaleTranslationHint(lookupBeforeTheWrite(Map.of("description", Set.of("de")))));
 
         final String rendered = bilingual.update(contextWithOrigin("/home/f/DEV/arknet"),
@@ -533,7 +538,7 @@ class ProjectMcpToolsTest {
         resolveProject.register(callerAnchor, target);
         updateProject.result = target;
         final ProjectMcpTools monolingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
-                renameProject, updateProject, listProjects, listAdoptable, resolveProject,
+                renameProject, updateProject, deleteProject, listProjects, listAdoptable, resolveProject,
                 hints(Map.of("description", Set.of("de", "en"))));
 
         final String rendered = monolingual.update(contextWithOrigin("/home/f/DEV/arknet"),
@@ -555,7 +560,7 @@ class ProjectMcpToolsTest {
         resolveProject.register(callerAnchor, target);
         updateProject.result = target;
         final ProjectMcpTools bilingual = new ProjectMcpTools(registerProject, adoptProject, attachAnchor,
-                renameProject, updateProject, listProjects, listAdoptable, resolveProject,
+                renameProject, updateProject, deleteProject, listProjects, listAdoptable, resolveProject,
                 hints(Map.of("description", Set.of("de", "en"))));
 
         final String rendered = bilingual.update(contextWithOrigin("/home/f/DEV/arknet"),
@@ -583,6 +588,73 @@ class ProjectMcpToolsTest {
                 return byField;
             }
         };
+    }
+
+    @Test
+    void deleteNamesTheProjectExplicitlyAndPassesTheCallersOwnAnchorOnlyForTheGuard() {
+        adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", true);
+
+        assertEquals("arknet-plugin", deleteProject.lastReference);
+        assertEquals(new Anchor("/home/f/DEV/arknet", AnchorType.PATH), deleteProject.lastCallerAnchor);
+        assertTrue(deleteProject.lastConfirmed);
+    }
+
+    /** An omitted confirmation is no confirmation. */
+    @Test
+    void deleteWithoutConfirmIsUnconfirmed() {
+        adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", null);
+
+        assertFalse(deleteProject.lastConfirmed);
+    }
+
+    /**
+     * A call without any anchor has no project of its own to protect; it is not refused, and the
+     * project to delete still comes from the parameter, never from a default.
+     */
+    @Test
+    void deleteWithoutAContextAnchorPassesNoCallerAnchor() {
+        adapter.delete(contextWithOrigin(null), "arknet-plugin", false);
+
+        assertEquals("arknet-plugin", deleteProject.lastReference);
+        assertNull(deleteProject.lastCallerAnchor);
+    }
+
+    @Test
+    void deleteAnswerNamesTheDeletedProjectAndWhatWentWithIt() {
+        deleteProject.result = new DeleteProject.Deletion(PLUGIN,
+                Map.of("arkreq:FunctionalRequirement", 3L));
+
+        final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", true);
+
+        assertTrue(rendered.contains("Deleted project arknet-plugin (id: p-2)"), rendered);
+        assertTrue(rendered.contains("3 arkreq:FunctionalRequirement"), rendered);
+        assertTrue(rendered.endsWith("\n\nproject: arknet-plugin"), rendered);
+    }
+
+    @Test
+    void deleteAnswerSaysSoWhenTheProjectHeldNoModelResources() {
+        final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", false);
+
+        assertTrue(rendered.contains("no model resources"), rendered);
+    }
+
+    private static final Project PLUGIN = new Project(new ProjectId("p-2"), "arknet-plugin",
+            List.of(new Anchor("/home/f/DEV/arknet-plugin", AnchorType.PATH)));
+
+    /** Structural fake implementing {@link DeleteProject}. */
+    private static final class FakeDeleteProject implements DeleteProject {
+        private String lastReference;
+        private Anchor lastCallerAnchor;
+        private boolean lastConfirmed;
+        private Deletion result = new Deletion(PLUGIN, Map.of());
+
+        @Override
+        public Deletion delete(final String project, final Anchor callerAnchor, final boolean confirmed) {
+            lastReference = project;
+            lastCallerAnchor = callerAnchor;
+            lastConfirmed = confirmed;
+            return result;
+        }
     }
 
     /** Structural fake implementing {@link RegisterProject}. */

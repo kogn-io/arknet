@@ -198,4 +198,19 @@ public interface ProjectRegistry {
      */
     Project updateAttributes(ProjectId projectId, RevisionToken expectedHead, String description,
             String descriptionLanguage, String defaultLanguage, List<String> maintainedLanguages);
+
+    /**
+     * Removes a project's registry entry completely: the project itself with every predicate it
+     * carries - label, anchors, description in every language, default language and maintained
+     * language set - and every anchor node it held. Afterwards none of its anchors resolves any
+     * more, and its label is free for another project.
+     *
+     * <p>Unlike {@link #compareAndUpdate}, this is not guarded by a concurrency token: there is no
+     * state the caller could have read stale that a delete would overwrite, only an entry that is
+     * either still there or already gone.</p>
+     *
+     * @param projectId the project to remove
+     * @throws ProjectNotFoundException if no project with {@code projectId} is registered
+     */
+    void delete(ProjectId projectId);
 }

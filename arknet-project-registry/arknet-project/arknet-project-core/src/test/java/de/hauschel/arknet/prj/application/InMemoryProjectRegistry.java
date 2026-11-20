@@ -148,6 +148,15 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
         return updated;
     }
 
+    @Override
+    public synchronized void delete(ProjectId projectId) {
+        if (byId.remove(projectId) == null) {
+            throw new ProjectNotFoundException(projectId);
+        }
+        headById.remove(projectId);
+        writeCount.incrementAndGet();
+    }
+
     /** @return how many mutating calls ({@link #register}/{@link #compareAndUpdate}) applied */
     int writeCount() {
         return writeCount.get();
