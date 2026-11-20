@@ -298,13 +298,13 @@ class ArknetMcpConfigurationTest {
                             "en");
                     Files.delete(checkout);
 
-                    assertThatThrownBy(() -> tools.delete(null, "arknet-plugin", null))
+                    assertThatThrownBy(() -> tools.delete(null, "arknet-plugin", null, null))
                             .as("a project holding model resources needs an explicit confirmation")
                             .isInstanceOf(UnconfirmedProjectDeletionException.class)
                             .hasMessageContaining("1 arkreq:");
                     assertThat(projects.findById(doomed.id())).isPresent();
 
-                    String answer = tools.delete(null, "arknet-plugin", true);
+                    String answer = tools.delete(null, "arknet-plugin", true, null);
 
                     assertThat(answer).contains("Deleted project arknet-plugin", doomed.id().value());
                     assertThat(projects.list()).containsExactly(kept);

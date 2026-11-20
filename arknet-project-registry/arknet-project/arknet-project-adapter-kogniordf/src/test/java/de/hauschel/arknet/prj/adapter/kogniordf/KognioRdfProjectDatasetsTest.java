@@ -13,6 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -137,6 +139,51 @@ class KognioRdfProjectDatasetsTest {
         }
 
         assertEquals(Map.of("arkreq:FunctionalRequirement", 1L), datasets.modelResourceCounts(PROJECT));
+    }
+
+    /**
+     * An interrupt ends the wait: the removal is not retried any further and is reported as in
+     * use, with the interrupt flag left set for the caller (review of kogn-io/arknet#712).
+     */
+    @Test
+    void anInterruptStopsRetryingAndKeepsTheInterruptFlag() {
+        insert(REQUIREMENTS_GRAPH, "<urn:req:1> a <" + ARKREQ + "FunctionalRequirement> .");
+        final AtomicInteger deleteCalls = new AtomicInteger();
+        final DatasetLifecycle counting = new DatasetLifecycle() {
+            @Override
+            public DatasetHandle acquire(final DatasetId id) {
+                return lifecycle.acquire(id);
+            }
+
+            @Override
+            public void close(final DatasetId id) {
+                lifecycle.close(id);
+            }
+
+            @Override
+            public void delete(final DatasetId id) {
+                deleteCalls.incrementAndGet();
+                lifecycle.delete(id);
+            }
+
+            @Override
+            public Set<DatasetId> list() {
+                return lifecycle.list();
+            }
+        };
+        final KognioRdfProjectDatasets patient = new KognioRdfProjectDatasets(counting, 50, Duration.ofSeconds(1));
+
+        try (DatasetHandle lease = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            Thread.currentThread().interrupt();
+            try {
+                assertThrows(DatasetInUseException.class, () -> patient.delete(PROJECT));
+                assertTrue(Thread.currentThread().isInterrupted(), "the interrupt must not be swallowed");
+            } finally {
+                Thread.interrupted();
+            }
+        }
+
+        assertEquals(1, deleteCalls.get(), "no further attempt after the interrupt");
     }
 
     private void insert(final String graph, final String triples) {

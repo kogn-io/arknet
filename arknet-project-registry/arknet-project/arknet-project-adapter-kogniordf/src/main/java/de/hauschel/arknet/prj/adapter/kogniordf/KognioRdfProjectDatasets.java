@@ -47,7 +47,8 @@ import de.hauschel.arknet.prj.domain.DatasetInUseException;
  * one query or transaction, and no per-project handle is cached anywhere - so a refusal means a
  * concurrent tool call is in flight on this very project, and it will be done in milliseconds.
  * The removal is retried for a bounded time and only then reported as {@link
- * DatasetInUseException}, leaving the dataset untouched.</p>
+ * DatasetInUseException}, leaving the dataset untouched. An interrupt during the wait ends it
+ * early with the same report, the interrupt flag left set.</p>
  */
 public final class KognioRdfProjectDatasets implements ProjectDatasets {
 
@@ -118,7 +119,9 @@ public final class KognioRdfProjectDatasets implements ProjectDatasets {
             } catch (final IllegalStateException e) {
                 // DatasetLifecycle#delete's documented refusal: a lease on the dataset is still open.
                 lastRefusal = e;
-                pause();
+                if (attempt < deleteAttempts && !pause()) {
+                    break;
+                }
             }
         }
         throw new DatasetInUseException(projectId, lastRefusal);
@@ -131,11 +134,19 @@ public final class KognioRdfProjectDatasets implements ProjectDatasets {
         return Map.entry(name, Long.parseLong(((Literal) count).getLexicalForm()));
     }
 
-    private void pause() {
+    /**
+     * Waits {@link #deletePause} before the next attempt.
+     *
+     * @return {@code false} if the wait was interrupted - the interrupt flag is restored and the
+     *         caller stops retrying, since a thread asked to stop must not keep spinning
+     */
+    private boolean pause() {
         try {
             Thread.sleep(deletePause);
+            return true;
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
+            return false;
         }
     }
 

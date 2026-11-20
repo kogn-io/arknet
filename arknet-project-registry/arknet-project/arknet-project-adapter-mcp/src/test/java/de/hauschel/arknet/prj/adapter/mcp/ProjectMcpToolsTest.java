@@ -592,17 +592,37 @@ class ProjectMcpToolsTest {
 
     @Test
     void deleteNamesTheProjectExplicitlyAndPassesTheCallersOwnAnchorOnlyForTheGuard() {
-        adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", true);
+        adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", true, null);
 
         assertEquals("arknet-plugin", deleteProject.lastReference);
         assertEquals(new Anchor("/home/f/DEV/arknet", AnchorType.PATH), deleteProject.lastCallerAnchor);
         assertTrue(deleteProject.lastConfirmed);
     }
 
+    /**
+     * The explicit {@code projectAnchor} overrides the header for every other tool, so it names
+     * the project the session works on here too: a header pointing at an unregistered folder must
+     * not open a way around the own-project guard (review of kogn-io/arknet#712).
+     */
+    @Test
+    void deleteGuardsTheProjectAnchorOverrideRatherThanTheHeader() {
+        adapter.delete(contextWithOrigin("/home/f/DEV/unregistered"), "arknet-plugin", true,
+                "/home/f/DEV/arknet-plugin");
+
+        assertEquals(new Anchor("/home/f/DEV/arknet-plugin", AnchorType.PATH), deleteProject.lastCallerAnchor);
+    }
+
+    @Test
+    void deleteWithOnlyAProjectAnchorOverrideStillGuardsIt() {
+        adapter.delete(contextWithOrigin(null), "arknet-plugin", true, "/home/f/DEV/arknet-plugin");
+
+        assertEquals(new Anchor("/home/f/DEV/arknet-plugin", AnchorType.PATH), deleteProject.lastCallerAnchor);
+    }
+
     /** An omitted confirmation is no confirmation. */
     @Test
     void deleteWithoutConfirmIsUnconfirmed() {
-        adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", null);
+        adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", null, null);
 
         assertFalse(deleteProject.lastConfirmed);
     }
@@ -613,7 +633,7 @@ class ProjectMcpToolsTest {
      */
     @Test
     void deleteWithoutAContextAnchorPassesNoCallerAnchor() {
-        adapter.delete(contextWithOrigin(null), "arknet-plugin", false);
+        adapter.delete(contextWithOrigin(null), "arknet-plugin", false, null);
 
         assertEquals("arknet-plugin", deleteProject.lastReference);
         assertNull(deleteProject.lastCallerAnchor);
@@ -624,7 +644,7 @@ class ProjectMcpToolsTest {
         deleteProject.result = new DeleteProject.Deletion(PLUGIN,
                 Map.of("arkreq:FunctionalRequirement", 3L));
 
-        final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", true);
+        final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", true, null);
 
         assertTrue(rendered.contains("Deleted project arknet-plugin (id: p-2)"), rendered);
         assertTrue(rendered.contains("3 arkreq:FunctionalRequirement"), rendered);
@@ -633,7 +653,7 @@ class ProjectMcpToolsTest {
 
     @Test
     void deleteAnswerSaysSoWhenTheProjectHeldNoModelResources() {
-        final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", false);
+        final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", false, null);
 
         assertTrue(rendered.contains("no model resources"), rendered);
     }

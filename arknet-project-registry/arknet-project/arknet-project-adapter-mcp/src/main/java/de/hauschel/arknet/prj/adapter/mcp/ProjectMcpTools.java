@@ -18,6 +18,7 @@ import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
+import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
 import de.hauschel.arknet.mcpsupport.WriteResponse;
 import de.hauschel.arknet.prj.application.port.in.AdoptProject;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
@@ -118,10 +119,9 @@ import de.hauschel.arknet.prj.domain.Project;
  * <p><strong>{@link #delete} is the one writing tool that does not act on the caller's own
  * project.</strong> It takes the project to delete as an explicit {@code project} parameter (id or
  * label, as {@link #list} renders them), and the caller's own anchor reaches the in-port only so
- * that deleting the caller's own project can be refused - never to choose the target. A call
- * without an anchor of its own is not refused: it has no project to protect. There is
- * deliberately no {@code callerAnchor} parameter: it could only ever add a refusal, and a client
- * that cannot send its anchor has no own project at risk. Its answer closes with the deleted
+ * that deleting the caller's own project can be refused - never to choose the target. The caller's
+ * anchor is the one every other tool would route on: the optional {@code projectAnchor} if given,
+ * otherwise the header. A call with neither is not refused: it has no project to protect. Its answer closes with the deleted
  * project's name, the project the call actually hit.</p>
  */
 public final class ProjectMcpTools {
@@ -502,8 +502,14 @@ public final class ProjectMcpTools {
             @McpToolParam(description = "Set to true to delete a project that still holds model resources, "
                     + "after a call without it has named what would be lost. Omitted or false: such a "
                     + "project is not deleted. An empty project needs no confirmation.", required = false)
-            final Boolean confirm) {
-        final String origin = contextAnchor(context);
+            final Boolean confirm,
+            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        // The same precedence every other tool's projectAnchor has: the explicit value overrides the
+        // header. It names the project this session works on, so it is what the own-project guard
+        // has to protect - guarding the header alone would let an unregistered header plus a
+        // projectAnchor delete the very project the session is working in.
+        final String origin = isBlank(projectAnchor) ? contextAnchor(context) : projectAnchor;
         final Anchor callerAnchor = isBlank(origin) ? null : new Anchor(origin, AnchorType.PATH);
         final DeleteProject.Deletion deletion =
                 deleteProject.delete(project, callerAnchor, Boolean.TRUE.equals(confirm));
