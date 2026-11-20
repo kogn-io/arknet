@@ -16,7 +16,6 @@ import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
-import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -160,7 +159,7 @@ public final class KognioRdfActorRepositoryFactory {
         URL resource = KognioRdfActorRepositoryFactory.class.getResource(classpathResource);
         Objects.requireNonNull(resource, "missing classpath resource " + classpathResource);
         try (InputStream in = resource.openStream()) {
-            return new GraphImportRdf4j().readTurtle(in, new SimpleRdf().createIRI(resource.toExternalForm()));
+            return new GraphImportRdf4j().readTurtle(in);
         } catch (IOException e) {
             throw new IllegalStateException("failed to load " + classpathResource, e);
         }

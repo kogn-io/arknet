@@ -164,7 +164,7 @@ public final class KognioRdfUseCaseRepositoryFactory {
         URL resource = KognioRdfUseCaseRepositoryFactory.class.getResource(classpathResource);
         Objects.requireNonNull(resource, "missing classpath resource " + classpathResource);
         try (InputStream in = resource.openStream()) {
-            return new GraphImportRdf4j().readTurtle(in, new SimpleRdf().createIRI(resource.toExternalForm()));
+            return new GraphImportRdf4j().readTurtle(in);
         } catch (IOException e) {
             throw new IllegalStateException("failed to load " + classpathResource, e);
         }
