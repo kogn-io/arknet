@@ -336,16 +336,29 @@ public final class StoreCheckRenderer {
 
     /**
      * Groups {@code sources} by term and appends one line per term - most sources first, then by
-     * term code. Within a line the sources are grouped by {@link TermSource#group()}, so a field
-     * name is written once per term rather than once per source; groups and sources keep the order
-     * the check reported them in.
+     * term code (numerically, so TERM-2 precedes TERM-10). Within a line the sources are grouped by
+     * {@link TermSource#group()}, so a field name is written once per term rather than once per
+     * source; groups and sources keep the order the check reported them in.
      */
+    /** Orders codes by prefix, then by the running number as a number; falls back to text. */
+    private static int compareCodes(final String left, final String right) {
+        final int leftDash = left.lastIndexOf('-');
+        final int rightDash = right.lastIndexOf('-');
+        if (leftDash > 0 && rightDash > 0 && left.substring(0, leftDash).equals(right.substring(0, rightDash))
+                && left.substring(leftDash + 1).matches("\\d{1,9}")
+                && right.substring(rightDash + 1).matches("\\d{1,9}")) {
+            return Integer.compare(Integer.parseInt(left.substring(leftDash + 1)),
+                    Integer.parseInt(right.substring(rightDash + 1)));
+        }
+        return left.compareTo(right);
+    }
+
     private static void appendTermLines(final StringBuilder out, final List<TermSource> sources) {
         final Map<String, List<TermSource>> byTerm = sources.stream()
                 .collect(Collectors.groupingBy(TermSource::termHandle, LinkedHashMap::new, Collectors.toList()));
         byTerm.values().stream()
                 .sorted(Comparator.comparingInt((List<TermSource> group) -> group.size()).reversed()
-                        .thenComparing(group -> group.getFirst().termHandle()))
+                        .thenComparing(group -> group.getFirst().termHandle(), StoreCheckRenderer::compareCodes))
                 .forEach(group -> out.append("\n- ").append(group.getFirst().termHandle())
                         .append(' ').append(group.getFirst().termLabel())
                         .append(" (").append(group.size()).append("): ")

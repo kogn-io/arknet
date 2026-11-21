@@ -115,7 +115,7 @@ public final class StoreCheckMcpTools {
             + "skos:definition naming another term without a skos:broader or skos:related edge - and "
             + "a constraint no requirement or use case is bound by via constrainedBy. Mentions are "
             + "listed one line per term with the number of sources, and each source is reported with "
-            + "the field(s) the term was found in (e.g. FR-3 (description, stepText)), so you need "
+            + "the field(s) the term was found in (e.g. description+stepText: FR-3, FR-5), so you need "
             + "not open the resource; the missing edge follows from the source's type and is named once "
             + "in a legend. The mention lists are the bulk of a large project's report: withMentions=false "
             + "drops them and keeps every count. Two kinds of mention are downgraded to a separate hint list that "

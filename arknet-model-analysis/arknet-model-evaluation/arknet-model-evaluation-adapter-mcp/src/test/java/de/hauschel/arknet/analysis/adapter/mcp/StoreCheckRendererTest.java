@@ -293,6 +293,19 @@ class StoreCheckRendererTest {
                         + "\n- TERM-2 Kasse (1): description+criterionText: FR-1");
     }
 
+    @Test
+    void ordersTiedTermsByRunningNumberNotByText() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(),
+                List.of(
+                        mention("FR-1", "TERM-10", "Zehn", List.of("description")),
+                        mention("FR-1", "TERM-2", "Zwei", List.of("description"))),
+                List.of(), List.of()));
+
+        assertThat(rendered).contains("\n- TERM-2 Zwei (1): description: FR-1"
+                + "\n- TERM-10 Zehn (1): description: FR-1");
+    }
+
     /** The legend cannot read a type off a shortened IRI, so such a source keeps its missing edge. */
     @Test
     void keepsTheMissingEdgeForASourceWithoutABusinessCode() {
