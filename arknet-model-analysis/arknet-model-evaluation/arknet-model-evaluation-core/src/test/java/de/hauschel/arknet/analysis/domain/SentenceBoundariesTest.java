@@ -51,4 +51,16 @@ class SentenceBoundariesTest {
     void aLineBreakAfterAnAbbreviationStillEndsTheSentence() {
         assertThat(SentenceBoundaries.sameSentence("Kunde lt.\nFR-2", 0, 5, 10, 14)).isFalse();
     }
+
+    @Test
+    void aPossessiveSDoesNotCountAsTheAbbreviationS() {
+        assertThat(SentenceBoundaries.sameSentence("Kunde is the customer's. FR-2", 0, 5, 25, 29)).isFalse();
+        assertThat(SentenceBoundaries.sameSentence("Kunde is the customer\u2019s. FR-2", 0, 5, 25, 29)).isFalse();
+    }
+
+    @Test
+    void aNonBreakingSpaceInsideAMultiPartAbbreviationIsAccepted() {
+        assertThat(SentenceBoundaries.sameSentence("Kunde z.\u00A0B. FR-2", 0, 5, 12, 16)).isTrue();
+        assertThat(SentenceBoundaries.sameSentence("Kunde d.\u202Fh. FR-2", 0, 5, 12, 16)).isTrue();
+    }
 }

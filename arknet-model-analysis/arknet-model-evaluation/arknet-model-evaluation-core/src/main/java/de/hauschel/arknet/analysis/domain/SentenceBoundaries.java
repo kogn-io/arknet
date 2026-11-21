@@ -15,9 +15,10 @@ import java.util.stream.Collectors;
  * that the dots of a known abbreviation do not end it. One list serves every text, whatever
  * language tag it is stored under. It holds only reference abbreviations that stand before a
  * continuing clause; words that often close a sentence ({@code etc.}, {@code usw.}) are left out,
- * as they would hide a real sentence end. Matching is case-insensitive and needs a non-letter in
- * front, so a word merely ending in {@code s} is not {@code s.}. Inner spaces of a multi-part
- * abbreviation are optional ({@code z.B.} and {@code z. B.}).</p>
+ * as they would hide a real sentence end. Matching is case-insensitive and needs a char in front that
+ * is neither letter, digit nor apostrophe, so a word merely ending in {@code s} and the possessive
+ * {@code 's.} are not {@code s.}. Inner spaces of a multi-part
+ * abbreviation are optional and may be a no-break space ({@code z.B.} and {@code z. B.}).</p>
  */
 final class SentenceBoundaries {
 
@@ -29,9 +30,9 @@ final class SentenceBoundaries {
     private static final String BREAKS = ".!?;:\n\r";
 
     private static final Pattern ABBREVIATION = Pattern.compile(
-            "(?<![\\p{L}\\p{N}])(?:"
+            "(?<![\\p{L}\\p{N}'\u2019])(?:"
                     + ABBREVIATIONS.stream()
-                            .map(a -> Pattern.quote(a).replace(" ", "\\E[ \\t]?\\Q"))
+                            .map(a -> Pattern.quote(a).replace(" ", "\\E[ \\t\u00A0\u202F]?\\Q"))
                             .collect(Collectors.joining("|"))
                     + ")",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
