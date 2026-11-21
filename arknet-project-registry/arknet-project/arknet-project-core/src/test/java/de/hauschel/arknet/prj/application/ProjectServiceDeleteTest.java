@@ -11,6 +11,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +32,7 @@ import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.prj.domain.ProjectDatasetRetainedException;
 import de.hauschel.arknet.prj.domain.UnconfirmedProjectDeletionException;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
+import de.hauschel.arknet.prj.domain.UnknownDatasetException;
 import de.hauschel.arknet.prj.domain.UnknownProjectException;
 
 /**
@@ -204,6 +213,7 @@ class ProjectServiceDeleteTest {
         assertFalse(ex.getMessage().contains("project_adopt"), ex.getMessage());
         assertTrue(ex.getMessage().contains("call project_delete with the dataset id '"
                 + project.id().value() + "' again"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("confirm=true"), ex.getMessage());
     }
 
     /**
@@ -330,15 +340,140 @@ class ProjectServiceDeleteTest {
     @Test
     void aUnregisteredDatasetRegisteredWhileItIsBeingDeletedIsLeftAlone() {
         ProjectId orphan = new ProjectId("orphan-dataset");
-        // The inventory answers, then a concurrent adopter registers the dataset before the lock is taken.
+        // A concurrent adopter registers the dataset once, during the first inventory answer (the lookup
+        // outside the lock); the dataset stays present, so only the registry guard in the lock can reject.
+        AtomicBoolean registered = new AtomicBoolean(false);
         ProjectService withOrphan = new ProjectService(registry, new InMemoryProjectSelfDescription(), () -> {
-            registry.register(new Project(orphan, "late", List.of(pathAnchor("/home/fred/DEV/late"))), null, null,
-                    null, List.of());
+            if (!registered.getAndSet(true)) {
+                registry.register(new Project(orphan, "late", List.of(pathAnchor("/home/fred/DEV/late"))), null,
+                        null, null, List.of());
+            }
             return java.util.Set.of(orphan);
         }, projectDatasets);
-        assertThrows(IllegalArgumentException.class,
+        // The message pins that the registry guard in the lock fired, not an unrelated rejection.
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> withOrphan.delete("orphan-dataset", List.of(ELSEWHERE), true));
+        assertTrue(ex.getMessage().contains("was registered as a project while it was being deleted"),
+                ex.getMessage());
         assertFalse(projectDatasets.wasDeleted(orphan));
+    }
+
+    /** Two deletions of the same orphan: the second must not report a removal that never happened. */
+    @Test
+    void aSecondDeletionOfTheSameUnregisteredDatasetAnswersUnknownProjectInsteadOfSuccess() throws Exception {
+        ProjectId orphan = new ProjectId("orphan-dataset");
+        InMemoryDatasetInventory inventory = new InMemoryDatasetInventory().with(orphan);
+        CountDownLatch firstInsideLock = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        AtomicBoolean firstCall = new AtomicBoolean(true);
+        projectDatasets.beforeCounting(() -> {
+            if (firstCall.getAndSet(false)) {
+                firstInsideLock.countDown();
+                await(releaseFirst);
+                inventory.without(orphan);
+            }
+        });
+        ProjectService racing = new ProjectService(registry, new InMemoryProjectSelfDescription(), inventory,
+                projectDatasets);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<Deletion> first = pool.submit(() -> racing.delete("orphan-dataset", List.of(ELSEWHERE), true));
+            await(firstInsideLock);
+            AtomicReference<Thread> secondWorker = new AtomicReference<>();
+            Future<Deletion> second = pool.submit(() -> {
+                secondWorker.set(Thread.currentThread());
+                return racing.delete("orphan-dataset", List.of(ELSEWHERE), true);
+            });
+            awaitBlocked(second, secondWorker);
+            releaseFirst.countDown();
+
+            first.get();
+            ExecutionException ex = assertThrows(ExecutionException.class, second::get);
+            assertEquals(UnknownProjectException.class, ex.getCause().getClass());
+            assertTrue(ex.getCause().getMessage().contains("No registered project has the id or label "
+                    + "'orphan-dataset'"), ex.getCause().getMessage());
+        } finally {
+            releaseFirst.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    /** An adopt that passed its guards before an overlapping delete removed the dataset must not register. */
+    @Test
+    void anAdoptOverlappingADeletionOfTheSameDatasetDoesNotRegisterAProjectWithoutAModel() throws Exception {
+        ProjectId orphan = new ProjectId("orphan-dataset");
+        InMemoryDatasetInventory inventory = new InMemoryDatasetInventory().with(orphan);
+        CountDownLatch firstInsideLock = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        AtomicBoolean firstCall = new AtomicBoolean(true);
+        projectDatasets.beforeCounting(() -> {
+            if (firstCall.getAndSet(false)) {
+                firstInsideLock.countDown();
+                await(releaseFirst);
+                inventory.without(orphan);
+            }
+        });
+        ProjectService racing = new ProjectService(registry, new InMemoryProjectSelfDescription(), inventory,
+                projectDatasets);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<Deletion> delete = pool.submit(() -> racing.delete("orphan-dataset", List.of(ELSEWHERE), true));
+            await(firstInsideLock);
+            AtomicReference<Thread> adoptWorker = new AtomicReference<>();
+            Future<Project> adopt = pool.submit(() -> {
+                adoptWorker.set(Thread.currentThread());
+                return racing.adopt(orphan, "late", pathAnchor("/home/fred/DEV/late"));
+            });
+            awaitBlocked(adopt, adoptWorker);
+            releaseFirst.countDown();
+
+            delete.get();
+            ExecutionException ex = assertThrows(ExecutionException.class, adopt::get);
+            assertEquals(UnknownDatasetException.class, ex.getCause().getClass());
+            assertEquals(Optional.empty(), registry.findById(orphan));
+        } finally {
+            releaseFirst.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("latch not released");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** The overlapping call is parked on the project lock once its own worker thread is BLOCKED. */
+    private static void awaitBlocked(Future<?> call, AtomicReference<Thread> worker) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            if (call.isDone()) {
+                return;
+            }
+            Thread thread = worker.get();
+            if (thread != null && thread.getState() == Thread.State.BLOCKED) {
+                return;
+            }
+            Thread.sleep(5);
+        }
+        throw new IllegalStateException("overlapping call never reached the lock");
+    }
+
+    @Test
+    void theRefusalUsesTheSingularForExactlyOneRevision() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/DEV/arknet"), null, null, null, null);
+        projectDatasets.withRevisions(project.id(), 1);
+
+        UnconfirmedProjectDeletionException ex = assertThrows(UnconfirmedProjectDeletionException.class,
+                () -> service.delete("arknet", List.of(ELSEWHERE), false));
+
+        assertTrue(ex.getMessage().contains("content that would be lost with it: 1 revision."),
+                ex.getMessage());
     }
 
     /** History alone is content: a project without a single resource but with revisions is not empty. */

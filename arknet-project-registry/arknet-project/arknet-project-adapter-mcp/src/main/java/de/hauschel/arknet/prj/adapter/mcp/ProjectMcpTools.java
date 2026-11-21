@@ -546,8 +546,9 @@ public final class ProjectMcpTools {
     private static String describeRemoved(final DeleteProject.Deletion deletion) {
         final Stream<String> resources = deletion.removedResources().entrySet().stream()
                 .map(entry -> entry.getValue() + " " + entry.getKey());
-        final Stream<String> revisions = deletion.removedRevisions() > 0
-                ? Stream.of(deletion.removedRevisions() + " revisions")
+        final long removed = deletion.removedRevisions();
+        final Stream<String> revisions = removed > 0
+                ? Stream.of(removed == 1 ? "1 revision" : removed + " revisions")
                 : Stream.empty();
         final String found = Stream.concat(resources, revisions).collect(Collectors.joining(", "));
         return found.isEmpty()

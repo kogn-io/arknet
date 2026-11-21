@@ -70,7 +70,7 @@ public class UnconfirmedProjectDeletionException extends RuntimeException {
             long revisions) {
         String counts = Stream.concat(
                 resourceCounts.entrySet().stream().map(entry -> entry.getValue() + " " + entry.getKey()),
-                revisions > 0 ? Stream.of(revisions + " revisions") : Stream.empty())
+                revisions > 0 ? Stream.of(revisions == 1 ? "1 revision" : revisions + " revisions") : Stream.empty())
                 .collect(Collectors.joining(", "));
         String subject = label == null
                 ? "The unregistered dataset '" + datasetId.value() + "'"

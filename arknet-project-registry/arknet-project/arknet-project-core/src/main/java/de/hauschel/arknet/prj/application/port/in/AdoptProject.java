@@ -50,12 +50,11 @@ public interface AdoptProject {
      * @throws DatasetAlreadyAdoptedException   if a project is already registered for it
      * @throws AnchorAlreadyRegisteredException if {@code anchor} already belongs to a project
      * @throws DuplicateProjectLabelException   if {@code label} is already taken
-     * @throws ResourceAlreadyExistsException   if a concurrent {@link #adopt} call won the race
-     *                                        for the very same {@code datasetId} - unlike
-     *                                        {@link RegisterProject#register}'s freshly minted
-     *                                        identity, {@code datasetId} is caller-chosen and can
-     *                                        genuinely already be claimed by the time a retried
-     *                                        write observes it (issue #174)
+     * @throws ResourceAlreadyExistsException   if a registry entry for {@code datasetId} appeared
+     *                                        between the guards and the write by a path that
+     *                                        bypasses them; a concurrent {@link #adopt} of the same
+     *                                        dataset is turned away with
+     *                                        {@link DatasetAlreadyAdoptedException} instead
      * @throws UnattributedRegistrationConflictException if the write keeps losing a real store
      *                                        commit conflict that none of the guards above can
      *                                        explain, across every retry attempt
