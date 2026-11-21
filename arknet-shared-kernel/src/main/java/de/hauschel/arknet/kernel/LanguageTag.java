@@ -56,6 +56,10 @@ public final class LanguageTag {
      * {@code de-ch}. A stored tag is data, not a caller's argument, so a malformed one is neither
      * rejected nor dropped (which would make it look untagged) - it is passed through as read.</p>
      *
+     * <p>Canonicalizing is more than a case fix: {@code Locale.Builder} also replaces deprecated
+     * and grandfathered tags ({@code iw} becomes {@code he}, {@code i-klingon} becomes
+     * {@code tlh}).</p>
+     *
      * @param tag a language tag as read from the store, or {@code null}
      * @return the canonicalized tag, {@code tag} itself if it is not well-formed, or {@code null}
      */

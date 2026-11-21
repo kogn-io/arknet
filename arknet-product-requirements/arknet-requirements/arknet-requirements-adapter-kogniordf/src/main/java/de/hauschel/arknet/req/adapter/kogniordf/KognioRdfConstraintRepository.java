@@ -306,7 +306,8 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
      * of throwing {@link InvalidLanguageTagException} - used where the tag may be a verbatim
      * pass-through of whatever is already sitting in the store ({@code ConstraintService} reads
      * {@code current.titleLanguage()}/{@code current.statementLanguage()} straight off
-     * {@link LocalizedLiteral#languageTag()}, the raw tag as read, never re-validated), rather
+     * {@link LocalizedLiteral#languageTag()}, canonical, or raw only when the stored tag is
+     * malformed ({@code LanguageTag#canonicalizeOrKeep}), never re-validated), rather
      * than a freshly caller-supplied value already validated before it reached this adapter (as
      * {@link #create}'s {@code language} is - that call site stays on the strict
      * {@link LanguageTag#canonicalize(String)}). Same fallback rationale as
