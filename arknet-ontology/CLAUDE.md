@@ -12,14 +12,14 @@ nach `src/main/resources/` erst, wenn ein BC das Modul tatsaechlich konsumiert.
 
 Ein Namespace-Name behauptet nicht mehr, als der Namespace traegt.
 Ein Namespace-Name ist publizierte Sprache, er steht in jedem Tripel: ein Name, der einen ganzen Gegenstandsbereich ankuendigt, aber live nur einen einzelnen Begriff traegt, fuehrt jeden in die Irre, der aus der IRI auf den Inhalt schliesst.
-Traegt ein Namespace live weniger, als sein Name verspricht, wird der Name auf das eingeengt, was live ist.
+Traegt ein Namespace live weniger, als sein Name verspricht, wird der Name auf das eingeengt, was live ist -- wann, regelt der Absatz zur Aenderung einer Namespace-IRI unten.
 Ob ein Name mehr behauptet, als der Namespace traegt, ist eine Beurteilung und wird im Review entschieden, keine mechanische Pruefung.
 Das ist eine andere Regel als die Namespace-Spannweite (ADR-12 im arknet-eigenen Store: kein Namespace spannt ueber zwei Kontexte) -- jene ist mechanisch pruefbar und eine Entscheidung ueber die Gestalt des Systems, diese hier eine Beurteilungsfrage ueber Benennung.
 
 Wann eine Namespace-IRI geaendert wird.
 Eine Namespace-IRI steht in jedem Tripel jedes Datasets; jede Aenderung ist eine Datenmigration.
-Ausserhalb einer Gesamtmigration, die ohnehin jedes Tripel neu schreibt, wird eine Namespace-IRI deshalb nur geaendert, wenn ein klassendefinierender Namespace ueber zwei Kontexte spannt -- nie aus Symmetrie- oder Namensgruenden.
-Auch eine Einengung nach der Benennungsregel oben wartet auf die naechste Gesamtmigration.
+Eine Namespace-IRI wird deshalb nur geaendert, wenn der Namespace die Spannweiten-Regel oben verletzt, nie aus Symmetrie- oder Namensgruenden -- es sei denn, eine Migration schreibt aus anderem Grund ohnehin jedes Tripel jedes Datasets neu (etwa ein geaendertes Graph-Layout); in diesem Schnitt kostet eine Umbenennung keine eigene Migration.
+Auch eine Einengung nach der Benennungsregel oben wartet auf eine solche Migration.
 
 Die Ontologie darf der Implementierung vorlaufen, die Shapes duerfen es nicht.
 Ein deklarierter Begriff ohne Schreibpfad ist Vokabular-Vorrat und bleibt stehen; eine Shape ohne Schreibpfad behauptet eine Pruefung, die nie laeuft, und wird geloescht.
