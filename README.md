@@ -195,11 +195,18 @@ scripts/rebuild-daemon.sh
 ```
 
 The script is the convenient way to build from your checkout and replace the running daemon.
-It is shorthand for:
+For the common case (run from the main checkout, daemon running as Compose project `arknet`)
+it boils down to this command, run from the repository root:
 
 ```bash
 ARKNET_VERSION="$(git rev-parse HEAD)-local" docker compose -p arknet up --build -d --force-recreate
 ```
+
+Typed by hand, this simplified form does not do everything the script does:
+it hard-codes `-p arknet` instead of detecting the running daemon's project (see below),
+does not append `-dirty` to the version and does not change into the repository root.
+Run from a worktree or a differently named checkout whose daemon runs under another project name,
+it ends in the failure the script avoids; use the script there.
 
 `--force-recreate` is needed because the rebuild alone was observed to leave the old container
 running on the old image (kogn-io/arknet#545); the flag forces the replacement.
@@ -216,6 +223,9 @@ The script avoids this: it passes the project name of the container currently ru
 set), so it replaces that daemon from any checkout.
 The rebuilt container takes its Compose configuration from the checkout the script lives in,
 including an untracked `docker-compose.override.yml` there.
+An override file in another checkout, for example the main checkout that started the running daemon
+(image pin, `PUID`/`PGID`, extra environment), is silently not applied by a rebuild from a worktree.
+If those settings must apply, run the rebuild from the checkout whose configuration should win.
 `ARKNET_DRY_RUN=1 scripts/rebuild-daemon.sh` prints the version, the project and the command
 without running anything.
 

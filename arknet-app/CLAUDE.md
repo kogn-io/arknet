@@ -130,6 +130,8 @@ Neu bauen und ersetzen mit `scripts/rebuild-daemon.sh` (von ueberall aufrufbar, 
 Ohne `-p` naehme Compose den Verzeichnisnamen der Checkout-Kopie und startete aus einem Worktree ein zweites Projekt, das am belegten Port scheitert, waehrend der alte Daemon weiterlaeuft.
 Ohne `--force-recreate` lief nach einem Neubau beobachtet der alte Container auf dem alten Image weiter (#545); das Flag erzwingt den Austausch.
 Die Compose-Konfiguration des neuen Containers stammt aus der Checkout-Kopie des Skripts, samt einer dort liegenden untracked `docker-compose.override.yml`.
+Eine `docker-compose.override.yml` in einem anderen Checkout (etwa dem Haupt-Checkout, der den laufenden Daemon gestartet hat: Image-Pin, `PUID`/`PGID`) wendet ein Neubau aus einem Worktree still nicht an.
+Gelten sollen diese Einstellungen, dann den Neubau aus dem Checkout fahren, dessen Konfiguration gelten soll.
 `ARKNET_DRY_RUN=1` gibt Version, Projekt und Befehl nur aus.
 Das Skript setzt `ARKNET_VERSION` auf die volle HEAD-Sha plus `-local` (bei unsauberem Arbeitsbaum zusaetzlich `-dirty`);
 `docker-compose.yml` reicht die Variable als Build-Arg durch.
