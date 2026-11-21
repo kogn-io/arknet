@@ -25,6 +25,7 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
@@ -441,6 +442,38 @@ class KognioRdfProjectRegistryTest {
         assertTrue(subjectHasDescriptionTaggedAs(id, "Architecture models machines understand.", "de"));
         assertFalse(subjectHasDescriptionWithRawLanguageTag(id, "DE"),
                 "a case-differing language argument must not leave a duplicate, differently-cased literal behind");
+    }
+
+    /**
+     * A region-subtagged language (kogn-io/arknet#711): kognio-rdf 0.4.0 lower-cases every language
+     * tag on the way into the store, so a description written under arknet's canonical
+     * {@code de-CH} is stored as {@code @de-ch}. A delete filter comparing {@code lang(?o)} against
+     * {@code "de-CH"} case-sensitively missed it, and {@code sh:uniqueLang} then rejected the update.
+     */
+    @Test
+    void updatingARegionTaggedDescriptionTwiceLeavesExactlyOneLiteralOfThatLanguage() {
+        ProjectId id = freshId();
+        registry.register(new Project(id, "arknet-region", List.of(pathAnchor("/home/dev/arknet-region"))),
+                "Erste Fassung.", "de-CH", null, null);
+
+        registry.updateAttributes(id, registry.findCurrentById(id).orElseThrow().head(),
+                "Zweite Fassung.", "de-CH", null, null);
+        registry.updateAttributes(id, registry.findCurrentById(id).orElseThrow().head(),
+                "Dritte Fassung.", "de-CH", null, null);
+
+        assertEquals(List.of("Dritte Fassung."), descriptionsOf(id));
+    }
+
+    /** Every {@code dcterms:description} value of the registered project {@code id}, whatever its tag. */
+    private List<String> descriptionsOf(ProjectId id) {
+        String projectSubject = "https://w3id.org/arknet/project/" + id.value();
+        String query = "SELECT ?o WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { <" + projectSubject
+                + "> <" + ArkprjVocabulary.DESCRIPTION + "> ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(ProjectId.RESERVED_SYSTEM_DATASET))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((Literal) row.getValue("o").orElseThrow()).getLexicalForm())
+                    .toList();
+        }
     }
 
     /** Whether the registered project {@code id} carries this exact {@code dcterms:description} literal+tag. */

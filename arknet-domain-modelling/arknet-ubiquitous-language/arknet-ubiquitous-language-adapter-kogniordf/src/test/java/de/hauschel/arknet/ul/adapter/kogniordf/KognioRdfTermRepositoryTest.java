@@ -436,6 +436,24 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
+     * A region-subtagged language (kogn-io/arknet#711): kognio-rdf 0.4.0 lower-cases every language
+     * tag on the way into the store, so a definition written under arknet's canonical {@code de-CH}
+     * is stored as {@code @de-ch}. A delete filter comparing {@code lang(?o)} against
+     * {@code "de-CH"} case-sensitively missed it and left two definitions of one language behind.
+     */
+    @Test
+    void updatingARegionTaggedDefinitionTwiceLeavesExactlyOneLiteralOfThatLanguage() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Kunde", "Erste Fassung.", null), "de-CH");
+
+        repository.update(PROJECT_A, code, null, "Zweite Fassung.", "de-CH", null, null, null);
+        repository.update(PROJECT_A, code, null, "Dritte Fassung.", "de-CH", null, null, null);
+
+        assertEquals(List.of("Dritte Fassung."), definitionsOf(PROJECT_A, id));
+    }
+
+    /**
      * {@code term_add}'s new {@code language} argument (issue #228): a term registered with an
      * explicit language tag stores its {@code prefLabel}/{@code definition} as language-tagged
      * literals, not the plain untagged ones {@code create} wrote before this argument existed.
@@ -817,6 +835,17 @@ class KognioRdfTermRepositoryTest {
                 + value + "\"@" + tag + " } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().ask(query);
+        }
+    }
+
+    /** Every {@code skos:definition} value of {@code id}, whatever its language tag. */
+    private List<String> definitionsOf(ProjectId projectId, TermId id) {
+        String query = "SELECT ?o WHERE { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#definition> ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((Literal) row.getValue("o").orElseThrow()).getLexicalForm())
+                    .toList();
         }
     }
 

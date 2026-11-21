@@ -954,9 +954,8 @@ public class KognioRdfTermRepository implements TermRepository {
      * (see that class's javadoc for why {@link Locale#forLanguageTag} is the wrong tool here: it
      * never throws, silently degrading a typo like {@code "de_DE"} to {@code "und"}).
      *
-     * <p>{@link #deleteTriplesOfLanguage}'s {@code FILTER(lang(?o) = "tag")} compares the raw
-     * string RDF4J's {@code lang()} returns - the exact case a literal was written with - against
-     * this method's {@code tag} argument, so an un-normalized case mismatch between two calls
+     * <p>{@link #deleteTriplesOfLanguage} originally compared {@code lang(?o)} case-sensitively
+     * against this method's {@code tag} argument, so an un-normalized case mismatch between two calls
      * (e.g. {@code term_add(..., language="de")} followed by {@code term_update(...,
      * language="DE")}) leaves the existing {@code @de} literal undeleted and inserts a second
      * {@code @DE} one instead of correcting it - two literals for one language, defeating
@@ -965,7 +964,9 @@ public class KognioRdfTermRepository implements TermRepository {
      * writing a literal ({@link #literalOf}) and building the delete filter keeps stored tags in
      * one consistent case, so a later scoped delete always matches - the same guarantee
      * {@code DisplayLocale#matching} already gives the read side by comparing tags
-     * case-insensitively.</p>
+     * case-insensitively. Since kognio-rdf 0.4.0 lower-cases every tag on the way into the store,
+     * the delete filter itself compares case-insensitively too; canonicalizing stays, because it is
+     * also what rejects a malformed tag.</p>
      */
     private static String canonicalLanguageTag(String language) {
         return LanguageTag.canonicalize(language);
@@ -1013,8 +1014,11 @@ public class KognioRdfTermRepository implements TermRepository {
             String subject, String predicateIri, String language, String defaultLanguage) {
         // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
         // DELETE {...} WHERE {...} form is required to scope the delete by language.
-        String tag = language == null ? "" : SparqlTerms.escape(language);
-        String filter = "lang(?o) = \"" + tag + "\"";
+        // LCASE: kognio-rdf 0.4.0 stores every tag lower-cased (de-CH -> de-ch), while older data
+        // and arknet's canonical form keep the region upper-case - compare case-insensitively.
+        // Not langMatches: that would let "de" sweep away a de-CH variant too.
+        String tag = language == null ? "" : SparqlTerms.escape(language.toLowerCase(Locale.ROOT));
+        String filter = "LCASE(lang(?o)) = \"" + tag + "\"";
         if (language != null && language.equals(defaultLanguage)) {
             filter += " || lang(?o) = \"\"";
         }

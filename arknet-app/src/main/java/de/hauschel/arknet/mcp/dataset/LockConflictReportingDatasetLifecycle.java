@@ -24,6 +24,7 @@ import io.kogn.rdf.dataset.SparqlUpdate;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 
 /**
  * Decorates a {@link DatasetLifecycle}, translating an {@link #acquire(DatasetId)} failure that
@@ -155,7 +156,7 @@ public final class LockConflictReportingDatasetLifecycle implements DatasetLifec
      * hold a lease on {@code id} itself.
      */
     @Override
-    public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+    public DatasetShutdownOutcome shutDown(DatasetId id) {
         return delegate.shutDown(id);
     }
 

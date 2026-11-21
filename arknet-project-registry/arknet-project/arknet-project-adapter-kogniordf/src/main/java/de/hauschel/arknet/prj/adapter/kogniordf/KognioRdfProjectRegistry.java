@@ -338,12 +338,14 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     private static String deleteDescriptionOfLanguage(String subject, String language) {
         // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
         // DELETE {...} WHERE {...} form is required to scope the delete by language.
-        String tag = language == null ? "" : SparqlTerms.escape(language);
+        // LCASE: kognio-rdf 0.4.0 stores every tag lower-cased (de-CH -> de-ch), while older data
+        // and arknet's canonical form keep the region upper-case - compare case-insensitively.
+        String tag = language == null ? "" : SparqlTerms.escape(language.toLowerCase(Locale.ROOT));
         return "DELETE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
                 + subject + " <" + ArkprjVocabulary.DESCRIPTION + "> ?o } } "
                 + "WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
                 + subject + " <" + ArkprjVocabulary.DESCRIPTION + "> ?o . "
-                + "FILTER(lang(?o) = \"" + tag + "\") } }";
+                + "FILTER(LCASE(lang(?o)) = \"" + tag + "\") } }";
     }
 
     /** A one-triple graph, for the common "insert exactly one new value" case in {@link #updateAttributes}. */
