@@ -80,14 +80,12 @@ public final class StoreReader {
     private static final String DCTERMS_IDENTIFIER = "http://purl.org/dc/terms/identifier";
 
     /**
-     * The named graphs this read path hides, as SPARQL {@code IRIREF}s - see the class javadoc for
-     * why each one is infrastructure rather than model. Adding a graph here is all it takes to hide
-     * it from {@link #readSnapshot}, {@link #outgoing} and {@link #incoming} at once, which is the
+     * The named graphs this read path hides, as SPARQL {@code IRIREF}s - taken from
+     * {@link InfrastructureGraphs}, see the class javadoc for why each one is infrastructure
+     * rather than model. Adding a graph there is all it takes to hide it from {@link #readSnapshot}, {@link #outgoing} and {@link #incoming} at once, which is the
      * point of the list: the three cannot drift apart.
      */
-    private static final List<String> HIDDEN_GRAPHS = List.of(
-            "<" + ArkprovVocabulary.PROVENANCE_GRAPH + ">",
-            "<" + ArkprjVocabulary.IDENTITY_GRAPH + ">");
+    private static final List<String> HIDDEN_GRAPHS = InfrastructureGraphs.SPARQL_IRIREFS;
 
     private final DatasetLifecycle lifecycle;
 
@@ -418,9 +416,7 @@ public final class StoreReader {
         String notInAnyHiddenGraph = HIDDEN_GRAPHS.stream()
                 .map(graph -> "FILTER NOT EXISTS { GRAPH " + graph + " { " + pattern + " } } ")
                 .collect(Collectors.joining());
-        String outsideEveryHiddenGraph = HIDDEN_GRAPHS.stream()
-                .map(graph -> "?g != " + graph)
-                .collect(Collectors.joining(" && "));
+        String outsideEveryHiddenGraph = InfrastructureGraphs.outsideExpression("?g");
         return "{ " + pattern + " " + notInAnyHiddenGraph + "} "
                 + "UNION { GRAPH ?g { " + pattern + " } FILTER(" + outsideEveryHiddenGraph + ") }";
     }

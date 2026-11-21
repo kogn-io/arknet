@@ -19,6 +19,7 @@ import io.kogn.rdf.terms.RDFTerm;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.InfrastructureGraphs;
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.prj.application.port.out.ProjectDatasets;
 import de.hauschel.arknet.prj.domain.DatasetInUseException;
@@ -60,8 +61,7 @@ public final class KognioRdfProjectDatasets implements ProjectDatasets {
 
     private static final String COUNT_BY_TYPE = "SELECT ?type (COUNT(DISTINCT ?s) AS ?count) WHERE { "
             + "GRAPH ?g { ?s a ?type } "
-            + "FILTER(?g != <" + ArkprjVocabulary.IDENTITY_GRAPH + "> && ?g != <"
-            + ArkprovVocabulary.PROVENANCE_GRAPH + ">) } GROUP BY ?type";
+            + "FILTER(" + InfrastructureGraphs.outsideExpression("?g") + ") } GROUP BY ?type";
 
     private final DatasetLifecycle lifecycle;
     private final Prefixes prefixes = Prefixes.defaults();
