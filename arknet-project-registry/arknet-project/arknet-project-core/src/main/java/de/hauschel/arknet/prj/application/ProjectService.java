@@ -6,6 +6,7 @@ package de.hauschel.arknet.prj.application;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 
 import de.hauschel.arknet.prj.application.port.in.AdoptProject;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
+import de.hauschel.arknet.prj.application.port.in.DeleteProject;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.application.port.in.ListAdoptableDatasets;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
@@ -25,19 +27,24 @@ import de.hauschel.arknet.prj.application.port.in.RenameProject;
 import de.hauschel.arknet.prj.application.port.in.ResolveProject;
 import de.hauschel.arknet.prj.application.port.in.UpdateProject;
 import de.hauschel.arknet.prj.application.port.out.DatasetInventory;
+import de.hauschel.arknet.prj.application.port.out.ProjectDatasets;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.DatasetAlreadyAdoptedException;
+import de.hauschel.arknet.prj.domain.OwnProjectDeletionException;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.prj.domain.ProjectDatasetRetainedException;
 import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
 import de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
 import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
+import de.hauschel.arknet.prj.domain.UnconfirmedProjectDeletionException;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 import de.hauschel.arknet.prj.domain.UnknownDatasetException;
+import de.hauschel.arknet.prj.domain.UnknownProjectException;
 
 /**
  * Application service implementing the project use cases.
@@ -110,7 +117,7 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
  */
 public class ProjectService
         implements RegisterProject, AdoptProject, AttachAnchor, RenameProject, ListProjects,
-        ListAdoptableDatasets, ResolveProject, FindProject, UpdateProject {
+        ListAdoptableDatasets, ResolveProject, FindProject, UpdateProject, DeleteProject {
 
     /**
      * Bound shared by {@link #updateWithOptimisticRetry} and {@link #register}'s retry loop,
@@ -125,6 +132,7 @@ public class ProjectService
     private final ProjectRegistry registry;
     private final ProjectSelfDescription selfDescription;
     private final DatasetInventory datasets;
+    private final ProjectDatasets projectDatasets;
 
     /**
      * One monitor per {@link ProjectId} that has ever been the target of a registry write in this
@@ -141,12 +149,15 @@ public class ProjectService
      * @param selfDescription the driven self-description port (must not be {@code null})
      * @param datasets        the driven inventory of datasets present in the store, consulted only
      *                        by {@link #adopt} and {@link #adoptable} (must not be {@code null})
+     * @param projectDatasets the driven port that inspects and removes a project's own dataset,
+     *                        consulted only by {@link #delete} (must not be {@code null})
      */
     public ProjectService(ProjectRegistry registry, ProjectSelfDescription selfDescription,
-            DatasetInventory datasets) {
+            DatasetInventory datasets, ProjectDatasets projectDatasets) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.selfDescription = Objects.requireNonNull(selfDescription, "selfDescription");
         this.datasets = Objects.requireNonNull(datasets, "datasets");
+        this.projectDatasets = Objects.requireNonNull(projectDatasets, "projectDatasets");
     }
 
     @Override
@@ -343,6 +354,77 @@ public class ProjectService
             }
             throw lastConflict;
         });
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The guards run before anything is removed, in this order: the reference must name exactly
+     * one registered project, that project must not be the caller's own, and a project still
+     * holding model resources needs {@code confirmed}. Only then is the registry entry removed, and
+     * after it the dataset - see {@link DeleteProject} for why that order.</p>
+     *
+     * <p>The count and both removals run under {@link #withProjectLock}, so no attach, rename or
+     * update of the same project through this service interleaves with them. A call already past
+     * its anchor resolution when the registry entry goes can still touch the dataset afterwards;
+     * the store refuses to remove a dataset such a call holds open, and any refusal of the dataset
+     * removal is reported as {@link ProjectDatasetRetainedException}, and one that opens it only after the removal brings back
+     * a dataset no project points to - the same orphan, visible and adoptable in {@code
+     * project_list}.</p>
+     */
+    @Override
+    public Deletion delete(String project, List<Anchor> callerAnchors, boolean confirmed) {
+        Objects.requireNonNull(callerAnchors, "callerAnchors");
+        Project target = findByReference(project);
+        for (Anchor callerAnchor : callerAnchors) {
+            registry.findByAnchor(callerAnchor)
+                    .filter(own -> own.id().equals(target.id()))
+                    .ifPresent(own -> {
+                        throw new OwnProjectDeletionException(own);
+                    });
+        }
+        return withProjectLock(target.id(), () -> {
+            Map<String, Long> resources = projectDatasets.modelResourceCounts(target.id());
+            if (!resources.isEmpty() && !confirmed) {
+                throw new UnconfirmedProjectDeletionException(target, resources);
+            }
+            try {
+                registry.delete(target.id());
+            } catch (ProjectNotFoundException e) {
+                // A concurrent call deleted it between the lookup above and this removal - the
+                // same answer as a reference that never named a project, in the port's own terms.
+                throw new UnknownProjectException(project.strip());
+            }
+            try {
+                projectDatasets.delete(target.id());
+            } catch (RuntimeException e) {
+                // Whatever stopped the removal - an open lease or a storage failure - the registry
+                // entry is already gone, so the state and its remedy are the same.
+                throw new ProjectDatasetRetainedException(target, e);
+            }
+            return new Deletion(target, resources);
+        });
+    }
+
+    /**
+     * Finds the one registered project whose id or label is {@code reference}. Ids are opaque and
+     * labels free-form, so one project's label can spell another project's id; such a reference
+     * is refused rather than resolved to either, since a deletion must not guess.
+     */
+    private Project findByReference(String reference) {
+        if (reference == null || reference.isBlank()) {
+            throw new IllegalArgumentException("Name the project to delete by its id or its label, "
+                    + "as project_list shows them.");
+        }
+        String wanted = reference.strip();
+        List<Project> matches = registry.findAll().stream()
+                .filter(candidate -> candidate.id().value().equals(wanted) || candidate.label().equals(wanted))
+                .toList();
+        if (matches.size() > 1) {
+            throw new IllegalArgumentException("'" + wanted + "' is ambiguous: it is the id of one registered "
+                    + "project and the label of another. Rename one of them with project_rename first.");
+        }
+        return matches.stream().findFirst().orElseThrow(() -> new UnknownProjectException(wanted));
     }
 
     /**

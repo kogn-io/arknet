@@ -68,10 +68,12 @@ import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfDatasetInventory;
+import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfProjectDatasets;
 import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfProjectRepositoryFactory;
 import de.hauschel.arknet.prj.adapter.mcp.ProjectMcpTools;
 import de.hauschel.arknet.prj.application.ProjectService;
 import de.hauschel.arknet.prj.application.port.out.DatasetInventory;
+import de.hauschel.arknet.prj.application.port.out.ProjectDatasets;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.mcp.store.StoreExportTools;
@@ -204,7 +206,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *   <li><strong>project</strong> ({@link ProjectMcpTools} over {@link ProjectService} over the
  *       RDF-persisted registry) - the project tools ({@code project_add}/
  *       {@code project_adopt}/{@code project_attach_anchor}/{@code project_rename}/
- *       {@code project_update}/{@code project_list}), assembled
+ *       {@code project_update}/{@code project_delete}/{@code project_list}), assembled
  *       through {@link KognioRdfProjectRepositoryFactory}. This one is shaped differently from the
  *       model hexagons above and deliberately so: it manages identity rather than model, its
  *       registry lives in one reserved dataset instead of a per-project one, and it is the only
@@ -893,16 +895,31 @@ public class ArknetMcpConfiguration {
         return new KognioRdfDatasetInventory(datasetLifecycle);
     }
 
+    /**
+     * Inspects and removes a project's own dataset - what {@code project_delete} needs beyond the
+     * registry. A bean of its own rather than a widening of {@link #datasetInventory}, which
+     * promises to stay read-only and identity-only.
+     *
+     * <p>Over the same shared {@link DatasetLifecycle} as everything else: a removal waits briefly
+     * for a lease another tool call still holds on that dataset, and this lifecycle is the one
+     * every such lease is taken from.</p>
+     */
+    @Bean
+    ProjectDatasets projectDatasets(final DatasetLifecycle datasetLifecycle) {
+        return new KognioRdfProjectDatasets(datasetLifecycle);
+    }
+
     @Bean
     ProjectService projectService(
             final ProjectRegistry projectRegistry, final ProjectSelfDescription projectSelfDescription,
-            final DatasetInventory datasetInventory) {
-        return new ProjectService(projectRegistry, projectSelfDescription, datasetInventory);
+            final DatasetInventory datasetInventory, final ProjectDatasets projectDatasets) {
+        return new ProjectService(projectRegistry, projectSelfDescription, datasetInventory, projectDatasets);
     }
 
     /**
      * The project tools ({@code project_add}, {@code project_attach_anchor},
-     * {@code project_rename}, {@code project_update}, {@code project_list}, {@code project_adopt}).
+     * {@code project_rename}, {@code project_update}, {@code project_delete}, {@code project_list},
+     * {@code project_adopt}).
      *
      * <p>Note what is <em>not</em> injected: no {@link ProjectResolver}. Every other
      * {@code *McpTools} bean gets one to turn a call's anchor into a {@link ProjectId}
@@ -920,7 +937,7 @@ public class ArknetMcpConfiguration {
     ProjectMcpTools projectMcpTools(final ProjectService service,
             final StaleTranslationHint staleTranslationHint) {
         return new ProjectMcpTools(service, service, service, service, service, service, service, service,
-                staleTranslationHint);
+                service, staleTranslationHint);
     }
 
     // --- Store read path: generic query, model-shaped report -------------------

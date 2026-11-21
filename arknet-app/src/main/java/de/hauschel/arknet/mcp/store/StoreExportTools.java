@@ -169,14 +169,10 @@ public final class StoreExportTools {
         final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
         final Optional<Project> project = findProject.findById(projectId);
         if (project.isEmpty()) {
-            // Not reachable today: ProjectRegistry (arknet-project-core, port/out) offers no
-            // deregistration operation - only register/findByAnchor/findById/findAll/
-            // findCurrentById/compareAndUpdate/updateAttributes - and there is no project_delete
-            // tool, so a project this anchor just resolved to cannot vanish before this lookup
-            // runs. Kept as defensive code anyway, in the same shape as every other per-project
-            // failure line, rather than left out: without it, the day a deregistration operation
-            // is added, project.get() below would throw NoSuchElementException instead of
-            // reporting a clean failure.
+            // Reachable: project_delete can remove the project this anchor just resolved to
+            // between the resolution above and this lookup. Reported in the same shape as every
+            // other per-project failure line instead of letting project.get() below throw
+            // NoSuchElementException.
             return "# Exported " + projectId.value() + ": FAILED to export (project is no longer registered)\n";
         }
         return exportOne(project.get(), timestamp) + "\n";

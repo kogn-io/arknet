@@ -42,6 +42,7 @@ class ProjectServiceTest {
     private InMemoryProjectRegistry registry;
     private InMemoryProjectSelfDescription selfDescription;
     private InMemoryDatasetInventory datasets;
+    private InMemoryProjectDatasets projectDatasets;
     private ProjectService service;
 
     @BeforeEach
@@ -49,7 +50,8 @@ class ProjectServiceTest {
         registry = new InMemoryProjectRegistry();
         selfDescription = new InMemoryProjectSelfDescription();
         datasets = new InMemoryDatasetInventory();
-        service = new ProjectService(registry, selfDescription, datasets);
+        projectDatasets = new InMemoryProjectDatasets();
+        service = new ProjectService(registry, selfDescription, datasets, projectDatasets);
     }
 
     @Test
@@ -317,7 +319,7 @@ class ProjectServiceTest {
     void aStaleCompareAndUpdateOnTheFirstAttemptIsRetriedTransparently() {
         Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         ProjectService retryingService =
-                new ProjectService(new ConflictsOnCompareAndUpdateRegistry(registry, 1), selfDescription, datasets);
+                new ProjectService(new ConflictsOnCompareAndUpdateRegistry(registry, 1), selfDescription, datasets, projectDatasets);
 
         Project attached = retryingService.attach(project.id(), pathAnchor("/home/fred/arknet-worktree"));
 
@@ -336,7 +338,7 @@ class ProjectServiceTest {
         Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         int writesAfterRegister = registry.writeCount();
         ProjectService retryingService = new ProjectService(
-                new ConflictsOnCompareAndUpdateRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
+                new ConflictsOnCompareAndUpdateRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets, projectDatasets);
 
         assertThrows(StaleProjectException.class,
                 () -> retryingService.attach(project.id(), pathAnchor("/home/fred/arknet-worktree")));
@@ -349,7 +351,7 @@ class ProjectServiceTest {
         Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         int writesAfterRegister = registry.writeCount();
         ProjectService retryingService = new ProjectService(
-                new ConflictsOnCompareAndUpdateRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
+                new ConflictsOnCompareAndUpdateRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets, projectDatasets);
 
         assertThrows(StaleProjectException.class, () -> retryingService.rename(project.id(), "arknet-renamed"));
         assertEquals(writesAfterRegister, registry.writeCount(), "an exhausted retry must not have written anything");
@@ -496,7 +498,7 @@ class ProjectServiceTest {
     void aStaleUpdateAttributesOnTheFirstAttemptIsRetriedTransparently() {
         Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         ProjectService retryingService =
-                new ProjectService(new ConflictsOnUpdateAttributesRegistry(registry, 1), selfDescription, datasets);
+                new ProjectService(new ConflictsOnUpdateAttributesRegistry(registry, 1), selfDescription, datasets, projectDatasets);
 
         Project updated = retryingService.update(project.id(), "Architecture + Knowledge Net", "en", null, null);
 
@@ -511,7 +513,7 @@ class ProjectServiceTest {
         Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
         int writesAfterRegister = registry.writeCount();
         ProjectService retryingService = new ProjectService(
-                new ConflictsOnUpdateAttributesRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
+                new ConflictsOnUpdateAttributesRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets, projectDatasets);
 
         assertThrows(StaleProjectException.class,
                 () -> retryingService.update(project.id(), "Architecture + Knowledge Net", "en", null, null));
@@ -528,7 +530,7 @@ class ProjectServiceTest {
     @Test
     void anUnattributedRegistrationConflictOnTheFirstAttemptIsRetriedTransparently() {
         ProjectService retryingService =
-                new ProjectService(new ConflictsOnRegisterRegistry(registry, 1), selfDescription, datasets);
+                new ProjectService(new ConflictsOnRegisterRegistry(registry, 1), selfDescription, datasets, projectDatasets);
 
         Project project = retryingService.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null);
 
@@ -544,7 +546,7 @@ class ProjectServiceTest {
     @Test
     void anUnattributedRegistrationConflictThatNeverClearsIsRethrownAfterTheRetryBudgetIsSpent() {
         ProjectService retryingService = new ProjectService(
-                new ConflictsOnRegisterRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
+                new ConflictsOnRegisterRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets, projectDatasets);
 
         assertThrows(UnattributedRegistrationConflictException.class,
                 () -> retryingService.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null, null));
@@ -564,7 +566,7 @@ class ProjectServiceTest {
         ProjectId existing = new ProjectId("arknet");
         datasets.with(existing);
         ProjectService retryingService =
-                new ProjectService(new ConflictsOnRegisterRegistry(registry, 1), selfDescription, datasets);
+                new ProjectService(new ConflictsOnRegisterRegistry(registry, 1), selfDescription, datasets, projectDatasets);
 
         Project adopted = retryingService.adopt(existing, "arknet", pathAnchor("/home/fred/DEV/arknet"));
 
@@ -578,7 +580,7 @@ class ProjectServiceTest {
         ProjectId existing = new ProjectId("arknet");
         datasets.with(existing);
         ProjectService retryingService = new ProjectService(
-                new ConflictsOnRegisterRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
+                new ConflictsOnRegisterRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets, projectDatasets);
 
         assertThrows(UnattributedRegistrationConflictException.class,
                 () -> retryingService.adopt(existing, "arknet", pathAnchor("/home/fred/DEV/arknet")));
@@ -596,7 +598,7 @@ class ProjectServiceTest {
         ProjectId existing = new ProjectId("arknet");
         datasets.with(existing);
         ProjectService retryingService = new ProjectService(
-                new ClaimedByAConcurrentAdopterRegistry(registry), selfDescription, datasets);
+                new ClaimedByAConcurrentAdopterRegistry(registry), selfDescription, datasets, projectDatasets);
 
         assertThrows(ResourceAlreadyExistsException.class,
                 () -> retryingService.adopt(existing, "arknet", pathAnchor("/home/fred/DEV/arknet")));
@@ -667,6 +669,11 @@ class ProjectServiceTest {
             return delegate.updateAttributes(projectId, expectedHead, description, descriptionLanguage,
                     defaultLanguage, maintainedLanguages);
         }
+
+        @Override
+        public void delete(ProjectId projectId) {
+            delegate.delete(projectId);
+        }
     }
 
     /**
@@ -727,6 +734,11 @@ class ProjectServiceTest {
             }
             return delegate.updateAttributes(projectId, expectedHead, description, descriptionLanguage,
                     defaultLanguage, maintainedLanguages);
+        }
+
+        @Override
+        public void delete(ProjectId projectId) {
+            delegate.delete(projectId);
         }
     }
 
@@ -789,6 +801,11 @@ class ProjectServiceTest {
             return delegate.updateAttributes(projectId, expectedHead, description, descriptionLanguage,
                     defaultLanguage, maintainedLanguages);
         }
+
+        @Override
+        public void delete(ProjectId projectId) {
+            delegate.delete(projectId);
+        }
     }
 
     /**
@@ -842,6 +859,11 @@ class ProjectServiceTest {
                 String descriptionLanguage, String defaultLanguage, List<String> maintainedLanguages) {
             return delegate.updateAttributes(projectId, expectedHead, description, descriptionLanguage,
                     defaultLanguage, maintainedLanguages);
+        }
+
+        @Override
+        public void delete(ProjectId projectId) {
+            delegate.delete(projectId);
         }
     }
 }
