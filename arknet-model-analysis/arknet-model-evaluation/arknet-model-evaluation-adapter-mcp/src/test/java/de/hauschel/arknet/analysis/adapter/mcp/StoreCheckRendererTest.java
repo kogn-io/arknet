@@ -204,8 +204,9 @@ class StoreCheckRendererTest {
                 .contains("| Resource | Type | Label |")
                 .contains("| FR-2 | FunctionalRequirement | Logout |")
                 .contains("Mentioned in text but not linked:")
-                .contains("| Source | Term | Label | Field(s) | Missing edge |")
-                .contains("| FR-3 | TERM-9 | Kunde | description, stepText | usesTerm |")
+                .contains(StoreCheckRenderer.MISSING_EDGE_LEGEND)
+                .contains("\n- TERM-9 Kunde (1): description+stepText: FR-3")
+                .doesNotContain("| Source |")
                 .doesNotContain("Terms never referenced:")
                 .doesNotContain("Constraints not attached to any requirement or use case:");
     }
@@ -247,9 +248,9 @@ class StoreCheckRendererTest {
                 .contains("2 weaker mention hints not counted")
                 .contains("Mentioned only in acceptance criteria or next to a covering reference "
                         + "(hints, not counted):")
-                .contains("| Source | Term | Label | Field(s) | Why |")
-                .contains("| FR-3 | TERM-9 | Kunde | criterionText | only in an acceptance criterion |")
-                .contains("| FR-4 | TERM-9 | Kunde | description | covered by FR-5 |")
+                .contains(StoreCheckRenderer.HINT_LEGEND)
+                .contains("\n- TERM-9 Kunde (2): criterionText: FR-3; description (covered by FR-5): FR-4")
+                .doesNotContain("| Source |")
                 .doesNotContain("Mentioned in text but not linked:");
     }
 
@@ -265,6 +266,136 @@ class StoreCheckRendererTest {
                 .contains("no orphaned requirements, unreferenced terms, unlinked mentions or unattached "
                         + "constraints found")
                 .contains("1 weaker mention hint not counted")
-                .contains("| FR-3 | TERM-9 | Kunde | criterionText | only in an acceptance criterion |");
+                .contains("\n- TERM-9 Kunde (1): criterionText: FR-3");
+    }
+
+    /**
+     * kogn-io/arknet#689: one line per term, not per source and term - the sources grouped by the
+     * field set they name the term in, the busiest term first and ties by term code.
+     */
+    @Test
+    void groupsMentionsByTermWithTheBusiestTermFirstAndTiesByCode() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(),
+                List.of(
+                        mention("FR-1", "TERM-7", "Mitglied", List.of("description")),
+                        mention("FR-1", "TERM-2", "Kasse", List.of("description", "criterionText")),
+                        mention("FR-2", "TERM-7", "Mitglied", List.of("title")),
+                        mention("UC3", "TERM-7", "Mitglied", List.of("stepText")),
+                        mention("FR-4", "TERM-1", "Beitrag", List.of("rationale")),
+                        mention("FR-5", "TERM-7", "Mitglied", List.of("description"))),
+                List.of(), List.of()));
+
+        assertThat(rendered)
+                .contains("6 unlinked mentions")
+                .contains("\n- TERM-7 Mitglied (4): description: FR-1, FR-5; title: FR-2; stepText: UC3"
+                        + "\n- TERM-1 Beitrag (1): rationale: FR-4"
+                        + "\n- TERM-2 Kasse (1): description+criterionText: FR-1");
+    }
+
+    /** The legend cannot read a type off a shortened IRI, so such a source keeps its missing edge. */
+    @Test
+    void keepsTheMissingEdgeForASourceWithoutABusinessCode() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(),
+                List.of(new MentionFinding(ID + "bc-x", null, ID + "term-9", "TERM-9", "Kunde",
+                        "ubiquitousLanguageTerm", List.of("domainVision"))),
+                List.of(), List.of()));
+
+        assertThat(rendered).contains("- TERM-9 Kunde (1): domainVision: " + ID + "bc-x (missing ubiquitousLanguageTerm)");
+    }
+
+    /**
+     * Hints group by term exactly like the counted mentions; sources covered by the same references
+     * share one group, sources covered by different ones do not.
+     */
+    @Test
+    void groupsHintsByTermAndKeepsTheCoveringReferencesPerSource() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(), List.of(), List.of(),
+                List.of(
+                        hint("UC2", "TERM-9", "Kontoauszug", WeakReason.COVERED_BY_REFERENCE, List.of("UC9")),
+                        hint("FR-8", "TERM-3", "Buchung", WeakReason.ONLY_IN_ACCEPTANCE_CRITERION, List.of()),
+                        hint("UC3", "TERM-9", "Kontoauszug", WeakReason.COVERED_BY_REFERENCE,
+                                List.of("UC9", "FR-1")),
+                        hint("UC4", "TERM-9", "Kontoauszug", WeakReason.COVERED_BY_REFERENCE, List.of("UC9")))));
+
+        assertThat(rendered)
+                .contains("4 weaker mention hints not counted")
+                .contains("\n- TERM-9 Kontoauszug (3): stepText (covered by UC9): UC2, UC4; "
+                        + "stepText (covered by UC9, FR-1): UC3"
+                        + "\n- TERM-3 Buchung (1): criterionText: FR-8");
+    }
+
+    /**
+     * kogn-io/arknet#689: switched off, both lists give way to one sentence, and every count in the
+     * summary - findings and hints alike - stays exactly what it is with the lists shown.
+     */
+    @Test
+    void omitsBothMentionListsButKeepsEveryCountWhenSwitchedOff() {
+        OrphanCheck.Result result = new OrphanCheck.Result(
+                List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
+                List.of(),
+                List.of(mention("FR-1", "TERM-7", "Mitglied", List.of("description")),
+                        mention("FR-3", "TERM-7", "Mitglied", List.of("description"))),
+                List.of(),
+                List.of(hint("FR-8", "TERM-3", "Buchung", WeakReason.ONLY_IN_ACCEPTANCE_CRITERION, List.of())));
+
+        String shown = renderer.orphanSection(result, true);
+        String omitted = renderer.orphanSection(result, false);
+
+        assertThat(result.total()).isEqualTo(3);
+        assertThat(omitted.lines().findFirst()).isEqualTo(shown.lines().findFirst());
+        assertThat(omitted)
+                .contains("2 unlinked mentions")
+                .contains("1 weaker mention hint not counted")
+                .contains("| FR-2 | FunctionalRequirement | Logout |")
+                .contains(StoreCheckRenderer.MENTIONS_OMITTED)
+                .doesNotContain("Mentioned in text but not linked:")
+                .doesNotContain("Mentioned only in acceptance criteria")
+                .doesNotContain("TERM-7");
+        assertThat(shown)
+                .contains("- TERM-7 Mitglied (2)")
+                .contains("- TERM-3 Buchung (1)")
+                .doesNotContain(StoreCheckRenderer.MENTIONS_OMITTED);
+        assertThat(renderer.orphanSection(result)).isEqualTo(shown);
+    }
+
+    /** An all-clear section with hints only still says the hints were left out, not that none exist. */
+    @Test
+    void namesTheOmittedHintsInAnOtherwiseCleanSection() {
+        String rendered = renderer.orphanSection(new OrphanCheck.Result(
+                List.of(), List.of(), List.of(), List.of(),
+                List.of(hint("FR-8", "TERM-3", "Buchung", WeakReason.ONLY_IN_ACCEPTANCE_CRITERION, List.of()))),
+                false);
+
+        assertThat(rendered)
+                .contains("no orphaned requirements")
+                .contains("1 weaker mention hint not counted")
+                .contains(StoreCheckRenderer.MENTIONS_OMITTED)
+                .doesNotContain("TERM-3");
+    }
+
+    /** Nothing to omit, nothing to announce: a section without mentions reads the same either way. */
+    @Test
+    void readsTheSameEitherWayWhenThereAreNoMentions() {
+        OrphanCheck.Result result = new OrphanCheck.Result(
+                List.of(new ResourceFinding(ID + "fr-2", "FR-2", "FunctionalRequirement", "Logout")),
+                List.of(), List.of(), List.of(), List.of());
+
+        assertThat(renderer.orphanSection(result, false)).isEqualTo(renderer.orphanSection(result, true));
+    }
+
+    private static MentionFinding mention(final String source, final String term, final String label,
+            final List<String> fields) {
+        return new MentionFinding(ID + source.toLowerCase(), source, ID + term.toLowerCase(), term, label,
+                "usesTerm", fields);
+    }
+
+    private static WeakMention hint(final String source, final String term, final String label,
+            final WeakReason reason, final List<String> coveredBy) {
+        return new WeakMention(ID + source.toLowerCase(), source, ID + term.toLowerCase(), term, label,
+                "usesTerm", List.of(reason == WeakReason.ONLY_IN_ACCEPTANCE_CRITERION ? "criterionText" : "stepText"),
+                reason, coveredBy);
     }
 }

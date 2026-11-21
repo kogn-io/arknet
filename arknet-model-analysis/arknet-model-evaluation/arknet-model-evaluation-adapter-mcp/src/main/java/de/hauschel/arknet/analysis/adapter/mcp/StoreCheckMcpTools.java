@@ -113,9 +113,12 @@ public final class StoreCheckMcpTools {
             + "architecture decision's text naming a term without the matching "
             + "usesTerm/primaryRole/supportingRole/ubiquitousLanguageTerm edge, or a term's own "
             + "skos:definition naming another term without a skos:broader or skos:related edge - and "
-            + "a constraint no requirement or use case is bound by via constrainedBy. Each mention is "
-            + "reported with the field(s) it was found in (e.g. description, stepText), so you need "
-            + "not open the resource. Two kinds of mention are downgraded to a separate hint list that "
+            + "a constraint no requirement or use case is bound by via constrainedBy. Mentions are "
+            + "listed one line per term with the number of sources, and each source is reported with "
+            + "the field(s) the term was found in (e.g. FR-3 (description, stepText)), so you need "
+            + "not open the resource; the missing edge follows from the source's type and is named once "
+            + "in a legend. The mention lists are the bulk of a large project's report: withMentions=false "
+            + "drops them and keeps every count. Two kinds of mention are downgraded to a separate hint list that "
             + "is shown but not counted as findings (kogn-io/arknet#697): a term named only in an "
             + "acceptance criterion (criterionText), and a term whose every normative hit sits in the "
             + "same sentence (text between . ! ? ; : or a line break) as a reference to another "
@@ -133,9 +136,14 @@ public final class StoreCheckMcpTools {
             final McpSyncRequestContext context,
             @McpToolParam(description = "Which checks to run, as a list of names. Allowed: LANGUAGE, "
                     + "ROLE_TERM_DUPLICATE, STEP_ACCEPTANCE, ORPHAN. Omit the parameter (or pass an empty list) to "
-                    + "run every check - which is what most callers want, since the set is small and each is "
-                    + "cheap.", required = false)
+                    + "run every check, which yields the complete result. On a large project that answer is "
+                    + "long - most of it ORPHAN's mention lists - so name only the checks you need, and pass "
+                    + "withMentions=false when the counts suffice.", required = false)
             final List<String> checks,
+            @McpToolParam(description = "Whether ORPHAN shows its two mention lists (unlinked mentions and "
+                    + "uncounted hints, one line per term). false replaces them by one sentence; every count "
+                    + "in the summary stays. Default true.", required = false)
+            final Boolean withMentions,
             @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
@@ -150,7 +158,8 @@ public final class StoreCheckMcpTools {
                         renderer.roleTermDuplicateSection(RoleTermDuplicateCheck.run(snapshot.get()));
                 case STEP_ACCEPTANCE ->
                         renderer.stepAcceptanceSection(StepAcceptanceCheck.run(snapshot.get()));
-                case ORPHAN -> renderer.orphanSection(OrphanCheck.run(readGraph(project)));
+                case ORPHAN -> renderer.orphanSection(OrphanCheck.run(readGraph(project)),
+                        !Boolean.FALSE.equals(withMentions));
             });
         }
         return renderer.report(selected, sections);

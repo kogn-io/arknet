@@ -3,7 +3,10 @@
 
 package de.hauschel.arknet.analysis.adapter.mcp;
 
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -169,19 +172,56 @@ public final class StoreCheckRenderer {
         return finding.position() == null ? "-" : String.valueOf(finding.position());
     }
 
+    /** How a line of either mention list reads (kogn-io/arknet#689). */
+    static final String LINE_LAYOUT = "One line per term: code, label, (number of sources), then the sources "
+            + "grouped by the field(s) the term was found in (field+field: sources; next group).";
+
     /**
-     * Renders the orphan section (kogn-io/arknet#473, folding the former {@code orphan_check} tool
-     * in here): four sub-tables, one per finding list, each shown only when it is non-empty - the
-     * same discipline {@link #stepAcceptanceSection} follows for its two cases.
-     *
-     * <p>Mentions downgraded to hints (kogn-io/arknet#697) follow in a separate block and a
-     * clause of the summary; they never count as findings, so an otherwise clean result stays
-     * clean and merely states them. The mention table names the field(s) each term was found in.</p>
+     * Legend under the mention list: the missing edge follows from the source's type, so it is said
+     * once here instead of on every row (kogn-io/arknet#689). Kept in step with the edge names
+     * {@code TraceabilityGraph#classifiedMentions} assigns per source type.
+     */
+    static final String MISSING_EDGE_LEGEND = "Missing edge by source type: requirement, use case or decision "
+            + "-> usesTerm; bounded context -> ubiquitousLanguageTerm; glossary term -> broader/narrower/related.";
+
+    /** Legend under the hint list: the reason is implied unless a covering reference is named. */
+    static final String HINT_LEGEND = "A group marked \"covered by\" names the term next to a reference "
+            + "that already carries the edge; every other group names it only in an acceptance criterion.";
+
+    /** What stands in for both mention lists when the caller switched them off (kogn-io/arknet#689). */
+    static final String MENTIONS_OMITTED = "Mention lists omitted (withMentions=false); the counts above "
+            + "still include them. Call again without withMentions=false to see them.";
+
+    /**
+     * Renders the orphan section with both mention lists shown - the answer {@code orphan_check}
+     * and a {@code store_check} call without {@code withMentions} give.
      *
      * @param result the findings lists and hints, already computed by {@link OrphanCheck#run}
      * @return the section text
+     * @see #orphanSection(OrphanCheck.Result, boolean)
      */
     public String orphanSection(final OrphanCheck.Result result) {
+        return orphanSection(result, true);
+    }
+
+    /**
+     * Renders the orphan section (kogn-io/arknet#473, folding the former {@code orphan_check} tool
+     * in here): one block per finding list, each shown only when it is non-empty - the same
+     * discipline {@link #stepAcceptanceSection} follows for its two cases.
+     *
+     * <p>Mentions downgraded to hints (kogn-io/arknet#697) follow in a separate block and a
+     * clause of the summary; they never count as findings, so an otherwise clean result stays
+     * clean and merely states them. Both mention lists are grouped by term, one line per term with
+     * its mention count and every source with the field(s) the term was found in
+     * (kogn-io/arknet#689) - a list per source and term repeated the term's label and the missing
+     * edge on every row, which made it the bulk of the whole report.</p>
+     *
+     * @param result       the findings lists and hints, already computed by {@link OrphanCheck#run}
+     * @param withMentions {@code false} replaces both mention lists by one sentence; the summary and
+     *                     its counts stay as they are
+     * @return the section text
+     */
+    public String orphanSection(final OrphanCheck.Result result, final boolean withMentions) {
         Objects.requireNonNull(result, "result");
         final int hints = result.weakMentions().size();
         if (result.total() == 0) {
@@ -189,7 +229,11 @@ public final class StoreCheckRenderer {
                     + "unlinked mentions or unattached constraints found.");
             if (hints > 0) {
                 clear.append(' ').append(hintCount(hints)).append('.');
-                appendWeakBlock(clear, result.weakMentions());
+                if (withMentions) {
+                    appendWeakBlock(clear, result.weakMentions());
+                } else {
+                    clear.append("\n\n").append(MENTIONS_OMITTED);
+                }
             }
             return clear.append("\n\n").append(ORPHAN_BLIND_SPOT).toString();
         }
@@ -215,16 +259,18 @@ public final class StoreCheckRenderer {
             rendered.append("\n\nTerms never referenced:\n\n");
             appendResourceTable(rendered, result.orphanTerms());
         }
-        if (!result.unlinkedMentions().isEmpty()) {
-            rendered.append("\n\nMentioned in text but not linked:\n\n");
-            appendMentionTable(rendered, result.unlinkedMentions());
+        if (withMentions && !result.unlinkedMentions().isEmpty()) {
+            appendMentionBlock(rendered, result.unlinkedMentions());
         }
         if (!result.orphanConstraints().isEmpty()) {
             rendered.append("\n\nConstraints not attached to any requirement or use case:\n\n");
             appendResourceTable(rendered, result.orphanConstraints());
         }
-        if (hints > 0) {
+        if (withMentions && hints > 0) {
             appendWeakBlock(rendered, result.weakMentions());
+        }
+        if (!withMentions && (hints > 0 || !result.unlinkedMentions().isEmpty())) {
+            rendered.append("\n\n").append(MENTIONS_OMITTED);
         }
         return rendered.append("\n\n").append(ORPHAN_BLIND_SPOT).toString();
     }
@@ -239,44 +285,76 @@ public final class StoreCheckRenderer {
         }
     }
 
-    private void appendMentionTable(final StringBuilder out, final List<MentionFinding> mentions) {
-        out.append("| Source | Term | Label | Field(s) | Missing edge |\n| --- | --- | --- | --- | --- |");
-        for (final MentionFinding mention : mentions) {
-            out.append("\n| ").append(handleOf(mention.sourceIri(), mention.sourceHandle()))
-                    .append(" | ").append(handleOf(mention.termIri(), mention.termHandle()))
-                    .append(" | ").append(mention.termLabel())
-                    .append(" | ").append(fieldsOf(mention.fields()))
-                    .append(" | ").append(mention.edgeLocalName())
-                    .append(" |");
-        }
+    /**
+     * The mention list, one line per term (kogn-io/arknet#689). A source without a business code
+     * keeps its missing edge, because the legend reads the edge off a type its shortened IRI does
+     * not show.
+     */
+    private void appendMentionBlock(final StringBuilder out, final List<MentionFinding> mentions) {
+        out.append("\n\nMentioned in text but not linked:\n\n").append(LINE_LAYOUT).append(' ')
+                .append(MISSING_EDGE_LEGEND).append('\n');
+        appendTermLines(out, mentions.stream().map(mention -> new TermSource(
+                handleOf(mention.termIri(), mention.termHandle()), mention.termLabel(), fieldsOf(mention.fields()),
+                handleOf(mention.sourceIri(), mention.sourceHandle())
+                        + (mention.sourceHandle() == null ? " (missing " + mention.edgeLocalName() + ")" : "")))
+                .toList());
     }
 
     private static String hintCount(final int hints) {
         return hints + (hints == 1 ? " weaker mention hint" : " weaker mention hints") + " not counted";
     }
 
+    /** The field set a source names the term in, as the key its sources are grouped under. */
     private static String fieldsOf(final List<String> fields) {
-        return fields.isEmpty() ? "-" : String.join(", ", fields);
+        return fields.isEmpty() ? "-" : String.join("+", fields);
     }
 
     /**
      * The hint block (kogn-io/arknet#697): mentions that are listed but neither counted nor
-     * demanding an edge, with the field they sit in and why they were downgraded.
+     * demanding an edge, grouped by term and field like the mention list (kogn-io/arknet#689); a
+     * covered mention is grouped under its field set plus the references that cover it, so sources
+     * covered by the same references share one group.
      */
     private void appendWeakBlock(final StringBuilder out, final List<WeakMention> weakMentions) {
         out.append("\n\nMentioned only in acceptance criteria or next to a covering reference "
-                + "(hints, not counted):\n\n")
-                .append("| Source | Term | Label | Field(s) | Why |\n| --- | --- | --- | --- | --- |");
-        for (final WeakMention mention : weakMentions) {
-            out.append("\n| ").append(handleOf(mention.sourceIri(), mention.sourceHandle()))
-                    .append(" | ").append(handleOf(mention.termIri(), mention.termHandle()))
-                    .append(" | ").append(mention.termLabel())
-                    .append(" | ").append(fieldsOf(mention.fields()))
-                    .append(" | ").append(mention.reason() == TraceabilityGraph.WeakReason.COVERED_BY_REFERENCE
-                            ? "covered by " + String.join(", ", mention.coveredBy())
-                            : "only in an acceptance criterion")
-                    .append(" |");
-        }
+                + "(hints, not counted):\n\n").append(LINE_LAYOUT).append(' ').append(HINT_LEGEND).append('\n');
+        appendTermLines(out, weakMentions.stream().map(mention -> new TermSource(
+                handleOf(mention.termIri(), mention.termHandle()), mention.termLabel(),
+                fieldsOf(mention.fields()) + (mention.reason() == TraceabilityGraph.WeakReason.COVERED_BY_REFERENCE
+                        ? " (covered by " + String.join(", ", mention.coveredBy()) + ")"
+                        : ""),
+                handleOf(mention.sourceIri(), mention.sourceHandle())))
+                .toList());
+    }
+
+    /**
+     * One rendered source of a mention: the term it names, the group it is listed under within that
+     * term's line (its field set, for a hint plus its covering references), and itself.
+     */
+    private record TermSource(String termHandle, String termLabel, String group, String source) {
+    }
+
+    /**
+     * Groups {@code sources} by term and appends one line per term - most sources first, then by
+     * term code. Within a line the sources are grouped by {@link TermSource#group()}, so a field
+     * name is written once per term rather than once per source; groups and sources keep the order
+     * the check reported them in.
+     */
+    private static void appendTermLines(final StringBuilder out, final List<TermSource> sources) {
+        final Map<String, List<TermSource>> byTerm = sources.stream()
+                .collect(Collectors.groupingBy(TermSource::termHandle, LinkedHashMap::new, Collectors.toList()));
+        byTerm.values().stream()
+                .sorted(Comparator.comparingInt((List<TermSource> group) -> group.size()).reversed()
+                        .thenComparing(group -> group.getFirst().termHandle()))
+                .forEach(group -> out.append("\n- ").append(group.getFirst().termHandle())
+                        .append(' ').append(group.getFirst().termLabel())
+                        .append(" (").append(group.size()).append("): ")
+                        .append(group.stream()
+                                .collect(Collectors.groupingBy(TermSource::group, LinkedHashMap::new,
+                                        Collectors.mapping(TermSource::source, Collectors.joining(", "))))
+                                .entrySet().stream()
+                                .map(byFields -> byFields.getKey() + ": " + byFields.getValue())
+                                .collect(Collectors.joining("; "))));
     }
 
     /**
