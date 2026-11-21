@@ -28,13 +28,19 @@ final class InMemoryDatasetInventory implements DatasetInventory {
      * @param id the dataset identity to add
      * @return this inventory, for chaining in a test's arrange step
      */
-    InMemoryDatasetInventory with(ProjectId id) {
+    synchronized InMemoryDatasetInventory with(ProjectId id) {
         present.add(id);
         return this;
     }
 
+    /** Declares that the dataset is gone from the store, as after a concurrent deletion. */
+    synchronized InMemoryDatasetInventory without(ProjectId id) {
+        present.remove(id);
+        return this;
+    }
+
     @Override
-    public Set<ProjectId> existingDatasets() {
+    public synchronized Set<ProjectId> existingDatasets() {
         return Set.copyOf(present);
     }
 }

@@ -642,6 +642,16 @@ class ProjectMcpToolsTest {
     }
 
     @Test
+    void deleteAnswerUsesTheSingularForExactlyOneRevision() {
+        deleteProject.result = DeleteProject.Deletion.ofProject(PLUGIN, Map.of(), 1L);
+
+        final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", true, null);
+
+        assertTrue(rendered.contains("1 revision."), rendered);
+        assertFalse(rendered.contains("1 revisions"), rendered);
+    }
+
+    @Test
     void deleteAnswerNamesTheDeletedProjectAndWhatWentWithIt() {
         deleteProject.result = DeleteProject.Deletion.ofProject(PLUGIN,
                 Map.of("arkreq:FunctionalRequirement", 3L), 12L);

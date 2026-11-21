@@ -206,12 +206,13 @@ public class ProjectService
      * deleted, or a dataset created moments ago by a failed call, would otherwise be unreachable
      * with no way to say so.</p>
      *
-     * <p><strong>The three guards above run outside any transaction and cannot themselves close
-     * the TOCTOU window between two concurrent adopters of the same dataset (issue #174).</strong>
-     * Both can pass their {@code findById} check before either has committed; the registry write
-     * that follows goes through {@link #registerRetryingOnUnattributedConflict} for exactly that
-     * reason - see its javadoc for why a retry is still correct here even though this method,
-     * unlike {@link #register}, hands it a caller-chosen rather than freshly minted identity.</p>
+     * <p><strong>The guards run under the project lock</strong>, so an overlapping {@link #delete}
+     * of the same dataset cannot remove it between guard and registry write and leave a registered
+     * project without a model. The registry write still goes through
+     * {@link #registerRetryingOnUnattributedConflict} (issue #174): the lock is per dataset and
+     * does not serialise two adopters claiming the same anchor for different datasets. See its
+     * javadoc for why a retry is correct here even though this method, unlike {@link #register},
+     * hands it a caller-chosen rather than freshly minted identity.</p>
      *
      * @throws de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException if a concurrent adopter
      *                                        won the race for the very same {@code datasetId}
@@ -221,19 +222,19 @@ public class ProjectService
         Objects.requireNonNull(datasetId, "datasetId");
         Objects.requireNonNull(label, "label");
         Objects.requireNonNull(anchor, "anchor");
-        if (!datasets.existingDatasets().contains(datasetId)) {
-            throw new UnknownDatasetException(datasetId);
-        }
-        Optional<Project> alreadyAdopted = registry.findById(datasetId);
-        if (alreadyAdopted.isPresent()) {
-            throw new DatasetAlreadyAdoptedException(datasetId, alreadyAdopted.get().label());
-        }
-        Optional<Project> anchorOwner = registry.findByAnchor(anchor);
-        if (anchorOwner.isPresent()) {
-            throw new AnchorAlreadyRegisteredException(anchor, anchorOwner.get().id());
-        }
         Project project = new Project(datasetId, label, List.of(anchor));
         return withProjectLock(datasetId, () -> {
+            if (!datasets.existingDatasets().contains(datasetId)) {
+                throw new UnknownDatasetException(datasetId);
+            }
+            Optional<Project> alreadyAdopted = registry.findById(datasetId);
+            if (alreadyAdopted.isPresent()) {
+                throw new DatasetAlreadyAdoptedException(datasetId, alreadyAdopted.get().label());
+            }
+            Optional<Project> anchorOwner = registry.findByAnchor(anchor);
+            if (anchorOwner.isPresent()) {
+                throw new AnchorAlreadyRegisteredException(anchor, anchorOwner.get().id());
+            }
             registerRetryingOnUnattributedConflict(project, null, null, null, List.of());
             selfDescription.describe(project);
             return project;
@@ -437,6 +438,11 @@ public class ProjectService
                 .findFirst()
                 .orElseThrow(() -> new UnknownProjectException(wanted));
         return withProjectLock(dataset, () -> {
+            if (!datasets.existingDatasets().contains(dataset)) {
+                // A concurrent call removed it between the lookup above and the lock - the same
+                // answer as for a registered project that went away.
+                throw new UnknownProjectException(wanted);
+            }
             if (registry.findById(dataset).isPresent()) {
                 throw new IllegalArgumentException("The dataset '" + wanted + "' was registered as a project "
                         + "while it was being deleted. Name it by its id or label again.");

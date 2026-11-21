@@ -61,7 +61,7 @@ public class ProjectDatasetRetainedException extends RuntimeException {
                 : "Project '" + label + "' is no longer registered, but its dataset '" + datasetId.value() + "'";
         String shown = label == null ? "" : " project_list now shows it as an unregistered dataset.";
         return subject + " " + reason(failure) + " and was kept." + shown + " To remove it, call project_delete "
-                + "with the dataset id '" + datasetId.value() + "' again.";
+                + "with the dataset id '" + datasetId.value() + "' again (add confirm=true if it still holds content).";
     }
 
     private static String reason(RuntimeException failure) {
