@@ -136,15 +136,15 @@ public class ProjectService
 
     /**
      * One monitor per {@link ProjectId} that {@link #withProjectLock} was ever called for in this
-     * JVM. Grows for the lifetime of the process, not with the number of writes: by one fresh id
-     * per {@link #register} call, and by every distinct id {@link #adopt}, {@link #update},
-     * {@link #attach} and {@link #rename} are called with - including one that names no project,
-     * since these calls take the lock before they check that the id exists. {@link #delete} adds
-     * no such entry: it locks only an id it has already resolved to a registered project or an
-     * existing unregistered dataset. Entries are never pruned: removing one while another caller
-     * holds or waits on its monitor would let a third caller obtain a fresh monitor through
-     * {@code computeIfAbsent} and run unserialised alongside it; each entry is one small object,
-     * so the map is left to grow.
+     * JVM. Grows for the lifetime of the process: by one fresh id per {@link #register} call that
+     * gets past its language and anchor checks (a call rejected there never takes the lock), and
+     * by every distinct id {@link #adopt}, {@link #update}, {@link #attach} and {@link #rename} are
+     * called with - including one that names no project, since these calls take the lock before
+     * they check that the id exists. {@link #delete} adds no such entry: it locks only an id it
+     * has already resolved to a registered project or an existing unregistered dataset. Entries
+     * are never pruned: removing one while another caller holds or waits on its monitor would let
+     * a third caller obtain a fresh monitor through {@code computeIfAbsent} and run unserialised
+     * alongside it; each entry is one small object, so the map is left to grow.
      */
     private final ConcurrentHashMap<ProjectId, Object> projectLocks = new ConcurrentHashMap<>();
 
@@ -517,10 +517,10 @@ public class ProjectService
      * the guards {@link #adopt} runs under the project lock, so a conflict reaching this method
      * comes from a registry write for another project (the project lock covers only this one). A
      * retry is still correct: it does not manufacture success where none is possible, it only
-     * re-runs the registry's own guards against the
-     * now-committed state, turning an ambiguous, unattributed conflict into either a real success
-     * (nothing actually collided) or a well-attributed exception such as
-     * {@link AnchorAlreadyRegisteredException} instead of a raw, unactionable signal.</p>
+     * re-runs the registry's own guards against the now-committed state, turning an ambiguous,
+     * unattributed conflict into either a real success (nothing actually collided) or a
+     * well-attributed exception such as {@link AnchorAlreadyRegisteredException} instead of a raw,
+     * unactionable signal.</p>
      *
      * @throws UnattributedRegistrationConflictException if the write keeps losing an
      *                                         unattributable conflict across every retry attempt
