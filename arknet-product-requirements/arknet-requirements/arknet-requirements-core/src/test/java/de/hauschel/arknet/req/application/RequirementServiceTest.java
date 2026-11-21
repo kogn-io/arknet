@@ -1174,6 +1174,23 @@ class RequirementServiceTest {
     }
 
     /**
+     * The second way out named by the guard's message: removing the placeholder position while
+     * supplying a new criterion in the same call replaces the placeholder instead of carrying it
+     * forward.
+     */
+    @Test
+    void updateAcceptsALegacyRequirementWhenThePlaceholderIsRemovedAndReplacedByANewCriterion() {
+        RequirementCode code = givenLegacyRequirement();
+
+        Requirement updated = service.update(WS, code, null, null, null, List.of("Real done-when criterion"), null,
+                new RemovedPositions(Set.of(1)), null, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")), updated.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")),
+                service.get(WS, code, null).orElseThrow().acceptanceCriteria());
+    }
+
+    /**
      * Merely appending a new criterion after the placeholder does not close the gap: the
      * placeholder itself would still be persisted at position 1, exactly the state the guard
      * exists to prevent.
