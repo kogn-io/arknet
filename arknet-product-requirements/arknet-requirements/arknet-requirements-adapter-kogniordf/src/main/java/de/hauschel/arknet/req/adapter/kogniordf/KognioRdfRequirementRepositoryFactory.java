@@ -5,28 +5,25 @@ package de.hauschel.arknet.req.adapter.kogniordf;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
 
-import org.eclipse.rdf4j.model.IRI;
-import org.eclipse.rdf4j.model.Literal;
-import org.eclipse.rdf4j.model.Model;
-import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
-import org.eclipse.rdf4j.model.vocabulary.RDFS;
-import org.eclipse.rdf4j.repository.RepositoryLockedException;
-import org.eclipse.rdf4j.rio.RDFFormat;
-import org.eclipse.rdf4j.rio.Rio;
-
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
-import io.kogn.rdf.rdf4j.RDF4JFactory;
+import io.kogn.rdf.dataset.hosting.DatasetStoreLockedException;
+import io.kogn.rdf.rdf4j.dataset.GraphImportRdf4j;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
+import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.ReadableGraph;
+import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.terms.Triple;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
@@ -46,7 +43,7 @@ import de.hauschel.arknet.req.domain.RequirementType;
  *
  * <p>This factory is the single place that names RDF4J-backed types: the lifecycle
  * ({@link DatasetLifecycleRdf4j}), the SHACL validation implementation
- * ({@link ShaclValidationRdf4j}) and the Turtle parsing ({@link Rio}) used to load the
+ * ({@link ShaclValidationRdf4j}) and the Turtle import ({@link GraphImportRdf4j}) used to load the
  * requirements SHACL shapes and ontology axioms onto the classpath. It lets the
  * composition root wire an RDF-persisted requirement repository by handing over just a
  * storage directory, without itself depending on {@code io.kogn.rdf.rdf4j.*} - keeping
@@ -58,22 +55,22 @@ public final class KognioRdfRequirementRepositoryFactory {
 
     private static final String SHAPES_RESOURCE = "/requirements-shapes.ttl";
     private static final String AXIOMS_RESOURCE = "/arknet-requirements.ttl";
+    private static final String RDFS_COMMENT = "http://www.w3.org/2000/01/rdf-schema#comment";
     private static final String REQUIREMENTS_NS = "https://w3id.org/arknet/requirements#";
 
     /**
      * Recognises a {@link DatasetLifecycle#acquire} failure caused by a second instance
-     * already holding the storage directory's file lock, as the kognio-rdf
-     * RDF4J-backed hosting adapter reports it: {@link DatasetLifecycleRdf4j#acquire} lets
-     * RDF4J's {@code SailRepository#initializeInternal} translate its own
-     * {@code SailLockedException} into {@link RepositoryLockedException} before it ever
-     * reaches a caller, so this one type is the complete signal - no cause chain to walk.
+     * already holding the storage directory's file lock: the kognio-rdf hosting port reports
+     * it as {@link DatasetStoreLockedException}, so this one type is the complete signal - no
+     * cause chain to walk.
      * This is the predicate arknet-app's shared {@code DatasetLifecycle} bean wants; it is
      * offered as a default rather than hard-wired, because a different store behind
      * {@link DatasetLifecycle} may fail its lock conflicts differently, and this
      * factory - the one place allowed to name RDF4J - would then be the wrong place to
      * encode that for it.
      */
-    public static final Predicate<RuntimeException> DEFAULT_LOCK_CONFLICT = RepositoryLockedException.class::isInstance;
+    public static final Predicate<RuntimeException> DEFAULT_LOCK_CONFLICT =
+            DatasetStoreLockedException.class::isInstance;
 
     private KognioRdfRequirementRepositoryFactory() {
     }
@@ -235,7 +232,7 @@ public final class KognioRdfRequirementRepositoryFactory {
      * @return a ready-to-use {@link RequirementSchemaSource}
      */
     public static RequirementSchemaSource buildSchemaSource() {
-        Model model = parseModel(AXIOMS_RESOURCE);
+        ReadableGraph model = loadGraph(AXIOMS_RESOURCE);
         List<RequirementSchemaTerm> terms = List.of(
                 schemaTerm(model, "RequirementType", "Requirement", RequirementType.values()),
                 schemaTerm(model, "RequirementStatus", "RequirementStatus", RequirementStatus.values()),
@@ -244,63 +241,33 @@ public final class KognioRdfRequirementRepositoryFactory {
     }
 
     private static <E extends Enum<E>> RequirementSchemaTerm schemaTerm(
-            Model model, String term, String ontologyClassLocalName, E[] values) {
+            ReadableGraph model, String term, String ontologyClassLocalName, E[] values) {
         String definition = classComment(model, ontologyClassLocalName);
         List<String> valueNames = Arrays.stream(values).map(Enum::name).toList();
         return new RequirementSchemaTerm(term, definition, valueNames);
     }
 
     /** Looks up the (single, {@code @de}) class-level {@code rdfs:comment} of {@code arkreq:<localName>}. */
-    private static String classComment(Model model, String localName) {
-        IRI subject = SimpleValueFactory.getInstance().createIRI(REQUIREMENTS_NS, localName);
-        return model.filter(subject, RDFS.COMMENT, null).objects().stream()
+    private static String classComment(ReadableGraph model, String localName) {
+        SimpleRdf rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI(REQUIREMENTS_NS + localName);
+        return model.stream(subject, rdf.createIRI(RDFS_COMMENT), null)
+                .map(Triple::getObject)
                 .filter(Literal.class::isInstance)
                 .map(Literal.class::cast)
-                .filter(literal -> literal.getLanguage().map("de"::equals).orElse(false))
-                .map(Literal::stringValue)
+                .filter(literal -> literal.getLanguageTag().map("de"::equals).orElse(false))
+                .map(Literal::getLexicalForm)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("missing @de rdfs:comment for " + subject));
+                .orElseThrow(() -> new IllegalStateException("missing @de rdfs:comment for " + subject.getIRIString()));
     }
 
     private static ReadableGraph loadGraph(String classpathResource) {
-        return toGraph(parseModel(classpathResource));
-    }
-
-    private static Model parseModel(String classpathResource) {
-        try (InputStream in = KognioRdfRequirementRepositoryFactory.class.getResourceAsStream(classpathResource)) {
-            Objects.requireNonNull(in, "missing classpath resource " + classpathResource);
-            return Rio.parse(in, "", RDFFormat.TURTLE);
+        URL resource = KognioRdfRequirementRepositoryFactory.class.getResource(classpathResource);
+        Objects.requireNonNull(resource, "missing classpath resource " + classpathResource);
+        try (InputStream in = resource.openStream()) {
+            return new GraphImportRdf4j().readTurtle(in, new SimpleRdf().createIRI(resource.toExternalForm()));
         } catch (IOException e) {
             throw new IllegalStateException("failed to load " + classpathResource, e);
         }
-    }
-
-    /**
-     * Copies a parsed RDF4J model into a kognio-rdf graph through the public term factory
-     * (RDF4JGraph has no public Model constructor since kognio-rdf 0.4.0-M1).
-     */
-    static io.kogn.rdf.terms.Graph toGraph(org.eclipse.rdf4j.model.Model model) {
-        final RDF4JFactory factory = new RDF4JFactory();
-        final io.kogn.rdf.terms.Graph graph = factory.createGraph();
-        for (org.eclipse.rdf4j.model.Statement st : model) {
-            graph.add(
-                    (io.kogn.rdf.terms.BlankNodeOrIRI) toTerm(factory, st.getSubject()),
-                    factory.createIRI(st.getPredicate().stringValue()),
-                    toTerm(factory, st.getObject()));
-        }
-        return graph;
-    }
-
-    private static io.kogn.rdf.terms.RDFTerm toTerm(RDF4JFactory factory, org.eclipse.rdf4j.model.Value value) {
-        if (value instanceof org.eclipse.rdf4j.model.BNode bnode) {
-            return factory.createBlankNode(bnode.getID());
-        }
-        if (value instanceof org.eclipse.rdf4j.model.Literal literal) {
-            if (literal.getLanguage().isPresent()) {
-                return factory.createLiteral(literal.getLabel(), literal.getLanguage().get());
-            }
-            return factory.createLiteral(literal.getLabel(), factory.createIRI(literal.getDatatype().stringValue()));
-        }
-        return factory.createIRI(value.stringValue());
     }
 }

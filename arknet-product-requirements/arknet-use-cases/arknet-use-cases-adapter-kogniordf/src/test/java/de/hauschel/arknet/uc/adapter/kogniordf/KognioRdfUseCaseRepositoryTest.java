@@ -710,7 +710,7 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         assertThrows(WriteConstraintViolationException.class,
-                () -> gate.enforce(KognioRdfUseCaseRepositoryFactory.toGraph(twoPrimaryRoles)));
+                () -> gate.enforce(ModelGraphs.toGraph(twoPrimaryRoles)));
     }
 
     /**
@@ -736,7 +736,7 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         assertThrows(WriteConstraintViolationException.class,
-                () -> gate.enforce(KognioRdfUseCaseRepositoryFactory.toGraph(noPrimaryRole)));
+                () -> gate.enforce(ModelGraphs.toGraph(noPrimaryRole)));
     }
 
     /**
@@ -777,7 +777,7 @@ class KognioRdfUseCaseRepositoryTest {
 
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
-        assertDoesNotThrow(() -> gate.enforce(KognioRdfUseCaseRepositoryFactory.toGraph(withPrimaryRole)));
+        assertDoesNotThrow(() -> gate.enforce(ModelGraphs.toGraph(withPrimaryRole)));
     }
 
     /**
@@ -810,7 +810,7 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
-                () -> gate.enforce(KognioRdfUseCaseRepositoryFactory.toGraph(twoTitles)));
+                () -> gate.enforce(ModelGraphs.toGraph(twoTitles)));
         assertTrue(ex.getMessage().contains("title"), ex.getMessage());
     }
 
@@ -842,14 +842,14 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate englishGate = KognioRdfUseCaseRepositoryFactory
                 .buildGate(new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH));
         WriteConstraintViolationException englishEx = assertThrows(WriteConstraintViolationException.class,
-                () -> englishGate.enforce(KognioRdfUseCaseRepositoryFactory.toGraph(twoTitles)));
+                () -> englishGate.enforce(ModelGraphs.toGraph(twoTitles)));
         assertTrue(englishEx.getMessage().contains("A Use Case needs at least one dcterms:title"),
                 englishEx.getMessage());
 
         ShaclWriteGate germanGate = KognioRdfUseCaseRepositoryFactory
                 .buildGate(new DisplayLocale(Locale.GERMAN, Locale.ENGLISH));
         WriteConstraintViolationException germanEx = assertThrows(WriteConstraintViolationException.class,
-                () -> germanGate.enforce(KognioRdfUseCaseRepositoryFactory.toGraph(twoTitles)));
+                () -> germanGate.enforce(ModelGraphs.toGraph(twoTitles)));
         assertTrue(germanEx.getMessage().contains("Use Case braucht mindestens eine dcterms:title"),
                 germanEx.getMessage());
     }
@@ -882,7 +882,7 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
-                () -> gate.enforce(KognioRdfUseCaseRepositoryFactory.toGraph(twoGoals)));
+                () -> gate.enforce(ModelGraphs.toGraph(twoGoals)));
         assertTrue(ex.getMessage().contains("useCaseGoal"), ex.getMessage());
     }
 
@@ -911,7 +911,7 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
-                () -> gate.enforce(KognioRdfUseCaseRepositoryFactory.toGraph(twoTexts)));
+                () -> gate.enforce(ModelGraphs.toGraph(twoTexts)));
         assertTrue(ex.getMessage().contains("stepText"), ex.getMessage());
     }
 

@@ -44,7 +44,7 @@
         <!-- 6.0.0 (nicht 5.2.2): Voraussetzung fuer io.kogn.rdf:rdf-shacl-rdf4j, das
              gegen RDF4J 6.0.0 gebaut ist (ShaclValidator.builder() existiert erst dort).
              Der Bump ist bewusst als eigener Schritt getrennt vom SHACL-Write-Gate (#38). -->
-        <rdf4j.version>6.1.0</rdf4j.version>
+        <rdf4j.version>6.2.0-M2</rdf4j.version>
         <asciidoctorj.version>3.0.0</asciidoctorj.version>
         <asciidoctorj-diagram.version>3.1.0</asciidoctorj-diagram.version>
         <mustache.version>0.9.14</mustache.version>
@@ -74,7 +74,7 @@
              Central synct, dann Wechsel auf das Release.
              0.4.0-M1 ist ein Milestone-Release (Maven Central) mit Breaking Changes gegenueber 0.3.0:
              close -> shutDown, export -> snapshot, RDF4JGraph ohne oeffentlichen Model-Konstruktor. -->
-        <kognio-rdf.version>0.4.0-M1</kognio-rdf.version>
+        <kognio-rdf.version>0.4.0-SNAPSHOT</kognio-rdf.version>
         <spotless-maven-plugin.version>3.10.4</spotless-maven-plugin.version>
     </properties>
 

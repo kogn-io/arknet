@@ -5,20 +5,18 @@ package de.hauschel.arknet.actor.adapter.kogniordf;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.Objects;
 
-import org.eclipse.rdf4j.model.Model;
-import org.eclipse.rdf4j.rio.RDFFormat;
-import org.eclipse.rdf4j.rio.Rio;
-
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
-import io.kogn.rdf.rdf4j.RDF4JFactory;
+import io.kogn.rdf.rdf4j.dataset.GraphImportRdf4j;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
+import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -30,7 +28,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  *
  * <p>This factory is the single place that names RDF4J-backed types: the lifecycle
  * ({@link DatasetLifecycleRdf4j}), the SHACL validation implementation
- * ({@link ShaclValidationRdf4j}) and the Turtle parsing ({@link Rio}) used to load the actor SHACL
+ * ({@link ShaclValidationRdf4j}) and the Turtle import ({@link GraphImportRdf4j}) used to load the actor SHACL
  * shapes and ontology axioms off the classpath. It lets the composition root wire an RDF-persisted
  * actor repository by handing over just a storage directory, without itself depending on
  * {@code io.kogn.rdf.rdf4j.*} - keeping RDF4J out of arknet-app and preserving the port-neutrality
@@ -159,41 +157,12 @@ public final class KognioRdfActorRepositoryFactory {
     }
 
     private static ReadableGraph loadGraph(String classpathResource) {
-        try (InputStream in = KognioRdfActorRepositoryFactory.class.getResourceAsStream(classpathResource)) {
-            Objects.requireNonNull(in, "missing classpath resource " + classpathResource);
-            Model model = Rio.parse(in, "", RDFFormat.TURTLE);
-            return toGraph(model);
+        URL resource = KognioRdfActorRepositoryFactory.class.getResource(classpathResource);
+        Objects.requireNonNull(resource, "missing classpath resource " + classpathResource);
+        try (InputStream in = resource.openStream()) {
+            return new GraphImportRdf4j().readTurtle(in, new SimpleRdf().createIRI(resource.toExternalForm()));
         } catch (IOException e) {
             throw new IllegalStateException("failed to load " + classpathResource, e);
         }
-    }
-
-    /**
-     * Copies a parsed RDF4J model into a kognio-rdf graph through the public term factory
-     * (RDF4JGraph has no public Model constructor since kognio-rdf 0.4.0-M1).
-     */
-    static io.kogn.rdf.terms.Graph toGraph(org.eclipse.rdf4j.model.Model model) {
-        final RDF4JFactory factory = new RDF4JFactory();
-        final io.kogn.rdf.terms.Graph graph = factory.createGraph();
-        for (org.eclipse.rdf4j.model.Statement st : model) {
-            graph.add(
-                    (io.kogn.rdf.terms.BlankNodeOrIRI) toTerm(factory, st.getSubject()),
-                    factory.createIRI(st.getPredicate().stringValue()),
-                    toTerm(factory, st.getObject()));
-        }
-        return graph;
-    }
-
-    private static io.kogn.rdf.terms.RDFTerm toTerm(RDF4JFactory factory, org.eclipse.rdf4j.model.Value value) {
-        if (value instanceof org.eclipse.rdf4j.model.BNode bnode) {
-            return factory.createBlankNode(bnode.getID());
-        }
-        if (value instanceof org.eclipse.rdf4j.model.Literal literal) {
-            if (literal.getLanguage().isPresent()) {
-                return factory.createLiteral(literal.getLabel(), literal.getLanguage().get());
-            }
-            return factory.createLiteral(literal.getLabel(), factory.createIRI(literal.getDatatype().stringValue()));
-        }
-        return factory.createIRI(value.stringValue());
     }
 }

@@ -5,26 +5,22 @@ package de.hauschel.arknet.bc.adapter.kogniordf;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 
-import org.eclipse.rdf4j.model.IRI;
-import org.eclipse.rdf4j.model.Model;
-import org.eclipse.rdf4j.model.Statement;
-import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
-import org.eclipse.rdf4j.model.vocabulary.SHACL;
-import org.eclipse.rdf4j.rio.RDFFormat;
-import org.eclipse.rdf4j.rio.Rio;
-
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
-import io.kogn.rdf.rdf4j.RDF4JFactory;
+import io.kogn.rdf.rdf4j.dataset.GraphImportRdf4j;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
+import io.kogn.rdf.terms.Graph;
+import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.terms.Triple;
 
 import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -38,7 +34,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  *
  * <p>This factory is the single place that names RDF4J-backed types: the lifecycle
  * ({@link DatasetLifecycleRdf4j}), the SHACL validation implementation
- * ({@link ShaclValidationRdf4j}) and the Turtle parsing ({@link Rio}) used to load the DDD SHACL
+ * ({@link ShaclValidationRdf4j}) and the Turtle import ({@link GraphImportRdf4j}) used to load the DDD SHACL
  * shapes onto the classpath. It lets the composition root wire an RDF-persisted
  * context-relationship repository by handing over just a storage directory, without itself
  * depending on {@code io.kogn.rdf.rdf4j.*} - keeping RDF4J out of arknet-app and preserving the
@@ -65,8 +61,9 @@ public final class KognioRdfContextRelationshipRepositoryFactory {
 
     private static final String SHAPES_RESOURCE = "/arknet-shapes.ttl";
 
+    private static final IRI TARGET_CLASS = new SimpleRdf().createIRI("http://www.w3.org/ns/shacl#targetClass");
     private static final IRI CONTEXT_RELATIONSHIP_CLASS =
-            SimpleValueFactory.getInstance().createIRI(ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE);
+            new SimpleRdf().createIRI(ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE);
 
     private KognioRdfContextRelationshipRepositoryFactory() {
     }
@@ -132,50 +129,21 @@ public final class KognioRdfContextRelationshipRepositoryFactory {
      * @return the filtered shapes graph
      */
     private static ReadableGraph loadContextRelationshipShapes() {
-        Model model = parse(SHAPES_RESOURCE);
-        List<Statement> foreignTargets = model.filter(null, SHACL.TARGET_CLASS, null).stream()
+        Graph shapes = loadGraph(SHAPES_RESOURCE);
+        List<Triple> foreignTargets = shapes.stream(null, TARGET_CLASS, null)
                 .filter(st -> !CONTEXT_RELATIONSHIP_CLASS.equals(st.getObject()))
                 .toList();
-        model.removeAll(foreignTargets);
-        return toGraph(model);
+        foreignTargets.forEach(shapes::remove);
+        return shapes;
     }
 
-    private static Model parse(String classpathResource) {
-        try (InputStream in = KognioRdfContextRelationshipRepositoryFactory.class
-                .getResourceAsStream(classpathResource)) {
-            Objects.requireNonNull(in, "missing classpath resource " + classpathResource);
-            return Rio.parse(in, "", RDFFormat.TURTLE);
+    private static Graph loadGraph(String classpathResource) {
+        URL resource = KognioRdfContextRelationshipRepositoryFactory.class.getResource(classpathResource);
+        Objects.requireNonNull(resource, "missing classpath resource " + classpathResource);
+        try (InputStream in = resource.openStream()) {
+            return new GraphImportRdf4j().readTurtle(in, new SimpleRdf().createIRI(resource.toExternalForm()));
         } catch (IOException e) {
             throw new IllegalStateException("failed to load " + classpathResource, e);
         }
-    }
-
-    /**
-     * Copies a parsed RDF4J model into a kognio-rdf graph through the public term factory
-     * (RDF4JGraph has no public Model constructor since kognio-rdf 0.4.0-M1).
-     */
-    static io.kogn.rdf.terms.Graph toGraph(org.eclipse.rdf4j.model.Model model) {
-        final RDF4JFactory factory = new RDF4JFactory();
-        final io.kogn.rdf.terms.Graph graph = factory.createGraph();
-        for (org.eclipse.rdf4j.model.Statement st : model) {
-            graph.add(
-                    (io.kogn.rdf.terms.BlankNodeOrIRI) toTerm(factory, st.getSubject()),
-                    factory.createIRI(st.getPredicate().stringValue()),
-                    toTerm(factory, st.getObject()));
-        }
-        return graph;
-    }
-
-    private static io.kogn.rdf.terms.RDFTerm toTerm(RDF4JFactory factory, org.eclipse.rdf4j.model.Value value) {
-        if (value instanceof org.eclipse.rdf4j.model.BNode bnode) {
-            return factory.createBlankNode(bnode.getID());
-        }
-        if (value instanceof org.eclipse.rdf4j.model.Literal literal) {
-            if (literal.getLanguage().isPresent()) {
-                return factory.createLiteral(literal.getLabel(), literal.getLanguage().get());
-            }
-            return factory.createLiteral(literal.getLabel(), factory.createIRI(literal.getDatatype().stringValue()));
-        }
-        return factory.createIRI(value.stringValue());
     }
 }
