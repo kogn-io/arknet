@@ -558,8 +558,8 @@ class ProjectServiceTest {
      * the same way {@link ProjectService#register} does (see
      * {@link #anUnattributedRegistrationConflictOnTheFirstAttemptIsRetriedTransparently} for the
      * register-path counterpart) - the registry write can still lose a store commit conflict to a
-     * writer of another dataset (the project lock covers only this dataset), and that first attempt
-     * surfaces this residual signal even though no uniqueness guard was violated.
+     * registry write for another project (the project lock covers only this one), and that first
+     * attempt surfaces this residual signal even though no uniqueness guard was violated.
      */
     @Test
     void anUnattributedRegistrationConflictOnTheFirstAdoptAttemptIsRetriedTransparently() {
