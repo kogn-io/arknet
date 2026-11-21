@@ -240,6 +240,31 @@ class ProjectRegistryRealStoreConcurrencyTest {
     }
 
     /**
+     * The self-exclusion of {@link KognioRdfProjectRegistry}'s label attribution: two writers
+     * register the <em>same</em> identity under the same label - the {@code adopt} shape, where
+     * the id is caller-chosen rather than freshly minted - and the loser's commit is lost to the
+     * winner's. The only holder of that label is the winner's entry, which is the loser's own
+     * identity, so no <em>other</em> project holds it and the loss must stay unattributed instead
+     * of being reported as a label collision with a project that does not exist. The anchors
+     * differ, so no anchor rule can explain the loss either and the label check is the only
+     * thing left to decide it.
+     */
+    @Test
+    void concurrentRegistrationsOfTheSameIdentityAndLabel_loserIsNotToldAnotherProjectHoldsTheLabel()
+            throws InterruptedException {
+        ProjectId sharedId = freshId();
+        Project winner = new Project(sharedId, "arknet", List.of(pathAnchor("/home/dev/arknet")));
+        Project loser = new Project(sharedId, "arknet", List.of(pathAnchor("/home/dev/arknet-other")));
+
+        Race race = raceRegistrations(winner, loser);
+
+        assertNull(race.winnerFailure(), "the winner commits first and must not fail");
+        assertInstanceOf(UnattributedRegistrationConflictException.class, race.loserFailure(),
+                "the label is held by the loser's own identity, not by another project");
+        assertEquals(List.of(winner), straightThrough.findAll());
+    }
+
+    /**
      * The same overlap, but between two registrations that share <em>nothing</em> - different
      * label, different anchor: both commit. The uniqueness guards cost concurrent registrations of
      * unrelated projects nothing, even though every one of them reads {@code dcterms:identifier}
