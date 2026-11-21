@@ -43,7 +43,8 @@
         <maven.compiler.release>25</maven.compiler.release>
         <!-- 6.0.0 (nicht 5.2.2): Voraussetzung fuer io.kogn.rdf:rdf-shacl-rdf4j, das
              gegen RDF4J 6.0.0 gebaut ist (ShaclValidator.builder() existiert erst dort).
-             Der Bump ist bewusst als eigener Schritt getrennt vom SHACL-Write-Gate (#38). -->
+             Der Bump ist bewusst als eigener Schritt getrennt vom SHACL-Write-Gate (#38).
+             6.2.0-M2: kognio-rdf 0.4.0-M1/-M2 ist dagegen gebaut; 0.4.0 final zieht auf 6.2.0 final. -->
         <rdf4j.version>6.2.0-M2</rdf4j.version>
         <asciidoctorj.version>3.0.0</asciidoctorj.version>
         <asciidoctorj-diagram.version>3.1.0</asciidoctorj-diagram.version>
@@ -73,8 +74,10 @@
              Serialisierungs-Port) fuer #154 - Uebergangspin bis das gleichnamige 0.3.0-Release auf
              Central synct, dann Wechsel auf das Release.
              0.4.0-M1 ist ein Milestone-Release (Maven Central) mit Breaking Changes gegenueber 0.3.0:
-             close -> shutDown, export -> snapshot, RDF4JGraph ohne oeffentlichen Model-Konstruktor. -->
-        <kognio-rdf.version>0.4.0-SNAPSHOT</kognio-rdf.version>
+             close -> shutDown, export -> snapshot, RDF4JGraph ohne oeffentlichen Model-Konstruktor.
+             0.4.0-M2 (Milestone, Maven Central): GraphImport/readTurtle und DatasetStoreLockedException
+             ersetzen die letzten direkten RDF4J-Importe in src/main; RDF4J bleibt 6.2.0-M2. -->
+        <kognio-rdf.version>0.4.0-M2</kognio-rdf.version>
         <spotless-maven-plugin.version>3.10.4</spotless-maven-plugin.version>
     </properties>
 
