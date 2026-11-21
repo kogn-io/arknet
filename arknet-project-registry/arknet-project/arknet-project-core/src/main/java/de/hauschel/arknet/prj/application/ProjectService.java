@@ -95,7 +95,7 @@ import de.hauschel.arknet.prj.domain.UnknownProjectException;
  * already-built candidate via {@link #registerRetryingOnUnattributedConflict} - see that
  * exception's javadoc for why repeating the identical write is honest here. Unlike
  * {@link #register}'s freshly minted identity, {@link #adopt}'s {@code datasetId} is caller-chosen
- * and can genuinely already be claimed by a concurrent adopter of the very same dataset; a retry
+ * and could already be claimed by a registry entry written outside this service's lock; a retry
  * does not paper over that, it only converts an ambiguous, unattributed conflict into a
  * definitive answer - either the retry succeeds because nothing really collided, or the registry's
  * own synchronous identity guard now sees the winner's committed write and rejects the retry with a
@@ -136,9 +136,13 @@ public class ProjectService
 
     /**
      * One monitor per {@link ProjectId} that has ever been the target of a registry write in this
-     * JVM, backing {@link #withProjectLock}. Grows with the number of distinct projects a caller
-     * has touched, not with the number of writes - bounded by how many projects genuinely exist,
-     * so it is not pruned.
+     * JVM, backing {@link #withProjectLock}. Grows with the number of distinct ids handed to
+     * {@link #register}, {@link #adopt}, {@link #update}, {@link #attach}, {@link #rename}
+     * and {@link #delete} for the lifetime of the process, not with the number of writes. An id
+     * that names no project still gets an entry: {@link #adopt} and the updating calls take the
+     * lock before they check that the id exists, and every {@link #register} mints a fresh one.
+     * Entries are never pruned: each is one small monitor object, and pruning would need the
+     * existence check the lock is taken before.
      */
     private final ConcurrentHashMap<ProjectId, Object> projectLocks = new ConcurrentHashMap<>();
 
@@ -147,8 +151,9 @@ public class ProjectService
      *
      * @param registry        the driven registry port (must not be {@code null})
      * @param selfDescription the driven self-description port (must not be {@code null})
-     * @param datasets        the driven inventory of datasets present in the store, consulted only
-     *                        by {@link #adopt} and {@link #adoptable} (must not be {@code null})
+     * @param datasets        the driven inventory of datasets present in the store, consulted by
+     *                        {@link #adopt}, {@link #adoptable} and {@link #delete} (must not be
+     *                        {@code null})
      * @param projectDatasets the driven port that inspects and removes a project's own dataset,
      *                        consulted only by {@link #delete} (must not be {@code null})
      */
