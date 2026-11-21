@@ -313,17 +313,19 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * (see that class's javadoc for why {@link Locale#forLanguageTag} is the wrong tool here: it
      * never throws, silently degrading a typo like {@code "de_DE"} to {@code "und"}).
      *
-     * <p>{@link #deleteDescriptionOfLanguage}'s {@code FILTER(lang(?o) = "tag")} compares the raw
-     * string RDF4J's {@code lang()} returns against this method's {@code tag} argument, so an
-     * un-normalized case mismatch between two calls (e.g. {@code project_add(...,
+     * <p>{@link #deleteDescriptionOfLanguage} originally compared {@code lang(?o)} case-sensitively
+     * against this method's {@code tag} argument, so an un-normalized case mismatch between two calls (e.g. {@code project_add(...,
      * language="de")} followed by {@code project_update(..., language="DE")}) leaves the existing
      * {@code @de} literal undeleted and inserts a second {@code @DE} one instead of correcting it
      * - the same class of bug fixed for {@code TermRepository#update}
      * ({@code KognioRdfTermRepository#canonicalLanguageTag}), only triggered by case here.
      * Canonicalizing every tag through this method before both writing a literal and building the
-     * delete filter keeps stored tags in one consistent case, so a later scoped delete always
-     * matches - the same guarantee {@code DisplayLocale#matching} already gives the read side by
-     * comparing tags case-insensitively.</p>
+     * delete filter keeps stored tags in one consistent case - the same guarantee
+     * {@code DisplayLocale#matching} already gives the read side by comparing tags
+     * case-insensitively. Since kognio-rdf 0.4.0 lower-cases every tag on the way into the store
+     * ({@code de-CH} is stored as {@code @de-ch}), the delete filter itself compares
+     * case-insensitively too; canonicalizing stays, because it is also what rejects a malformed
+     * tag.</p>
      */
     private static String canonicalLanguageTag(String language) {
         return LanguageTag.canonicalize(language);
