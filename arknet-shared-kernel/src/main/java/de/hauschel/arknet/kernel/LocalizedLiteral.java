@@ -15,7 +15,8 @@ import java.util.Objects;
  * before handing candidates to {@link DisplayLocale#select(java.util.Collection)}.</p>
  *
  * @param value       the lexical form (the actual string), never {@code null}
- * @param languageTag the RDF language tag (e.g. {@code "de"}, {@code "en-US"}), or
+ * @param languageTag the RDF language tag (e.g. {@code "de"}, {@code "en-US"}), canonicalized via
+ *                    {@link LanguageTag#canonicalizeOrKeep(String)}, or
  *                    {@code null} for a plain, untagged literal
  */
 public record LocalizedLiteral(String value, String languageTag) {
@@ -25,6 +26,9 @@ public record LocalizedLiteral(String value, String languageTag) {
         // languageTag is deliberately nullable: null models a plain literal without a tag
         // (`"Kunde"` rather than `"Kunde"@de`) - today's normal case, since term_add writes
         // untagged labels.
+        // Canonical case on the way in: the store lower-cases tags (kognio-rdf 0.4.0 reads de-CH
+        // back as de-ch), and every value read from it passes through here (kogn-io/arknet#711).
+        languageTag = LanguageTag.canonicalizeOrKeep(languageTag);
     }
 
     /** A plain literal without a language tag. */

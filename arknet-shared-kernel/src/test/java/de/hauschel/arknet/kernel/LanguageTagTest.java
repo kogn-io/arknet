@@ -85,4 +85,24 @@ class LanguageTagTest {
         assertNull(LanguageTag.writtenLanguage(null, null));
     }
 
+    // --- canonicalizeOrKeep: reading a tag back from the store (kogn-io/arknet#711) -------
+
+    /** kognio-rdf 0.4.0 stores every tag lower-cased; read back, it must be arknet's canonical form again. */
+    @Test
+    void canonicalizeOrKeepRestoresTheCanonicalCaseOfAStoredLowerCaseRegionTag() {
+        assertEquals("de-CH", LanguageTag.canonicalizeOrKeep("de-ch"));
+        assertEquals("zh-Hant", LanguageTag.canonicalizeOrKeep("zh-hant"));
+    }
+
+    /** A malformed stored tag is data, not a caller error: it is kept as read, never dropped or rejected. */
+    @Test
+    void canonicalizeOrKeepKeepsAMalformedTagAsIs() {
+        assertEquals("de_DE", LanguageTag.canonicalizeOrKeep("de_DE"));
+    }
+
+    @Test
+    void canonicalizeOrKeepPassesNullThrough() {
+        assertNull(LanguageTag.canonicalizeOrKeep(null));
+    }
+
 }

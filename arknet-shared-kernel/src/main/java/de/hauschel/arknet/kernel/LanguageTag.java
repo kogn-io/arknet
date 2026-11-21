@@ -48,6 +48,29 @@ public final class LanguageTag {
     }
 
     /**
+     * Canonicalizes a tag read back from the store, keeping it unchanged where it is not
+     * well-formed - the reading counterpart of {@link #canonicalize(String)}, which rejects.
+     *
+     * <p>Needed because the store does not keep arknet's canonical case: kognio-rdf 0.4.0 stores
+     * every tag lower-cased, so a literal written under {@code de-CH} is read back as
+     * {@code de-ch}. A stored tag is data, not a caller's argument, so a malformed one is neither
+     * rejected nor dropped (which would make it look untagged) - it is passed through as read.</p>
+     *
+     * @param tag a language tag as read from the store, or {@code null}
+     * @return the canonicalized tag, {@code tag} itself if it is not well-formed, or {@code null}
+     */
+    public static String canonicalizeOrKeep(String tag) {
+        if (tag == null) {
+            return null;
+        }
+        try {
+            return canonicalize(tag);
+        } catch (InvalidLanguageTagException e) {
+            return tag;
+        }
+    }
+
+    /**
      * The tag a write actually landed under, decided the same way {@link #resolveWriteLanguage}
      * decides it but never rejecting: {@code explicit} if the caller named one, otherwise {@code
      * projectDefaultLanguage}, otherwise {@code null}.

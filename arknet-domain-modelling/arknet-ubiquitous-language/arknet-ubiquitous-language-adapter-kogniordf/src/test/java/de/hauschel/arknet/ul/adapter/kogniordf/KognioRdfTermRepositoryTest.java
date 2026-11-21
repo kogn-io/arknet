@@ -454,6 +454,34 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
+     * Data written before kognio-rdf 0.4.0 kept the tag as written ({@code @de-CH}); data written
+     * since is lower-cased ({@code @de-ch}). The language-scoped delete must catch the old spelling
+     * too, or the first update after the upgrade leaves the old definition next to the new one
+     * (kogn-io/arknet#711).
+     */
+    @Test
+    void updatingADefinitionStoredUnderTheOldMixedCaseRegionTagReplacesIt() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Kunde", "Neue Fassung.", null), "en");
+        String legacyDefinition = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#definition> "
+                + "\"Alte Fassung.\"@de-CH } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(legacyDefinition);
+                return null;
+            });
+            assertTrue(handle.sparqlQuery().ask("ASK { GRAPH ?g { ?s ?p ?o FILTER(lang(?o) = \"de-CH\") } }"),
+                    "precondition: the legacy literal must really carry the mixed-case tag");
+        }
+
+        repository.update(PROJECT_A, code, null, "Zweite Fassung.", "de-CH", null, null, null);
+
+        assertEquals(List.of("Neue Fassung.", "Zweite Fassung."), definitionsOf(PROJECT_A, id).stream().sorted().toList());
+    }
+
+    /**
      * {@code term_add}'s new {@code language} argument (issue #228): a term registered with an
      * explicit language tag stores its {@code prefLabel}/{@code definition} as language-tagged
      * literals, not the plain untagged ones {@code create} wrote before this argument existed.

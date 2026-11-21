@@ -621,6 +621,23 @@ class KognioRdfActorRepositoryTest {
         assertEquals(headsOf(stored.id().value().value()), List.of(current.head().value()));
     }
 
+    /**
+     * kognio-rdf 0.4.0 stores {@code de-CH} as {@code @de-ch}. The language a field is read under
+     * must come back in arknet's canonical form, the same one a write names - otherwise
+     * {@code ActorService}'s no-op check sees a language change where there is none and writes a
+     * revision for an unchanged update (kogn-io/arknet#711).
+     */
+    @Test
+    void findCurrentByCodeReportsARegionTaggedFieldUnderTheCanonicalTag() {
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, "Beschreibung."), "de-CH");
+
+        ActorRepository.CurrentActor current =
+                repository.findCurrentByCode(PROJECT_A, new ActorCode("ACTOR-1"), null).orElseThrow();
+
+        assertEquals("de-CH", current.nameLanguage());
+        assertEquals("de-CH", current.descriptionLanguage());
+    }
+
     @Test
     void findCurrentByCodeReturnsEmptyForAnUnknownCode() {
         assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, new ActorCode("ACTOR-9"), null));
