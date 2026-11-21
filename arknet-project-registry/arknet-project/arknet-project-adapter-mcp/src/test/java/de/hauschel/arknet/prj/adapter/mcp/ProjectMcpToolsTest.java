@@ -643,13 +643,14 @@ class ProjectMcpToolsTest {
 
     @Test
     void deleteAnswerNamesTheDeletedProjectAndWhatWentWithIt() {
-        deleteProject.result = new DeleteProject.Deletion(PLUGIN,
-                Map.of("arkreq:FunctionalRequirement", 3L));
+        deleteProject.result = DeleteProject.Deletion.ofProject(PLUGIN,
+                Map.of("arkreq:FunctionalRequirement", 3L), 12L);
 
         final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", true, null);
 
         assertTrue(rendered.contains("Deleted project arknet-plugin (id: p-2)"), rendered);
         assertTrue(rendered.contains("3 arkreq:FunctionalRequirement"), rendered);
+        assertTrue(rendered.contains("12 revisions"), rendered);
         assertTrue(rendered.endsWith("\n\nproject: arknet-plugin"), rendered);
     }
 
@@ -657,7 +658,18 @@ class ProjectMcpToolsTest {
     void deleteAnswerSaysSoWhenTheProjectHeldNoModelResources() {
         final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", false, null);
 
-        assertTrue(rendered.contains("no model resources"), rendered);
+        assertTrue(rendered.contains("no model resources and no revisions when counted"), rendered);
+    }
+
+    @Test
+    void deleteAnswerForAnUnregisteredDatasetSaysNoRegistryEntryExistedAndCarriesNoProjectLine() {
+        deleteProject.result = DeleteProject.Deletion.ofUnregisteredDataset(new ProjectId("orphan"), Map.of(), 0L);
+
+        final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "orphan", false, null);
+
+        assertTrue(rendered.contains("Deleted the unregistered dataset orphan (no registry entry existed)"),
+                rendered);
+        assertFalse(rendered.contains("project:"), rendered);
     }
 
     private static final Project PLUGIN = new Project(new ProjectId("p-2"), "arknet-plugin",
@@ -668,7 +680,7 @@ class ProjectMcpToolsTest {
         private String lastReference;
         private List<Anchor> lastCallerAnchors;
         private boolean lastConfirmed;
-        private Deletion result = new Deletion(PLUGIN, Map.of());
+        private Deletion result = Deletion.ofProject(PLUGIN, Map.of(), 0L);
 
         @Override
         public Deletion delete(final String project, final List<Anchor> callerAnchors, final boolean confirmed) {

@@ -19,6 +19,7 @@ import io.kogn.rdf.terms.RDFTerm;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.InfrastructureGraphs;
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.prj.application.port.out.ProjectDatasets;
 import de.hauschel.arknet.prj.domain.DatasetInUseException;
@@ -41,13 +42,20 @@ import de.hauschel.arknet.prj.domain.DatasetInUseException;
  * empty. A resource carrying two types is counted under each; the types are shortened to the
  * prefixed names the store report uses.</p>
  *
+ * <p><strong>Revisions are counted apart.</strong> The revision trail lives in {@link
+ * ArkprovVocabulary#PROVENANCE_GRAPH}, which the model count leaves out, so {@link
+ * #revisionCount} answers for it: a dataset without model resources can still hold history.</p>
+ *
  * <p><strong>An open lease is waited for, briefly.</strong> {@link DatasetLifecycle#delete}
  * refuses with an {@link IllegalStateException} while any lease on the dataset is open. arknet
  * holds no lease beyond a single read or write - every acquisition is a try-with-resources around
  * one query or transaction, and no per-project handle is cached anywhere - so a refusal means a
  * concurrent tool call is in flight on this very project, and it will be done in milliseconds.
  * The removal is retried for a bounded time and only then reported as {@link
- * DatasetInUseException}, leaving the dataset untouched. An interrupt during the wait ends it
+ * DatasetInUseException}, leaving the dataset untouched. The caller holds the project's lock during
+ * that wait, which is deliberate: it only blocks calls on the project being deleted, and releasing
+ * it would let an attach, rename or adopt of that project slip in between the registry removal and
+ * the dataset removal. An interrupt during the wait ends it
  * early with the same report, the interrupt flag left set.</p>
  */
 public final class KognioRdfProjectDatasets implements ProjectDatasets {
@@ -60,8 +68,14 @@ public final class KognioRdfProjectDatasets implements ProjectDatasets {
 
     private static final String COUNT_BY_TYPE = "SELECT ?type (COUNT(DISTINCT ?s) AS ?count) WHERE { "
             + "GRAPH ?g { ?s a ?type } "
-            + "FILTER(?g != <" + ArkprjVocabulary.IDENTITY_GRAPH + "> && ?g != <"
-            + ArkprovVocabulary.PROVENANCE_GRAPH + ">) } GROUP BY ?type";
+            + "FILTER(" + InfrastructureGraphs.outsideExpression("?g") + ") } GROUP BY ?type";
+
+    /**
+     * One revision is one {@code arkprov:Revision} subject; the activity and head triples the
+     * funnel writes next to it are bookkeeping of the same write and do not count again.
+     */
+    private static final String COUNT_REVISIONS = "SELECT (COUNT(DISTINCT ?r) AS ?count) WHERE { GRAPH <"
+            + ArkprovVocabulary.PROVENANCE_GRAPH + "> { ?r a <" + ArkprovVocabulary.REVISION_TYPE + "> } }";
 
     private final DatasetLifecycle lifecycle;
     private final Prefixes prefixes = Prefixes.defaults();
@@ -103,6 +117,20 @@ public final class KognioRdfProjectDatasets implements ProjectDatasets {
                     .forEachOrdered(entry -> counts.merge(entry.getKey(), entry.getValue(), Long::sum));
         }
         return counts;
+    }
+
+    @Override
+    public long revisionCount(final ProjectId projectId) {
+        final DatasetId dataset = datasetOf(projectId);
+        if (!lifecycle.list().contains(dataset)) {
+            return 0L;
+        }
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            return handle.sparqlQuery().select(COUNT_REVISIONS)
+                    .map(row -> Long.parseLong(((Literal) row.getValue("count").orElseThrow()).getLexicalForm()))
+                    .findFirst()
+                    .orElse(0L);
+        }
     }
 
     @Override

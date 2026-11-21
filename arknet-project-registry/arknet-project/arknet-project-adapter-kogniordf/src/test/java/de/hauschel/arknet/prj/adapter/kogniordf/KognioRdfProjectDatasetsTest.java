@@ -31,6 +31,7 @@ import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.InfrastructureGraphs;
 import de.hauschel.arknet.prj.domain.DatasetInUseException;
 
 /**
@@ -86,6 +87,42 @@ class KognioRdfProjectDatasetsTest {
     void theSelfDescriptionAndTheRevisionTrailAreNotModelResources() {
         insert(ArkprjVocabulary.IDENTITY_GRAPH, "<urn:project> a <" + ArkprjVocabulary.PROJECT_TYPE + "> .");
         insert(ArkprovVocabulary.PROVENANCE_GRAPH, "<urn:rev:1> a <http://www.w3.org/ns/prov#Entity> .");
+
+        assertEquals(Map.of(), datasets.modelResourceCounts(PROJECT));
+    }
+
+    /** Writes via the funnel leave one {@code arkprov:Revision} each; activities and heads do not count. */
+    @Test
+    void countsTheRevisionsOfTheProvenanceTrailAndNothingElseInIt() {
+        insert(ArkprovVocabulary.PROVENANCE_GRAPH, "<urn:rev:1> a <" + ArkprovVocabulary.REVISION_TYPE + "> , <"
+                + ArkprovVocabulary.ENTITY_TYPE + "> . "
+                + "<urn:rev:2> a <" + ArkprovVocabulary.REVISION_TYPE + "> , <" + ArkprovVocabulary.ENTITY_TYPE
+                + "> . <urn:act:1> a <" + ArkprovVocabulary.ACTIVITY_TYPE + "> .");
+
+        assertEquals(2L, datasets.revisionCount(PROJECT));
+        assertEquals(Map.of(), datasets.modelResourceCounts(PROJECT));
+    }
+
+    @Test
+    void aDatasetWithoutAProvenanceTrailHoldsNoRevisions() {
+        insert(REQUIREMENTS_GRAPH, "<urn:req:1> a <" + ARKREQ + "FunctionalRequirement> .");
+
+        assertEquals(0L, datasets.revisionCount(PROJECT));
+    }
+
+    @Test
+    void countingTheRevisionsOfAMissingDatasetReportsNoneAndDoesNotCreateIt() {
+        assertEquals(0L, datasets.revisionCount(PROJECT));
+
+        assertFalse(lifecycle.list().contains(new DatasetId(PROJECT.value())));
+    }
+
+    /** The filter comes from the shared infrastructure-graph set, so every graph in it is skipped. */
+    @Test
+    void noInfrastructureGraphContributesToTheModelCount() {
+        for (final String graph : InfrastructureGraphs.IRIS) {
+            insert(graph, "<urn:infra:" + graph.hashCode() + "> a <" + ARKREQ + "FunctionalRequirement> .");
+        }
 
         assertEquals(Map.of(), datasets.modelResourceCounts(PROJECT));
     }
