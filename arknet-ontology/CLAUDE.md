@@ -16,6 +16,11 @@ Traegt ein Namespace live weniger, als sein Name verspricht, wird der Name auf d
 Ob ein Name mehr behauptet, als der Namespace traegt, ist eine Beurteilung und wird im Review entschieden, keine mechanische Pruefung.
 Das ist eine andere Regel als die Namespace-Spannweite (ADR-12 im arknet-eigenen Store: kein Namespace spannt ueber zwei Kontexte) -- jene ist mechanisch pruefbar und eine Entscheidung ueber die Gestalt des Systems, diese hier eine Beurteilungsfrage ueber Benennung.
 
+Wann eine Namespace-IRI geaendert wird.
+Eine Namespace-IRI steht in jedem Tripel jedes Datasets; jede Aenderung ist eine Datenmigration.
+Ausserhalb einer Gesamtmigration, die ohnehin jedes Tripel neu schreibt, wird eine Namespace-IRI deshalb nur geaendert, wenn ein klassendefinierender Namespace ueber zwei Kontexte spannt -- nie aus Symmetrie- oder Namensgruenden.
+Auch eine Einengung nach der Benennungsregel oben wartet auf die naechste Gesamtmigration.
+
 Die Ontologie darf der Implementierung vorlaufen, die Shapes duerfen es nicht.
 Ein deklarierter Begriff ohne Schreibpfad ist Vokabular-Vorrat und bleibt stehen; eine Shape ohne Schreibpfad behauptet eine Pruefung, die nie laeuft, und wird geloescht.
 Wer den Schreibpfad spaeter baut, schreibt die Shape mit ihm zusammen -- dann gegen echte Anforderungen statt gegen eine Vermutung von heute.
