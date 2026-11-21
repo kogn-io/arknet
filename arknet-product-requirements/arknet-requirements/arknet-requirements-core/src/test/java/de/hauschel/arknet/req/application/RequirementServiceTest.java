@@ -1121,6 +1121,22 @@ class RequirementServiceTest {
     }
 
     /**
+     * The message must name the way out that actually works: appending via
+     * {@code newAcceptanceCriteria} lands behind the placeholder and is rejected again (issue #674).
+     */
+    @Test
+    void missingAcceptanceCriteriaMessageNamesThePositionOnePatchAsTheWayOut() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.update(WS, code, "New title", null, null, null, null, null, null, null, null, DEFAULT_LANGUAGE));
+
+        assertTrue(ex.getMessage().contains("acceptanceCriteriaTextPatches"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("removeAcceptanceCriterionPositions"), ex.getMessage());
+        assertFalse(ex.getMessage().contains("e.g. via req_update"), ex.getMessage());
+    }
+
+    /**
      * Same regression as {@link #updateRejectsALegacyRequirementWhenAcceptanceCriteriaAreLeftUnchanged},
      * but with no {@code defaultLanguage} at all: the acceptance-criteria guard must still take
      * precedence over {@link de.hauschel.arknet.kernel.MissingDefaultLanguageException}, which
