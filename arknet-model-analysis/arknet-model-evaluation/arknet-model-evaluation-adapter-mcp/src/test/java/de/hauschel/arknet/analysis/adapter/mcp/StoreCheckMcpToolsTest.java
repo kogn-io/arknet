@@ -24,7 +24,9 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.persistence.Prefixes;
+import de.hauschel.arknet.persistence.RdfNode;
 import de.hauschel.arknet.persistence.StoreSnapshot;
+import de.hauschel.arknet.persistence.Triple;
 
 /**
  * Unit tests for {@code store_check}'s tool surface: which checks a {@code checks} argument
@@ -100,7 +102,7 @@ class StoreCheckMcpToolsTest {
                 anchor -> new ResolvedProject(new ProjectId("sample-project"), null, List.of()),
                 DisplayLocale.DEFAULT);
 
-        tools.storeCheck(null, List.of("ORPHAN"), "sample-project");
+        tools.storeCheck(null, List.of("ORPHAN"), null, "sample-project");
 
         assertThat(snapshotRead).isFalse();
     }
@@ -127,7 +129,7 @@ class StoreCheckMcpToolsTest {
                 anchor -> new ResolvedProject(new ProjectId("sample-project"), null, List.of()),
                 DisplayLocale.DEFAULT);
 
-        tools.storeCheck(null, List.of(kind.name()), "sample-project");
+        tools.storeCheck(null, List.of(kind.name()), null, "sample-project");
 
         assertThat(snapshotReads.get()).isLessThanOrEqualTo(1);
     }
@@ -150,9 +152,50 @@ class StoreCheckMcpToolsTest {
                 anchor -> new ResolvedProject(new ProjectId("sample-project"), null, List.of()),
                 DisplayLocale.DEFAULT);
 
-        tools.storeCheck(null, null, "sample-project");
+        tools.storeCheck(null, null, null, "sample-project");
 
         assertThat(snapshotReads.get()).isEqualTo(1);
+    }
+
+    /**
+     * kogn-io/arknet#689: withMentions only switches the two mention lists, and leaving it out keeps
+     * them - the shape every existing caller, checks=[ORPHAN] included, relies on.
+     */
+    @Test
+    void showsTheMentionListsUnlessWithMentionsIsFalse() {
+        final String id = "https://w3id.org/arknet/id/";
+        final StoreSnapshot model = StoreSnapshot.of(List.of(
+                new Triple(id + "fr-3", "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                        new RdfNode.Resource("https://w3id.org/arknet/requirements#FunctionalRequirement")),
+                literal(id + "fr-3", "http://purl.org/dc/terms/title", "Bestandsdaten"),
+                literal(id + "fr-3", "http://purl.org/dc/terms/identifier", "FR-3"),
+                literal(id + "fr-3", "http://purl.org/dc/terms/description", "Der Kunde sieht seine Daten ein."),
+                new Triple(id + "term-9", "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                        new RdfNode.Resource("http://www.w3.org/2004/02/skos/core#Concept")),
+                literal(id + "term-9", "http://www.w3.org/2004/02/skos/core#prefLabel", "Kunde"),
+                literal(id + "term-9", "http://purl.org/dc/terms/identifier", "TERM-9")));
+        final StoreCheckMcpTools tools = new StoreCheckMcpTools(projectId -> model,
+                (projectId, locale) -> TraceabilityGraph.of(model, locale), Prefixes.defaults(),
+                anchor -> new ResolvedProject(new ProjectId("sample-project"), null, List.of()),
+                DisplayLocale.DEFAULT);
+
+        final String byDefault = tools.storeCheck(null, List.of("ORPHAN"), null, "sample-project");
+        final String switchedOn = tools.storeCheck(null, List.of("ORPHAN"), true, "sample-project");
+        final String switchedOff = tools.storeCheck(null, List.of("ORPHAN"), false, "sample-project");
+
+        assertThat(byDefault)
+                .contains("1 unlinked mention")
+                .contains("- TERM-9 Kunde (1): description: FR-3")
+                .isEqualTo(switchedOn);
+        assertThat(switchedOff)
+                .contains("1 unlinked mention")
+                .contains(StoreCheckRenderer.MENTIONS_OMITTED)
+                .doesNotContain("Kunde (1)");
+    }
+
+    private static Triple literal(final String subject, final String predicate, final String lexical) {
+        return new Triple(subject, predicate,
+                new RdfNode.Literal(lexical, "http://www.w3.org/2001/XMLSchema#string", null));
     }
 
     @Test
