@@ -99,7 +99,8 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * retry that would absorb the signal, so {@link #attributeLostRegistration} re-reads the committed
  * state and names the actual collision, wrapping the residual case in
  * {@link de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException} for
- * {@code ProjectService#register} to retry rather than leaving it to the caller. The shared
+ * {@code ProjectService}'s {@code register} and {@code adopt} to retry rather than leaving it to
+ * the caller. The shared
  * {@link WriteFunnel} takes that decision as a parameter for exactly this reason.</p>
  *
  * <p><strong>Replace-by-identity leaves no orphaned anchor nodes.</strong> {@link #replaceExistingProject}
@@ -394,7 +395,8 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * heals the signal before any caller sees it - {@link #register} has no read-modify-write to
      * retry with a fresh read, but a plain repeat of the same, fully rolled-back create is honest
      * here (see {@link UnattributedRegistrationConflictException}'s javadoc) - so what this method
-     * cannot attribute becomes the residual signal {@code ProjectService#register} retries on.</p>
+     * cannot attribute becomes the residual signal {@code ProjectService}'s {@code register} and
+     * {@code adopt} retry on.</p>
      *
      * <p>Runs after the write transaction was rolled back, so these reads see committed state
      * only - the winner's write included. The anchor is checked before the label: it is the rule
@@ -425,15 +427,16 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * Whether {@code project}'s label is {@code dcterms:identifier} of some <em>other</em>
      * registered project - the label half of {@link #attributeLostRegistration}'s attribution.
      *
-     * <p>The {@code FILTER (?other != <projectIri>)} is defensive, not load-bearing on the one
-     * path that reaches this method today: {@link #attributeLostRegistration} runs only from
-     * {@link #register}'s {@code commitConflict} translator, and {@link WriteFunnel#create}'s own
-     * {@code alreadyExists} guard has already ruled out that this subject exists before the
-     * translator ever runs - a freshly minted {@link ProjectId} (a UUID, never reused) that no
-     * other writer could have committed. So on this path the filter can never actually exclude
-     * anything; it exists to keep this method correct if a translator is ever wired onto the
-     * {@link #compareAndUpdate} path too, where the subject <em>does</em> already exist and
-     * excluding it would matter.</p>
+     * <p>The {@code FILTER (?other != <projectIri>)} is load-bearing. {@link #attributeLostRegistration}
+     * runs from {@link #register}'s {@code commitConflict} translator, and {@link #register} serves
+     * two callers: {@code ProjectService#register} with a freshly minted {@link ProjectId} (a UUID,
+     * never reused), and {@code ProjectService#adopt} with a caller-chosen, pre-existing dataset
+     * id. On the adopt path a writer outside the service's project lock can commit an entry with
+     * the same id and the same label first; without the filter that winner's own label would be
+     * misread as another project's, and the lost race would surface as a wrong
+     * {@link DuplicateProjectLabelException} instead of an unattributed conflict, whose retry then
+     * meets {@link WriteFunnel#create}'s {@code alreadyExists} guard and is rejected as an existing
+     * resource.</p>
      */
     private boolean labelHeldByAnotherProject(Project project) {
         String query = "ASK { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "

@@ -15,12 +15,14 @@ import java.util.Objects;
  * UUID, never reused - see {@link ProjectId}'s Javadoc for why it is not a
  * {@link de.hauschel.arknet.kernel.ResourceIdFactory}-minted {@code ResourceId}), so it should
  * only fire there if something outside that normal path collides with an already-registered
- * identity. On the {@code project_adopt} path, though, it is an expected, reachable outcome
- * (issue #174): {@code datasetId} is caller-chosen there, not minted, and two concurrent
- * {@code project_adopt} calls naming the very same dataset can genuinely race for it - see
- * {@code ProjectService#adopt}'s javadoc for how the retry that precedes this exception still
- * turns a raw commit conflict into this well-attributed signal rather than leaving the loser with
- * an unactionable one.</p>
+ * identity. On the {@code project_adopt} path, {@code datasetId} is caller-chosen, not minted, but
+ * {@code ProjectService#adopt} checks it under the per-project lock: two {@code project_adopt}
+ * calls naming the same dataset run one after the other, and the second is turned away with
+ * {@code DatasetAlreadyAdoptedException}. This exception is therefore only reachable there when a
+ * registry entry for the dataset is written by something that does not take that lock - another
+ * {@code ProjectService} instance or a direct {@code ProjectRegistry} caller - between the guards
+ * and the write. See {@code ProjectService#adopt}'s javadoc for how the retry that precedes this
+ * exception turns a raw commit conflict into this well-attributed signal (issue #174).</p>
  */
 public class ResourceAlreadyExistsException extends RuntimeException {
 

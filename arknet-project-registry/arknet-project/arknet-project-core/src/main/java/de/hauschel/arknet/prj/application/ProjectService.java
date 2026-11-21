@@ -95,7 +95,7 @@ import de.hauschel.arknet.prj.domain.UnknownProjectException;
  * already-built candidate via {@link #registerRetryingOnUnattributedConflict} - see that
  * exception's javadoc for why repeating the identical write is honest here. Unlike
  * {@link #register}'s freshly minted identity, {@link #adopt}'s {@code datasetId} is caller-chosen
- * and can genuinely already be claimed by a concurrent adopter of the very same dataset; a retry
+ * and could already be claimed by a registry entry written outside this service's lock; a retry
  * does not paper over that, it only converts an ambiguous, unattributed conflict into a
  * definitive answer - either the retry succeeds because nothing really collided, or the registry's
  * own synchronous identity guard now sees the winner's committed write and rejects the retry with a
@@ -135,10 +135,16 @@ public class ProjectService
     private final ProjectDatasets projectDatasets;
 
     /**
-     * One monitor per {@link ProjectId} that has ever been the target of a registry write in this
-     * JVM, backing {@link #withProjectLock}. Grows with the number of distinct projects a caller
-     * has touched, not with the number of writes - bounded by how many projects genuinely exist,
-     * so it is not pruned.
+     * One monitor per {@link ProjectId} that {@link #withProjectLock} was ever called for in this
+     * JVM. Grows for the lifetime of the process: by one fresh id per {@link #register} call that
+     * gets past its language and anchor checks (a call rejected there never takes the lock), and
+     * by every distinct id {@link #adopt}, {@link #update}, {@link #attach} and {@link #rename} are
+     * called with - including one that names no project, since these calls take the lock before
+     * they check that the id exists. {@link #delete} adds no such entry: it locks only an id it
+     * has already resolved to a registered project or an existing unregistered dataset. Entries
+     * are never pruned: removing one while another caller holds or waits on its monitor would let
+     * a third caller obtain a fresh monitor through {@code computeIfAbsent} and run unserialised
+     * alongside it; each entry is one small object, so the map is left to grow.
      */
     private final ConcurrentHashMap<ProjectId, Object> projectLocks = new ConcurrentHashMap<>();
 
@@ -147,8 +153,9 @@ public class ProjectService
      *
      * @param registry        the driven registry port (must not be {@code null})
      * @param selfDescription the driven self-description port (must not be {@code null})
-     * @param datasets        the driven inventory of datasets present in the store, consulted only
-     *                        by {@link #adopt} and {@link #adoptable} (must not be {@code null})
+     * @param datasets        the driven inventory of datasets present in the store, consulted by
+     *                        {@link #adopt}, {@link #adoptable} and {@link #delete} (must not be
+     *                        {@code null})
      * @param projectDatasets the driven port that inspects and removes a project's own dataset,
      *                        consulted only by {@link #delete} (must not be {@code null})
      */
@@ -211,8 +218,10 @@ public class ProjectService
      * project without a model. The same lock serialises two adopters of the same dataset: the
      * second one sees the first one's registration and gets {@link DatasetAlreadyAdoptedException}.
      * The registry write still goes through {@link #registerRetryingOnUnattributedConflict}
-     * (issue #174), because the lock is per dataset and does not cover writers of other datasets
-     * whose commits can still conflict with this one without either side being at fault.</p>
+     * (issue #174), because the lock only orders writers that take it: a registry entry for the
+     * same {@code datasetId} written outside this service's lock still surfaces as an unattributed
+     * commit conflict, and a registry write for another project lands in the same system dataset
+     * and may conflict with this one, depending on the store behind the port.</p>
      *
      * @throws de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException only if a registry entry
      *                                        for {@code datasetId} was written outside this
@@ -507,11 +516,14 @@ public class ProjectService
      * retry to success. For {@link #adopt}, {@code project}'s identity is the caller-chosen,
      * pre-existing {@code datasetId}; a second adopter of that dataset is already turned away by
      * the guards {@link #adopt} runs under the project lock, so a conflict reaching this method
-     * comes from a writer of another dataset. A retry is still correct: it does not manufacture
-     * success where none is possible, it only re-runs the registry's own guards against the
-     * now-committed state, turning an ambiguous, unattributed conflict into either a real success
-     * (nothing actually collided) or a well-attributed exception such as
-     * {@link AnchorAlreadyRegisteredException} instead of a raw, unactionable signal.</p>
+     * comes from a writer that does not take that lock: a registry entry for the same
+     * {@code datasetId} written outside this service, or - depending on the store behind the
+     * port - a registry write for another project in the shared system dataset. A retry is still
+     * correct: it does not manufacture success where none is possible, it only
+     * re-runs the registry's own guards against the now-committed state, turning an ambiguous,
+     * unattributed conflict into either a real success (nothing actually collided) or a
+     * well-attributed exception such as {@link AnchorAlreadyRegisteredException} instead of a raw,
+     * unactionable signal.</p>
      *
      * @throws UnattributedRegistrationConflictException if the write keeps losing an
      *                                         unattributable conflict across every retry attempt

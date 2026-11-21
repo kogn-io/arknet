@@ -557,9 +557,10 @@ class ProjectServiceTest {
      * Issue #174: {@link ProjectService#adopt} must retry an unattributed registration conflict
      * the same way {@link ProjectService#register} does (see
      * {@link #anUnattributedRegistrationConflictOnTheFirstAttemptIsRetriedTransparently} for the
-     * register-path counterpart) - two concurrent adopters of the same dataset can genuinely
-     * overlap under a real store, and the loser's first attempt may surface this residual signal
-     * before either uniqueness guard runs.
+     * register-path counterpart) - the registry write can still lose a store commit conflict to a
+     * writer that does not take the project lock (an entry for the same dataset written outside
+     * the service, or, depending on the store, a registry write for another project), and that
+     * first attempt surfaces this residual signal even though no uniqueness guard was violated.
      */
     @Test
     void anUnattributedRegistrationConflictOnTheFirstAdoptAttemptIsRetriedTransparently() {
@@ -589,16 +590,18 @@ class ProjectServiceTest {
 
     /**
      * Unlike {@code register}'s freshly minted identity, an adopt candidate's {@code datasetId}
-     * is caller-chosen and can genuinely already be claimed by a concurrent adopter of the same
-     * dataset by the time a retried write observes it - the retry above must not swallow that
-     * real, well-attributed collision as if it were the residual, unattributed case.
+     * is caller-chosen and can already be claimed by a registry entry written outside the project
+     * lock (another service instance or a direct registry caller; two {@code adopt} calls through
+     * one service are serialised and the second gets {@code DatasetAlreadyAdoptedException}) by the
+     * time a retried write observes it - the retry above must not swallow that real,
+     * well-attributed collision as if it were the residual, unattributed case.
      */
     @Test
     void aGenuineIdentityCollisionOnAdoptIsNotRetriedAndPropagatesTheAttributedException() {
         ProjectId existing = new ProjectId("arknet");
         datasets.with(existing);
         ProjectService retryingService = new ProjectService(
-                new ClaimedByAConcurrentAdopterRegistry(registry), selfDescription, datasets, projectDatasets);
+                new ClaimedOutsideTheLockRegistry(registry), selfDescription, datasets, projectDatasets);
 
         assertThrows(ResourceAlreadyExistsException.class,
                 () -> retryingService.adopt(existing, "arknet", pathAnchor("/home/fred/DEV/arknet")));
@@ -810,16 +813,16 @@ class ProjectServiceTest {
 
     /**
      * Decorator that reports {@link ResourceAlreadyExistsException} on every {@link #register}
-     * call, as the funnel's own synchronous identity guard would once a concurrent adopter of the
-     * same dataset has already committed - unlike {@link ConflictsOnRegisterRegistry}, this is a
+     * call, as the funnel's own synchronous identity guard would once a writer outside the project
+     * lock has already committed an entry for the same dataset - unlike {@link ConflictsOnRegisterRegistry}, this is a
      * genuine, well-attributed collision that {@link ProjectService#registerRetryingOnUnattributedConflict}
      * must not catch and retry past.
      */
-    private static final class ClaimedByAConcurrentAdopterRegistry implements ProjectRegistry {
+    private static final class ClaimedOutsideTheLockRegistry implements ProjectRegistry {
 
         private final ProjectRegistry delegate;
 
-        ClaimedByAConcurrentAdopterRegistry(ProjectRegistry delegate) {
+        ClaimedOutsideTheLockRegistry(ProjectRegistry delegate) {
             this.delegate = delegate;
         }
 
