@@ -25,7 +25,8 @@ import de.hauschel.arknet.kernel.ProjectId;
  * {@code arkreq:acceptanceCriterion} literal - after which the requirement is indistinguishable
  * from one that was deliberately given that criterion, and the gap this placeholder was meant to
  * surface becomes permanently invisible instead. Rejecting the write keeps the gap visible and
- * pushes the caller to close it explicitly (e.g. via {@code req_update} with real criteria)
+ * pushes the caller to close it explicitly (via {@code req_update}, by patching or removing the
+ * placeholder on position 1)
  * before anything else about the requirement can change.</p>
  *
  * <p>An expected domain outcome (not a programming error): driving adapters - e.g. the MCP tools
@@ -49,8 +50,11 @@ public class MissingAcceptanceCriteriaException extends RuntimeException {
         super("requirement " + Objects.requireNonNull(code, "code").value()
                 + " in project " + Objects.requireNonNull(projectId, "projectId").value()
                 + " has no acceptance criteria on record - it predates the mandatory acceptance-criterion "
-                + "invariant and is currently showing a read-time placeholder, not a real one; add explicit "
-                + "acceptance criteria (e.g. via req_update) before this requirement can be modified further");
+                + "invariant and is currently showing a read-time placeholder, not a real one; replace the "
+                + "placeholder on position 1 via req_update (acceptanceCriteriaTextPatches=[{position: 1, text: ...}], "
+                + "or removeAcceptanceCriterionPositions=[1] together with newAcceptanceCriteria) before this "
+                + "requirement can be modified further - newAcceptanceCriteria alone appends behind the "
+                + "placeholder and is rejected again");
         this.projectId = projectId;
         this.code = code;
     }

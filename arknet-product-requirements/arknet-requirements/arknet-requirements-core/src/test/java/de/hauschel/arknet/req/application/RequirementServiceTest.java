@@ -1121,6 +1121,22 @@ class RequirementServiceTest {
     }
 
     /**
+     * The message must name the way out that actually works: appending via
+     * {@code newAcceptanceCriteria} lands behind the placeholder and is rejected again (issue #674).
+     */
+    @Test
+    void missingAcceptanceCriteriaMessageNamesThePositionOnePatchAsTheWayOut() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.update(WS, code, "New title", null, null, null, null, null, null, null, null, DEFAULT_LANGUAGE));
+
+        assertTrue(ex.getMessage().contains("acceptanceCriteriaTextPatches"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("removeAcceptanceCriterionPositions"), ex.getMessage());
+        assertFalse(ex.getMessage().contains("e.g. via req_update"), ex.getMessage());
+    }
+
+    /**
      * Same regression as {@link #updateRejectsALegacyRequirementWhenAcceptanceCriteriaAreLeftUnchanged},
      * but with no {@code defaultLanguage} at all: the acceptance-criteria guard must still take
      * precedence over {@link de.hauschel.arknet.kernel.MissingDefaultLanguageException}, which
@@ -1151,6 +1167,23 @@ class RequirementServiceTest {
         Requirement updated = service.update(WS, code, null, null, null, null,
                 List.of(new AcceptanceCriterionTextPatch(1, "Real done-when criterion")), null, null, null, null,
                 DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")), updated.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")),
+                service.get(WS, code, null).orElseThrow().acceptanceCriteria());
+    }
+
+    /**
+     * The second way out named by the guard's message: removing the placeholder position while
+     * supplying a new criterion in the same call replaces the placeholder instead of carrying it
+     * forward.
+     */
+    @Test
+    void updateAcceptsALegacyRequirementWhenThePlaceholderIsRemovedAndReplacedByANewCriterion() {
+        RequirementCode code = givenLegacyRequirement();
+
+        Requirement updated = service.update(WS, code, null, null, null, List.of("Real done-when criterion"), null,
+                new RemovedPositions(Set.of(1)), null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")), updated.acceptanceCriteria());
         assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")),
