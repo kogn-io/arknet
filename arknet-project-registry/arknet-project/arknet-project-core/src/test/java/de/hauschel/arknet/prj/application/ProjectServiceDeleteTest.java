@@ -15,6 +15,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.application.port.in.DeleteProject.Deletion;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
@@ -200,8 +201,9 @@ class ProjectServiceDeleteTest {
 
         assertEquals(Optional.empty(), service.findById(project.id()));
         assertFalse(projectDatasets.wasDeleted(project.id()));
-        assertTrue(ex.getMessage().contains("project_adopt"), ex.getMessage());
-        assertTrue(ex.getMessage().contains(project.id().value()), ex.getMessage());
+        assertFalse(ex.getMessage().contains("project_adopt"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("call project_delete with the dataset id '"
+                + project.id().value() + "' again"), ex.getMessage());
     }
 
     /**
@@ -247,8 +249,128 @@ class ProjectServiceDeleteTest {
                 () -> service.delete("arknet", List.of(ELSEWHERE), false));
 
         assertEquals(Optional.empty(), service.findById(project.id()));
-        assertTrue(ex.getMessage().contains("project_adopt"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("project_delete"), ex.getMessage());
         assertEquals("storage locked", ex.getSuppressed()[0].getMessage());
+    }
+
+    /** The retained dataset is exactly what the next call can remove: the advice has to work. */
+    @Test
+    void aDatasetRetainedAfterTheRegistryEntryWentCanBeRemovedByItsIdAlone() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/DEV/arknet"), null, null, null, null);
+        projectDatasets.inUse(project.id());
+        assertThrows(ProjectDatasetRetainedException.class,
+                () -> service.delete("arknet", List.of(ELSEWHERE), false));
+        InMemoryProjectDatasets retry = new InMemoryProjectDatasets();
+        ProjectService afterwards = new ProjectService(registry, new InMemoryProjectSelfDescription(),
+                new InMemoryDatasetInventory().with(project.id()), retry);
+
+        Deletion deletion = afterwards.delete(project.id().value(), List.of(ELSEWHERE), false);
+
+        assertFalse(deletion.registered());
+        assertEquals(project.id(), deletion.datasetId());
+        assertTrue(retry.wasDeleted(project.id()));
+    }
+
+    @Test
+    void anUnregisteredDatasetIsDeletedByItsIdAndTheAnswerSaysNoRegistryEntryExisted() {
+        ProjectId orphan = new ProjectId("orphan-dataset");
+        ProjectService withOrphan = serviceWithOrphan(orphan);
+
+        Deletion deletion = withOrphan.delete("orphan-dataset", List.of(ELSEWHERE), false);
+
+        assertFalse(deletion.registered());
+        assertEquals(null, deletion.project());
+        assertEquals(orphan, deletion.datasetId());
+        assertTrue(projectDatasets.wasDeleted(orphan));
+    }
+
+    @Test
+    void anUnregisteredDatasetHoldingModelResourcesNeedsConfirmationToo() {
+        ProjectId orphan = new ProjectId("orphan-dataset");
+        ProjectService withOrphan = serviceWithOrphan(orphan);
+        projectDatasets.holding(orphan, "arkreq:FunctionalRequirement", 2);
+
+        UnconfirmedProjectDeletionException ex = assertThrows(UnconfirmedProjectDeletionException.class,
+                () -> withOrphan.delete("orphan-dataset", List.of(ELSEWHERE), false));
+
+        assertTrue(ex.getMessage().contains("unregistered dataset 'orphan-dataset'"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("2 arkreq:FunctionalRequirement"), ex.getMessage());
+        assertFalse(projectDatasets.wasDeleted(orphan));
+
+        Deletion deletion = withOrphan.delete("orphan-dataset", List.of(ELSEWHERE), true);
+
+        assertEquals(Map.of("arkreq:FunctionalRequirement", 2L), deletion.removedResources());
+        assertTrue(projectDatasets.wasDeleted(orphan));
+    }
+
+    /** A registered project wins over an unregistered dataset of the same name; the guards stay. */
+    @Test
+    void aRegisteredProjectIsResolvedBeforeAnUnregisteredDatasetAndKeepsItsOwnProjectGuard() {
+        Anchor own = pathAnchor("/home/fred/DEV/arknet");
+        Project project = service.register("arknet", own, null, null, null, null);
+        ProjectService withSameIdAsDataset = new ProjectService(registry, new InMemoryProjectSelfDescription(),
+                new InMemoryDatasetInventory().with(project.id()), projectDatasets);
+
+        assertThrows(OwnProjectDeletionException.class,
+                () -> withSameIdAsDataset.delete(project.id().value(), List.of(own), true));
+        assertEquals(Optional.of(project), service.findById(project.id()));
+    }
+
+    @Test
+    void anUnknownValueIsStillRejectedWhenOtherDatasetsAreAdoptable() {
+        ProjectService withOrphan = serviceWithOrphan(new ProjectId("orphan-dataset"));
+
+        UnknownProjectException ex = assertThrows(UnknownProjectException.class,
+                () -> withOrphan.delete("something-else", List.of(ELSEWHERE), true));
+
+        assertTrue(ex.getMessage().contains("unregistered datasets"), ex.getMessage());
+        assertFalse(projectDatasets.wasDeleted(new ProjectId("something-else")));
+    }
+
+    @Test
+    void aUnregisteredDatasetRegisteredWhileItIsBeingDeletedIsLeftAlone() {
+        ProjectId orphan = new ProjectId("orphan-dataset");
+        // The inventory answers, then a concurrent adopter registers the dataset before the lock is taken.
+        ProjectService withOrphan = new ProjectService(registry, new InMemoryProjectSelfDescription(), () -> {
+            registry.register(new Project(orphan, "late", List.of(pathAnchor("/home/fred/DEV/late"))), null, null,
+                    null, List.of());
+            return java.util.Set.of(orphan);
+        }, projectDatasets);
+        assertThrows(IllegalArgumentException.class,
+                () -> withOrphan.delete("orphan-dataset", List.of(ELSEWHERE), true));
+        assertFalse(projectDatasets.wasDeleted(orphan));
+    }
+
+    /** History alone is content: a project without a single resource but with revisions is not empty. */
+    @Test
+    void aProjectHoldingOnlyRevisionHistoryNeedsConfirmationAndTheRefusalCountsTheRevisions() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/DEV/arknet"), null, null, null, null);
+        projectDatasets.withRevisions(project.id(), 7);
+
+        UnconfirmedProjectDeletionException ex = assertThrows(UnconfirmedProjectDeletionException.class,
+                () -> service.delete("arknet", List.of(ELSEWHERE), false));
+
+        assertEquals(7L, ex.revisions());
+        assertEquals(Map.of(), ex.resourceCounts());
+        assertTrue(ex.getMessage().contains("7 revisions"), ex.getMessage());
+        assertEquals(Optional.of(project), service.findById(project.id()));
+        assertFalse(projectDatasets.wasDeleted(project.id()));
+    }
+
+    @Test
+    void aConfirmedDeletionReportsTheRevisionsThatWentWithIt() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/DEV/arknet"), null, null, null, null);
+        projectDatasets.withRevisions(project.id(), 7);
+
+        Deletion deletion = service.delete("arknet", List.of(ELSEWHERE), true);
+
+        assertEquals(7L, deletion.removedRevisions());
+        assertTrue(projectDatasets.wasDeleted(project.id()));
+    }
+
+    private ProjectService serviceWithOrphan(ProjectId orphan) {
+        return new ProjectService(registry, new InMemoryProjectSelfDescription(),
+                new InMemoryDatasetInventory().with(orphan), projectDatasets);
     }
 
     private static Anchor pathAnchor(String value) {

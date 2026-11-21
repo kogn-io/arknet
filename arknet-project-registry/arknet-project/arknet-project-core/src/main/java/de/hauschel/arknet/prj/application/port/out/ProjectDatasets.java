@@ -32,13 +32,22 @@ public interface ProjectDatasets {
      * <p>A model resource is anything the bounded contexts wrote into the project - requirements,
      * use cases, terms, decisions and their typed parts. The project's own infrastructure is not:
      * its self-description and its provenance trail go with the dataset, but nobody wrote them as
-     * part of the model, and a project holding nothing else is empty.</p>
+     * part of the model. The trail is counted separately, by {@link #revisionCount}.</p>
      *
      * @param projectId the project whose dataset is inspected
      * @return the number of resources per type, keyed by a short, human-readable type name and
      *         ordered by it; empty if the dataset holds no model resource or does not exist
      */
     Map<String, Long> modelResourceCounts(ProjectId projectId);
+
+    /**
+     * Counts the revisions in a project's provenance trail. Every guarded write leaves one, so a
+     * dataset without model resources can still hold history that a deletion would destroy.
+     *
+     * @param projectId the project whose dataset is inspected
+     * @return the number of revisions, {@code 0} if the dataset holds none or does not exist
+     */
+    long revisionCount(ProjectId projectId);
 
     /**
      * Removes a project's dataset with everything in it, including its on-disk storage. A dataset

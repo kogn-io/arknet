@@ -360,22 +360,41 @@ public class ProjectService
      * {@inheritDoc}
      *
      * <p>The guards run before anything is removed, in this order: the reference must name exactly
-     * one registered project, that project must not be the caller's own, and a project still
-     * holding model resources needs {@code confirmed}. Only then is the registry entry removed, and
-     * after it the dataset - see {@link DeleteProject} for why that order.</p>
+     * one registered project - or, if it names none, an unregistered dataset -, that project must
+     * not be the caller's own, and a dataset still holding model resources or revisions needs
+     * {@code confirmed}. Only then is the registry entry removed, and after it the dataset - see
+     * {@link DeleteProject} for why that order. An unregistered dataset has no registry entry and
+     * no own project to guard; only the dataset is removed.</p>
      *
-     * <p>The count and both removals run under {@link #withProjectLock}, so no attach, rename or
+     * <p>The count and the removals run under {@link #withProjectLock}, so no attach, rename or
      * update of the same project through this service interleaves with them. A call already past
-     * its anchor resolution when the registry entry goes can still touch the dataset afterwards;
-     * the store refuses to remove a dataset such a call holds open, and any refusal of the dataset
-     * removal is reported as {@link ProjectDatasetRetainedException}, and one that opens it only after the removal brings back
-     * a dataset no project points to - the same orphan, visible and adoptable in {@code
-     * project_list}.</p>
+     * its anchor resolution when the registry entry goes can still touch the dataset afterwards.
+     * The store refuses to remove a dataset such a call holds open, and any refusal of the dataset
+     * removal is reported as {@link ProjectDatasetRetainedException}. A call that opens the dataset
+     * only after the removal brings back a dataset no project points to - the same orphan, visible
+     * in {@code project_list} and removable by its id.</p>
+     *
+     * <p>The store's short retry for an open lease runs inside the lock on purpose: it only blocks
+     * calls on the project being deleted, and releasing the lock for the wait would let an attach,
+     * rename or adopt of that project slip in between the registry removal and the dataset
+     * removal.</p>
+     *
+     * <p><strong>The lock does not cover writers of other contexts.</strong> {@code req_add} and
+     * the other model writers do not take this service's per-project lock, so a resource written
+     * between the count and the removal is deleted without the confirmation it would have needed,
+     * and the answer reports only what the count found. The window is the time between two store
+     * calls; closing it would need a lock shared by every context, which the project component
+     * does not own.</p>
      */
     @Override
     public Deletion delete(String project, List<Anchor> callerAnchors, boolean confirmed) {
         Objects.requireNonNull(callerAnchors, "callerAnchors");
-        Project target = findByReference(project);
+        String wanted = requireReference(project);
+        Optional<Project> registered = findRegisteredByReference(wanted);
+        if (registered.isEmpty()) {
+            return deleteUnregisteredDataset(wanted, confirmed);
+        }
+        Project target = registered.get();
         for (Anchor callerAnchor : callerAnchors) {
             registry.findByAnchor(callerAnchor)
                     .filter(own -> own.id().equals(target.id()))
@@ -385,15 +404,16 @@ public class ProjectService
         }
         return withProjectLock(target.id(), () -> {
             Map<String, Long> resources = projectDatasets.modelResourceCounts(target.id());
-            if (!resources.isEmpty() && !confirmed) {
-                throw new UnconfirmedProjectDeletionException(target, resources);
+            long revisions = projectDatasets.revisionCount(target.id());
+            if (needsConfirmation(resources, revisions) && !confirmed) {
+                throw new UnconfirmedProjectDeletionException(target, resources, revisions);
             }
             try {
                 registry.delete(target.id());
             } catch (ProjectNotFoundException e) {
                 // A concurrent call deleted it between the lookup above and this removal - the
                 // same answer as a reference that never named a project, in the port's own terms.
-                throw new UnknownProjectException(project.strip());
+                throw new UnknownProjectException(wanted);
             }
             try {
                 projectDatasets.delete(target.id());
@@ -402,21 +422,58 @@ public class ProjectService
                 // entry is already gone, so the state and its remedy are the same.
                 throw new ProjectDatasetRetainedException(target, e);
             }
-            return new Deletion(target, resources);
+            return Deletion.ofProject(target, resources, revisions);
         });
     }
 
     /**
-     * Finds the one registered project whose id or label is {@code reference}. Ids are opaque and
-     * labels free-form, so one project's label can spell another project's id; such a reference
-     * is refused rather than resolved to either, since a deletion must not guess.
+     * Removes the unregistered dataset whose id is {@code wanted}. The candidates come from
+     * {@link #adoptable()}, never from probing the store with the value: opening a dataset by an
+     * unknown id would create it.
      */
-    private Project findByReference(String reference) {
+    private Deletion deleteUnregisteredDataset(String wanted, boolean confirmed) {
+        ProjectId dataset = adoptable().stream()
+                .filter(candidate -> candidate.value().equals(wanted))
+                .findFirst()
+                .orElseThrow(() -> new UnknownProjectException(wanted));
+        return withProjectLock(dataset, () -> {
+            if (registry.findById(dataset).isPresent()) {
+                throw new IllegalArgumentException("The dataset '" + wanted + "' was registered as a project "
+                        + "while it was being deleted. Name it by its id or label again.");
+            }
+            Map<String, Long> resources = projectDatasets.modelResourceCounts(dataset);
+            long revisions = projectDatasets.revisionCount(dataset);
+            if (needsConfirmation(resources, revisions) && !confirmed) {
+                throw new UnconfirmedProjectDeletionException(dataset, resources, revisions);
+            }
+            try {
+                projectDatasets.delete(dataset);
+            } catch (RuntimeException e) {
+                throw new ProjectDatasetRetainedException(dataset, e);
+            }
+            return Deletion.ofUnregisteredDataset(dataset, resources, revisions);
+        });
+    }
+
+    /** A dataset is empty only if it holds neither model resources nor history. */
+    private static boolean needsConfirmation(Map<String, Long> resources, long revisions) {
+        return !resources.isEmpty() || revisions > 0;
+    }
+
+    private static String requireReference(String reference) {
         if (reference == null || reference.isBlank()) {
             throw new IllegalArgumentException("Name the project to delete by its id or its label, "
-                    + "as project_list shows them.");
+                    + "or an unregistered dataset by its id, as project_list shows them.");
         }
-        String wanted = reference.strip();
+        return reference.strip();
+    }
+
+    /**
+     * Finds the one registered project whose id or label is {@code wanted}, if any. Ids are opaque
+     * and labels free-form, so one project's label can spell another project's id; such a reference
+     * is refused rather than resolved to either, since a deletion must not guess.
+     */
+    private Optional<Project> findRegisteredByReference(String wanted) {
         List<Project> matches = registry.findAll().stream()
                 .filter(candidate -> candidate.id().value().equals(wanted) || candidate.label().equals(wanted))
                 .toList();
@@ -424,7 +481,7 @@ public class ProjectService
             throw new IllegalArgumentException("'" + wanted + "' is ambiguous: it is the id of one registered "
                     + "project and the label of another. Rename one of them with project_rename first.");
         }
-        return matches.stream().findFirst().orElseThrow(() -> new UnknownProjectException(wanted));
+        return matches.stream().findFirst();
     }
 
     /**

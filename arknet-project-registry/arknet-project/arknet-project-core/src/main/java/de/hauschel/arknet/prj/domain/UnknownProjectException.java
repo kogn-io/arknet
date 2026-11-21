@@ -28,7 +28,8 @@ public class UnknownProjectException extends RuntimeException {
      */
     public UnknownProjectException(String reference) {
         super("No registered project has the id or label '" + Objects.requireNonNull(reference, "reference")
-                + "'. project_list shows every registered project with its label and id.");
+                + "'. project_list shows every registered project with its label and id, and the ids of "
+                + "unregistered datasets, which project_delete accepts as well.");
         this.reference = reference;
     }
 

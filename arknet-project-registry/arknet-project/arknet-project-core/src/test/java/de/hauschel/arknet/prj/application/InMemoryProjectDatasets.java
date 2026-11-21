@@ -25,6 +25,7 @@ import de.hauschel.arknet.prj.domain.DatasetInUseException;
 final class InMemoryProjectDatasets implements ProjectDatasets {
 
     private final Map<ProjectId, Map<String, Long>> resources = new LinkedHashMap<>();
+    private final Map<ProjectId, Long> revisions = new LinkedHashMap<>();
     private final Set<ProjectId> deleted = new LinkedHashSet<>();
     private final Set<ProjectId> inUse = new LinkedHashSet<>();
     private final Map<ProjectId, RuntimeException> failures = new LinkedHashMap<>();
@@ -37,6 +38,12 @@ final class InMemoryProjectDatasets implements ProjectDatasets {
      */
     InMemoryProjectDatasets holding(ProjectId projectId, String type, long count) {
         resources.computeIfAbsent(projectId, id -> new TreeMap<>()).put(type, count);
+        return this;
+    }
+
+    /** Declares that a project's dataset holds {@code count} revisions in its provenance trail. */
+    InMemoryProjectDatasets withRevisions(ProjectId projectId, long count) {
+        revisions.put(projectId, count);
         return this;
     }
 
@@ -70,6 +77,11 @@ final class InMemoryProjectDatasets implements ProjectDatasets {
     }
 
     @Override
+    public synchronized long revisionCount(ProjectId projectId) {
+        return revisions.getOrDefault(projectId, 0L);
+    }
+
+    @Override
     public synchronized void delete(ProjectId projectId) {
         if (inUse.contains(projectId)) {
             throw new DatasetInUseException(projectId, new IllegalStateException("open lease"));
@@ -78,6 +90,7 @@ final class InMemoryProjectDatasets implements ProjectDatasets {
             throw failures.get(projectId);
         }
         resources.remove(projectId);
+        revisions.remove(projectId);
         deleted.add(projectId);
     }
 }

@@ -122,8 +122,10 @@ import de.hauschel.arknet.prj.domain.Project;
  * label, as {@link #list} renders them), and the caller's own anchor reaches the in-port only so
  * that deleting the caller's own project can be refused - never to choose the target. Both anchors
  * a call can carry count: the header and the optional {@code projectAnchor}; the project either
- * resolves to is refused. A call with neither is not refused: it has no project to protect. Its answer closes with the deleted
- * project's name, the project the call actually hit.</p>
+ * resolves to is refused. A call with neither is not refused: it has no project to protect. Its answer
+ * closes with the deleted project's name, the project the call actually hit. A value that names no
+ * registered project but an unregistered dataset removes that dataset; the answer then says no
+ * registry entry existed and carries no project line.</p>
  */
 public final class ProjectMcpTools {
 
@@ -492,19 +494,26 @@ public final class ProjectMcpTools {
             + "registry entry, all its anchors and its dataset with the whole model in it - requirements, "
             + "use cases, glossary, decisions and their revision history. Name the project explicitly by "
             + "its id or label as project_list shows them; the project the call itself comes from cannot "
-            + "be deleted. A project that still holds model resources is only deleted with confirm=true - "
-            + "without it, the call is refused and names how many resources of which type would be lost. "
-            + "This cannot be undone.")
+            + "be deleted. The id of an unregistered dataset from project_list's second section is "
+            + "accepted too and removes just that dataset, e.g. one left behind by a failed deletion. "
+            + "A project or dataset that still holds model resources or revision history is only "
+            + "deleted with confirm=true - without it, the call is refused and names how many "
+            + "resources of which type and how many revisions would be lost. This cannot be undone.")
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "The project to delete: its id or its label, exactly as "
-                    + "project_list shows them. Never the calling project itself.")
+                    + "project_list shows them, or the id of an unregistered dataset. Never the "
+                    + "calling project itself.")
             final String project,
-            @McpToolParam(description = "Set to true to delete a project that still holds model resources, "
-                    + "after a call without it has named what would be lost. Omitted or false: such a "
-                    + "project is not deleted. An empty project needs no confirmation.", required = false)
+            @McpToolParam(description = "Set to true to delete a project or dataset that still holds "
+                    + "model resources or revision history, after a call without it has named what "
+                    + "would be lost. Omitted or false: such a project is not deleted. One without "
+                    + "either needs no confirmation.", required = false)
             final Boolean confirm,
-            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
+            @McpToolParam(description = "Optional: project anchor of the calling session. Not the "
+                    + "project to delete - it only protects the project this session works in from "
+                    + "being deleted. Omit unless your client cannot send the request header.",
+                    required = false)
             final String projectAnchor) {
         // Both anchors a call can carry name a project the session may be working in - the header
         // and the projectAnchor override - so both go to the own-project guard; guarding only one
@@ -516,15 +525,34 @@ public final class ProjectMcpTools {
                 .toList();
         final DeleteProject.Deletion deletion =
                 deleteProject.delete(project, callerAnchors, Boolean.TRUE.equals(confirm));
+        final String removed = describeRemoved(deletion);
         final Project deleted = deletion.project();
-        final String removed = deletion.removedResources().isEmpty()
-                ? "It held no model resources."
-                : "Removed with it: " + deletion.removedResources().entrySet().stream()
-                        .map(entry -> entry.getValue() + " " + entry.getKey())
-                        .collect(Collectors.joining(", ")) + ".";
+        if (deleted == null) {
+            // No registry entry existed, so there is no project to name: the answer carries no
+            // project line, and says so.
+            return "Deleted the unregistered dataset %s (no registry entry existed). %s"
+                    .formatted(deletion.datasetId().value(), removed);
+        }
         final String body = "Deleted project %s (id: %s) with its anchors and its dataset. %s"
                 .formatted(deleted.label(), deleted.id().value(), removed);
         return WriteResponse.withProject(body, toResolvedProject(deleted));
+    }
+
+    /**
+     * What went with the dataset, as it was found when counted - concurrent writers of other
+     * contexts are not held back, so this never claims the dataset was empty at the moment of
+     * removal.
+     */
+    private static String describeRemoved(final DeleteProject.Deletion deletion) {
+        final Stream<String> resources = deletion.removedResources().entrySet().stream()
+                .map(entry -> entry.getValue() + " " + entry.getKey());
+        final Stream<String> revisions = deletion.removedRevisions() > 0
+                ? Stream.of(deletion.removedRevisions() + " revisions")
+                : Stream.empty();
+        final String found = Stream.concat(resources, revisions).collect(Collectors.joining(", "));
+        return found.isEmpty()
+                ? "It held no model resources and no revisions when counted."
+                : "Removed with it, as counted: " + found + ".";
     }
 
     @McpTool(name = "project_list", description = "List all registered projects, and any datasets "
@@ -549,9 +577,9 @@ public final class ProjectMcpTools {
     /**
      * Renders a project as its label, every anchor it is reachable by (value first, type as a
      * trailing annotation, e.g. {@code /home/f/DEV/arknet (path)}), its opaque identity, and its
-     * description, default language and maintained language set if any of them is set - the identity is not a caller-facing tool
-     * parameter anywhere in this adapter, but a later surface without an anchor of its own needs
-     * a stable value to address a project by.
+     * description, default language and maintained language set if any of them is set - the
+     * identity is not a caller-facing tool parameter anywhere in this adapter, but a later surface
+     * without an anchor of its own needs a stable value to address a project by.
      *
      * <p><strong>The type trails the value on purpose (issue #386).</strong> Every tool's
      * {@code projectAnchor} parameter (and {@code callerAnchor} above) matches on
