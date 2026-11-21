@@ -198,14 +198,26 @@ The script is the convenient way to build from your checkout and replace the run
 It is shorthand for:
 
 ```bash
-ARKNET_VERSION="$(git rev-parse HEAD)-local" docker compose up --build -d --force-recreate
+ARKNET_VERSION="$(git rev-parse HEAD)-local" docker compose -p arknet up --build -d --force-recreate
 ```
 
-`--force-recreate` is needed because the service keeps the tag `ghcr.io/kogn-io/arknet:latest`:
-Compose sees an unchanged service configuration and would otherwise leave the old container
-running on the old image. `ARKNET_VERSION` becomes the build's `serverInfo.version` (the script
-appends `-dirty` when the working tree has uncommitted changes); without it a local build
-reports `dev`. Recreating the container briefly interrupts every session using the daemon.
+`--force-recreate` is needed because the rebuild alone was observed to leave the old container
+running on the old image (kogn-io/arknet#545); the flag forces the replacement.
+`ARKNET_VERSION` becomes the build's `serverInfo.version` (the script appends `-dirty` when the
+working tree has uncommitted changes); without it a local build reports `dev`.
+Recreating the container briefly interrupts every session using the daemon.
+
+Compose names the project after the checkout's directory unless told otherwise.
+Run from a git worktree or a checkout under another directory name, a plain `docker compose up`
+therefore starts a second project, which fails on the published port while the old daemon keeps
+running.
+The script avoids this: it passes the project name of the container currently running the
+`arknet-app` service on port 47331 (`arknet` when none runs; `COMPOSE_PROJECT_NAME` wins when
+set), so it replaces that daemon from any checkout.
+The rebuilt container takes its Compose configuration from the checkout the script lives in,
+including an untracked `docker-compose.override.yml` there.
+`ARKNET_DRY_RUN=1 scripts/rebuild-daemon.sh` prints the version, the project and the command
+without running anything.
 
 The compose service was renamed from `arknet-mcp` to `arknet-app` (kogn-io/arknet#656). If you
 still have a container running under the old service name, stop and remove it first --

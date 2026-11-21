@@ -2,10 +2,11 @@
 #
 #     docker compose up --build -d --force-recreate
 #
-# Use --force-recreate when rebuilding: the service keeps the tag
-# ghcr.io/kogn-io/arknet:latest, so Compose sees an unchanged configuration and
-# would leave the old container running on the old image. scripts/rebuild-daemon.sh
-# runs this command and also sets ARKNET_VERSION (full HEAD sha + "-local",
+# Use --force-recreate when rebuilding: the rebuild alone was observed to leave
+# the old container running on the old image (#545); the flag forces the
+# replacement. scripts/rebuild-daemon.sh runs this command against the Compose
+# project of the running daemon (the project name is otherwise the checkout's
+# directory name) and also sets ARKNET_VERSION (full HEAD sha + "-local",
 # "-dirty" for uncommitted changes); without it the build reports "dev".
 #
 # This encodes the two non-obvious flags so you don't have to remember them:
