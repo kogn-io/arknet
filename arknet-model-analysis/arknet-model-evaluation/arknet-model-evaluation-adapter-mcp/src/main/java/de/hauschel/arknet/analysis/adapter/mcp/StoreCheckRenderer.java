@@ -334,12 +334,6 @@ public final class StoreCheckRenderer {
     private record TermSource(String termHandle, String termLabel, String group, String source) {
     }
 
-    /**
-     * Groups {@code sources} by term and appends one line per term - most sources first, then by
-     * term code (numerically, so TERM-2 precedes TERM-10). Within a line the sources are grouped by
-     * {@link TermSource#group()}, so a field name is written once per term rather than once per
-     * source; groups and sources keep the order the check reported them in.
-     */
     /** Orders codes by prefix, then by the running number as a number; falls back to text. */
     private static int compareCodes(final String left, final String right) {
         final int leftDash = left.lastIndexOf('-');
@@ -353,6 +347,12 @@ public final class StoreCheckRenderer {
         return left.compareTo(right);
     }
 
+    /**
+     * Groups {@code sources} by term and appends one line per term - most sources first, then by
+     * term code (numerically, so TERM-2 precedes TERM-10). Within a line the sources are grouped by
+     * {@link TermSource#group()}, so a field name is written once per term rather than once per
+     * source; groups and sources keep the order the check reported them in.
+     */
     private static void appendTermLines(final StringBuilder out, final List<TermSource> sources) {
         final Map<String, List<TermSource>> byTerm = sources.stream()
                 .collect(Collectors.groupingBy(TermSource::termHandle, LinkedHashMap::new, Collectors.toList()));
