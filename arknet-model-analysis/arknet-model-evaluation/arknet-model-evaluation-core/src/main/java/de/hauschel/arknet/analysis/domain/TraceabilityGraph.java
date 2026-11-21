@@ -149,13 +149,6 @@ public final class TraceabilityGraph {
     private static final String CRITERION_FIELD = StoreResource.localName(CRITERION_TEXT);
 
     /**
-     * Characters that end a sentence for the reference rule of {@link #classifiedMentions()}. Every
-     * {@code .} counts, abbreviation dots included: "Kunde, lt. FR-2" stays a finding (known blind
-     * spot, conservative direction).
-     */
-    private static final String SENTENCE_BREAKS = ".!?;:\n\r";
-
-    /**
      * {@code skos:definition} - a term's meaning, scanned by {@link #unlinkedMentions()}'s third
      * sweep for a mention of another term the source links neither via {@code broader} nor via
      * {@code related} (issue #252, kogn-io/arknet#420).
@@ -940,7 +933,8 @@ public final class TraceabilityGraph {
      *     arkarch:usesTerm}, {@code arkddd:ubiquitousLanguageTerm} or, for a use case, its
      *     roles) - weak, {@link WeakReason#COVERED_BY_REFERENCE}: the term belongs to the
      *     referenced resource, not the mentioning one. A sentence is the text between {@code .},
-     *     {@code !}, {@code ?}, {@code ;}, {@code :} or a line break. One uncovered normative hit
+     *     {@code !}, {@code ?}, {@code ;}, {@code :} or a line break; the dots of the abbreviations in
+     *     {@link SentenceBoundaries#ABBREVIATIONS} do not end it. One uncovered normative hit
      *     keeps the pair a finding;</li>
      * <li>anything else - strong. The term-to-term sweep has no reference rule.</li>
      * </ul>
@@ -1000,18 +994,6 @@ public final class TraceabilityGraph {
                 || linkedTerms(resourceIri).contains(termIri) || rolesOf(resourceIri).contains(termIri);
     }
 
-    /** Whether no sentence break lies between two mentions of one text. */
-    private static boolean sameSentence(String text, int firstStart, int firstEnd, int secondStart, int secondEnd) {
-        int from = Math.min(firstEnd, secondEnd);
-        int to = Math.max(firstStart, secondStart);
-        for (int i = from; i < to; i++) {
-            if (SENTENCE_BREAKS.indexOf(text.charAt(i)) >= 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     /** The shared state of one {@link #classifiedMentions()} pass. */
     private final class MentionScan {
 
@@ -1058,7 +1040,7 @@ public final class TraceabilityGraph {
                         // The own-code exclusion is a guard unreachable with valid data: a source that
                         // carries the edge has the term in 'linked' and never gets here.
                         if (!ref.item().equals(sourceIri) && carriesTerm(ref.item(), hit.item())
-                                && sameSentence(text, hit.start(), hit.end(), ref.start(), ref.end())) {
+                                && SentenceBoundaries.sameSentence(text, hit.start(), hit.end(), ref.start(), ref.end())) {
                             covering.add(ref.item());
                         }
                     }

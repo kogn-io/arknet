@@ -273,9 +273,22 @@ class OrphanCheckTest {
     }
 
     @Test
-    void keepsAMentionAFindingWhenAnAbbreviationDotSeparatesItFromTheReference() {
+    void anAbbreviationDotDoesNotSeparateAMentionFromItsReference() {
         OrphanCheck.Result result = run(
                 requirement("fr-1", "FR-1", "Der Kunde, lt. FR-2, wird informiert."),
+                requirement("fr-2", "FR-2", "Anlage."),
+                iri(ID + "fr-2", USES_TERM, ID + "term-9"),
+                term("term-9", "TERM-9", "Kunde"));
+
+        assertThat(result.unlinkedMentions()).isEmpty();
+        assertThat(result.weakMentions()).extracting(WeakMention::reason)
+                .containsExactly(WeakReason.COVERED_BY_REFERENCE);
+    }
+
+    @Test
+    void aRealSentenceEndStillSeparatesAMentionFromItsReference() {
+        OrphanCheck.Result result = run(
+                requirement("fr-1", "FR-1", "Der Kunde wird informiert. Lt. FR-2 ist das so."),
                 requirement("fr-2", "FR-2", "Anlage."),
                 iri(ID + "fr-2", USES_TERM, ID + "term-9"),
                 term("term-9", "TERM-9", "Kunde"));
