@@ -556,7 +556,8 @@ public final class ProjectMcpTools {
     }
 
     @McpTool(name = "project_list", description = "List all registered projects, and any datasets "
-            + "in the store that no project claims yet (adoptable with project_adopt).",
+            + "in the store that no project claims yet (adoptable with project_adopt, or removable by "
+            + "passing the id to project_delete).",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list() {
         final List<Project> all = listProjects.list();
@@ -570,7 +571,8 @@ public final class ProjectMcpTools {
         // Rendered here rather than as a tool of its own: a caller asking what exists should not
         // have to know that "registered" and "present in the store" can differ before it can find
         // out that they do. The section disappears once everything is adopted.
-        return projects + "\n\n# Unregistered datasets (adoptable with project_adopt)\n"
+        return projects + "\n\n# Unregistered datasets (adoptable with project_adopt, removable with "
+                + "project_delete)\n"
                 + adoptable.stream().map(ProjectId::value).collect(Collectors.joining("\n"));
     }
 

@@ -82,8 +82,9 @@ public final class StoreReader {
     /**
      * The named graphs this read path hides, as SPARQL {@code IRIREF}s - taken from
      * {@link InfrastructureGraphs}, see the class javadoc for why each one is infrastructure
-     * rather than model. Adding a graph there is all it takes to hide it from {@link #readSnapshot}, {@link #outgoing} and {@link #incoming} at once, which is the
-     * point of the list: the three cannot drift apart.
+     * rather than model. Adding a graph there is all it takes to hide it from {@link #readSnapshot},
+     * {@link #outgoing} and {@link #incoming} at once, which is the point of the list: the three
+     * cannot drift apart.
      */
     private static final List<String> HIDDEN_GRAPHS = InfrastructureGraphs.SPARQL_IRIREFS;
 
