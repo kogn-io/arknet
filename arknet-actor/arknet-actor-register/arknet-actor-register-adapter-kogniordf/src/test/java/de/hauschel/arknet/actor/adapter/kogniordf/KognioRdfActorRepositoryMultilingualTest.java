@@ -30,6 +30,8 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.actor.application.ActorService;
+import de.hauschel.arknet.actor.application.port.in.AddActor.NewActor;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.domain.Actor;
@@ -40,6 +42,7 @@ import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.WriteFunnel;
 
 /**
@@ -89,6 +92,25 @@ class KognioRdfActorRepositoryMultilingualTest {
 
     private static Actor actor(ActorId id, ActorCode code, String name, String description) {
         return new Actor(id, code, ActorType.HUMAN, name, description);
+    }
+
+    /**
+     * kogn-io/arknet#711: kognio-rdf 0.4.0 stores a region-subtagged language lower-cased
+     * ({@code @de-ch}) while the service compares against arknet's canonical {@code de-CH}. An
+     * update that changes nothing must still be recognised as a no-op against the real store -
+     * no write, no new revision, no moved head.
+     */
+    @Test
+    void anUnchangedUpdateUnderARegionTaggedLanguageIsANoOpWithoutANewRevision() {
+        ActorService service = new ActorService(repository, new UuidResourceIdFactory());
+        Actor created = service.add(PROJECT_A,
+                new NewActor(ActorType.HUMAN, "Sachbearbeiter", "Bearbeitet Antraege.", "de-CH"), null);
+        RevisionToken headBefore = currentHead(created.code());
+
+        service.update(PROJECT_A, created.code(), "Sachbearbeiter", "Bearbeitet Antraege.", "de-CH", null);
+
+        assertEquals(headBefore, currentHead(created.code()),
+                "an update that changes nothing must not write a new revision");
     }
 
     @Test

@@ -464,6 +464,35 @@ class KognioRdfProjectRegistryTest {
         assertEquals(List.of("Dritte Fassung."), descriptionsOf(id));
     }
 
+    /**
+     * Data written before kognio-rdf 0.4.0 kept the tag as written ({@code @de-CH}); data written
+     * since is lower-cased ({@code @de-ch}). The language-scoped delete must catch the old spelling
+     * too, or the first update after the upgrade leaves the old description next to the new one
+     * (kogn-io/arknet#711).
+     */
+    @Test
+    void updatingADescriptionStoredUnderTheOldMixedCaseRegionTagReplacesIt() {
+        ProjectId id = freshId();
+        registry.register(new Project(id, "arknet-legacy", List.of(pathAnchor("/home/dev/arknet-legacy"))),
+                "New version.", "en", null, null);
+        String legacyDescription = "INSERT DATA { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { <"
+                + "https://w3id.org/arknet/project/" + id.value() + "> <" + ArkprjVocabulary.DESCRIPTION
+                + "> \"Alte Fassung.\"@de-CH } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(ProjectId.RESERVED_SYSTEM_DATASET))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(legacyDescription);
+                return null;
+            });
+            assertTrue(handle.sparqlQuery().ask("ASK { GRAPH ?g { ?s ?p ?o FILTER(lang(?o) = \"de-CH\") } }"),
+                    "precondition: the legacy literal must really carry the mixed-case tag");
+        }
+
+        registry.updateAttributes(id, registry.findCurrentById(id).orElseThrow().head(),
+                "Zweite Fassung.", "de-CH", null, null);
+
+        assertEquals(List.of("New version.", "Zweite Fassung."), descriptionsOf(id).stream().sorted().toList());
+    }
+
     /** Every {@code dcterms:description} value of the registered project {@code id}, whatever its tag. */
     private List<String> descriptionsOf(ProjectId id) {
         String projectSubject = "https://w3id.org/arknet/project/" + id.value();
