@@ -218,9 +218,10 @@ public class ProjectService
      * project without a model. The same lock serialises two adopters of the same dataset: the
      * second one sees the first one's registration and gets {@link DatasetAlreadyAdoptedException}.
      * The registry write still goes through {@link #registerRetryingOnUnattributedConflict}
-     * (issue #174), because the lock is per dataset and does not cover a registry write for
-     * another project - every registry write lands in the same system dataset, so such a commit
-     * can still conflict with this one without either side being at fault.</p>
+     * (issue #174), because the lock only orders writers that take it: a registry entry for the
+     * same {@code datasetId} written outside this service's lock still surfaces as an unattributed
+     * commit conflict, and a registry write for another project lands in the same system dataset
+     * and may conflict with this one, depending on the store behind the port.</p>
      *
      * @throws de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException only if a registry entry
      *                                        for {@code datasetId} was written outside this
@@ -515,8 +516,10 @@ public class ProjectService
      * retry to success. For {@link #adopt}, {@code project}'s identity is the caller-chosen,
      * pre-existing {@code datasetId}; a second adopter of that dataset is already turned away by
      * the guards {@link #adopt} runs under the project lock, so a conflict reaching this method
-     * comes from a registry write for another project (the project lock covers only this one). A
-     * retry is still correct: it does not manufacture success where none is possible, it only
+     * comes from a writer that does not take that lock: a registry entry for the same
+     * {@code datasetId} written outside this service, or - depending on the store behind the
+     * port - a registry write for another project in the shared system dataset. A retry is still
+     * correct: it does not manufacture success where none is possible, it only
      * re-runs the registry's own guards against the now-committed state, turning an ambiguous,
      * unattributed conflict into either a real success (nothing actually collided) or a
      * well-attributed exception such as {@link AnchorAlreadyRegisteredException} instead of a raw,
