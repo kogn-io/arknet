@@ -7,7 +7,9 @@ import java.util.stream.Stream;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetTx;
+import io.kogn.rdf.terms.BlankNodeOrIRI;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.ReadableGraph;
 
 /**
@@ -59,7 +61,7 @@ public final class PausingOnFirstUpdateTx implements DatasetTx {
     }
 
     @Override
-    public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+    public void update(String sparqlUpdate, java.util.Map<String, RDFTerm> bindings) {
         delegate.update(sparqlUpdate, bindings);
     }
 
@@ -69,8 +71,8 @@ public final class PausingOnFirstUpdateTx implements DatasetTx {
     }
 
     @Override
-    public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
-            io.kogn.rdf.terms.RDFTerm object) {
+    public boolean contains(IRI graph, BlankNodeOrIRI subject, IRI predicate,
+            RDFTerm object) {
         return delegate.contains(graph, subject, predicate, object);
     }
 
@@ -80,7 +82,7 @@ public final class PausingOnFirstUpdateTx implements DatasetTx {
     }
 
     @Override
-    public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+    public boolean ask(String query, java.util.Map<String, RDFTerm> bindings) {
         return delegate.ask(query, bindings);
     }
 
@@ -95,8 +97,8 @@ public final class PausingOnFirstUpdateTx implements DatasetTx {
     }
 
     @Override
-    public ReadableGraph export(IRI graph) {
-        return delegate.export(graph);
+    public ReadableGraph snapshot(IRI graph) {
+        return delegate.snapshot(graph);
     }
 
     @Override
@@ -115,7 +117,7 @@ public final class PausingOnFirstUpdateTx implements DatasetTx {
     }
 
     @Override
-    public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+    public Stream<BindingSet> select(String query, java.util.Map<String, RDFTerm> bindings) {
         return delegate.select(query, bindings);
     }
 
@@ -125,7 +127,13 @@ public final class PausingOnFirstUpdateTx implements DatasetTx {
     }
 
     @Override
-    public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+    public ReadableGraph construct(String query, java.util.Map<String, RDFTerm> bindings) {
         return delegate.construct(query, bindings);
+    }
+
+    @Override
+    public ReadableGraph match(IRI graph, BlankNodeOrIRI subject, IRI predicate,
+            RDFTerm object) {
+        return delegate.match(graph, subject, predicate, object);
     }
 }

@@ -40,6 +40,7 @@ import io.kogn.rdf.dataset.SparqlUpdate;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.BlankNodeOrIRI;
@@ -635,8 +636,13 @@ class ProjectRegistryRealStoreConcurrencyTest {
         }
 
         @Override
-        public void close(DatasetId id) {
-            delegate.close(id);
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
+            return delegate.shutDown(id);
+        }
+
+        @Override
+        public void shutDownAll() {
+            delegate.shutDownAll();
         }
 
         @Override
@@ -732,6 +738,11 @@ class ProjectRegistryRealStoreConcurrencyTest {
         }
 
         @Override
+        public ReadableGraph match(IRI graph, BlankNodeOrIRI subject, IRI predicate, RDFTerm object) {
+            return delegate.match(graph, subject, predicate, object);
+        }
+
+        @Override
         public boolean contains(IRI graph, BlankNodeOrIRI subject, IRI predicate, RDFTerm object) {
             return delegate.contains(graph, subject, predicate, object);
         }
@@ -757,8 +768,8 @@ class ProjectRegistryRealStoreConcurrencyTest {
         }
 
         @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
+        public ReadableGraph snapshot(IRI graph) {
+            return delegate.snapshot(graph);
         }
 
         @Override

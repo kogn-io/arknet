@@ -117,7 +117,7 @@ class StoreReaderTest {
 
     @AfterEach
     void tearDown() {
-        lifecycle.close(new DatasetId(PROJECT.value()));
+        lifecycle.shutDown(new DatasetId(PROJECT.value()));
     }
 
     @Test

@@ -5,16 +5,13 @@ package de.hauschel.arknet.prj.adapter.kogniordf;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.Objects;
 
-import org.eclipse.rdf4j.model.Model;
-import org.eclipse.rdf4j.rio.RDFFormat;
-import org.eclipse.rdf4j.rio.Rio;
-
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
-import io.kogn.rdf.rdf4j.RDF4JGraph;
+import io.kogn.rdf.rdf4j.dataset.GraphImportRdf4j;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
@@ -33,7 +30,7 @@ import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
  *
  * <p>This factory is the single place that names RDF4J-backed types: the lifecycle
  * ({@link DatasetLifecycleRdf4j}), the SHACL validation implementation
- * ({@link ShaclValidationRdf4j}) and the Turtle parsing ({@link Rio}) used to load the project
+ * ({@link ShaclValidationRdf4j}) and the Turtle import ({@link GraphImportRdf4j}) used to load the project
  * SHACL shapes onto the classpath. It lets the composition root wire the project component by
  * handing over just a storage directory, without itself depending on {@code io.kogn.rdf.rdf4j.*} -
  * keeping RDF4J out of arknet-app and preserving the port-neutrality of
@@ -138,10 +135,10 @@ public final class KognioRdfProjectRepositoryFactory {
     }
 
     private static ReadableGraph loadGraph(String classpathResource) {
-        try (InputStream in = KognioRdfProjectRepositoryFactory.class.getResourceAsStream(classpathResource)) {
-            Objects.requireNonNull(in, "missing classpath resource " + classpathResource);
-            Model model = Rio.parse(in, "", RDFFormat.TURTLE);
-            return new RDF4JGraph(model);
+        URL resource = KognioRdfProjectRepositoryFactory.class.getResource(classpathResource);
+        Objects.requireNonNull(resource, "missing classpath resource " + classpathResource);
+        try (InputStream in = resource.openStream()) {
+            return new GraphImportRdf4j().readTurtle(in);
         } catch (IOException e) {
             throw new IllegalStateException("failed to load " + classpathResource, e);
         }

@@ -82,7 +82,7 @@ class StoreExporterTest {
 
     @AfterEach
     void tearDown() {
-        lifecycle.close(new DatasetId(PROJECT.value()));
+        lifecycle.shutDown(new DatasetId(PROJECT.value()));
     }
 
     private static Requirement requirementTitled(String title) {

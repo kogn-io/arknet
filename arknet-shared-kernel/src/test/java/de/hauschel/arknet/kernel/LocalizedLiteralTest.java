@@ -26,6 +26,18 @@ class LocalizedLiteralTest {
         assertEquals("de", literal.languageTag());
     }
 
+    /**
+     * kognio-rdf 0.4.0 stores every tag lower-cased ({@code de-CH} becomes {@code de-ch}); every
+     * value read from the store passes through this record, so this is where arknet's canonical
+     * form is restored - otherwise a re-written tag ({@code de-CH}) and the read one compare
+     * unequal and an unchanged update is mistaken for a language change (kogn-io/arknet#711).
+     */
+    @Test
+    void canonicalizesALowerCaseRegionTag() {
+        assertEquals("de-CH", new LocalizedLiteral("Kunde", "de-ch").languageTag());
+        assertEquals("de-CH", LocalizedLiteral.tagged("Kunde", "de-ch").languageTag());
+    }
+
     @Test
     void rejectsNullValue() {
         assertThrows(NullPointerException.class, () -> new LocalizedLiteral(null, "de"));

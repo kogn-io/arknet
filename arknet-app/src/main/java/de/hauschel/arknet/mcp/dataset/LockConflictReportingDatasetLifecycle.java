@@ -24,6 +24,7 @@ import io.kogn.rdf.dataset.SparqlUpdate;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 
 /**
  * Decorates a {@link DatasetLifecycle}, translating an {@link #acquire(DatasetId)} failure that
@@ -38,37 +39,34 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
  * outside this process - someone starts a second daemon instance against the same
  * {@code arknet.rdf.storage} directory, or hand-writes a {@code stdio}-type MCP entry that spawns
  * arknet as a local subprocess instead of pointing at the one running daemon's HTTP endpoint. When
- * that happens, the RDF4J-backed {@code DatasetLifecycle} implementation's {@code acquire} fails
- * with RDF4J's own {@code RepositoryLockedException} as soon as it touches the same
- * {@link DatasetId} - a message that names an RDF4J internal, not the arknet-level cause. This
+ * that happens, the kognio-rdf {@code DatasetLifecycle} implementation's {@code acquire} fails
+ * with a {@code DatasetStoreLockedException} as soon as it touches the same {@link DatasetId} - a
+ * message that names a storage-level fact, not the arknet-level cause and its remedy. This
  * decorator is the one place that failure is translated, right where the shared lifecycle bean is
  * built.</p>
  *
- * <p><strong>Why an injected predicate, not a narrower RDF4J catch.</strong> The composition root
- * deliberately stays free of any direct RDF4J dependency (see
- * {@code KognioRdfRequirementRepositoryFactory#persistentLifecycle}) so that swapping the RDF4J
- * backend for another {@link DatasetLifecycle} implementation never touches arknet-app. Catching
- * {@code org.eclipse.rdf4j.repository.RepositoryLockedException} by name here would reintroduce
- * exactly that dependency. Instead {@code isLockConflict} is a constructor parameter -
- * {@code KognioRdfRequirementRepositoryFactory} supplies {@code DEFAULT_LOCK_CONFLICT}, the one
- * place RDF4J is allowed to be named - and an {@code acquire} failure the predicate does not
+ * <p><strong>Why an injected predicate, not a catch by type.</strong> The composition root
+ * deliberately does not know which store sits behind {@link DatasetLifecycle} (see
+ * {@code KognioRdfRequirementRepositoryFactory#persistentLifecycle}) so that swapping the backend
+ * never touches arknet-app; a different store may report its lock conflicts differently.
+ * Instead {@code isLockConflict} is a constructor parameter -
+ * {@code KognioRdfRequirementRepositoryFactory} supplies {@code DEFAULT_LOCK_CONFLICT}, next to
+ * the lifecycle it builds - and an {@code acquire} failure the predicate does not
  * recognise is rethrown as-is. That matters beyond keeping the dependency out: a permissions,
  * disk-space or store-corruption failure must never be misdiagnosed as a lock conflict just
  * because it, too, is a {@link RuntimeException} out of {@code acquire}.</p>
  *
- * <p><strong>Why {@link AutoCloseable} (issue #140).</strong> Neither {@link DatasetLifecycle} nor
- * the RDF4J-backed implementation it wraps expose a no-arg shutdown - only {@code close(DatasetId)}
- * per dataset. Without one, stopping the daemon (a {@code systemctl stop}, a container stop) tears
- * down the Spring context without ever telling the underlying store to release its datasets in an
- * orderly way, leaving it to crash recovery on the next start instead. {@link #close()} closes
- * every dataset {@link #list()} reports through the same neutral {@code close(DatasetId)} the
- * interface already declares - no RDF4J-specific bulk-shutdown method is called, so this stays free
- * of the dependency {@link #acquire} already avoids. A failure closing one dataset is logged and
- * does not abort the loop - the remaining datasets are still worth an orderly close even if one of
- * them fails (issue #302); {@code close(DatasetId)}'s own contract does not promise to be
- * exception-free. {@code ArknetMcpConfiguration#datasetLifecycle} registers this as the bean's
- * destroy method, so it runs once, automatically, when the context closes. This is best-effort, not
- * a guarantee: {@code close(DatasetId)} is a silent no-op while a concurrently in-flight
+ * <p><strong>Why {@link AutoCloseable} (issue #140).</strong> Without a destroy hook, stopping the
+ * daemon (a {@code systemctl stop}, a container stop) tears down the Spring context without ever
+ * telling the underlying store to release its datasets in an orderly way, leaving it to crash
+ * recovery on the next start instead. {@link #close()} shuts down every dataset {@link #list()}
+ * reports, one by one, through the neutral {@code shutDown(DatasetId)} rather than
+ * {@code shutDownAll()}: a failure on one dataset is logged with its id and does not abort the
+ * loop - the remaining datasets are still worth an orderly shutdown even if one of them fails
+ * (issue #302); {@code shutDown(DatasetId)}'s own contract does not promise to be exception-free.
+ * {@code ArknetMcpConfiguration#datasetLifecycle} registers this as the bean's destroy method, so it
+ * runs once, automatically, when the context closes. This is best-effort, not a guarantee:
+ * {@code shutDown(DatasetId)} leaves a dataset open while a concurrently in-flight
  * {@link #acquire} still holds an open {@link DatasetHandle} lease on that dataset, and
  * {@link #close()} does not wait for such a lease to be released - a dataset caught that way still
  * falls back to crash recovery, merely logged rather than left unnoticed.</p>
@@ -147,19 +145,24 @@ public final class LockConflictReportingDatasetLifecycle implements DatasetLifec
      *
      * <p><strong>Must not be used to release a lease obtained through {@link #acquire}.</strong> A
      * caller holding a {@link DatasetHandle} from {@link #acquire} has to close that handle, not
-     * call this method with its {@link DatasetId} - per {@link DatasetLifecycle#close(DatasetId)}'s
+     * call this method with its {@link DatasetId} - per {@link DatasetLifecycle#shutDown(DatasetId)}'s
      * own contract this is a silent no-op while any lease on {@code id} is open, including one this
      * same caller still holds. Since {@link #openLeases} is only ever decremented by
      * {@link LeaseTrackingHandle#close()}, calling this method instead leaves the tracked count
      * exactly where it was: the lease is never released, and the mismatch surfaces, if at all, only
      * later as a "still open" warning from {@link #close()} - the same symptom class {@link #close()}
      * itself fixes (issue #294), reachable through this method instead. This method is meant for the
-     * eviction-policy caller {@link DatasetLifecycle#close(DatasetId)} documents, one that does not
+     * eviction-policy caller {@link DatasetLifecycle#shutDown(DatasetId)} documents, one that does not
      * hold a lease on {@code id} itself.
      */
     @Override
-    public void close(DatasetId id) {
-        delegate.close(id);
+    public DatasetShutdownOutcome shutDown(DatasetId id) {
+        return delegate.shutDown(id);
+    }
+
+    @Override
+    public void shutDownAll() {
+        delegate.shutDownAll();
     }
 
     @Override
@@ -175,11 +178,11 @@ public final class LockConflictReportingDatasetLifecycle implements DatasetLifec
     /**
      * Closes every dataset {@link #list()} currently reports, so a daemon shutdown releases them
      * in an orderly way instead of relying on crash recovery. Safe to call for a dataset this
-     * instance never {@link #acquire}d - {@code close(DatasetId)} is a no-op for one the delegate
+     * instance never {@link #acquire}d - {@code shutDown(DatasetId)} is a no-op for one the delegate
      * does not have open.
      *
      * <p>A failure closing one dataset is logged and does not abort the loop (issue #302): the
-     * delegate's {@code close(DatasetId)} does not promise to be exception-free, and the remaining
+     * delegate's {@code shutDown(DatasetId)} does not promise to be exception-free, and the remaining
      * datasets are still worth an orderly close even if one of them throws.</p>
      *
      * <p>Best-effort: does not wait for an in-flight {@link #acquire} call elsewhere to release its
@@ -193,7 +196,7 @@ public final class LockConflictReportingDatasetLifecycle implements DatasetLifec
     public void close() {
         for (DatasetId id : delegate.list()) {
             try {
-                delegate.close(id);
+                delegate.shutDown(id);
             } catch (RuntimeException e) {
                 LOG.warn("close(): failed to close dataset '{}' during shutdown, continuing with the "
                         + "remaining datasets: {}", id, e.toString(), e);

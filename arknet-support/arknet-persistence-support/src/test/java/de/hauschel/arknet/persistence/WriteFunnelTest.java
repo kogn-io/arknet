@@ -39,6 +39,7 @@ import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
 import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.dataset.SparqlUpdate;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 import io.kogn.rdf.shacl.ShaclMessage;
 import io.kogn.rdf.shacl.ShaclReport;
 import io.kogn.rdf.shacl.ShaclResult;
@@ -52,6 +53,7 @@ import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.ReadableGraph;
+import io.kogn.rdf.terms.SimpleIRI;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.Triple;
 import io.kogn.rdf.terms.vocab.VocabDct;
@@ -361,7 +363,7 @@ class WriteFunnelTest {
     @Test
     void gateViolationPreventsAcquisition() {
         ShaclReport violation = new ShaclReport(false,
-                List.of(new ShaclResult(SUBJECT_IRI, null, Severity.VIOLATION,
+                List.of(shaclResult(SUBJECT_IRI, null, Severity.VIOLATION,
                         List.of(ShaclMessage.untagged("bad")))));
         Fixture fixture = new Fixture(List.of(), violation, null, e -> false);
 
@@ -1243,7 +1245,12 @@ class WriteFunnelTest {
         }
 
         @Override
-        public void close(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void shutDownAll() {
             throw new UnsupportedOperationException();
         }
 
@@ -1419,7 +1426,7 @@ class WriteFunnelTest {
         }
 
         @Override
-        public ReadableGraph export(IRI namedGraph) {
+        public ReadableGraph snapshot(IRI namedGraph) {
             throw new UnsupportedOperationException();
         }
 
@@ -1430,6 +1437,11 @@ class WriteFunnelTest {
 
         @Override
         public long count() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ReadableGraph match(IRI namedGraph, BlankNodeOrIRI subject, IRI predicate, RDFTerm object) {
             throw new UnsupportedOperationException();
         }
 
@@ -1543,5 +1555,14 @@ class WriteFunnelTest {
             this.data = data;
             return report;
         }
+    }
+
+    private static ShaclResult shaclResult(String focus, String path, Severity severity, List<ShaclMessage> messages) {
+        return new ShaclResult(new SimpleIRI(focus), path, severity,
+                new SimpleIRI("http://www.w3.org/ns/shacl#" + switch (severity) {
+                    case VIOLATION -> "Violation";
+                    case WARNING -> "Warning";
+                    case INFO -> "Info";
+                }), messages);
     }
 }

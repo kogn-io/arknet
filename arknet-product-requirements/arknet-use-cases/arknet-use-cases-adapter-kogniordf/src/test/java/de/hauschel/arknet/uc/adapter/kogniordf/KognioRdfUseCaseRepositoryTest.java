@@ -31,7 +31,6 @@ import org.junit.jupiter.api.io.TempDir;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
-import io.kogn.rdf.rdf4j.RDF4JGraph;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -120,7 +119,7 @@ class KognioRdfUseCaseRepositoryTest {
     @BeforeEach
     void setUp() {
         lifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), storageRoot);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         repository = KognioRdfUseCaseRepositoryFactory.over(
                 lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
     }
@@ -711,7 +710,7 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         assertThrows(WriteConstraintViolationException.class,
-                () -> gate.enforce(new RDF4JGraph(twoPrimaryRoles)));
+                () -> gate.enforce(ModelGraphs.toGraph(twoPrimaryRoles)));
     }
 
     /**
@@ -737,7 +736,7 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         assertThrows(WriteConstraintViolationException.class,
-                () -> gate.enforce(new RDF4JGraph(noPrimaryRole)));
+                () -> gate.enforce(ModelGraphs.toGraph(noPrimaryRole)));
     }
 
     /**
@@ -778,7 +777,7 @@ class KognioRdfUseCaseRepositoryTest {
 
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
-        assertDoesNotThrow(() -> gate.enforce(new RDF4JGraph(withPrimaryRole)));
+        assertDoesNotThrow(() -> gate.enforce(ModelGraphs.toGraph(withPrimaryRole)));
     }
 
     /**
@@ -811,7 +810,7 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
-                () -> gate.enforce(new RDF4JGraph(twoTitles)));
+                () -> gate.enforce(ModelGraphs.toGraph(twoTitles)));
         assertTrue(ex.getMessage().contains("title"), ex.getMessage());
     }
 
@@ -843,14 +842,14 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate englishGate = KognioRdfUseCaseRepositoryFactory
                 .buildGate(new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH));
         WriteConstraintViolationException englishEx = assertThrows(WriteConstraintViolationException.class,
-                () -> englishGate.enforce(new RDF4JGraph(twoTitles)));
+                () -> englishGate.enforce(ModelGraphs.toGraph(twoTitles)));
         assertTrue(englishEx.getMessage().contains("A Use Case needs at least one dcterms:title"),
                 englishEx.getMessage());
 
         ShaclWriteGate germanGate = KognioRdfUseCaseRepositoryFactory
                 .buildGate(new DisplayLocale(Locale.GERMAN, Locale.ENGLISH));
         WriteConstraintViolationException germanEx = assertThrows(WriteConstraintViolationException.class,
-                () -> germanGate.enforce(new RDF4JGraph(twoTitles)));
+                () -> germanGate.enforce(ModelGraphs.toGraph(twoTitles)));
         assertTrue(germanEx.getMessage().contains("Use Case braucht mindestens eine dcterms:title"),
                 germanEx.getMessage());
     }
@@ -883,7 +882,7 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
-                () -> gate.enforce(new RDF4JGraph(twoGoals)));
+                () -> gate.enforce(ModelGraphs.toGraph(twoGoals)));
         assertTrue(ex.getMessage().contains("useCaseGoal"), ex.getMessage());
     }
 
@@ -912,7 +911,7 @@ class KognioRdfUseCaseRepositoryTest {
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
-                () -> gate.enforce(new RDF4JGraph(twoTexts)));
+                () -> gate.enforce(ModelGraphs.toGraph(twoTexts)));
         assertTrue(ex.getMessage().contains("stepText"), ex.getMessage());
     }
 

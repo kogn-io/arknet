@@ -38,7 +38,9 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
+import io.kogn.rdf.terms.BlankNodeOrIRI;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
@@ -519,7 +521,7 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public Stream<BindingSet> select(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.select(query, bindings);
         }
 
@@ -529,8 +531,14 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
-                io.kogn.rdf.terms.RDFTerm object) {
+        public ReadableGraph match(IRI graph, BlankNodeOrIRI subject, IRI predicate,
+                RDFTerm object) {
+            return delegate.match(graph, subject, predicate, object);
+        }
+
+        @Override
+        public boolean contains(IRI graph, BlankNodeOrIRI subject, IRI predicate,
+                RDFTerm object) {
             return delegate.contains(graph, subject, predicate, object);
         }
 
@@ -540,7 +548,7 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public boolean ask(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.ask(query, bindings);
         }
 
@@ -555,8 +563,8 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
+        public ReadableGraph snapshot(IRI graph) {
+            return delegate.snapshot(graph);
         }
 
         @Override
@@ -575,7 +583,7 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public void update(String sparqlUpdate, java.util.Map<String, RDFTerm> bindings) {
             delegate.update(sparqlUpdate, bindings);
         }
 
@@ -585,7 +593,7 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public ReadableGraph construct(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.construct(query, bindings);
         }
     }
@@ -664,8 +672,14 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
-                io.kogn.rdf.terms.RDFTerm object) {
+        public ReadableGraph match(IRI graph, BlankNodeOrIRI subject, IRI predicate,
+                RDFTerm object) {
+            return delegate.match(graph, subject, predicate, object);
+        }
+
+        @Override
+        public boolean contains(IRI graph, BlankNodeOrIRI subject, IRI predicate,
+                RDFTerm object) {
             return delegate.contains(graph, subject, predicate, object);
         }
 
@@ -675,7 +689,7 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public boolean ask(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.ask(query, bindings);
         }
 
@@ -690,8 +704,8 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
+        public ReadableGraph snapshot(IRI graph) {
+            return delegate.snapshot(graph);
         }
 
         @Override
@@ -710,7 +724,7 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public void update(String sparqlUpdate, java.util.Map<String, RDFTerm> bindings) {
             delegate.update(sparqlUpdate, bindings);
         }
 
@@ -720,7 +734,7 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public Stream<BindingSet> select(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.select(query, bindings);
         }
 
@@ -730,7 +744,7 @@ class TermServiceRealStoreConcurrencyTest {
         }
 
         @Override
-        public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public ReadableGraph construct(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.construct(query, bindings);
         }
     }

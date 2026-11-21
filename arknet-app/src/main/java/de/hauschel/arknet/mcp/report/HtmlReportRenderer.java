@@ -20,6 +20,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.persistence.RdfNode;
@@ -640,10 +641,13 @@ public final class HtmlReportRenderer {
         for (final Triple triple : subject.outgoing()) {
             if (predicate.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal
                     && literal.languageTag() != null) {
+                // Canonical key: the store lower-cases tags (kognio-rdf 0.4.0), older data keeps
+                // the written case - one language must be one switch option (kogn-io/arknet#711).
+                final String lang = LanguageTag.canonicalizeOrKeep(literal.languageTag());
                 if (activeLang == null && literal.lexicalForm().equals(displayed)) {
-                    activeLang = literal.languageTag();
+                    activeLang = lang;
                 }
-                byLang.putIfAbsent(literal.languageTag(), literal.lexicalForm());
+                byLang.putIfAbsent(lang, literal.lexicalForm());
             }
         }
         for (final Triple triple : subject.outgoing()) {

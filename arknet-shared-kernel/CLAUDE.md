@@ -23,6 +23,8 @@ arknet-ubiquitous-language als auch arknet-project denselben Helfer brauchen und
 kanonisierter Tag sonst asymmetrisch zwischen Schreiben und dem zugehoerigen sprachscoped Delete
 divergieren kann (zwei verschieden gecaste Literale fuer dieselbe Sprache statt einer Korrektur).
 
+`LanguageTag#canonicalizeOrKeep` ist das lesende Gegenstueck: kognio-rdf 0.4.0 speichert jeden Sprach-Tag lower-case (`de-CH` -> `@de-ch`), also kanonisiert es einen aus dem Store gelesenen Tag zurueck (`de-ch` -> `de-CH`), wirft bei einem fehlerhaften Tag aber nicht und verwirft ihn auch nicht (er wuerde sonst ungetaggt aussehen), sondern reicht ihn unveraendert durch. Weil `Locale.Builder` auch veraltete Tags ersetzt (`iw` -> `he`), ist das mehr als eine Schreibweisen-Korrektur. `LocalizedLiteral` ruft es im Konstruktor auf, sodass jedes Literal im Domaenenmodell den kanonischen Tag traegt, egal ob es aus einem Aufruf oder aus dem Store stammt.
+
 Dieselbe Klasse traegt seit Issue #258 zusaetzlich `resolveWriteLanguage(String explicit, String
 projectDefaultLanguage)`: die eine Stelle, an der jeder Schreibpfad von requirements,
 ubiquitous-language und use-cases ermittelt, unter welchem Tag ein Feld tatsaechlich geschrieben

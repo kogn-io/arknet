@@ -709,6 +709,26 @@ class HtmlReportRendererTest {
                 .contains("<p class=\"prose\">The <strong>customer</strong> orders.</p>");
     }
 
+    /**
+     * kognio-rdf 0.4.0 stores {@code de-CH} as {@code @de-ch}, while data written before keeps
+     * {@code @de-CH}. The switch keys every variant under the canonical tag, so one report holding
+     * both spellings offers one language, not two (kogn-io/arknet#711).
+     */
+    @Test
+    void keysALowerCaseStoredRegionTagUnderItsCanonicalForm() {
+        final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
+                new ModelCard("FR-1", "Bestellen", FR_1, List.of(), List.of())));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                literalLang(FR_1, "http://purl.org/dc/terms/title", "Bestellen", "de-ch"),
+                literalLang(FR_1, "http://purl.org/dc/terms/title", "Order", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"de-CH\">Bestellen</span>")
+                .doesNotContain("data-lang=\"de-ch\"");
+    }
+
     /** A field with only one language on offer stays exactly as it rendered before this issue. */
     @Test
     void leavesATitleUnwrappedWhenOnlyOneLanguageExists() {

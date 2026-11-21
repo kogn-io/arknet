@@ -57,7 +57,7 @@ class KognioRdfTermLookupUbiquitousLanguageSchemaTest {
     void setUp() throws IOException {
         Path tmp = Files.createTempDirectory("arknet-adr-term-schema-it");
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         termRepository = KognioRdfTermRepositoryFactory.over(datasetLifecycle);
         adrTermLookup = new KognioRdfTermLookup(datasetLifecycle);

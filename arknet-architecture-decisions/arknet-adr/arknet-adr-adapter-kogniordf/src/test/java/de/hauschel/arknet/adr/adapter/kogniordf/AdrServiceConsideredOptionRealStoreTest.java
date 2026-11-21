@@ -70,7 +70,7 @@ class AdrServiceConsideredOptionRealStoreTest {
     void setUp() throws IOException {
         Path tmp = Files.createTempDirectory("arknet-adr-service-it");
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         AdrRepository repository = KognioRdfAdrRepositoryFactory.over(
                 datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);

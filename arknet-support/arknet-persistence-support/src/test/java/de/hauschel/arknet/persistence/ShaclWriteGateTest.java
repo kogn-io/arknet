@@ -25,6 +25,7 @@ import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.ReadableGraph;
+import io.kogn.rdf.terms.SimpleIRI;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.Triple;
 
@@ -56,7 +57,7 @@ class ShaclWriteGateTest {
     @Test
     void rejectsNonConformingCandidate() {
         ShaclReport report = new ShaclReport(false,
-                List.of(new ShaclResult(SUBJECT, "https://example.org/label", Severity.VIOLATION,
+                List.of(shaclResult(SUBJECT, "https://example.org/label", Severity.VIOLATION,
                         List.of(ShaclMessage.untagged("missing label")))));
         ShaclWriteGate gate = gateReturning(report);
 
@@ -70,7 +71,7 @@ class ShaclWriteGateTest {
     @Test
     void messageOmitsAbsentPathAndMessage() {
         ShaclReport report = new ShaclReport(false,
-                List.of(new ShaclResult(SUBJECT, null, Severity.VIOLATION, List.of())));
+                List.of(shaclResult(SUBJECT, null, Severity.VIOLATION, List.of())));
         ShaclWriteGate gate = gateReturning(report);
 
         WriteConstraintViolationException thrown = assertThrows(WriteConstraintViolationException.class,
@@ -82,13 +83,13 @@ class ShaclWriteGateTest {
     @Test
     void messageReportsOnlyViolationsAndJoinsThem() {
         ShaclReport report = new ShaclReport(false, List.of(
-                new ShaclResult("https://example.org/warn", null, Severity.WARNING,
+                shaclResult("https://example.org/warn", null, Severity.WARNING,
                         List.of(ShaclMessage.untagged("just a warning"))),
-                new ShaclResult("https://example.org/a", null, Severity.VIOLATION,
+                shaclResult("https://example.org/a", null, Severity.VIOLATION,
                         List.of(ShaclMessage.untagged("first"))),
-                new ShaclResult("https://example.org/info", null, Severity.INFO,
+                shaclResult("https://example.org/info", null, Severity.INFO,
                         List.of(ShaclMessage.untagged("just info"))),
-                new ShaclResult("https://example.org/b", null, Severity.VIOLATION,
+                shaclResult("https://example.org/b", null, Severity.VIOLATION,
                         List.of(ShaclMessage.untagged("second")))));
         ShaclWriteGate gate = gateReturning(report);
 
@@ -208,7 +209,7 @@ class ShaclWriteGateTest {
      */
     @Test
     void reportsTheMessageInTheRequestedLanguage() {
-        ShaclReport report = new ShaclReport(false, List.of(new ShaclResult(SUBJECT, null, Severity.VIOLATION,
+        ShaclReport report = new ShaclReport(false, List.of(shaclResult(SUBJECT, null, Severity.VIOLATION,
                 List.of(new ShaclMessage("Name fehlt.", "de"), new ShaclMessage("Name is required.", "en")))));
         ShaclWriteGate gate = gateReturning(report, new DisplayLocale(Locale.GERMAN, Locale.ENGLISH));
 
@@ -227,7 +228,7 @@ class ShaclWriteGateTest {
         List<ShaclMessage> bilingual =
                 List.of(new ShaclMessage("Name fehlt.", "de"), new ShaclMessage("Name is required.", "en"));
         ShaclReport report =
-                new ShaclReport(false, List.of(new ShaclResult(SUBJECT, null, Severity.VIOLATION, bilingual)));
+                new ShaclReport(false, List.of(shaclResult(SUBJECT, null, Severity.VIOLATION, bilingual)));
 
         assertEquals("focusNode=" + SUBJECT + ", message=Name is required.",
                 assertThrows(WriteConstraintViolationException.class,
@@ -243,7 +244,7 @@ class ShaclWriteGateTest {
      */
     @Test
     void fallsBackWhenTheRequestedLanguageIsMissing() {
-        ShaclReport report = new ShaclReport(false, List.of(new ShaclResult(SUBJECT, null, Severity.VIOLATION,
+        ShaclReport report = new ShaclReport(false, List.of(shaclResult(SUBJECT, null, Severity.VIOLATION,
                 List.of(ShaclMessage.untagged("Plain."), new ShaclMessage("Name is required.", "en")))));
         ShaclWriteGate gate = gateReturning(report, new DisplayLocale(Locale.ITALIAN, Locale.ENGLISH));
 
@@ -304,5 +305,14 @@ class ShaclWriteGateTest {
             this.options = options;
             return report;
         }
+    }
+
+    private static ShaclResult shaclResult(String focus, String path, Severity severity, List<ShaclMessage> messages) {
+        return new ShaclResult(new SimpleIRI(focus), path, severity,
+                new SimpleIRI("http://www.w3.org/ns/shacl#" + switch (severity) {
+                    case VIOLATION -> "Violation";
+                    case WARNING -> "Warning";
+                    case INFO -> "Info";
+                }), messages);
     }
 }

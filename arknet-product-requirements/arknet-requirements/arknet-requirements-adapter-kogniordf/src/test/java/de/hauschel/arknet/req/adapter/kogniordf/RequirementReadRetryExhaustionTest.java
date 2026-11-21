@@ -23,6 +23,7 @@ import io.kogn.rdf.dataset.SparqlUpdate;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -100,8 +101,14 @@ class RequirementReadRetryExhaustionTest {
         }
 
         @Override
-        public void close(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
             // no-op: never reached by this test
+            return DatasetShutdownOutcome.SHUT_DOWN;
+        }
+
+        @Override
+        public void shutDownAll() {
+            // nothing to shut down
         }
 
         @Override

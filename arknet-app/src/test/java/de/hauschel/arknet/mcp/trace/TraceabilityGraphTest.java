@@ -240,7 +240,7 @@ class TraceabilityGraphTest {
 
         @AfterAll
         void tearDown() {
-            lifecycle.close(new DatasetId(PROJECT.value()));
+            lifecycle.shutDown(new DatasetId(PROJECT.value()));
         }
 
         @Test
@@ -571,7 +571,7 @@ class TraceabilityGraphTest {
 
         @AfterEach
         void tearDown() {
-            lifecycle.close(new DatasetId(PROJECT.value()));
+            lifecycle.shutDown(new DatasetId(PROJECT.value()));
         }
 
         /**

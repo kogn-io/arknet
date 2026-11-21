@@ -37,11 +37,14 @@ import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
 import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.dataset.SparqlUpdate;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
+import io.kogn.rdf.terms.BlankNodeOrIRI;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
@@ -93,7 +96,7 @@ class KognioRdfTermRepositoryTest {
     @BeforeEach
     void setUp() {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), storageRoot);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         repository = KognioRdfTermRepositoryFactory.over(datasetLifecycle);
     }
@@ -433,6 +436,52 @@ class KognioRdfTermRepositoryTest {
         assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
         assertFalse(subjectHasPrefLabelWithRawLanguageTag(PROJECT_A, id, "DE"),
                 "a case-differing language argument must not leave a duplicate, differently-cased literal behind");
+    }
+
+    /**
+     * A region-subtagged language (kogn-io/arknet#711): kognio-rdf 0.4.0 lower-cases every language
+     * tag on the way into the store, so a definition written under arknet's canonical {@code de-CH}
+     * is stored as {@code @de-ch}. A delete filter comparing {@code lang(?o)} against
+     * {@code "de-CH"} case-sensitively missed it and left two definitions of one language behind.
+     */
+    @Test
+    void updatingARegionTaggedDefinitionTwiceLeavesExactlyOneLiteralOfThatLanguage() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Kunde", "Erste Fassung.", null), "de-CH");
+
+        repository.update(PROJECT_A, code, null, "Zweite Fassung.", "de-CH", null, null, null);
+        repository.update(PROJECT_A, code, null, "Dritte Fassung.", "de-CH", null, null, null);
+
+        assertEquals(List.of("Dritte Fassung."), definitionsOf(PROJECT_A, id));
+    }
+
+    /**
+     * Data written before kognio-rdf 0.4.0 kept the tag as written ({@code @de-CH}); data written
+     * since is lower-cased ({@code @de-ch}). The language-scoped delete must catch the old spelling
+     * too, or the first update after the upgrade leaves the old definition next to the new one
+     * (kogn-io/arknet#711).
+     */
+    @Test
+    void updatingADefinitionStoredUnderTheOldMixedCaseRegionTagReplacesIt() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Kunde", "Neue Fassung.", null), "en");
+        String legacyDefinition = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#definition> "
+                + "\"Alte Fassung.\"@de-CH } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(legacyDefinition);
+                return null;
+            });
+            assertTrue(handle.sparqlQuery().ask("ASK { GRAPH ?g { ?s ?p ?o FILTER(lang(?o) = \"de-CH\") } }"),
+                    "precondition: the legacy literal must really carry the mixed-case tag");
+        }
+
+        repository.update(PROJECT_A, code, null, "Zweite Fassung.", "de-CH", null, null, null);
+
+        assertEquals(List.of("Neue Fassung.", "Zweite Fassung."), definitionsOf(PROJECT_A, id).stream().sorted().toList());
     }
 
     /**
@@ -820,6 +869,17 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
+    /** Every {@code skos:definition} value of {@code id}, whatever its language tag. */
+    private List<String> definitionsOf(ProjectId projectId, TermId id) {
+        String query = "SELECT ?o WHERE { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#definition> ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((Literal) row.getValue("o").orElseThrow()).getLexicalForm())
+                    .toList();
+        }
+    }
+
     /** Whether {@code subjectIri} carries a plain, untagged {@code skos:prefLabel} literal with exactly this value. */
     private boolean subjectHasUntaggedPrefLabel(ProjectId projectId, TermId id, String value) {
         String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
@@ -863,8 +923,13 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public void close(DatasetId id) {
-            delegate.close(id);
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
+            return delegate.shutDown(id);
+        }
+
+        @Override
+        public void shutDownAll() {
+            delegate.shutDownAll();
         }
 
         @Override
@@ -944,7 +1009,7 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public boolean ask(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.ask(query, bindings);
         }
 
@@ -964,8 +1029,8 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
+        public ReadableGraph snapshot(IRI graph) {
+            return delegate.snapshot(graph);
         }
 
         @Override
@@ -979,8 +1044,14 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
-                io.kogn.rdf.terms.RDFTerm object) {
+        public ReadableGraph match(IRI graph, BlankNodeOrIRI subject, IRI predicate,
+                RDFTerm object) {
+            return delegate.match(graph, subject, predicate, object);
+        }
+
+        @Override
+        public boolean contains(IRI graph, BlankNodeOrIRI subject, IRI predicate,
+                RDFTerm object) {
             return delegate.contains(graph, subject, predicate, object);
         }
 
@@ -990,7 +1061,7 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public void update(String sparqlUpdate, java.util.Map<String, RDFTerm> bindings) {
             delegate.update(sparqlUpdate, bindings);
         }
 
@@ -1000,7 +1071,7 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public Stream<BindingSet> select(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.select(query, bindings);
         }
 
@@ -1010,7 +1081,7 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public ReadableGraph construct(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.construct(query, bindings);
         }
     }
@@ -1778,8 +1849,13 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public void close(DatasetId id) {
-            delegate.close(id);
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
+            return delegate.shutDown(id);
+        }
+
+        @Override
+        public void shutDownAll() {
+            delegate.shutDownAll();
         }
 
         @Override
@@ -1914,8 +1990,13 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public void close(DatasetId id) {
-            delegate.close(id);
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
+            return delegate.shutDown(id);
+        }
+
+        @Override
+        public void shutDownAll() {
+            delegate.shutDownAll();
         }
 
         @Override
@@ -1960,7 +2041,7 @@ class KognioRdfTermRepositoryTest {
                 }
 
                 @Override
-                public Stream<BindingSet> select(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                public Stream<BindingSet> select(String sparql, java.util.Map<String, RDFTerm> bindings) {
                     List<BindingSet> rows = real.select(sparql, bindings).toList();
                     afterSelect.run();
                     return rows.stream();
@@ -1972,7 +2053,7 @@ class KognioRdfTermRepositoryTest {
                 }
 
                 @Override
-                public ReadableGraph construct(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                public ReadableGraph construct(String sparql, java.util.Map<String, RDFTerm> bindings) {
                     return real.construct(sparql, bindings);
                 }
 
@@ -1982,7 +2063,7 @@ class KognioRdfTermRepositoryTest {
                 }
 
                 @Override
-                public boolean ask(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                public boolean ask(String sparql, java.util.Map<String, RDFTerm> bindings) {
                     return real.ask(sparql, bindings);
                 }
             };

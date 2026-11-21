@@ -36,6 +36,7 @@ import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.shacl.ShaclReport;
 import io.kogn.rdf.shacl.ShaclValidation;
 import io.kogn.rdf.shacl.ValidationOptions;
+import io.kogn.rdf.terms.BlankNodeOrIRI;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
@@ -356,8 +357,8 @@ class WriteFunnelCompareAndUpdateRealStoreConcurrencyTest {
         }
 
         @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
+        public ReadableGraph snapshot(IRI graph) {
+            return delegate.snapshot(graph);
         }
 
         @Override
@@ -371,7 +372,13 @@ class WriteFunnelCompareAndUpdateRealStoreConcurrencyTest {
         }
 
         @Override
-        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
+        public ReadableGraph match(IRI graph, BlankNodeOrIRI subject,
+                IRI predicate, RDFTerm object) {
+            return delegate.match(graph, subject, predicate, object);
+        }
+
+        @Override
+        public boolean contains(IRI graph, BlankNodeOrIRI subject, IRI predicate,
                 RDFTerm object) {
             return delegate.contains(graph, subject, predicate, object);
         }

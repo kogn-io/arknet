@@ -24,6 +24,7 @@ import org.junit.jupiter.api.io.TempDir;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 
@@ -156,8 +157,13 @@ class KognioRdfProjectDatasetsTest {
             }
 
             @Override
-            public void close(final DatasetId id) {
-                lifecycle.close(id);
+            public DatasetShutdownOutcome shutDown(final DatasetId id) {
+                return lifecycle.shutDown(id);
+            }
+
+            @Override
+            public void shutDownAll() {
+                lifecycle.shutDownAll();
             }
 
             @Override

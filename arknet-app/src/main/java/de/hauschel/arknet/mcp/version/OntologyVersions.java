@@ -28,8 +28,8 @@ import java.util.regex.Pattern;
  * where they come from.</p>
  *
  * <p><strong>Why a scan and not a parser.</strong> arknet-app is barred from RDF4J (see
- * {@code DependencyRulesTest}'s composition-root rule) and the technology-neutral kognio-rdf ports
- * carry no RDF <em>parser</em> - only a serialiser. The one place allowed to name Rio is each
+ * {@code DependencyRulesTest}'s composition-root rule). kognio-rdf's neutral {@code GraphImport}
+ * port is a parser, but its implementation {@code GraphImportRdf4j} may only be named by an
  * out-adapter's repository factory, and none of them owns "all ontology modules". Rather than
  * widen an architecture rule or hand-maintain a table of version constants that would drift
  * silently, this reads the shipped files with a deliberately narrow scan of the exact two-line

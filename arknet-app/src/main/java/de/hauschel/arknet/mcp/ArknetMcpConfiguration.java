@@ -290,11 +290,11 @@ public class ArknetMcpConfiguration {
      * <p>Wrapped in {@link LockConflictReportingDatasetLifecycle}: if this shared
      * instance is not actually the only one holding {@code storageDir} open - a client/subagent
      * MCP config that spawns arknet as a local {@code stdio} subprocess instead of pointing at the
-     * one running daemon, say - the first {@code acquire} call fails with a raw RDF4J lock
+     * one running daemon, say - the first {@code acquire} call fails with a storage-level lock
      * exception. The wrapper recognises that failure via the injected {@code isLockConflict}
-     * predicate ({@link KognioRdfRequirementRepositoryFactory#DEFAULT_LOCK_CONFLICT}, the one
-     * place RDF4J is allowed to be named) and translates it into a message naming the actual cause
-     * and its remedy instead of leaving a caller to decode an RDF4J internal; a failure the
+     * predicate ({@link KognioRdfRequirementRepositoryFactory#DEFAULT_LOCK_CONFLICT}, next to the
+     * lifecycle that factory builds) and translates it into a message naming the actual cause
+     * and its remedy instead of leaving a caller to decode a storage exception; a failure the
      * predicate does not recognise - a permissions problem, a full disk, a corrupted store -
      * passes through unchanged rather than being misdiagnosed as a lock conflict. A second full
      * daemon instance no longer reaches this path at all - {@link #daemonStorageLock} above fails

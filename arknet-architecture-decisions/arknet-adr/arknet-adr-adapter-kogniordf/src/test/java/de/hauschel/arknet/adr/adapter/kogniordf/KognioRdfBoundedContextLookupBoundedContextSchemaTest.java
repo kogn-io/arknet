@@ -57,7 +57,7 @@ class KognioRdfBoundedContextLookupBoundedContextSchemaTest {
     void setUp() throws IOException {
         Path tmp = Files.createTempDirectory("arknet-adr-bc-schema-it");
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         boundedContextRepository = KognioRdfBoundedContextRepositoryFactory.over(
                 datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);

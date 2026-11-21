@@ -22,6 +22,7 @@ import ch.qos.logback.core.read.ListAppender;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 
@@ -36,13 +37,13 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
  * it. The first lifecycle opens (and, by acquiring, locks) a real {@code NativeStore} directory; a
  * second, independently constructed lifecycle over that same directory is then handed to the
  * decorator, together with {@link KognioRdfRequirementRepositoryFactory#DEFAULT_LOCK_CONFLICT}, and
- * made to acquire the same {@link DatasetId}. This does trigger a genuine RDF4J lock conflict even
+ * made to acquire the same {@link DatasetId}. This does trigger a genuine lock conflict even
  * though both lifecycles live in the same JVM/process - {@code DatasetLifecycleRdf4j}'s own class
  * documentation states that an instance owns its storage root exclusively and that a second one
- * fails with RDF4J's {@code RepositoryLockedException} as soon as it touches the same dataset,
- * because the lock is a {@code NativeStore} file lock, not an in-JVM object lock. Running it
- * against the real default predicate is itself the proof that the default recognises the real
- * RDF4J type it names.</p>
+ * fails with {@code DatasetStoreLockedException} as soon as it touches the same dataset, because
+ * the lock is a {@code NativeStore} file lock, not an in-JVM object lock. Running it against the
+ * real default predicate is itself the proof that the default recognises the real type the store
+ * reports.</p>
  *
  * <p>{@link #delegatesEveryOtherCallAndAnAcquireThatSucceedsUnchanged()},
  * {@link #translatesAnAcquireFailureThePredicateRecognises()} and
@@ -67,7 +68,7 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
  * {@code list()} contract, "known" not "open"), so before the fix the first test's {@code close()}
  * would have warned about a dataset nothing ever left open. {@link
  * #closeContinuesClosingRemainingDatasetsWhenOneThrows()} pins down issue #302: a failing {@code
- * close(DatasetId)} for one dataset must not stop the loop from attempting the rest.</p>
+ * shutDown(DatasetId)} for one dataset must not stop the loop from attempting the rest.</p>
  */
 class LockConflictReportingDatasetLifecycleTest {
 
@@ -95,7 +96,7 @@ class LockConflictReportingDatasetLifecycleTest {
                     .satisfies(e -> assertThat(e.getSuppressed()).isNotEmpty());
         } finally {
             firstHandle.close();
-            first.close(id);
+            first.shutDown(id);
         }
     }
 
@@ -115,7 +116,7 @@ class LockConflictReportingDatasetLifecycleTest {
         acquired.close();
         assertThat(handle.closed).isTrue();
 
-        guarded.close(id);
+        guarded.shutDown(id);
         guarded.delete(id);
         assertThat(guarded.list()).isEqualTo(Set.of(id));
 
@@ -212,7 +213,7 @@ class LockConflictReportingDatasetLifecycleTest {
     }
 
     /**
-     * Regression test for issue #302: {@code close(DatasetId)} throwing for one dataset must not
+     * Regression test for issue #302: {@code shutDown(DatasetId)} throwing for one dataset must not
      * abort the shutdown loop before the remaining datasets are even attempted.
      */
     @Test
@@ -286,7 +287,7 @@ class LockConflictReportingDatasetLifecycleTest {
         }
     }
 
-    /** Records every {@link #close(DatasetId)}/{@link #delete(DatasetId)} call it forwards. */
+    /** Records every {@link #shutDown(DatasetId)}/{@link #delete(DatasetId)} call it forwards. */
     private static final class FakeLifecycle implements DatasetLifecycle {
 
         private final DatasetHandle handle;
@@ -303,8 +304,14 @@ class LockConflictReportingDatasetLifecycleTest {
         }
 
         @Override
-        public void close(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
             closed.add(id);
+            return DatasetShutdownOutcome.SHUT_DOWN;
+        }
+
+        @Override
+        public void shutDownAll() {
+            // nothing to shut down
         }
 
         @Override
@@ -327,8 +334,14 @@ class LockConflictReportingDatasetLifecycleTest {
         }
 
         @Override
-        public void close(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
             // unused in this test
+            return DatasetShutdownOutcome.SHUT_DOWN;
+        }
+
+        @Override
+        public void shutDownAll() {
+            // nothing to shut down
         }
 
         @Override
@@ -344,7 +357,7 @@ class LockConflictReportingDatasetLifecycleTest {
 
     /**
      * Lists exactly the given {@code known} ids (insertion order preserved) and throws when
-     * {@link #close(DatasetId)} is called for {@code failing} - used to prove the shutdown loop
+     * {@link #shutDown(DatasetId)} is called for {@code failing} - used to prove the shutdown loop
      * still attempts the remaining datasets (issue #302). Every attempted id, including the
      * failing one, is recorded before the exception is thrown.
      */
@@ -365,11 +378,17 @@ class LockConflictReportingDatasetLifecycleTest {
         }
 
         @Override
-        public void close(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
             closeAttempts.add(id);
             if (id.equals(failing)) {
                 throw new RuntimeException("simulated close failure for " + id);
             }
+            return DatasetShutdownOutcome.SHUT_DOWN;
+        }
+
+        @Override
+        public void shutDownAll() {
+            // nothing to shut down
         }
 
         @Override

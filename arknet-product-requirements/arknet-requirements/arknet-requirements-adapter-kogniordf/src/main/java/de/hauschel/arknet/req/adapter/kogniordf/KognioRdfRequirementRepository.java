@@ -779,9 +779,11 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * handle a tag which may be a verbatim pass-through of whatever is already sitting in the store
      * ({@code RequirementService#updateWithOptimisticRetry} reads {@code current.titleLanguage()}/
      * {@code current.descriptionLanguage()} straight off {@link LocalizedLiteral#languageTag()}, the
-     * raw tag as read from the store, never re-validated), rather than a freshly caller-supplied
-     * value already validated before it reached this adapter (as {@link #create}'s {@code language}
-     * argument is - that call site stays on the strict {@link LanguageTag#canonicalize(String)}).
+     * tag as read from the store: canonical, or kept raw when the stored tag is malformed
+     * ({@code LanguageTag#canonicalizeOrKeep}) - so a malformed tag can still arrive here), rather
+     * than a freshly caller-supplied value already validated before it reached this adapter (as
+     * {@link #create}'s {@code language} argument is - that call site stays on the strict
+     * {@link LanguageTag#canonicalize(String)}).
      *
      * <p>The fallback is {@code null}, not the raw tag, deliberately: RDF4J's own literal
      * construction ({@code Literals#isValidLanguageTag}, reached from {@link #compareAndUpdate}'s

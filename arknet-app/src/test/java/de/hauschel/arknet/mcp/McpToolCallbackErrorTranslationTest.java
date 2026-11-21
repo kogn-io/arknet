@@ -80,7 +80,7 @@ class McpToolCallbackErrorTranslationTest {
             assertThat(onlyText(result)).contains("Stop the other process", "shared daemon");
         } finally {
             firstHandle.close();
-            first.close(id);
+            first.shutDown(id);
         }
     }
 
