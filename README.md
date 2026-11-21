@@ -191,8 +191,21 @@ the volume.
 Wires up the port publish (host loopback) and volume mount for you:
 
 ```bash
-docker compose up --build
+scripts/rebuild-daemon.sh
 ```
+
+The script is the convenient way to build from your checkout and replace the running daemon.
+It is shorthand for:
+
+```bash
+ARKNET_VERSION="$(git rev-parse HEAD)-local" docker compose up --build -d --force-recreate
+```
+
+`--force-recreate` is needed because the service keeps the tag `ghcr.io/kogn-io/arknet:latest`:
+Compose sees an unchanged service configuration and would otherwise leave the old container
+running on the old image. `ARKNET_VERSION` becomes the build's `serverInfo.version` (the script
+appends `-dirty` when the working tree has uncommitted changes); without it a local build
+reports `dev`. Recreating the container briefly interrupts every session using the daemon.
 
 The compose service was renamed from `arknet-mcp` to `arknet-app` (kogn-io/arknet#656). If you
 still have a container running under the old service name, stop and remove it first --
@@ -235,6 +248,8 @@ therefore says its own version in three places, from one source:
 
 The version is the release tag or commit sha baked into the image
 (`ARKNET_VERSION`), falling back to the Maven version of the jar being run.
+A local Compose build reports `dev` unless `ARKNET_VERSION` is set; `scripts/rebuild-daemon.sh`
+sets it to the full commit sha plus `-local` (and `-dirty` for an unclean working tree).
 A daemon that answers `unknown` was started from a source tree that was never
 packaged.
 

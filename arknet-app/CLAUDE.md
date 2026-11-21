@@ -125,11 +125,14 @@ des Menschen, siehe `README.md`.
 
 Der geteilte Daemon aktualisiert sich nach einem Merge oder Release nicht selbst.
 Er laeuft auf dem Image weiter, das beim letzten Start geladen war.
-Neu bauen und ersetzen im Repo-Root mit `docker compose up --build -d --force-recreate`; ohne
-`--force-recreate` bleibt der alte Container trotz neuem Image stehen.
+Neu bauen und ersetzen mit `scripts/rebuild-daemon.sh` (von ueberall aufrufbar); es ruft im Repo-Root
+`docker compose up --build -d --force-recreate` auf. Ohne `--force-recreate` bleibt der alte Container trotz
+neuem Image stehen, weil der Dienst das Tag `ghcr.io/kogn-io/arknet:latest` behaelt.
+Das Skript setzt `ARKNET_VERSION` auf die volle HEAD-Sha plus `-local` (bei unsauberem Arbeitsbaum zusaetzlich `-dirty`);
+`docker-compose.yml` reicht die Variable als Build-Arg durch.
 Welchen Stand der Daemon tatsaechlich faehrt, zeigt `serverInfo.version` aus der MCP-`initialize`-
-Antwort (siehe `README.md`, Abschnitt "Which build is running?"; ein lokaler Compose-Build ohne
-`ARKNET_VERSION`-Build-Arg meldet `dev`), ersatzweise die Tool-Zahl in
+Antwort (siehe `README.md`, Abschnitt "Which build is running?"; ein lokaler Compose-Build mit nicht gesetzter
+`ARKNET_VERSION` meldet `dev`), ersatzweise die Tool-Zahl in
 `docker logs <container> | grep "Registered tools"`.
 Ein bereits geladenes Tool-Schema in einer laufenden Client-Session kann veraltet sein; ein echter
 Tool-Aufruf zeigt das neue Serververhalten sofort, `ToolSearch` erst nach erneutem Abruf.
