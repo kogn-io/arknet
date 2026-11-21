@@ -39,6 +39,7 @@ import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
 import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.dataset.SparqlUpdate;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 import io.kogn.rdf.shacl.ShaclMessage;
 import io.kogn.rdf.shacl.ShaclReport;
 import io.kogn.rdf.shacl.ShaclResult;
@@ -52,6 +53,7 @@ import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.ReadableGraph;
+import io.kogn.rdf.terms.SimpleIRI;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.Triple;
 import io.kogn.rdf.terms.vocab.VocabDct;
@@ -1243,7 +1245,7 @@ class WriteFunnelTest {
         }
 
         @Override
-        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
             throw new UnsupportedOperationException();
         }
 
@@ -1556,8 +1558,8 @@ class WriteFunnelTest {
     }
 
     private static ShaclResult shaclResult(String focus, String path, Severity severity, List<ShaclMessage> messages) {
-        return new ShaclResult(new io.kogn.rdf.terms.SimpleIRI(focus), path, severity,
-                new io.kogn.rdf.terms.SimpleIRI("http://www.w3.org/ns/shacl#" + switch (severity) {
+        return new ShaclResult(new SimpleIRI(focus), path, severity,
+                new SimpleIRI("http://www.w3.org/ns/shacl#" + switch (severity) {
                     case VIOLATION -> "Violation";
                     case WARNING -> "Warning";
                     case INFO -> "Info";

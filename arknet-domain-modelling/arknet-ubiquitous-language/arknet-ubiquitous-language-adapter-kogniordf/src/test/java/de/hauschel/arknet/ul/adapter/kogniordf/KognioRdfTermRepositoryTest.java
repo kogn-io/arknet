@@ -37,11 +37,14 @@ import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
 import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.dataset.SparqlUpdate;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
+import io.kogn.rdf.terms.BlankNodeOrIRI;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
@@ -920,7 +923,7 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
             return delegate.shutDown(id);
         }
 
@@ -1006,7 +1009,7 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public boolean ask(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.ask(query, bindings);
         }
 
@@ -1041,14 +1044,14 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public io.kogn.rdf.terms.ReadableGraph match(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
-                io.kogn.rdf.terms.RDFTerm object) {
+        public ReadableGraph match(IRI graph, BlankNodeOrIRI subject, IRI predicate,
+                RDFTerm object) {
             return delegate.match(graph, subject, predicate, object);
         }
 
         @Override
-        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
-                io.kogn.rdf.terms.RDFTerm object) {
+        public boolean contains(IRI graph, BlankNodeOrIRI subject, IRI predicate,
+                RDFTerm object) {
             return delegate.contains(graph, subject, predicate, object);
         }
 
@@ -1058,7 +1061,7 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public void update(String sparqlUpdate, java.util.Map<String, RDFTerm> bindings) {
             delegate.update(sparqlUpdate, bindings);
         }
 
@@ -1068,7 +1071,7 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public Stream<BindingSet> select(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.select(query, bindings);
         }
 
@@ -1078,7 +1081,7 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+        public ReadableGraph construct(String query, java.util.Map<String, RDFTerm> bindings) {
             return delegate.construct(query, bindings);
         }
     }
@@ -1846,7 +1849,7 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
             return delegate.shutDown(id);
         }
 
@@ -1987,7 +1990,7 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
             return delegate.shutDown(id);
         }
 
@@ -2038,7 +2041,7 @@ class KognioRdfTermRepositoryTest {
                 }
 
                 @Override
-                public Stream<BindingSet> select(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                public Stream<BindingSet> select(String sparql, java.util.Map<String, RDFTerm> bindings) {
                     List<BindingSet> rows = real.select(sparql, bindings).toList();
                     afterSelect.run();
                     return rows.stream();
@@ -2050,7 +2053,7 @@ class KognioRdfTermRepositoryTest {
                 }
 
                 @Override
-                public ReadableGraph construct(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                public ReadableGraph construct(String sparql, java.util.Map<String, RDFTerm> bindings) {
                     return real.construct(sparql, bindings);
                 }
 
@@ -2060,7 +2063,7 @@ class KognioRdfTermRepositoryTest {
                 }
 
                 @Override
-                public boolean ask(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                public boolean ask(String sparql, java.util.Map<String, RDFTerm> bindings) {
                     return real.ask(sparql, bindings);
                 }
             };

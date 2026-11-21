@@ -10,6 +10,7 @@ import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 
 /**
  * Wraps a real {@link DatasetLifecycle} so that a test can pin a chosen interleaving of two
@@ -75,7 +76,7 @@ public final class GuardedLifecycle implements DatasetLifecycle {
     }
 
     @Override
-    public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+    public DatasetShutdownOutcome shutDown(DatasetId id) {
         return delegate.shutDown(id);
     }
 

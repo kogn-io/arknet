@@ -25,6 +25,7 @@ import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.ReadableGraph;
+import io.kogn.rdf.terms.SimpleIRI;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.Triple;
 
@@ -307,8 +308,8 @@ class ShaclWriteGateTest {
     }
 
     private static ShaclResult shaclResult(String focus, String path, Severity severity, List<ShaclMessage> messages) {
-        return new ShaclResult(new io.kogn.rdf.terms.SimpleIRI(focus), path, severity,
-                new io.kogn.rdf.terms.SimpleIRI("http://www.w3.org/ns/shacl#" + switch (severity) {
+        return new ShaclResult(new SimpleIRI(focus), path, severity,
+                new SimpleIRI("http://www.w3.org/ns/shacl#" + switch (severity) {
                     case VIOLATION -> "Violation";
                     case WARNING -> "Warning";
                     case INFO -> "Info";

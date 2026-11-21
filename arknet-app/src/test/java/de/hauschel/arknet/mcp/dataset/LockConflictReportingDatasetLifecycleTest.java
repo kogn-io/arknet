@@ -22,6 +22,7 @@ import ch.qos.logback.core.read.ListAppender;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 
@@ -303,9 +304,9 @@ class LockConflictReportingDatasetLifecycleTest {
         }
 
         @Override
-        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
             closed.add(id);
-            return io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome.SHUT_DOWN;
+            return DatasetShutdownOutcome.SHUT_DOWN;
         }
 
         @Override
@@ -333,9 +334,9 @@ class LockConflictReportingDatasetLifecycleTest {
         }
 
         @Override
-        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
             // unused in this test
-            return io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome.SHUT_DOWN;
+            return DatasetShutdownOutcome.SHUT_DOWN;
         }
 
         @Override
@@ -377,12 +378,12 @@ class LockConflictReportingDatasetLifecycleTest {
         }
 
         @Override
-        public io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome shutDown(DatasetId id) {
+        public DatasetShutdownOutcome shutDown(DatasetId id) {
             closeAttempts.add(id);
             if (id.equals(failing)) {
                 throw new RuntimeException("simulated close failure for " + id);
             }
-            return io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome.SHUT_DOWN;
+            return DatasetShutdownOutcome.SHUT_DOWN;
         }
 
         @Override
