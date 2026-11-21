@@ -18,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -378,8 +379,12 @@ class ProjectServiceDeleteTest {
         try {
             Future<Deletion> first = pool.submit(() -> racing.delete("orphan-dataset", List.of(ELSEWHERE), true));
             await(firstInsideLock);
-            Future<Deletion> second = pool.submit(() -> racing.delete("orphan-dataset", List.of(ELSEWHERE), true));
-            awaitBlocked(second, pool);
+            AtomicReference<Thread> secondWorker = new AtomicReference<>();
+            Future<Deletion> second = pool.submit(() -> {
+                secondWorker.set(Thread.currentThread());
+                return racing.delete("orphan-dataset", List.of(ELSEWHERE), true);
+            });
+            awaitBlocked(second, secondWorker);
             releaseFirst.countDown();
 
             first.get();
@@ -414,9 +419,12 @@ class ProjectServiceDeleteTest {
         try {
             Future<Deletion> delete = pool.submit(() -> racing.delete("orphan-dataset", List.of(ELSEWHERE), true));
             await(firstInsideLock);
-            Future<Project> adopt = pool.submit(() -> racing.adopt(orphan, "late",
-                    pathAnchor("/home/fred/DEV/late")));
-            awaitBlocked(adopt, pool);
+            AtomicReference<Thread> adoptWorker = new AtomicReference<>();
+            Future<Project> adopt = pool.submit(() -> {
+                adoptWorker.set(Thread.currentThread());
+                return racing.adopt(orphan, "late", pathAnchor("/home/fred/DEV/late"));
+            });
+            awaitBlocked(adopt, adoptWorker);
             releaseFirst.countDown();
 
             delete.get();
@@ -440,14 +448,15 @@ class ProjectServiceDeleteTest {
         }
     }
 
-    /** The overlapping call is parked on the project lock once its worker thread is BLOCKED. */
-    private static void awaitBlocked(Future<?> call, ExecutorService pool) throws InterruptedException {
+    /** The overlapping call is parked on the project lock once its own worker thread is BLOCKED. */
+    private static void awaitBlocked(Future<?> call, AtomicReference<Thread> worker) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline) {
             if (call.isDone()) {
                 return;
             }
-            if (blockedWorkers() > 0) {
+            Thread thread = worker.get();
+            if (thread != null && thread.getState() == Thread.State.BLOCKED) {
                 return;
             }
             Thread.sleep(5);
@@ -455,13 +464,6 @@ class ProjectServiceDeleteTest {
         throw new IllegalStateException("overlapping call never reached the lock");
     }
 
-    private static long blockedWorkers() {
-        return Thread.getAllStackTraces().keySet().stream()
-                .filter(t -> t.getName().startsWith("pool-") && t.getState() == Thread.State.BLOCKED)
-                .count();
-    }
-
-    /** History alone is content: a project without a single resource but with revisions is not empty. */
     @Test
     void theRefusalUsesTheSingularForExactlyOneRevision() {
         Project project = service.register("arknet", pathAnchor("/home/fred/DEV/arknet"), null, null, null, null);
@@ -474,6 +476,7 @@ class ProjectServiceDeleteTest {
                 ex.getMessage());
     }
 
+    /** History alone is content: a project without a single resource but with revisions is not empty. */
     @Test
     void aProjectHoldingOnlyRevisionHistoryNeedsConfirmationAndTheRefusalCountsTheRevisions() {
         Project project = service.register("arknet", pathAnchor("/home/fred/DEV/arknet"), null, null, null, null);
