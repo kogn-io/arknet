@@ -1,6 +1,13 @@
 # Convenience wiring for the arknet-app daemon (issue #140).
 #
-#     docker compose up --build
+#     docker compose up --build -d --force-recreate
+#
+# Use --force-recreate when rebuilding: the rebuild alone was observed to leave
+# the old container running on the old image (#545); the flag forces the
+# replacement. scripts/rebuild-daemon.sh runs this command against the Compose
+# project of the running daemon (the project name is otherwise the checkout's
+# directory name) and also sets ARKNET_VERSION (full HEAD sha + "-local",
+# "-dirty" for uncommitted changes); without it the build reports "dev".
 #
 # This encodes the two non-obvious flags so you don't have to remember them:
 #
@@ -50,6 +57,8 @@ services:
     build:
       context: .
       dockerfile: arknet-app/Dockerfile
+      args:
+        ARKNET_VERSION: ${ARKNET_VERSION:-dev}
     image: ghcr.io/kogn-io/arknet:latest
     environment:
       ARKNET_REPORT_HOST_DIR: *report-host-dir

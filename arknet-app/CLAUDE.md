@@ -125,11 +125,19 @@ des Menschen, siehe `README.md`.
 
 Der geteilte Daemon aktualisiert sich nach einem Merge oder Release nicht selbst.
 Er laeuft auf dem Image weiter, das beim letzten Start geladen war.
-Neu bauen und ersetzen im Repo-Root mit `docker compose up --build -d --force-recreate`; ohne
-`--force-recreate` bleibt der alte Container trotz neuem Image stehen.
+Neu bauen und ersetzen mit `scripts/rebuild-daemon.sh` (von ueberall aufrufbar, auch aus einem Worktree); es ruft im Root seiner Checkout-Kopie `docker compose -p <projekt> up --build -d --force-recreate` auf.
+`<projekt>` ist der Compose-Projektname des Containers, der den Dienst `arknet-app` auf Port 47331 betreibt (ohne laufenden Daemon `arknet`, ein gesetztes `COMPOSE_PROJECT_NAME` geht vor).
+Ohne `-p` naehme Compose den Verzeichnisnamen der Checkout-Kopie und startete aus einem Worktree ein zweites Projekt, das am belegten Port scheitert, waehrend der alte Daemon weiterlaeuft.
+Ohne `--force-recreate` lief nach einem Neubau beobachtet der alte Container auf dem alten Image weiter (#545); das Flag erzwingt den Austausch.
+Die Compose-Konfiguration des neuen Containers stammt aus der Checkout-Kopie des Skripts, samt einer dort liegenden untracked `docker-compose.override.yml`.
+Eine `docker-compose.override.yml` in einem anderen Checkout (etwa dem Haupt-Checkout, der den laufenden Daemon gestartet hat: Image-Pin, `PUID`/`PGID`) wendet ein Neubau aus einem Worktree still nicht an.
+Gelten sollen diese Einstellungen, dann den Neubau aus dem Checkout fahren, dessen Konfiguration gelten soll.
+`ARKNET_DRY_RUN=1` gibt Version, Projekt und Befehl nur aus.
+Das Skript setzt `ARKNET_VERSION` auf die volle HEAD-Sha plus `-local` (bei unsauberem Arbeitsbaum zusaetzlich `-dirty`);
+`docker-compose.yml` reicht die Variable als Build-Arg durch.
 Welchen Stand der Daemon tatsaechlich faehrt, zeigt `serverInfo.version` aus der MCP-`initialize`-
-Antwort (siehe `README.md`, Abschnitt "Which build is running?"; ein lokaler Compose-Build ohne
-`ARKNET_VERSION`-Build-Arg meldet `dev`), ersatzweise die Tool-Zahl in
+Antwort (siehe `README.md`, Abschnitt "Which build is running?"; ein lokaler Compose-Build mit nicht gesetzter
+`ARKNET_VERSION` meldet `dev`), ersatzweise die Tool-Zahl in
 `docker logs <container> | grep "Registered tools"`.
 Ein bereits geladenes Tool-Schema in einer laufenden Client-Session kann veraltet sein; ein echter
 Tool-Aufruf zeigt das neue Serververhalten sofort, `ToolSearch` erst nach erneutem Abruf.

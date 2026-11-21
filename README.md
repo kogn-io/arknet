@@ -191,8 +191,43 @@ the volume.
 Wires up the port publish (host loopback) and volume mount for you:
 
 ```bash
-docker compose up --build
+scripts/rebuild-daemon.sh
 ```
+
+The script is the convenient way to build from your checkout and replace the running daemon.
+For the common case (run from the main checkout, daemon running as Compose project `arknet`)
+it boils down to this command, run from the repository root:
+
+```bash
+ARKNET_VERSION="$(git rev-parse HEAD)-local" docker compose -p arknet up --build -d --force-recreate
+```
+
+Typed by hand, this simplified form does not do everything the script does:
+it hard-codes `-p arknet` instead of detecting the running daemon's project (see below),
+does not append `-dirty` to the version and does not change into the repository root.
+Run from a worktree or a differently named checkout whose daemon runs under another project name,
+it ends in the failure the script avoids; use the script there.
+
+`--force-recreate` is needed because the rebuild alone was observed to leave the old container
+running on the old image (kogn-io/arknet#545); the flag forces the replacement.
+`ARKNET_VERSION` becomes the build's `serverInfo.version` (the script appends `-dirty` when the
+working tree has uncommitted changes); without it a local build reports `dev`.
+Recreating the container briefly interrupts every session using the daemon.
+
+Compose names the project after the checkout's directory unless told otherwise.
+Run from a git worktree or a checkout under another directory name, a plain `docker compose up`
+therefore starts a second project, which fails on the published port while the old daemon keeps
+running.
+The script avoids this: it passes the project name of the container currently running the
+`arknet-app` service on port 47331 (`arknet` when none runs; `COMPOSE_PROJECT_NAME` wins when
+set), so it replaces that daemon from any checkout.
+The rebuilt container takes its Compose configuration from the checkout the script lives in,
+including an untracked `docker-compose.override.yml` there.
+An override file in another checkout, for example the main checkout that started the running daemon
+(image pin, `PUID`/`PGID`, extra environment), is silently not applied by a rebuild from a worktree.
+If those settings must apply, run the rebuild from the checkout whose configuration should win.
+`ARKNET_DRY_RUN=1 scripts/rebuild-daemon.sh` prints the version, the project and the command
+without running anything.
 
 The compose service was renamed from `arknet-mcp` to `arknet-app` (kogn-io/arknet#656). If you
 still have a container running under the old service name, stop and remove it first --
@@ -235,6 +270,8 @@ therefore says its own version in three places, from one source:
 
 The version is the release tag or commit sha baked into the image
 (`ARKNET_VERSION`), falling back to the Maven version of the jar being run.
+A local Compose build reports `dev` unless `ARKNET_VERSION` is set; `scripts/rebuild-daemon.sh`
+sets it to the full commit sha plus `-local` (and `-dirty` for an unclean working tree).
 A daemon that answers `unknown` was started from a source tree that was never
 packaged.
 
