@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
@@ -26,6 +27,10 @@ import de.hauschel.arknet.kernel.ProjectId;
  * asks whether any of the {@link #LEGACY_GRAPHS} holds a triple; if one does, the handle is
  * released again and {@link LegacyDatasetLayoutException} names the dataset - nothing is read,
  * nothing is written. A dataset found clean is remembered and not asked again.</p>
+ *
+ * <p>{@link LegacyLayoutMigration} moves every such dataset to the content graph at daemon start,
+ * before this lifecycle hands out a handle; a dataset still in the old layout here is one whose
+ * migration failed and was rolled back, and the refusal points to the daemon log that names why.</p>
  *
  * <p>The reserved system dataset of the project registry is exempt: it never held component
  * graphs, and a provenance graph left there from earlier registry writes is inert - the registry
@@ -70,7 +75,7 @@ public final class LegacyLayoutRefusingDatasetLifecycle implements DatasetLifecy
         }
         boolean legacy;
         try {
-            legacy = handle.sparqlQuery().ask(LEGACY_ASK);
+            legacy = holdsLegacyLayout(handle.sparqlQuery());
         } catch (RuntimeException e) {
             handle.close();
             throw e;
@@ -111,13 +116,23 @@ public final class LegacyLayoutRefusingDatasetLifecycle implements DatasetLifecy
         }
     }
 
+    /**
+     * Tells whether a dataset still holds a triple in one of the {@link #LEGACY_GRAPHS}.
+     *
+     * @param query the dataset's query port
+     * @return {@code true} for a dataset in the earlier layout
+     */
+    static boolean holdsLegacyLayout(SparqlQuery query) {
+        return query.ask(LEGACY_ASK);
+    }
+
     private static String message(DatasetId id) {
         return "The project dataset '" + id.value() + "' still uses the storage layout of an earlier arknet"
-                + " version: one named graph per component and a provenance graph. This version keeps every"
-                + " model resource of a project in one versioned content graph and refuses to read or write the"
-                + " old layout, so the project is neither shown as empty nor overwritten. To work with this"
-                + " project, keep running the arknet version that wrote it, or move to an arknet version that"
-                + " migrates this layout to the content graph; until the project is migrated, keep a copy of the"
-                + " storage directory.";
+                + " version: one named graph per component and a provenance graph. The daemon migrates that layout"
+                + " to the one versioned content graph at startup, but the migration of this dataset failed and was"
+                + " rolled back, so the old layout is unchanged; this version refuses to read or write it, so the"
+                + " project is neither shown as empty nor overwritten. The daemon log names the reason under"
+                + " 'legacy layout migration'. Keep a copy of the storage directory, fix the named cause or keep"
+                + " running the arknet version that wrote it, and restart the daemon to retry the migration.";
     }
 }
