@@ -114,6 +114,7 @@ class DependencyRulesTest {
     private static final Set<String> PERSISTENCE_WRITE_TYPES = Set.of(
             "ShaclWriteGate",
             "WriteFunnel",
+            "VersionedWriteFunnel",
             "WriteConstraintViolationException",
             "UnresolvedReferenceException",
             "SparqlTerms");

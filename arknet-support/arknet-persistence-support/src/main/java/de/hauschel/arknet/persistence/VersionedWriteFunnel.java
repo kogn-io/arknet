@@ -9,6 +9,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -121,6 +123,7 @@ public final class VersionedWriteFunnel {
     private final ResourceVersioning versioning;
     private final Predicate<RuntimeException> isWriteConflict;
     private final RDF rdf = new SimpleRdf();
+    private final Set<DatasetId> boundDatasets = ConcurrentHashMap.newKeySet();
 
     /**
      * Creates the funnel on the system UTC clock.
@@ -251,6 +254,7 @@ public final class VersionedWriteFunnel {
         Objects.requireNonNull(slice, "slice");
 
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            ensureBound(dataset, handle);
             try {
                 return handle.transactor().inTransaction(tx -> {
                     Optional<String> existing = findExisting.apply(tx);
@@ -377,24 +381,33 @@ public final class VersionedWriteFunnel {
 
     /**
      * Publishes the current drafts of the given subjects in one transaction - all or none. An
-     * unchanged draft creates no new entry; the result then names the latest one.
+     * unchanged draft creates no new entry; the result then names the latest one. Every subject is
+     * checked before anything is written: one with an empty draft (never written or deleted)
+     * throws {@code notFound} for that subject and publishes none of the others.
      *
      * @param dataset     the dataset (project)
      * @param subjectIris the subjects to publish, each at most once
      * @param details     creator and comment of the entries created
+     * @param notFound    the signal for a subject with an empty draft, given its IRI
      * @return per subject the entry naming its current version
      */
-    public PublishResult publish(DatasetId dataset, Collection<String> subjectIris, EntryDetails details) {
+    public PublishResult publish(DatasetId dataset, Collection<String> subjectIris, EntryDetails details,
+            Function<String, RuntimeException> notFound) {
         Objects.requireNonNull(dataset, "dataset");
         Objects.requireNonNull(subjectIris, "subjectIris");
         Objects.requireNonNull(details, "details");
+        Objects.requireNonNull(notFound, "notFound");
 
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             return handle.transactor().inTransaction(tx -> {
                 versioning.bindContentGraph(tx);
                 List<RevisionToken> tokens = new ArrayList<>(subjectIris.size());
                 for (String subjectIri : subjectIris) {
-                    tokens.add(versioning.readDraft(tx, rdf.createIRI(subjectIri)).token());
+                    DraftSlice draft = versioning.readDraft(tx, rdf.createIRI(subjectIri));
+                    if (draft.triples().isEmpty()) {
+                        throw notFound.apply(subjectIri);
+                    }
+                    tokens.add(draft.token());
                 }
                 return versioning.publish(tx, tokens, details);
             });
@@ -456,6 +469,7 @@ public final class VersionedWriteFunnel {
     private RevisionToken write(DatasetId dataset, UnaryOperator<RuntimeException> commitConflict,
             Function<DatasetTx, RevisionToken> work) {
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            ensureBound(dataset, handle);
             try {
                 return handle.transactor().inTransaction(work);
             } catch (RuntimeException e) {
@@ -465,6 +479,36 @@ public final class VersionedWriteFunnel {
                 throw e;
             }
         }
+    }
+
+    /**
+     * Commits the content-graph binding in a transaction of its own, once per dataset and funnel.
+     * The library records the binding on first use; two first writes on a fresh dataset would
+     * otherwise both record it and one would lose at commit - reported by {@link #create} as a
+     * false {@code duplicateCode}. A binding lost to a concurrent binder is read back on the one
+     * retry. Should a dataset be dropped and created anew, the cache only skips this step: every
+     * library operation still binds itself inside the write transaction.
+     */
+    private void ensureBound(DatasetId dataset, DatasetHandle handle) {
+        if (boundDatasets.contains(dataset)) {
+            return;
+        }
+        try {
+            bind(handle);
+        } catch (RuntimeException e) {
+            if (!isWriteConflict.test(e)) {
+                throw e;
+            }
+            bind(handle);
+        }
+        boundDatasets.add(dataset);
+    }
+
+    private void bind(DatasetHandle handle) {
+        handle.transactor().inTransaction(tx -> {
+            versioning.bindContentGraph(tx);
+            return null;
+        });
     }
 
     private DraftSlice openDraft(DatasetTx tx, IRI subject) {

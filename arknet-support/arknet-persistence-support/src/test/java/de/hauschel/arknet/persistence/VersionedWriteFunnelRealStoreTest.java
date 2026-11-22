@@ -110,9 +110,9 @@ class VersionedWriteFunnelRealStoreTest {
         assertTrue(funnel.history(DATASET, SUBJECT).isEmpty());
 
         // when - published by alice, then republished unchanged by bob
-        PublishResult first = funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(alice));
+        PublishResult first = funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(alice), NotFound::of);
         clock.advance(Duration.ofMinutes(5));
-        PublishResult unchanged = funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(bob));
+        PublishResult unchanged = funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(bob), NotFound::of);
 
         // then - one entry only, the repeated publish names it
         assertEquals(PublishState.PUBLISHED_UNCHANGED, funnel.publishState(DATASET, SUBJECT));
@@ -122,7 +122,8 @@ class VersionedWriteFunnelRealStoreTest {
         // when - one criterion changes under its stable fragment name, bob publishes
         update(SUBJECT, "v1", "crit one CHANGED", "crit two");
         assertEquals(PublishState.PUBLISHED_WITH_UNPUBLISHED_CHANGES, funnel.publishState(DATASET, SUBJECT));
-        funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(bob).withComment("changed ac-1"));
+        funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(bob).withComment("changed ac-1"),
+                NotFound::of);
 
         // then
         List<HistoryEntry> history = funnel.history(DATASET, SUBJECT);
@@ -259,7 +260,7 @@ class VersionedWriteFunnelRealStoreTest {
     @Test
     void deleteRecordsATombstoneNamingTheLastVersionAndRetainsTheCode() {
         create(SUBJECT, CODE, "v1", "crit one");
-        funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE);
+        funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE, NotFound::of);
         HistoryEntry published = funnel.history(DATASET, SUBJECT).get(0);
 
         String tombstoneIri = funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE.withCreator(alice),
@@ -311,20 +312,162 @@ class VersionedWriteFunnelRealStoreTest {
     }
 
     @Test
-    void publishOfSeveralResourcesIsOneTransaction_andRecreateAfterDeleteWorks() {
+    void publishOfSeveralResourcesCreatesOneEntryEach() {
         create(SUBJECT, CODE, "a", "x");
         create(OTHER, "FR-2", "b", "y");
 
-        PublishResult result = funnel.publish(DATASET, List.of(SUBJECT, OTHER), EntryDetails.NONE);
+        PublishResult result = funnel.publish(DATASET, List.of(SUBJECT, OTHER), EntryDetails.NONE, NotFound::of);
+
         assertEquals(2, result.results().size());
         update(SUBJECT, "a2", "x");
         long dirty = Set.of(SUBJECT, OTHER).stream()
                 .filter(iri -> funnel.publishState(DATASET, iri) != PublishState.PUBLISHED_UNCHANGED).count();
         assertEquals(1, dirty);
+    }
 
+    /**
+     * The publishable subject comes first, the unknown one second: a publish running one
+     * transaction per subject, or writing before it checked every subject, would leave the first
+     * one published.
+     */
+    @Test
+    void publishIsAllOrNone_anUnknownSubjectLeavesTheOthersUnpublished() {
+        create(SUBJECT, CODE, "a", "x");
+
+        NotFound thrown = assertThrows(NotFound.class, () -> funnel.publish(DATASET, List.of(SUBJECT, OTHER),
+                EntryDetails.NONE, NotFound::of));
+
+        assertEquals(OTHER, thrown.getMessage());
+        assertEquals(PublishState.NEVER_PUBLISHED, funnel.publishState(DATASET, SUBJECT));
+        assertTrue(funnel.history(DATASET, SUBJECT).isEmpty());
+    }
+
+    @Test
+    void publishOfADeletedSubjectIsNotFound() {
+        create(SUBJECT, CODE, "a", "x");
+        funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE, Signals::unexpected, tx -> { });
+
+        NotFound thrown = assertThrows(NotFound.class, () -> funnel.publish(DATASET, List.of(SUBJECT),
+                EntryDetails.NONE, NotFound::of));
+
+        assertEquals(SUBJECT, thrown.getMessage());
+        assertEquals(1, funnel.history(DATASET, SUBJECT).size(), "only the tombstone");
+    }
+
+    @Test
+    void aDeletedSubjectCanBeCreatedAgain() {
+        create(OTHER, "FR-2", "b", "y");
         funnel.delete(DATASET, OTHER, "FR-2", EntryDetails.NONE, Signals::unexpected, tx -> { });
+
         create(OTHER, "FR-3", "c", "z");
+
         assertEquals(Set.of("c"), titles(draft(OTHER)));
+    }
+
+    /**
+     * Two creates of different subjects with the same code, on a dataset whose content-graph
+     * binding is already committed: both pass the synchronous code check before either commits,
+     * so the store's commit-time conflict decides, and the loser surfaces as {@code duplicateCode}.
+     */
+    @Test
+    void twoOverlappingCreatesWithTheSameCode_oneCommitsTheOtherIsADuplicateCode() throws InterruptedException {
+        create(NS + "req/seed", "FR-0", "seed");
+        CyclicBarrier bothInside = new CyclicBarrier(2);
+
+        List<Optional<RuntimeException>> outcomes = runTwo(
+                () -> funnel.create(DATASET, SUBJECT, CODE, null, Signals::unexpected, DuplicateCode::new,
+                        (tx, current) -> awaitThen(bothInside, requirement(SUBJECT, CODE, "racer-A"))),
+                () -> funnel.create(DATASET, OTHER, CODE, null, Signals::unexpected, DuplicateCode::new,
+                        (tx, current) -> awaitThen(bothInside, requirement(OTHER, CODE, "racer-B"))));
+
+        RuntimeException loser = exactlyOneLoser(outcomes);
+        assertSame(DuplicateCode.class, loser.getClass());
+        assertEquals(1, Set.of(SUBJECT, OTHER).stream().filter(s -> !draft(s).isEmpty()).count(),
+                "exactly one subject holds a draft");
+    }
+
+    /**
+     * Two idempotent creates of the same logical resource under different subject IRIs: both find
+     * nothing, both build, one loses at commit and answers with the winner's IRI from the retry.
+     */
+    @Test
+    void twoOverlappingCreateIfAbsent_bothReturnTheWinnersIri() throws InterruptedException {
+        create(NS + "req/seed", "FR-0", "seed");
+        CyclicBarrier bothInside = new CyclicBarrier(2);
+        AtomicReference<String> resultA = new AtomicReference<>();
+        AtomicReference<String> resultB = new AtomicReference<>();
+
+        List<Optional<RuntimeException>> outcomes = runTwo(
+                () -> resultA.set(funnel.createIfAbsent(DATASET, SUBJECT, CODE, null, this::findByCode,
+                        Signals::unexpected, Signals::unexpected,
+                        (tx, current) -> awaitThen(bothInside, requirement(SUBJECT, CODE, "racer-A")))),
+                () -> resultB.set(funnel.createIfAbsent(DATASET, OTHER, CODE, null, this::findByCode,
+                        Signals::unexpected, Signals::unexpected,
+                        (tx, current) -> awaitThen(bothInside, requirement(OTHER, CODE, "racer-B")))));
+
+        assertEquals(List.of(Optional.empty(), Optional.empty()), outcomes);
+        assertEquals(resultA.get(), resultB.get());
+        String loser = resultA.get().equals(SUBJECT) ? OTHER : SUBJECT;
+        assertTrue(draft(loser).isEmpty(), "the loser's write never landed");
+    }
+
+    /**
+     * The first two writes on a fresh dataset both find the content graph unbound and both record
+     * the binding; disjoint subjects and codes must still both succeed.
+     */
+    @Test
+    void twoFirstCreatesOnAFreshDatasetWithDifferentCodesBothSucceed() throws InterruptedException {
+        CyclicBarrier bothInside = new CyclicBarrier(2);
+
+        List<Optional<RuntimeException>> outcomes = runTwo(
+                () -> funnel.create(DATASET, SUBJECT, CODE, null, Signals::unexpected, DuplicateCode::new,
+                        (tx, current) -> awaitThen(bothInside, requirement(SUBJECT, CODE, "racer-A"))),
+                () -> funnel.create(DATASET, OTHER, "FR-2", null, Signals::unexpected, DuplicateCode::new,
+                        (tx, current) -> awaitThen(bothInside, requirement(OTHER, "FR-2", "racer-B"))));
+
+        assertEquals(List.of(Optional.empty(), Optional.empty()), outcomes);
+        assertEquals(Set.of("racer-A"), titles(draft(SUBJECT)));
+        assertEquals(Set.of("racer-B"), titles(draft(OTHER)));
+    }
+
+    private Optional<String> findByCode(DatasetTx tx) {
+        return tx.select("SELECT ?s WHERE { GRAPH <" + CONTENT_GRAPH + "> { ?s <"
+                + VocabDct.IDENTIFIER.getIRIString() + "> \"" + CODE + "\" } }")
+                .map(row -> ((IRI) row.getValue("s").orElseThrow()).getIRIString())
+                .findFirst();
+    }
+
+    private static List<Optional<RuntimeException>> runTwo(Runnable a, Runnable b) throws InterruptedException {
+        AtomicReference<Optional<RuntimeException>> outcomeA = new AtomicReference<>();
+        AtomicReference<Optional<RuntimeException>> outcomeB = new AtomicReference<>();
+        Thread racerA = new Thread(() -> outcomeA.set(outcomeOf(a)), "racer-A");
+        Thread racerB = new Thread(() -> outcomeB.set(outcomeOf(b)), "racer-B");
+        racerA.start();
+        racerB.start();
+        racerA.join();
+        racerB.join();
+        assertNotNull(outcomeA.get(), "racer-A must have finished");
+        assertNotNull(outcomeB.get(), "racer-B must have finished");
+        return List.of(outcomeA.get(), outcomeB.get());
+    }
+
+    private static Optional<RuntimeException> outcomeOf(Runnable work) {
+        try {
+            work.run();
+            return Optional.empty();
+        } catch (RuntimeException e) {
+            return Optional.of(e);
+        }
+    }
+
+    private static RuntimeException exactlyOneLoser(List<Optional<RuntimeException>> outcomes) {
+        assertNotEquals(outcomes.get(0).isEmpty(), outcomes.get(1).isEmpty(), "exactly one racer must succeed");
+        return outcomes.get(0).orElseGet(() -> outcomes.get(1).orElseThrow());
+    }
+
+    private static ReadableGraph awaitThen(CyclicBarrier barrier, ReadableGraph slice) {
+        await(barrier);
+        return slice;
     }
 
     @Test
@@ -448,6 +591,16 @@ class VersionedWriteFunnelRealStoreTest {
     }
 
     private static final class NotFound extends RuntimeException {
+        NotFound() {
+        }
+
+        NotFound(String subjectIri) {
+            super(subjectIri);
+        }
+
+        static NotFound of(String subjectIri) {
+            return new NotFound(subjectIri);
+        }
     }
 
     private static final class Referenced extends RuntimeException {

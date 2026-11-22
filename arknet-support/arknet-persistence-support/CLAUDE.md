@@ -44,17 +44,21 @@ Kontextunterschiede sind Konstruktor-Parameter (`shapes`/`axioms`/`options`/`dis
 **Der versionierte Schreibpfad (ADR-61..64).**
 `VersionedWriteFunnel` ist der Schreibtrichter ueber kognio-rdf `rdf-versioning` (`rdf-cid` als direkte Abhaengigkeit, weil er den inhaltsadressierenden IRI-Generator selbst baut).
 Jede Modellressource ist dort der Draft-Slice ihrer Subjekt-IRI im einen Content-Graph des Projekt-Datasets, dessen IRI der Konstruktor bekommt; geschrieben wird nur ueber `replaceDraft`.
-Er steht neben `WriteFunnel`, kein BC-Adapter ruft ihn auf, und das System-Dataset der Projekt-Registry liegt ausserhalb von Content-Graph und Versionierung.
+Das System-Dataset der Projekt-Registry liegt ausserhalb von Content-Graph und Versionierung.
+Die Bindung eines Datasets an den Content-Graph committet der Trichter einmal je Dataset in einer eigenen Transaktion vor dem ersten Write, weil zwei erste Writes auf einem frischen Dataset sonst beide die Bindung schreiben und einer am Commit verliert, was `create` als falsches `duplicateCode` meldete.
 Skelett jedes Writes in einer Transaktion: Bindung an den Content-Graph, Draft und Token lesen, Existenz-/Code-/Token-Pruefung, der `SliceBuilder` des Aufrufers baut aus Transaktion und aktuellem Draft den vollstaendigen neuen Slice, das Gate validiert genau diesen Slice, `replaceDraft` schreibt ihn.
 Anders als beim `WriteFunnel` validiert das Gate damit, was geschrieben wird, und nicht einen Kandidaten, den ein Body danach noch mit erhaltenen Sprachvarianten zusammenfuehrt; das Gate selbst braucht dafuer keine Aenderung, ein Slice ist ein gewoehnlicher `ReadableGraph`.
-Ein Slice umfasst die Subjekt-IRI, ihre `#fragment`-IRIs und die daran erreichbaren Blank Nodes; ein Tripel auf einem anderen Subjekt lehnt die Bibliothek mit `IllegalArgumentException` ab, darum brauchen Kinder Fragment-IRIs, bevor ein Adapter umschaltet.
+Ein Slice umfasst die Subjekt-IRI, ihre `#fragment`-IRIs und die daran erreichbaren Blank Nodes; ein Tripel auf einem anderen Subjekt lehnt die Bibliothek mit `IllegalArgumentException` ab, darum sind Kinder Fragment-IRIs ihrer Eltern-IRI.
 Nebenlaeufigkeitsschutz ist das `RevisionToken` der Bibliothek: `compareAndUpdate` meldet ein veraltetes Token und einen verlorenen Commit-Konflikt ueber dasselbe `revisionMismatch`-Signal.
-Das Token ist nicht serialisierbar (sein Revisionszaehler ist package-private) und schuetzt darum Lesen und Schreiben innerhalb eines Aufrufs, nicht ueber mehrere MCP-Aufrufe hinweg; `currentToken(tx, iri)` liest es in der Lesetransaktion des Aufrufers, damit es zum gelesenen Stand gehoert.
+Das Token ist nicht serialisierbar (sein Revisionszaehler ist package-private) und laesst sich nicht aus einem String zurueckbauen.
+Es reist darum nur als Objekt im selben Prozess, also durch einen Out-Port nur als opaker Traeger und nie ueber mehrere MCP-Aufrufe hinweg.
+`currentToken(tx, iri)` liest es in der Lesetransaktion des Aufrufers, damit es zum gelesenen Stand gehoert.
 `publish` ist der explizite Akt aus ADR-62, fuer mehrere Ressourcen in einer Transaktion; ein unveraenderter Draft erzeugt keinen neuen History-Eintrag.
+Ein Subjekt mit leerem Draft (nie geschrieben oder geloescht) wirft vor jedem Schreiben das `notFound`-Signal des Aufrufers mit seiner IRI, und keine der anderen Ressourcen wird veroeffentlicht.
 `delete` laesst die Bibliothek Draft und veroeffentlichten Slice entfernen und einen Tombstone schreiben und haengt einen uebergebenen Business-Code an dessen Eintrags-IRI in `RETAINED_CODES_GRAPH`, den `findRetainedCodes` mit demselben Vertrag wie beim `WriteFunnel` liest.
 Den Code haelt arknet selbst, weil der Tombstone einer nie veroeffentlichten Ressource keine Version nennt und ihr letzter Inhalt dann nicht mehr lesbar ist.
 Die Code-Pruefung von `create` laeuft im ganzen Content-Graph, also ueber alle Ressourcentypen eines Projekts statt je Komponentengraph.
-Abgesichert durch `VersionedWriteFunnelRealStoreTest` gegen einen echten `NativeStore` unter `@TempDir`, inklusive zweier ueberlappender Updates vom selben Token.
+Abgesichert durch `VersionedWriteFunnelRealStoreTest` gegen einen echten `NativeStore` unter `@TempDir`, inklusive ueberlappender Updates vom selben Token, ueberlappender Creates mit demselben Code und der ersten Writes auf einem frischen Dataset.
 
 **Der Uniqueness-Guard sieht mehr als ein Lesepfad (kogn-io/arknet#360).**
 `create`s Code-Pruefung ist `tx.contains(graph, null, dcterms:identifier, code)` -- das Subjekt ist ein Wildcard.
