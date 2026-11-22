@@ -128,7 +128,7 @@ class AdrServiceRealStoreConcurrencyTest {
      */
     private static AdrService serviceOver(DatasetLifecycle lifecycle) {
         AdrRepository repository =
-                KognioRdfAdrRepositoryFactory.over(lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                KognioRdfAdrRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         RequirementLookup neverCalledRequirementLookup = (projectId, code) -> {
             throw new AssertionError("not expected to resolve a requirement code in this test");
         };

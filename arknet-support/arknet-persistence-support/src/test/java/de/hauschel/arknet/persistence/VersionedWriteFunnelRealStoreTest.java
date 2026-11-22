@@ -152,6 +152,23 @@ class VersionedWriteFunnelRealStoreTest {
         assertEquals(6, tx(t -> library.readPublished(t, rdf.createIRI(SUBJECT))).size());
     }
 
+    /**
+     * Every fragment a written slice holds is recorded as issued, and the record outlives the
+     * fragment: a later slice without it does not take the number back (ADR-64, stable names).
+     */
+    @Test
+    void everyWrittenFragmentIsRecordedAsIssuedAndStaysIssuedAfterItsRemoval() {
+        create(SUBJECT, CODE, "v1", "crit one", "crit two");
+        update(SUBJECT, "v2", "crit one");
+
+        Set<String> issued = tx(t -> t.match(rdf.createIRI(ChildFragments.ISSUED_FRAGMENTS_GRAPH),
+                rdf.createIRI(SUBJECT), null, null).stream()
+                .map(triple -> ((IRI) triple.getObject()).getIRIString())
+                .collect(Collectors.toSet()));
+
+        assertEquals(Set.of(SUBJECT + "#AC-1", SUBJECT + "#AC-2"), issued);
+    }
+
     @Test
     void sliceBuilderSeesTheCurrentDraftAndTheGateValidatesTheBuiltSlice() {
         create(SUBJECT, CODE, "v1", "crit one");

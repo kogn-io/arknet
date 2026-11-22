@@ -61,7 +61,6 @@ import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -97,7 +96,7 @@ class KognioRdfAdrRepositoryTest {
         VersionedWriteFunnel funnel = new VersionedWriteFunnel(datasetLifecycle, gate, ContentGraph.GRAPH_IRI,
                 VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = new KognioRdfAdrRepository(
-                datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT, funnel);
+                datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
     @AfterEach

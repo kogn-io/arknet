@@ -34,7 +34,6 @@ import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 
 /**
  * Integration tests for the multilingual {@code arknet:name}/{@code arkddd:domainVision} behaviour
@@ -72,7 +71,7 @@ class KognioRdfBoundedContextRepositoryMultilingualTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         repository = KognioRdfBoundedContextRepositoryFactory.over(
-                datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                datasetLifecycle, DisplayLocale.DEFAULT);
     }
 
     @AfterEach

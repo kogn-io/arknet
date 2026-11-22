@@ -20,8 +20,6 @@ import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.kernel.DisplayLocale;
-import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
@@ -58,7 +56,7 @@ public final class KognioRdfBoundedContextRepositoryFactory {
         Objects.requireNonNull(storageDir, "storageDir");
         DatasetLifecycle lifecycle =
                 new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
-        return over(lifecycle, new UuidResourceIdFactory(), displayLocale);
+        return over(lifecycle, displayLocale);
     }
 
     /**
@@ -67,21 +65,16 @@ public final class KognioRdfBoundedContextRepositoryFactory {
      * {@link #persistent(Path, DisplayLocale)} and directly by tests that supply their own
      * (e.g. in-memory) lifecycle.
      *
-     * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from
-     * @param resourceIdFactory mints the opaque IRI of the derived {@code arkddd:Subdomain} node;
-     *                          the same kernel-owned scheme the composition root uses everywhere
-     *                          else
-     * @param displayLocale     the display-language preference for SHACL violation messages
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param displayLocale the display-language preference for SHACL violation messages
      * @return a ready-to-use {@link BoundedContextRepository}
      */
-    public static BoundedContextRepository over(
-            DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, DisplayLocale displayLocale) {
+    public static BoundedContextRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
-        Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         Objects.requireNonNull(displayLocale, "displayLocale");
         VersionedWriteFunnel funnel = new VersionedWriteFunnel(lifecycle, buildGate(displayLocale), ContentGraph.GRAPH_IRI,
                 VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
-        return new KognioRdfBoundedContextRepository(lifecycle, resourceIdFactory, displayLocale, funnel);
+        return new KognioRdfBoundedContextRepository(lifecycle, displayLocale, funnel);
     }
 
     /**

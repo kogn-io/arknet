@@ -73,7 +73,7 @@ class AdrServiceConsideredOptionRealStoreTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         AdrRepository repository = KognioRdfAdrRepositoryFactory.over(
-                datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                datasetLifecycle, DisplayLocale.DEFAULT);
         RequirementLookup neverCalledRequirementLookup = (projectId, code) -> {
             throw new AssertionError("not expected to resolve a requirement code in this test");
         };

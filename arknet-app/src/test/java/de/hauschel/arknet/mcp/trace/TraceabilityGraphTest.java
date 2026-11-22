@@ -51,7 +51,6 @@ import de.hauschel.arknet.bc.domain.ContextRelationshipId;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.persistence.StoreSnapshot;
@@ -131,7 +130,7 @@ class TraceabilityGraphTest {
                 KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         TermRepository terms = KognioRdfTermRepositoryFactory.over(lifecycle);
         UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
-                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                lifecycle, DisplayLocale.DEFAULT);
         VersionedWriteFunnel requirementsFunnel = KognioRdfRequirementRepositoryFactory.buildFunnel(
                 lifecycle, DisplayLocale.DEFAULT);
         ConstraintRepository constraints = KognioRdfConstraintRepositoryFactory.over(
@@ -211,7 +210,7 @@ class TraceabilityGraphTest {
         // graph-level accessors are what is under test here, text-mention matching is a
         // TraceabilityRenderer concern (see TraceabilityRendererTest).
         BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
-                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                lifecycle, DisplayLocale.DEFAULT);
         boundedContexts.create(PROJECT, new BoundedContext(
                 new BoundedContextId(ResourceId.of(BC_1_IRI)), new BoundedContextCode("BC-1"), "Ordering",
                 "Wir verarbeiten Bestellungen.", null, null,
@@ -940,7 +939,7 @@ class TraceabilityGraphTest {
             String bc2Iri = "https://w3id.org/arknet/id/trace-test-bc-2";
             String relationshipIri = "https://w3id.org/arknet/id/trace-test-context-relationship";
             BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             boundedContexts.create(PROJECT, new BoundedContext(
                     new BoundedContextId(ResourceId.of(bc2Iri)), new BoundedContextCode("BC-2"), "Billing",
                     "Wir stellen Rechnungen.", null, null, List.of()), "en");
@@ -970,7 +969,7 @@ class TraceabilityGraphTest {
             String bc2Iri = "https://w3id.org/arknet/id/trace-test-bc-2-unlinked";
             String relationshipIri = "https://w3id.org/arknet/id/trace-test-context-relationship-unlinked";
             BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             boundedContexts.create(PROJECT, new BoundedContext(
                     new BoundedContextId(ResourceId.of(bc2Iri)), new BoundedContextCode("BC-3"), "Payments",
                     "Wir verarbeiten Zahlungen.", null, null, List.of()), "en");
@@ -1004,7 +1003,7 @@ class TraceabilityGraphTest {
             String bc2Iri = "https://w3id.org/arknet/id/trace-test-bc-2-term-unlinked";
             String termIri = "https://w3id.org/arknet/id/trace-test-term-unlinked";
             BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             BoundedContextId id = new BoundedContextId(ResourceId.of(bc2Iri));
             boundedContexts.create(PROJECT, new BoundedContext(
                     id, new BoundedContextCode("BC-4"), "Fulfilment", "Wir versenden Bestellungen.", null, null,
@@ -1078,7 +1077,7 @@ class TraceabilityGraphTest {
         @Test
         void useCaseFieldTextsCoversEveryOptionalFieldAndEveryStepAndExtension() {
             UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             useCases.create(PROJECT, new UseCase(
                     new UseCaseId(ResourceId.of(UC_2_IRI)), new UseCaseCode("UC2"), "Manage cart",
                     "Customer manages the cart", "Checkout subsystem", "Customer opens the cart",
@@ -1100,7 +1099,7 @@ class TraceabilityGraphTest {
         @Test
         void unlinkedMentionsFlagsAUseCaseGoalMentionWithNoUsesTermEdge() {
             UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             useCases.create(PROJECT, new UseCase(
                     new UseCaseId(ResourceId.of(UC_2_IRI)), new UseCaseCode("UC2"), "Reset",
                     "Customer resets their Passwort", null, null,
@@ -1139,7 +1138,7 @@ class TraceabilityGraphTest {
             seedTermWithBroader(termIri, "TERM-UM-1", "Reviewer", "Someone who reviews a submission.", null);
 
             UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             String useCaseIri = "https://w3id.org/arknet/id/trace-test-unlinked-uc-samename";
             useCases.create(PROJECT, new UseCase(
                     new UseCaseId(ResourceId.of(useCaseIri)), new UseCaseCode("UC-UM1"), "Approve submission",
@@ -1189,7 +1188,7 @@ class TraceabilityGraphTest {
             }
 
             UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             String useCaseIri = "https://w3id.org/arknet/id/trace-test-unlinked-uc-role-and-term";
             useCases.create(PROJECT, new UseCase(
                     new UseCaseId(ResourceId.of(useCaseIri)), new UseCaseCode("UC-UM2"), "Approve request",

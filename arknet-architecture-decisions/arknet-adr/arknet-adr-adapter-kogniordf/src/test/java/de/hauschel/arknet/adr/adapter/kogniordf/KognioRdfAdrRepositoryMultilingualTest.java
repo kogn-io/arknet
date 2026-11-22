@@ -39,7 +39,6 @@ import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.ContentGraph;
@@ -74,7 +73,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         VersionedWriteFunnel funnel = new VersionedWriteFunnel(datasetLifecycle, gate, ContentGraph.GRAPH_IRI,
                 VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = new KognioRdfAdrRepository(
-                datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT, funnel);
+                datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
     @AfterEach
@@ -358,6 +357,52 @@ class KognioRdfAdrRepositoryMultilingualTest {
         assertEquals("Deutscher Wortlaut", deSelected.consequences().get(0).statement());
         Adr enSelected = repository.findByCode(PROJECT, original.code(), "en").orElseThrow();
         assertEquals("English wording", enSelected.consequences().get(0).statement());
+    }
+
+    /**
+     * ADR-64: a consequence or considered option keeps its fragment name when a sibling is removed,
+     * and a child added later never gets the number of a removed one.
+     */
+    @Test
+    void consequencesAndOptionsKeepTheirFragmentsAndANewChildNeverReusesANumber() {
+        AdrId id = freshId();
+        Adr original = adr(id, new AdrCode("ADR-1"),
+                List.of(new Consequence(1, "First wording", ConsequenceType.NEUTRAL),
+                        new Consequence(2, "Second wording", ConsequenceType.POSITIVE)),
+                List.of(new ConsideredOption(1, "Option A", "Rationale A", OptionOutcome.CHOSEN),
+                        new ConsideredOption(2, "Option B", "Rationale B", OptionOutcome.REJECTED)));
+        repository.create(PROJECT, original, "en");
+        RemovedPositions firstConsequence = new RemovedPositions(Set.of(1));
+        RemovedPositions secondOption = new RemovedPositions(Set.of(2));
+        Adr changed = original
+                .withAppendedConsequences(List.of(new de.hauschel.arknet.adr.domain.NewConsequence(
+                        "Third wording", ConsequenceType.NEGATIVE)))
+                .withAppendedConsideredOptions(List.of(new de.hauschel.arknet.adr.domain.NewConsideredOption(
+                        "Option C", "Rationale C", OptionOutcome.REJECTED)))
+                .withoutConsequences(PROJECT, firstConsequence)
+                .withoutConsideredOptions(PROJECT, secondOption);
+
+        repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), changed,
+                "en", "en", "en", Map.of(1, "en", 2, "en"), Map.of(1, "en", 2, "en"), null,
+                firstConsequence, secondOption);
+
+        String subject = id.value().value();
+        assertEquals(Map.of("1", subject + "#Consequence-2", "2", subject + "#Consequence-3"),
+                childFragmentsByPosition(subject, ArkarchVocabulary.CONSEQUENCE));
+        assertEquals(Map.of("1", subject + "#Option-1", "2", subject + "#Option-3"),
+                childFragmentsByPosition(subject, ArkarchVocabulary.CONSIDERED_OPTION));
+    }
+
+    private Map<String, String> childFragmentsByPosition(String subject, String edge) {
+        String query = "SELECT ?c ?pos WHERE { GRAPH <" + ADR_GRAPH + "> { <" + subject + "> <" + edge
+                + "> ?c . ?c <" + ArkarchVocabulary.POSITION + "> ?pos } }";
+        Map<String, String> byPosition = new java.util.HashMap<>();
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.sparqlQuery().select(query).forEach(row -> byPosition.put(
+                    ((io.kogn.rdf.terms.Literal) row.getValue("pos").orElseThrow()).getLexicalForm(),
+                    ((io.kogn.rdf.terms.IRI) row.getValue("c").orElseThrow()).getIRIString()));
+        }
+        return byPosition;
     }
 
     /**

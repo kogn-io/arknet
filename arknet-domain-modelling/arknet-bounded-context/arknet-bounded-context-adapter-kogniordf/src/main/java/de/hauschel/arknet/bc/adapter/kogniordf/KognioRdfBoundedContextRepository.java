@@ -52,7 +52,6 @@ import de.hauschel.arknet.kernel.InvalidLanguageTagException;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
@@ -70,7 +69,7 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  * ({@code io.kogn.rdf}, embeddable RDF store).
  *
  * <p>Maps a {@link BoundedContext} to its opaque {@link BoundedContextId} as the subject IRI
- * (minted once by a {@link ResourceIdFactory}, never derived from the business code), stored in
+ * (minted once by a {@code ResourceIdFactory}, never derived from the business code), stored in
  * one named graph shared by all bounded contexts: the type triple ({@code a
  * arkddd:BoundedContext}), the mandatory {@code dcterms:identifier} (the business code
  * {@code BC-1}), one or more language-tagged {@code arknet:name} literals and one or more
@@ -104,13 +103,9 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  * {@code BoundedContext arkddd:partOf Subdomain ; Subdomain arkddd:subdomainType
  * arkddd:CoreDomain|SupportingDomain|GenericDomain} - a class-typed node in between, matching
  * {@code arkddd:Domain}/{@code arkddd:Subdomain}'s class-based modelling. When present, this
- * adapter mints that node's opaque IRI afresh on every write via {@link ResourceIdFactory} - the
- * same "derived value object, minted by the adapter, no stable identity of its own" pattern
- * {@code KognioRdfUseCaseRepository} uses for a use case's steps. {@link #replaceExistingTriples}
- * follows the {@code arkddd:partOf} edge to delete the superseded node's triples on update, exactly as
- * the use-case adapter follows {@code mainStep}/{@code extensionStep} - a plain subject-only
- * delete would otherwise leave a fresh, disconnected {@code arkddd:Subdomain} node behind on
- * every update that touches the classification.</p>
+ * adapter writes that node as the fragment {@code <bounded context>#Subdomain} of the bounded
+ * context's IRI (ADR-64); a bounded context has at most one, so the name needs no number, and
+ * the node lies inside the versioned slice that every write replaces whole.</p>
  *
  * <p><strong>Create vs. compare-and-set update (opaque identity).</strong> The
  * transactional mechanics - the in-transaction {@code contains} existence checks, the SHACL gate,
@@ -200,7 +195,6 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private static final String GENERIC_DOMAIN = ArkdddVocabulary.GENERIC_DOMAIN;
 
     private final DatasetLifecycle lifecycle;
-    private final ResourceIdFactory resourceIdFactory;
     private final DisplayLocale displayLocale;
     private final VersionedWriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
@@ -211,10 +205,6 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from - read
      *                          paths only, the write path goes through {@code funnel} (must not
      *                          be {@code null})
-     * @param resourceIdFactory mints the opaque IRI of the derived {@code arkddd:Subdomain} node
-     *                          when a bounded context carries a subdomain classification (must
-     *                          not be {@code null}); the bounded context's own identity is minted
-     *                          store-neutrally above the store
      * @param displayLocale     the display-language preference selecting which {@code arknet:name}/
      *                          {@code arkddd:domainVision} the read paths surface for a
      *                          multilingual bounded context (must not be {@code null})
@@ -224,10 +214,9 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      *                          (must not be {@code null})
      */
     KognioRdfBoundedContextRepository(
-            DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, DisplayLocale displayLocale,
+            DatasetLifecycle lifecycle, DisplayLocale displayLocale,
             VersionedWriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
-        this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
     }

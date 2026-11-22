@@ -336,11 +336,10 @@ public class ArknetMcpConfiguration {
     }
 
     @Bean
-    RequirementRepository requirementRepository(
-            final DatasetLifecycle datasetLifecycle, final ResourceIdFactory resourceIdFactory,
+    RequirementRepository requirementRepository(final DatasetLifecycle datasetLifecycle,
             final DisplayLocale displayLocale, final VersionedWriteFunnel requirementsWriteFunnel) {
         return KognioRdfRequirementRepositoryFactory.over(
-                datasetLifecycle, resourceIdFactory, displayLocale, requirementsWriteFunnel);
+                datasetLifecycle, displayLocale, requirementsWriteFunnel);
     }
 
     /**
@@ -509,10 +508,8 @@ public class ArknetMcpConfiguration {
      * below).
      */
     @Bean
-    UseCaseRepository useCaseRepository(
-            final DatasetLifecycle datasetLifecycle, final ResourceIdFactory resourceIdFactory,
-            final DisplayLocale displayLocale) {
-        return KognioRdfUseCaseRepositoryFactory.over(datasetLifecycle, resourceIdFactory, displayLocale);
+    UseCaseRepository useCaseRepository(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfUseCaseRepositoryFactory.over(datasetLifecycle, displayLocale);
     }
 
     /**
@@ -603,10 +600,9 @@ public class ArknetMcpConfiguration {
     // --- Bounded-context hexagon -----------------------------------------------
 
     @Bean
-    BoundedContextRepository boundedContextRepository(
-            final DatasetLifecycle datasetLifecycle, final ResourceIdFactory resourceIdFactory,
+    BoundedContextRepository boundedContextRepository(final DatasetLifecycle datasetLifecycle,
             final DisplayLocale displayLocale) {
-        return KognioRdfBoundedContextRepositoryFactory.over(datasetLifecycle, resourceIdFactory, displayLocale);
+        return KognioRdfBoundedContextRepositoryFactory.over(datasetLifecycle, displayLocale);
     }
 
     /**
@@ -664,9 +660,8 @@ public class ArknetMcpConfiguration {
     // --- ADR hexagon -----------------------------------------------------------
 
     @Bean
-    AdrRepository adrRepository(final DatasetLifecycle datasetLifecycle, final ResourceIdFactory resourceIdFactory,
-            final DisplayLocale displayLocale) {
-        return KognioRdfAdrRepositoryFactory.over(datasetLifecycle, resourceIdFactory, displayLocale);
+    AdrRepository adrRepository(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfAdrRepositoryFactory.over(datasetLifecycle, displayLocale);
     }
 
     /**

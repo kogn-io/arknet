@@ -57,7 +57,9 @@ import io.kogn.rdf.versioning.RevisionToken;
  * {@link ResourceVersioning#replaceDraft}. What is validated is therefore what is written, not a
  * candidate a later body still merges into. A slice holds the subject IRI, its {@code #fragment}
  * IRIs and the blank nodes reachable from them; a triple on any other subject is rejected by the
- * library with an {@link IllegalArgumentException} and nothing is written.</p>
+ * library with an {@link IllegalArgumentException} and nothing is written. Every fragment IRI of a
+ * written slice is recorded as issued in the same transaction (see {@link ChildFragments}), so a
+ * child's number is never handed out twice.</p>
  *
  * <p><strong>Concurrency.</strong> The library's {@link RevisionToken} is the concurrency token:
  * {@link #compareAndUpdate} takes the token the caller read and reports a stale one through the
@@ -544,6 +546,7 @@ public final class VersionedWriteFunnel {
         } else {
             gate.enforce(next, assertedContext);
         }
+        ChildFragments.recordIssued(tx, subject, next);
         return versioning.replaceDraft(tx, subject, next, draft.token());
     }
 

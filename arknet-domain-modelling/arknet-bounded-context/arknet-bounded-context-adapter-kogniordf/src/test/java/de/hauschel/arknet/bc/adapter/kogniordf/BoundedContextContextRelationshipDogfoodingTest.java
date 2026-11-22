@@ -67,7 +67,7 @@ class BoundedContextContextRelationshipDogfoodingTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
-                datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                datasetLifecycle, DisplayLocale.DEFAULT);
         ContextRelationshipRepository contextRelationships =
                 KognioRdfContextRelationshipRepositoryFactory.over(datasetLifecycle, DisplayLocale.DEFAULT);
         TermLookup unusedTermLookup = new TermLookup() {

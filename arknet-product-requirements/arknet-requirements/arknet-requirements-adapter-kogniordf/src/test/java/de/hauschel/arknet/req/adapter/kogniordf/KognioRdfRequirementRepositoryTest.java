@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -458,6 +459,61 @@ class KognioRdfRequirementRepositoryTest {
         assertEquals(RequirementStatus.ACCEPTED, found.status());
         assertEquals(List.of(termRef("TERM-1")), found.usesTerms());
         assertEquals(List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), found.acceptanceCriteria());
+    }
+
+    /**
+     * ADR-64: a criterion's fragment name survives the removal of a sibling, and a criterion added
+     * later never gets the number of a removed one - not even of the highest.
+     */
+    @Test
+    void anAcceptanceCriterionKeepsItsFragmentAcrossARemovalAndANewOneNeverReusesANumber() {
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement created = new Requirement(freshId(), code, "Login", "The system shall authenticate a user.",
+                null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null,
+                List.of(new AcceptanceCriterion(1, "First criterion"), new AcceptanceCriterion(2, "Second criterion"),
+                        new AcceptanceCriterion(3, "Third criterion")), List.of());
+        repository.create(PROJECT_A, created, null);
+        String subject = created.id().value().value();
+
+        Requirement withoutFirst = withCriteria(created, "Second criterion", "Third criterion", "Fourth criterion");
+        repository.compareAndUpdate(PROJECT_A, repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head(),
+                withoutFirst, null, null, null, noAcceptanceCriteriaLanguages(withoutFirst),
+                new de.hauschel.arknet.req.domain.RemovedPositions(java.util.Set.of(1)), null);
+
+        assertEquals(Map.of(1, subject + "#AC-2", 2, subject + "#AC-3", 3, subject + "#AC-4"),
+                criterionFragmentsByPosition(subject));
+
+        Requirement withoutLast = withCriteria(created, "Second criterion", "Third criterion", "Fifth criterion");
+        repository.compareAndUpdate(PROJECT_A, repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head(),
+                withoutLast, null, null, null, noAcceptanceCriteriaLanguages(withoutLast),
+                new de.hauschel.arknet.req.domain.RemovedPositions(java.util.Set.of(3)), null);
+
+        assertEquals(Map.of(1, subject + "#AC-2", 2, subject + "#AC-3", 3, subject + "#AC-5"),
+                criterionFragmentsByPosition(subject));
+    }
+
+    private static Requirement withCriteria(Requirement base, String... texts) {
+        List<AcceptanceCriterion> criteria = new ArrayList<>();
+        for (int i = 0; i < texts.length; i++) {
+            criteria.add(new AcceptanceCriterion(i + 1, texts[i]));
+        }
+        return new Requirement(base.id(), base.code(), base.title(), base.description(), base.rationale(),
+                base.type(), base.status(), base.priority(), base.qualityCategory(), base.usesTerms(), criteria,
+                base.constrainedBy());
+    }
+
+    private Map<Integer, String> criterionFragmentsByPosition(String subject) {
+        String query = "SELECT ?c ?position WHERE { GRAPH <https://w3id.org/arknet/model/content> { <" + subject
+                + "> <https://w3id.org/arknet/requirements#acceptanceCriterion> ?c . "
+                + "?c <https://w3id.org/arknet/requirements#position> ?position } }";
+        Map<Integer, String> byPosition = new java.util.TreeMap<>();
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.sparqlQuery().select(query).forEach(row -> byPosition.put(
+                    Integer.parseInt(((io.kogn.rdf.terms.Literal) row.getValue("position").orElseThrow())
+                            .getLexicalForm()),
+                    ((io.kogn.rdf.terms.IRI) row.getValue("c").orElseThrow()).getIRIString()));
+        }
+        return byPosition;
     }
 
     @Test

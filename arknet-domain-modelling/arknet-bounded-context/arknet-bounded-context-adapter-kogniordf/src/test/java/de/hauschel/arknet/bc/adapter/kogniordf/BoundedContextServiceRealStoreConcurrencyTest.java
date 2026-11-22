@@ -217,7 +217,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         assertNotEquals(winnerResult.get().code(), loserResult.get().code(), diagnostics);
 
         List<BoundedContext> stored =
-                KognioRdfBoundedContextRepositoryFactory.over(realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT)
+                KognioRdfBoundedContextRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT)
                         .findAll(WS, null);
         assertEquals(2, stored.size(), diagnostics);
         assertTrue(stored.stream().map(BoundedContext::code).toList()
@@ -449,7 +449,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
     void concurrentLinkContextCallsWithTheSameTripleUnderGenuinelyOverlappingTransactions_loserGetsWinnersRelationship()
             throws InterruptedException {
         BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
-                realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                realLifecycle, DisplayLocale.DEFAULT);
         TermLookup unusedTermLookup = new TermLookup() {
             @Override
             public ResourceId resolveByCode(ProjectId projectId, String termCode) {
@@ -586,7 +586,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
             }
         };
         return new BoundedContextService(
-                KognioRdfBoundedContextRepositoryFactory.over(lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT),
+                KognioRdfBoundedContextRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT),
                 new UuidResourceIdFactory(), termLookup, unusedContextRelationshipRepository());
     }
 
@@ -657,7 +657,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
             // This service pins the code-assignment interleaving inside the transaction; nothing to do before.
         });
         BoundedContextRepository repository =
-                KognioRdfBoundedContextRepositoryFactory.over(guarded, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                KognioRdfBoundedContextRepositoryFactory.over(guarded, DisplayLocale.DEFAULT);
         TermLookup unusedTermLookup = new TermLookup() {
             @Override
             public ResourceId resolveByCode(ProjectId projectId, String termCode) {

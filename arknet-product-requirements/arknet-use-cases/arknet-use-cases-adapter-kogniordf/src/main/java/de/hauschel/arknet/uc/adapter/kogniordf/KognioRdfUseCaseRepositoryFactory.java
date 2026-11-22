@@ -25,8 +25,6 @@ import io.kogn.rdf.terms.Triple;
 import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
-import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
@@ -70,7 +68,7 @@ public final class KognioRdfUseCaseRepositoryFactory {
         Objects.requireNonNull(storageDir, "storageDir");
         final DatasetLifecycle lifecycle =
                 new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
-        return over(lifecycle, new UuidResourceIdFactory(), displayLocale);
+        return over(lifecycle, displayLocale);
     }
 
     /**
@@ -86,21 +84,17 @@ public final class KognioRdfUseCaseRepositoryFactory {
      * {@code FR-1}, or naming a {@code ROLE-N} role) actually find those resources. Tests likewise
      * supply their own (e.g. in-memory) lifecycle.</p>
      *
-     * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from
-     * @param resourceIdFactory mints the opaque IRI of each derived step resource; the same
-     *                          kernel-owned scheme the composition root uses everywhere else
-     * @param displayLocale     the display-language preference for SHACL violation messages
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param displayLocale the display-language preference for SHACL violation messages
      * @return a ready-to-use {@link UseCaseRepository}
      */
-    public static UseCaseRepository over(
-            DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, DisplayLocale displayLocale) {
+    public static UseCaseRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
-        Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         Objects.requireNonNull(displayLocale, "displayLocale");
         ShaclWriteGate gate = buildGate(displayLocale);
         VersionedWriteFunnel funnel = new VersionedWriteFunnel(lifecycle, gate, ContentGraph.GRAPH_IRI,
                 VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
-        return new KognioRdfUseCaseRepository(lifecycle, resourceIdFactory, displayLocale, funnel);
+        return new KognioRdfUseCaseRepository(lifecycle, displayLocale, funnel);
     }
 
     /**

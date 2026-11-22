@@ -39,7 +39,6 @@ import io.kogn.rdf.versioning.HistoryEntry;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -127,7 +126,7 @@ class KognioRdfUseCaseRepositoryTest {
         lifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         repository = KognioRdfUseCaseRepositoryFactory.over(
-                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                lifecycle, DisplayLocale.DEFAULT);
     }
 
     @AfterEach
@@ -216,6 +215,52 @@ class KognioRdfUseCaseRepositoryTest {
                         new Step(1, "Customer selects items", List.of(FR_1_REF)),
                         new Step(2, "Customer confirms and pays", List.of())),
                 List.of("2a. Payment declined -> use case ends in failure"), List.of(), List.of());
+    }
+
+    /**
+     * ADR-64: a step keeps its fragment name when a sibling is removed, an unchanged extension keeps
+     * its name when another is inserted before it, and a new child never gets a used number.
+     */
+    @Test
+    void stepsAndExtensionsKeepTheirFragmentsAcrossARemovalAndAnInsert() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, flow(List.of("First step", "Second step", "Third step"),
+                List.of("1a. First extension", "2a. Second extension")), null);
+        RevisionToken head = repository.findCurrentByCode(PROJECT_A, CODE_1, null).orElseThrow().head();
+
+        UseCase changed = flow(List.of("Second step", "Third step", "Fourth step"),
+                List.of("1b. Inserted extension", "1a. First extension", "2a. Second extension"));
+        repository.compareAndUpdate(PROJECT_A, head, changed, null, null, null, null, null, null,
+                java.util.Map.of(), java.util.Map.of(), null, 0,
+                new de.hauschel.arknet.uc.domain.RemovedPositions(java.util.Set.of(1)));
+
+        String subject = ID_1.value().value();
+        assertEquals(java.util.Map.of("1", subject + "#Step-2", "2", subject + "#Step-3", "3", subject + "#Step-4"),
+                childFragmentsByPosition(subject, "mainStep"));
+        assertEquals(java.util.Map.of("1", subject + "#Extension-3", "2", subject + "#Extension-1",
+                "3", subject + "#Extension-2"), childFragmentsByPosition(subject, "extensionStep"));
+    }
+
+    private static UseCase flow(List<String> steps, List<String> extensions) {
+        List<Step> mainFlow = new java.util.ArrayList<>();
+        for (int i = 0; i < steps.size(); i++) {
+            mainFlow.add(new Step(i + 1, steps.get(i), List.of()));
+        }
+        return new UseCase(ID_1, CODE_1, "Place order", "Customer places an order", null, null, CUSTOMER,
+                List.of(), null, null, mainFlow, extensions, List.of(), List.of());
+    }
+
+    private java.util.Map<String, String> childFragmentsByPosition(String subject, String edgeLocalName) {
+        String query = "SELECT ?c ?pos WHERE { GRAPH <https://w3id.org/arknet/model/content> { <" + subject
+                + "> <https://w3id.org/arknet/requirements#" + edgeLocalName + "> ?c . "
+                + "?c <https://w3id.org/arknet/requirements#position> ?pos } }";
+        java.util.Map<String, String> byPosition = new java.util.HashMap<>();
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.sparqlQuery().select(query).forEach(row -> byPosition.put(
+                    ((io.kogn.rdf.terms.Literal) row.getValue("pos").orElseThrow()).getLexicalForm(),
+                    ((io.kogn.rdf.terms.IRI) row.getValue("c").orElseThrow()).getIRIString()));
+        }
+        return byPosition;
     }
 
     @Test

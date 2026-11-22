@@ -28,7 +28,6 @@ import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
@@ -70,7 +69,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         lifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         repository = KognioRdfUseCaseRepositoryFactory.over(
-                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                lifecycle, DisplayLocale.DEFAULT);
         seedCustomerRole();
     }
 
@@ -114,7 +113,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
     /** A use-case repository reading the shared store under an explicit display-language preference. */
     private UseCaseRepository readerFor(Locale requested, Locale systemDefault) {
         return KognioRdfUseCaseRepositoryFactory.over(
-                lifecycle, new UuidResourceIdFactory(), new DisplayLocale(requested, systemDefault));
+                lifecycle, new DisplayLocale(requested, systemDefault));
     }
 
     /**

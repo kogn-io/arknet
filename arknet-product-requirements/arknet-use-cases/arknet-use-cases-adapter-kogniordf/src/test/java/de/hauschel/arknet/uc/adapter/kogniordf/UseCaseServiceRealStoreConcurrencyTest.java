@@ -224,7 +224,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
         assertNotEquals(winnerResult.get().code(), loserResult.get().code(), diagnostics);
 
         List<UseCase> stored = KognioRdfUseCaseRepositoryFactory.over(
-                realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT).findAll(WS, null);
+                realLifecycle, DisplayLocale.DEFAULT).findAll(WS, null);
         assertEquals(2, stored.size(), diagnostics);
         assertTrue(stored.stream().map(UseCase::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())), diagnostics);
@@ -377,7 +377,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
             // This service pins the code-assignment interleaving inside the transaction; nothing to do before.
         });
         UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
-                guarded, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                guarded, DisplayLocale.DEFAULT);
         return new UseCaseService(repository, new UuidResourceIdFactory(), UNUSED_REQUIREMENT_LOOKUP,
                 CUSTOMER_ROLE_LOOKUP, UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_LOOKUP);
     }
@@ -389,7 +389,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
      */
     private static UseCaseService serviceOver(DatasetLifecycle lifecycle) {
         UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
-                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                lifecycle, DisplayLocale.DEFAULT);
         return new UseCaseService(repository, new UuidResourceIdFactory(), UNUSED_REQUIREMENT_LOOKUP,
                 CUSTOMER_ROLE_LOOKUP, UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_LOOKUP);
     }
