@@ -550,9 +550,13 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
             for (Step updatedStep : updated.steps()) {
                 // Resolved lazily, not via a blind put: a lifecycle call passes no language at
                 // all and must not be asked for one on behalf of a position it merely carries
-                // through.
-                stepTextLanguageByPosition.computeIfAbsent(updatedStep.position(),
-                        position -> LanguageTag.resolveWriteLanguage(language, defaultLanguage));
+                // through. A carried-through step whose stored text has no language tag (a record
+                // from before multilingual fields) is mapped to null and stays untagged; asking
+                // for a write language there failed an edge-only change (issue #675).
+                if (!stepTextLanguageByPosition.containsKey(updatedStep.position())) {
+                    stepTextLanguageByPosition.put(updatedStep.position(),
+                            LanguageTag.resolveWriteLanguage(language, defaultLanguage));
+                }
             }
             Map<Integer, String> extensionTextLanguageByPosition = new LinkedHashMap<>();
             List<String> currentExtensions = current.value().extensions();
