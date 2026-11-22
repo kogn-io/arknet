@@ -115,8 +115,9 @@ public final class LegacyLayoutRefusingDatasetLifecycle implements DatasetLifecy
         return "The project dataset '" + id.value() + "' still uses the storage layout of an earlier arknet"
                 + " version: one named graph per component and a provenance graph. This version keeps every"
                 + " model resource of a project in one versioned content graph and refuses to read or write the"
-                + " old layout, so the project is neither shown as empty nor overwritten. The dataset has to be"
-                + " migrated to the new layout before this version can use it; keep a copy of the storage"
-                + " directory until it is.";
+                + " old layout, so the project is neither shown as empty nor overwritten. To work with this"
+                + " project, keep running the arknet version that wrote it, or move to an arknet version that"
+                + " migrates this layout to the content graph; until the project is migrated, keep a copy of the"
+                + " storage directory.";
     }
 }

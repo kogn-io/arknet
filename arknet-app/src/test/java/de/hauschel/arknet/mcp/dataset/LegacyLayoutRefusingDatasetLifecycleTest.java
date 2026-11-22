@@ -53,6 +53,17 @@ class LegacyLayoutRefusingDatasetLifecycleTest {
                 .hasMessageContaining("earlier arknet version");
     }
 
+    /** The refusal tells the user what to do, not only what is wrong. */
+    @Test
+    void theRefusalNamesWhatToDo() {
+        insert(PROJECT, "https://w3id.org/arknet/model/requirements");
+
+        assertThatThrownBy(() -> guarded.acquire(PROJECT))
+                .hasMessageContaining("keep running the arknet version that wrote it")
+                .hasMessageContaining("an arknet version that migrates this layout")
+                .hasMessageContaining("copy of the storage directory");
+    }
+
     @Test
     void aDatasetWithOnlyTheProvenanceGraphIsRefusedToo() {
         insert(PROJECT, "https://w3id.org/arknet/model/provenance");
