@@ -680,14 +680,13 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     /**
-     * Orphan-cleanup regression: an update that changes the subdomain classification
-     * must not leave the superseded {@code arkddd:Subdomain} node's triples behind as disconnected
-     * garbage - {@link KognioRdfBoundedContextRepository#replaceExistingTriples} follows the
-     * {@code arkddd:partOf} edge to delete it, mirroring the use-case adapter's step-following
-     * delete.
+     * The {@code arkddd:Subdomain} node is the fragment {@code #Subdomain} of the bounded context's
+     * IRI (ADR-64): an update that changes the classification keeps the same node, carrying the new
+     * classification only - no superseded node is left behind, and no fresh IRI is minted per
+     * write (issue #584).
      */
     @Test
-    void updateDeletesTheSupersededSubdomainNode() {
+    void updateKeepsTheOneStableSubdomainNodeWithTheNewClassification() {
         BoundedContextId id = freshId();
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
@@ -708,10 +707,14 @@ class KognioRdfBoundedContextRepositoryTest {
                 Subdomain.SUPPORTING_DOMAIN, null, List.of());
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed, "en", "en", null);
 
-        String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + originalSubdomainNode + "> ?p ?o } }";
+        assertEquals(id.value().value() + "#Subdomain", originalSubdomainNode);
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertFalse(handle.sparqlQuery().ask(ask),
-                    "the superseded subdomain node must not survive the update as orphaned garbage");
+            assertEquals(List.of(originalSubdomainNode), handle.sparqlQuery().select(subdomainNodeQuery)
+                    .map(row -> ((IRI) row.getValue("subdomainNode").orElseThrow()).getIRIString()).toList(),
+                    "the update keeps the one subdomain node");
+            String types = "SELECT ?type WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + originalSubdomainNode
+                    + "> <https://w3id.org/arknet/ddd#subdomainType> ?type } }";
+            assertEquals(1, handle.sparqlQuery().select(types).count(), "only the new classification remains");
         }
     }
 
@@ -888,7 +891,7 @@ class KognioRdfBoundedContextRepositoryTest {
     // ---- compare-and-set ------------------------------------------------------------------
 
     /**
-     * The read side of the guard: {@code findCurrentByCode} hands out the very {@code arkprov:head}
+     * The read side of the guard: {@code findCurrentByCode} hands out the very {@code RevisionToken}
      * the last funnel write recorded, so a caller's {@code compareAndUpdate} can be checked against
      * it - and the state it pairs the head with is the same one {@code findByCode} reads.
      */
@@ -1078,7 +1081,7 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void deleteRejectsAContextStillReferencedByAContextRelationshipUpstream() {
         assertDeleteRejectedFor(ArkdddVocabulary.UPSTREAM,
-                "https://w3id.org/arknet/model/bounded-context-relationship",
+                "https://w3id.org/arknet/model/content",
                 "https://w3id.org/arknet/id/relationship-1", "upstream");
     }
 
@@ -1086,7 +1089,7 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void deleteRejectsAContextStillReferencedByAContextRelationshipDownstream() {
         assertDeleteRejectedFor(ArkdddVocabulary.DOWNSTREAM,
-                "https://w3id.org/arknet/model/bounded-context-relationship",
+                "https://w3id.org/arknet/model/content",
                 "https://w3id.org/arknet/id/relationship-2", "downstream");
     }
 
@@ -1106,7 +1109,7 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void deleteRejectsAContextStillReferencedByADomainsHasContext() {
         assertDeleteRejectedFor(ArkdddVocabulary.HAS_CONTEXT,
-                "https://w3id.org/arknet/model/bounded-context-domain", "https://w3id.org/arknet/id/domain-1",
+                "https://w3id.org/arknet/model/content", "https://w3id.org/arknet/id/domain-1",
                 "hasContext");
     }
 

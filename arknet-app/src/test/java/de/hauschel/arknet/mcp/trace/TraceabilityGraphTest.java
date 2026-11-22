@@ -86,6 +86,7 @@ import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.persistence.ContentGraph;
 
 /**
  * Lower-level, pure-graph tests: a real kognio-rdf store, seeded through the real repositories
@@ -780,7 +781,7 @@ class TraceabilityGraphTest {
                     rdf.createLiteral(labelB, languageB));
             try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
                 handle.transactor().inTransaction(tx -> {
-                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-multilingual-graph"), graph);
+                    tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                     return null;
                 });
             }
@@ -808,7 +809,7 @@ class TraceabilityGraphTest {
             }
             try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
                 handle.transactor().inTransaction(tx -> {
-                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-broader-graph"), graph);
+                    tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                     return null;
                 });
             }
@@ -835,7 +836,7 @@ class TraceabilityGraphTest {
             }
             try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
                 handle.transactor().inTransaction(tx -> {
-                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-related-graph"), graph);
+                    tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                     return null;
                 });
             }
@@ -860,7 +861,7 @@ class TraceabilityGraphTest {
                     rdf.createLiteral(description));
             try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
                 handle.transactor().inTransaction(tx -> {
-                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-description-graph"), graph);
+                    tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                     return null;
                 });
             }
@@ -1182,7 +1183,7 @@ class TraceabilityGraphTest {
                     rdf.createLiteral("Approver"));
             try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
                 handle.transactor().inTransaction(tx -> {
-                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-unlinked-role-and-term-graph"), graph);
+                    tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                     return null;
                 });
             }

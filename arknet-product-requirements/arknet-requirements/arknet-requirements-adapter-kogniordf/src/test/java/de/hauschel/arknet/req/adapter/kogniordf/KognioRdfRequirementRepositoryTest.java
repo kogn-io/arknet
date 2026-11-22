@@ -1914,7 +1914,7 @@ class KognioRdfRequirementRepositoryTest {
      */
     @Test
     void deleteRejectsARequirementStillReferencedByAnArchitectureDecision() {
-        assertDeleteRejectedFor("https://w3id.org/arknet/model/architecture-decisions",
+        assertDeleteRejectedFor("https://w3id.org/arknet/model/content",
                 ArkarchVocabulary.ADDRESSES_REQUIREMENT, "addressesRequirement");
     }
 

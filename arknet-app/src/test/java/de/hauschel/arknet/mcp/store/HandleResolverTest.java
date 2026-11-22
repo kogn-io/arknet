@@ -16,6 +16,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
 
 import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -37,6 +38,7 @@ import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.persistence.ContentGraph;
 
 /**
  * Unit tests for {@link HandleResolver#resolve(ProjectId, String)}'s handle contract
@@ -72,11 +74,16 @@ class HandleResolverTest {
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
                 "The act of proving one's identity.", null), null);
-        // Same dcterms:identifier as FR-1, minted by a different bounded context - the
-        // cross-context ambiguity resolve() must reject rather than guess (issue #103/#14).
-        terms.create(PROJECT, new Term(
-                new TermId(ResourceId.of(DUPLICATE_TERM_IRI)), new TermCode("FR-1"), "Doppelter Code",
-                "Shares FR-1's business code on purpose.", null), null);
+        // Same dcterms:identifier as FR-1 on a second resource - the ambiguity resolve() must
+        // reject rather than guess (issue #103/#14). Written store-first: every write path refuses
+        // a code already held anywhere in the content graph, so only a direct edit can do this.
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update("INSERT DATA { GRAPH <" + ContentGraph.GRAPH_IRI + "> { <" + DUPLICATE_TERM_IRI + "> a <"
+                        + "http://www.w3.org/2004/02/skos/core#Concept> ; <http://purl.org/dc/terms/identifier> \"FR-1\" } }");
+                return null;
+            });
+        }
 
         handleResolver = new HandleResolver(new StoreReader(lifecycle), Prefixes.defaults());
     }

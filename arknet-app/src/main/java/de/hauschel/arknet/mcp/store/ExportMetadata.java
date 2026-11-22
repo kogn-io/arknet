@@ -52,7 +52,7 @@ public final class ExportMetadata {
      * @param ontologyVersions ontology module IRI to {@code owl:versionInfo}, as
      *                         {@code OntologyVersions#onClasspath()} read them; may be empty
      * @param clock            supplies the export timestamp - injected for the same reason
-     *                         {@code WriteFunnel}'s is: it is the one value of the envelope that
+     *                         {@code VersionedWriteFunnel}'s is: it is the one value of the envelope that
      *                         does not follow from its inputs
      */
     public ExportMetadata(final ServerVersion serverVersion, final Map<String, String> ontologyVersions,

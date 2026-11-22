@@ -115,24 +115,24 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  * <p><strong>Create vs. compare-and-set update (opaque identity).</strong> The
  * transactional mechanics - the in-transaction {@code contains} existence checks, the SHACL gate,
  * the commit-conflict translation, and the head comparison - live in the shared
- * {@link WriteFunnel}, not here. {@link #create} rejects an existing subject
+ * {@link VersionedWriteFunnel}, not here. {@link #create} rejects an existing subject
  * with {@link ResourceAlreadyExistsException} and a business-code collision (by
  * {@code dcterms:identifier}) with {@link DuplicateBoundedContextCodeException};
  * {@link #compareAndUpdate} rejects a missing subject with
  * {@link BoundedContextNotFoundException}, a stale {@code expectedHead} with
  * {@link BoundedContextConcurrentlyModifiedException}, and - via its own
- * {@link #rejectCodeCollision} check, since {@link WriteFunnel#compareAndUpdate} runs no such
+ * {@link #rejectCodeCollision} check, since {@link VersionedWriteFunnel#compareAndUpdate} runs no such
  * check itself - a business-code collision with {@link DuplicateBoundedContextCodeException} too
  * (issue #164), and otherwise replaces the subject's triples wholesale (see
  * {@link #replaceExistingTriples}). There is no unconditional update: every correction to an
  * already-created bounded context goes through the compare-and-set guard, so two concurrent
  * {@code bc_link_term} calls can no longer silently lose one another's edge.</p>
  *
- * <p><strong>The second interleaving.</strong> {@link WriteFunnel#create} translates
+ * <p><strong>The second interleaving.</strong> {@link VersionedWriteFunnel#create} translates
  * a lost {@code SERIALIZABLE} write conflict on {@link #create} into the same
  * {@link DuplicateBoundedContextCodeException} its synchronous code check throws - so
  * {@code CodeAssignment}'s retry (see {@code arknet-shared-kernel}) catches both interleavings the
- * same way. {@link WriteFunnel#compareAndUpdate} translates the same commit-time rejection into
+ * same way. {@link VersionedWriteFunnel#compareAndUpdate} translates the same commit-time rejection into
  * its {@code headMismatch} signal instead - on that path a lost conflict is not a code collision
  * but a stale read, which the application service's retry loop absorbs exactly like a synchronous
  * head mismatch.</p>
@@ -150,7 +150,7 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance graph
  * against the DDD SHACL shapes before the write transaction opens, throw
  * {@link WriteConstraintViolationException} on a violation, persist nothing - live in the shared
- * {@link WriteFunnel}. {@code shapes:BoundedContext-hasAggregate} is {@code sh:Warning},
+ * {@link VersionedWriteFunnel}. {@code shapes:BoundedContext-hasAggregate} is {@code sh:Warning},
  * not {@code sh:Violation}: a store-first bounded context minted during analysis,
  * before tactical design, has no aggregates yet, and that must not block the write.</p>
  *
@@ -191,7 +191,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     /**
      * The prefix every code this hexagon mints carries. Used only by {@link #findRetainedCodes} to
      * tell a bounded context's own retained code apart from a neighbouring hexagon's, since the
-     * provenance graph {@link WriteFunnel#findRetainedCodes} reads from is shared by all of them.
+     * provenance graph {@link VersionedWriteFunnel#findRetainedCodes} reads from is shared by all of them.
      */
     private static final String CODE_PREFIX = "BC-";
 
@@ -252,14 +252,14 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
 
     /**
      * Compare-and-set update (the guard requirements got): replaces the bounded context's
-     * triples only if its {@code arkprov:head} still equals
-     * {@code expectedHead} at the moment the shared {@link WriteFunnel} checks it inside the write
+     * triples only if its {@code RevisionToken} still equals
+     * {@code expectedHead} at the moment the shared {@link VersionedWriteFunnel} checks it inside the write
      * transaction - closing the lost-update window a plain read (via {@link #findCurrentByCode})
      * followed by an unconditional replace would otherwise leave open between the read and the
      * write.
      *
      * <p><strong>Business-code uniqueness (issue #164).</strong> Unlike {@link #create},
-     * {@link WriteFunnel#compareAndUpdate} runs no {@code dcterms:identifier} collision check of
+     * {@link VersionedWriteFunnel#compareAndUpdate} runs no {@code dcterms:identifier} collision check of
      * its own - a create's subject is brand-new, but a compare-and-set update's subject already
      * exists and, ordinarily, already carries this very code. So the check this method runs
      * itself, via {@link #rejectCodeCollision}, must exclude the subject being updated rather than
@@ -788,7 +788,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * number, so which of two duplicates survives makes no difference.</p>
      *
      * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
-     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * (kogn-io/arknet#360).</strong> {@code VersionedWriteFunnel#create}'s uniqueness check is
      * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
      * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
      * A counter that filtered blank nodes out would therefore be blind to a code the write path
@@ -816,7 +816,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * Deletes the bounded context identified by {@code code}, and every triple it carries in
      * {@link #BOUNDED_CONTEXT_GRAPH}, from the project (kogn-io/arknet#566). Resolves the subject by
      * code outside any transaction (mirroring {@link #findByCode}'s own read), then hands the whole
-     * check-and-delete to {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside
+     * check-and-delete to {@link VersionedWriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside
      * the funnel's own write transaction, and only once it finds nothing pointing at the context
      * does the body remove the subject's triples wholesale. Mirrors
      * {@code KognioRdfConstraintRepository#delete} exactly.
@@ -865,7 +865,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     }
 
     /**
-     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained
+     * Reads back the codes {@link VersionedWriteFunnel#delete}'s {@code code} parameter retained
      * (kogn-io/arknet#566): the shared funnel keeps the number out of circulation, this hexagon only
      * maps its raw strings to {@link BoundedContextCode}. One prefix, one call - a bounded context
      * has a single counter, unlike a constraint's three.
@@ -906,7 +906,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
      * the content graph, where every one of those edges lives, whichever hexagon wrote it (ADR-63).
      * Runs inside the live
-     * write transaction {@link WriteFunnel#delete} hands its {@code body}, so the check and the
+     * write transaction {@link VersionedWriteFunnel#delete} hands its {@code body}, so the check and the
      * eventual delete share one atomic snapshot. Mirrors
      * {@code KognioRdfConstraintRepository#rejectIfReferenced}.
      *

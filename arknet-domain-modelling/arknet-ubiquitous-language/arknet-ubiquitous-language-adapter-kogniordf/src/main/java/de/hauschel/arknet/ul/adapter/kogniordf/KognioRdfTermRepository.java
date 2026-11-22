@@ -95,7 +95,7 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
  * minted once, "insert or replace by identity" was never one coherent operation for
  * {@link #create}. The transactional mechanics of that check - the in-transaction {@code contains}
- * check, the SHACL gate, the commit-conflict translation - live in the shared {@link WriteFunnel},
+ * check, the SHACL gate, the commit-conflict translation - live in the shared {@link VersionedWriteFunnel},
  * not here; {@link #create} only builds the candidate graph and rejects an existing
  * subject with {@link ResourceAlreadyExistsException}.</p>
  *
@@ -126,8 +126,8 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * ran its own transaction and translated a genuine {@code
  * SERIALIZABLE} write conflict (the "second interleaving" scenario) on the caller's own patched
  * predicate into {@link TermConcurrentlyModifiedException}. {@link #update} now retries {@link
- * #attemptUpdate} (bounded by {@link #MAX_RETRY_ATTEMPTS}) against the shared {@link WriteFunnel}:
- * each attempt reads the term's current state and {@code arkprov:head} together, then
+ * #attemptUpdate} (bounded by {@link #MAX_RETRY_ATTEMPTS}) against the shared {@link VersionedWriteFunnel}:
+ * each attempt reads the term's current state and {@code RevisionToken} together, then
  * asks the funnel to apply the patch only if that head still matches - a head conflict, whether
  * from a losing synchronous comparison or a losing commit under {@code SERIALIZABLE} isolation,
  * surfaces identically and is retried transparently, exactly the CAS guard {@code
@@ -135,7 +135,7 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  *
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate before the write transaction
  * opens, {@link WriteConstraintViolationException} on a violation, nothing persisted - live in the
- * shared {@link WriteFunnel}, for {@link #create} and {@link #update}
+ * shared {@link VersionedWriteFunnel}, for {@link #create} and {@link #update}
  * alike: {@link #attemptUpdate} builds the same validation-only {@code assertedContext} an earlier
  * version enforced itself (mirroring how the sibling requirements adapter asserts a referenced
  * term's type) - a predicate {@link #update} is not touching is asserted there for validation
@@ -221,7 +221,7 @@ public class KognioRdfTermRepository implements TermRepository {
     /**
      * The prefix every code this hexagon mints carries. Used only by {@link #findRetainedCodes} to
      * tell a term's own retained code apart from a neighbouring bounded context's, since the
-     * provenance graph {@link WriteFunnel#findRetainedCodes} reads from is shared by all of them.
+     * provenance graph {@link VersionedWriteFunnel#findRetainedCodes} reads from is shared by all of them.
      */
     private static final String CODE_PREFIX = "TERM-";
 
@@ -437,7 +437,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * <p>Only {@link #update} calls this - see {@link TermCycleException}'s javadoc for why
      * {@link #create} structurally cannot trigger it. {@link #attemptUpdate} calls it twice per
      * attempt: once before the write transaction (a fast, friendly rejection for the ordinary
-     * sequential case) and once more inside {@link WriteFunnel#compareAndUpdate}'s write body,
+     * sequential case) and once more inside {@link VersionedWriteFunnel#compareAndUpdate}'s write body,
      * against {@code tx::select} rather than the pre-transaction {@code selectFn} - the second call
      * is what actually guards against two terms racing to close a cycle from opposite ends; see
      * that call site.</p>
@@ -480,8 +480,8 @@ public class KognioRdfTermRepository implements TermRepository {
      * The read of whatever is being preserved now happens <em>before</em> the write
      * transaction, exactly like {@link #create} - the SHACL gate therefore runs before the
      * transaction opens again, not inside it. What used to be a single in-adapter-transaction
-     * merge is now a compare-and-set on the {@link WriteFunnel}: {@link #attemptUpdate} reads the
-     * term's current state and {@code arkprov:head} together, then asks the funnel to patch it
+     * merge is now a compare-and-set on the {@link VersionedWriteFunnel}: {@link #attemptUpdate} reads the
+     * term's current state and {@code RevisionToken} together, then asks the funnel to patch it
      * only if that head still matches. Two callers changing <em>different</em> fields at the same
      * time now both succeed only if neither loses the race on the shared head - unlike the
      * predicate-scoped conflict detection this replaces, a head conflict on either field now
@@ -496,7 +496,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * {@code term_update} MCP tool exposes is {@code required = false}, so a caller can invoke this
      * method with every correctable argument ({@code prefLabel}, {@code definition},
      * {@code broader}, {@code related}) {@code null}.
-     * Such a call never reaches the funnel: no write, no SHACL gate, no {@code arkprov:head}
+     * Such a call never reaches the funnel: no write, no SHACL gate, no {@code RevisionToken}
      * comparison. A revision documents a model change; recording one for an
      * empty patch would grow the immutable provenance trail without cause and would move the head,
      * handing a concurrent CAS writer a spurious conflict it did not actually have. The
@@ -543,7 +543,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * Deletes the term identified by {@code code}, and every triple it carries in
      * {@link #TERMS_GRAPH}, from the project (issue #335). Resolves the subject outside any
      * transaction (mirroring {@link #attemptUpdate}'s own pre-transaction reads), then hands the
-     * whole check-and-delete to {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs
+     * whole check-and-delete to {@link VersionedWriteFunnel#delete}: {@link #rejectIfReferenced} runs
      * first, inside the funnel's own write transaction (so a concurrent writer racing to add a
      * reference is resolved by the store's {@code SERIALIZABLE} isolation rather than a window
      * between a separate pre-check and this write), and only once it finds nothing pointing at the
@@ -567,7 +567,7 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     /**
-     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained (issue
+     * Reads back the codes {@link VersionedWriteFunnel#delete}'s {@code code} parameter retained (issue
      * #350): the shared funnel keeps the number out of circulation, this hexagon only maps its raw
      * strings to {@link TermCode}.
      */
@@ -623,7 +623,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * ubiquitous-language BC's own {@code skos:broader}/{@code skos:related} - searched across
      * every named graph
      * ({@code GRAPH ?g}), since a referencing edge lives in its own BC's model graph, not
-     * {@link #TERMS_GRAPH}. Runs inside the live write transaction {@link WriteFunnel#delete} hands
+     * {@link #TERMS_GRAPH}. Runs inside the live write transaction {@link VersionedWriteFunnel#delete} hands
      * its {@code body}, so the check and the eventual delete share one atomic snapshot.
      */
     private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, TermCode code) {
@@ -655,7 +655,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * One attempt of {@link #update}'s CAS retry loop: reads the term's current state and head
      * together, from a single query ({@link #readCurrentByCode}), outside any transaction, builds
      * the same candidate/context {@code update} always built, and hands the granular patch to
-     * {@link WriteFunnel#compareAndUpdate} as the write body - the funnel checks the head again
+     * {@link VersionedWriteFunnel#compareAndUpdate} as the write body - the funnel checks the head again
      * inside its own transaction and runs the body only if it still matches.
      *
      * <p><strong>Why one combined read, not two.</strong> An earlier
@@ -687,7 +687,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * the gate, mirroring the {@code prefLabel} "untouched" branch below. This
      * pre-transaction check alone only catches a concurrent change that had already fully
      * committed by the time it ran; {@link #assertNoCycle} runs a second time, against {@code
-     * tx::select}, inside the write body handed to {@link WriteFunnel#compareAndUpdate} - see that
+     * tx::select}, inside the write body handed to {@link VersionedWriteFunnel#compareAndUpdate} - see that
      * call site for why two terms racing to close a cycle from opposite ends needs an in-transaction
      * re-check, not just this one.</p>
      *
@@ -1265,7 +1265,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * duplicates changes nothing about the result.</p>
      *
      * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
-     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * (kogn-io/arknet#360).</strong> {@code VersionedWriteFunnel#create}'s uniqueness check is
      * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
      * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
      * A counter that filtered blank nodes out would therefore be blind to a code the write path

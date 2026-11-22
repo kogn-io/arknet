@@ -255,7 +255,7 @@ public interface BoundedContextRepository {
      * repeat alongside it - a bounded context carries no lifecycle status, so the reference check is
      * the whole protection. The identical promise of {@code RequirementRepository#delete} is pinned
      * by a real-store racer, Pinned by {@code RequirementServiceRealStoreConcurrencyTest#deleteRacingAConcurrentlyCommittedAddressesRequirementEdgeLeavesNoDanglingReference}; it
-     * exercises the shared {@code WriteFunnel#delete} body this port's implementation uses too,
+     * exercises the shared {@code VersionedWriteFunnel#delete} body this port's implementation uses too,
      * differing only in which predicates the check looks for.</p>
      *
      * <p>The context's own triples go, and with them any node derived from them that nothing else

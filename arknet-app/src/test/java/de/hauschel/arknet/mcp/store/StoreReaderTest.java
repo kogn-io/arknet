@@ -26,14 +26,17 @@ import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.versioning.EntryDetails;
+import io.kogn.rdf.versioning.VersioningGraphs;
+import io.kogn.rdf.versioning.VocabVersioning;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.persistence.RdfNode;
-import de.hauschel.arknet.persistence.Revision;
+import de.hauschel.arknet.persistence.VersionEntry;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.persistence.StoreSnapshot;
 import de.hauschel.arknet.persistence.Triple;
@@ -177,8 +180,13 @@ class StoreReaderTest {
     }
 
     @Test
-    void literalContainingDoesNotSurfaceTheProvenanceGraph() {
-        assertThat(storeReader.literalContaining(PROJECT, "Login")).noneMatch(StoreReaderTest::isProvenance);
+    void literalContainingDoesNotSurfaceThePublishedCopy() {
+        List<Triple> beforePublish = storeReader.literalContaining(PROJECT, "Login");
+
+        publish();
+
+        assertThat(storeReader.literalContaining(PROJECT, "Login")).hasSameSizeAs(beforePublish)
+                .noneMatch(StoreReaderTest::isVersioning);
     }
 
     @Test
@@ -206,83 +214,27 @@ class StoreReaderTest {
     }
 
     /**
-     * Every guarded write records a PROV-O revision plus a head pointer into the provenance
-     * graph, and that trail grows with every write, forever. None of the three read
-     * paths surfaces it: the snapshot feeds the store report, a view of the model rather than of
-     * its change history, and the head pointer stays hidden even though every user-reachable
-     * write now moves it through the funnel ({@code req_update}, {@code
-     * req_set_status}, {@code req_link_term} and {@code term_update} were resolved into it decision 4)
-     * - whether and how to expose it through this generic read path is a separate, still open
-     * decision, not gated on the head being a usable token any more.
+     * A publish copies the resource into the library's published view and records a history
+     * entry. None of the read paths surfaces either: they read the content graph alone, so a
+     * published resource is shown once, as its draft, and no versioning vocabulary reaches a
+     * renderer.
      */
     @Test
-    void noReadPathSurfacesTheProvenanceGraph() {
-        assertThat(provenanceStatementCount())
-                .as("the write in setUp must have recorded a revision - else this test is vacuous")
+    void noReadPathSurfacesTheLibraryGraphs() {
+        List<Triple> outgoingBeforePublish = storeReader.outgoing(PROJECT, FR_1_IRI);
+        List<Triple> incomingBeforePublish = storeReader.incoming(PROJECT, FR_1_IRI);
+        int snapshotBeforePublish = snapshotTriples().size();
+
+        publish();
+
+        assertThat(versioningStatementCount())
+                .as("the publish must have written the library's graphs - else this test is vacuous")
                 .isPositive();
-
-        assertThat(storeReader.outgoing(PROJECT, FR_1_IRI)).noneMatch(StoreReaderTest::isProvenance);
-        assertThat(storeReader.incoming(PROJECT, FR_1_IRI)).noneMatch(StoreReaderTest::isProvenance);
-        assertThat(snapshotTriples()).noneMatch(StoreReaderTest::isProvenance);
-    }
-
-    /**
-     * The generic read path must not grow with the revision trail: every revision names its
-     * resource via {@code prov:specializationOf} and rewrites its head, so an unfiltered view
-     * would add rows per write, without bound. The revisions themselves are not model resources
-     * either - reaching one by its IRI yields nothing.
-     */
-    @Test
-    void furtherWritesGrowTheTrailInTheStoreButNotTheReadPath() {
-        List<Triple> incomingAfterOneWrite = storeReader.incoming(PROJECT, FR_1_IRI);
-        List<Triple> outgoingAfterOneWrite = storeReader.outgoing(PROJECT, FR_1_IRI);
-        long trailAfterOneWrite = provenanceStatementCount();
-        String firstHead = headIri();
-
-        replaceViaCompareAndUpdate(requirementTitled("Login v2"));
-        replaceViaCompareAndUpdate(requirementTitled("Login v3"));
-
-        assertThat(provenanceStatementCount())
-                .as("the two updates must have extended the trail in the store")
-                .isGreaterThan(trailAfterOneWrite);
-        assertThat(headIri())
-                .as("and moved the head - so the read path is hiding something that really changed")
-                .isNotEqualTo(firstHead);
-
-        assertThat(storeReader.incoming(PROJECT, FR_1_IRI))
-                .as("two further writes must not add neighbour rows")
-                .hasSameSizeAs(incomingAfterOneWrite);
-        assertThat(storeReader.outgoing(PROJECT, FR_1_IRI))
-                .as("nor statement rows")
-                .hasSameSizeAs(outgoingAfterOneWrite);
-        assertThat(storeReader.outgoing(PROJECT, headIri()))
-                .as("a revision is not a model resource - the generic read path does not reach it")
-                .isEmpty();
-    }
-
-    /**
-     * The second infrastructure graph: a project describes itself - its
-     * anchors and its label - inside its own dataset, so that the registry stays a rebuildable
-     * index and a restored backup carries its identity with it. That record is routing machinery,
-     * not model: without the exclusion every store report would open with the anchors by which
-     * the calling client was routed here.
-     *
-     * <p>Written raw rather than through the project out-adapter on purpose - what is under test
-     * is {@link StoreReader}'s filter, and going through the adapter would make this test fail for
-     * reasons that have nothing to do with the filter.</p>
-     */
-    @Test
-    void noReadPathSurfacesTheProjectSelfDescription() {
-        writeSelfDescription();
-
-        assertThat(selectCount("SELECT ?s ?p ?o WHERE { GRAPH <"
-                + ArkprjVocabulary.IDENTITY_GRAPH + "> { ?s ?p ?o } }"))
-                .as("the self-description must be in the store - else this test is vacuous")
-                .isPositive();
-
-        assertThat(snapshotTriples()).noneMatch(StoreReaderTest::isProjectIdentity);
-        assertThat(storeReader.outgoing(PROJECT, PROJECT_IRI)).isEmpty();
-        assertThat(storeReader.incoming(PROJECT, PROJECT_IRI)).isEmpty();
+        assertThat(storeReader.outgoing(PROJECT, FR_1_IRI)).hasSameSizeAs(outgoingBeforePublish)
+                .noneMatch(StoreReaderTest::isVersioning);
+        assertThat(storeReader.incoming(PROJECT, FR_1_IRI)).hasSameSizeAs(incomingBeforePublish)
+                .noneMatch(StoreReaderTest::isVersioning);
+        assertThat(snapshotTriples()).hasSize(snapshotBeforePublish).noneMatch(StoreReaderTest::isVersioning);
     }
 
     /** Writes a minimal project self-description straight into the identity graph. */
@@ -307,9 +259,15 @@ class StoreReaderTest {
                 || triple.predicate().startsWith(ArkprjVocabulary.NAMESPACE);
     }
 
-    private static boolean isProvenance(Triple triple) {
-        return triple.predicate().equals(ArkprovVocabulary.HEAD)
-                || triple.predicate().equals(ArkprovVocabulary.SPECIALIZATION_OF);
+    private static boolean isVersioning(Triple triple) {
+        return triple.predicate().startsWith(VocabVersioning.NAMESPACE);
+    }
+
+    /** Publishes FR-1 through the requirements hexagon's own funnel. */
+    private void publish() {
+        KognioRdfRequirementRepositoryFactory.buildFunnel(lifecycle, DisplayLocale.DEFAULT).publish(
+                new DatasetId(PROJECT.value()), List.of(FR_1_IRI), EntryDetails.NONE, IllegalStateException::new,
+                IllegalStateException::new);
     }
 
     private List<Triple> snapshotTriples() {
@@ -318,21 +276,10 @@ class StoreReaderTest {
                 .toList();
     }
 
-    /** Reads the trail straight from the store - the read path under test cannot show it. */
-    private long provenanceStatementCount() {
-        return selectCount("SELECT ?s ?p ?o WHERE { GRAPH <"
-                + ArkprovVocabulary.PROVENANCE_GRAPH + "> { ?s ?p ?o } }");
-    }
-
-    private String headIri() {
-        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + FR_1_IRI + "> <" + ArkprovVocabulary.HEAD + "> ?v } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
-                    .findFirst()
-                    .orElseThrow();
-        }
+    /** Counts the library's published view and history straight from the store. */
+    private long versioningStatementCount() {
+        return selectCount("SELECT ?s ?p ?o WHERE { VALUES ?g { <" + VersioningGraphs.PUBLISHED.getIRIString()
+                + "> <" + VersioningGraphs.HISTORY.getIRIString() + "> } GRAPH ?g { ?s ?p ?o } }");
     }
 
     private long selectCount(String query) {
@@ -407,7 +354,7 @@ class StoreReaderTest {
         graph.add(subject, rdf.createIRI(predicate), rdf.createIRI(FR_1_IRI));
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.add(rdf.createIRI("https://w3id.org/arknet/id/store-reader-test-blank-node-graph"), graph);
+                tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                 return null;
             });
         }
@@ -425,8 +372,7 @@ class StoreReaderTest {
         graph.add(subject, rdf.createIRI("http://purl.org/dc/terms/identifier"), rdf.createLiteral(identifier));
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.add(rdf.createIRI(
-                        "https://w3id.org/arknet/id/store-reader-test-blank-node-identifier-graph"), graph);
+                tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                 return null;
             });
         }
@@ -489,48 +435,38 @@ class StoreReaderTest {
         graph.add(rdf.createIRI(FR_1_IRI), rdf.createIRI(predicate), object);
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.add(rdf.createIRI("https://w3id.org/arknet/id/store-reader-test-blank-node-object-graph"), graph);
+                tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                 return null;
             });
         }
     }
 
-    /**
-     * Regression/happy-path coverage for issue #251: the {@code setUp} create is the resource's
-     * only write so far, so it must have recorded exactly one revision, and that one is the
-     * current head.
-     */
+    /** A write changes the draft only: before any publish the history is empty. */
     @Test
-    void historyHasExactlyOneCurrentRevisionAfterASingleCreate() {
-        List<Revision> history = storeReader.history(PROJECT, FR_1_IRI);
-
-        assertThat(history).hasSize(1);
-        assertThat(history.get(0).current()).isTrue();
-        assertThat(history.get(0).generatedAtTime()).isNotBlank();
-        assertThat(history.get(0).iri()).isEqualTo(headIri());
+    void historyIsEmptyBeforeThePublish() {
+        assertThat(storeReader.history(PROJECT, FR_1_IRI)).isEmpty();
+        assertThat(storeReader.publishState(PROJECT, FR_1_IRI)).isEqualTo("NEVER_PUBLISHED");
     }
 
     /**
-     * Issue #251's central case: three writes through the funnel (the {@code setUp} create plus
-     * two {@link #replaceViaCompareAndUpdate} calls) must be listed oldest first, matching the
-     * exact revision identities the head pointer moved through, with only the last one marked
-     * {@link Revision#current()}.
+     * Two publishes around a change are two entries, oldest first, each naming a content-addressed
+     * version; a write in between leaves the history alone until it is published.
      */
     @Test
-    void historyListsEveryRevisionOldestFirstWithOnlyTheHeadMarkedCurrent() {
-        String firstRevision = headIri();
-
+    void historyListsEveryPublishOldestFirst() {
+        publish();
         replaceViaCompareAndUpdate(requirementTitled("Login v2"));
-        String secondRevision = headIri();
-        replaceViaCompareAndUpdate(requirementTitled("Login v3"));
-        String thirdRevision = headIri();
+        assertThat(storeReader.publishState(PROJECT, FR_1_IRI)).isEqualTo("PUBLISHED_WITH_UNPUBLISHED_CHANGES");
+        assertThat(storeReader.history(PROJECT, FR_1_IRI)).hasSize(1);
 
-        List<Revision> history = storeReader.history(PROJECT, FR_1_IRI);
+        publish();
 
-        assertThat(history).extracting(Revision::iri)
-                .containsExactly(firstRevision, secondRevision, thirdRevision);
-        assertThat(history).extracting(Revision::current)
-                .containsExactly(false, false, true);
+        List<VersionEntry> history = storeReader.history(PROJECT, FR_1_IRI);
+        assertThat(history).extracting(VersionEntry::sequence).containsExactly(1L, 2L);
+        assertThat(history).extracting(VersionEntry::tombstone).containsExactly(false, false);
+        assertThat(history).allMatch(entry -> entry.cid() != null);
+        assertThat(history.get(0).cid()).isNotEqualTo(history.get(1).cid());
+        assertThat(storeReader.publishState(PROJECT, FR_1_IRI)).isEqualTo("PUBLISHED_UNCHANGED");
     }
 
     /**
@@ -541,7 +477,7 @@ class StoreReaderTest {
      * "no such resource" itself, via {@link StoreReader#outgoing}/{@link StoreReader#incoming}.
      */
     @Test
-    void historyIsEmptyForAResourceNoWriteHasGoneThroughTheFunnelFor() {
+    void historyIsEmptyForABlankNodeHandle() {
         String predicate = "https://w3id.org/arknet/requirements#usesTerm";
         seedBlankNodeSubjectTriple(predicate);
         String blankNodeHandle = snapshotTriples().stream()

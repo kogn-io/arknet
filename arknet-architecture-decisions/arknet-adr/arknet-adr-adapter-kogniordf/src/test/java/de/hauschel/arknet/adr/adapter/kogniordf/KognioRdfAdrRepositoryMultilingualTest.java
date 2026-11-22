@@ -286,13 +286,11 @@ class KognioRdfAdrRepositoryMultilingualTest {
     }
 
     /**
-     * The UNION-hop: {@code deleteExisting} follows {@code arkarch:consequence}/
-     * {@code arkarch:consideredOption} edges and deletes the pointed-at child's own triples too - a
-     * replacing write must not leave the old, re-minted-away child node's triples behind as orphaned
-     * garbage.
+     * A consequence is the fragment {@code #Consequence-<n>} of the decision's IRI (ADR-64): a
+     * replacing write keeps the child's IRI and replaces its triples, leaving no second node behind.
      */
     @Test
-    void compareAndUpdateDoesNotOrphanTheOldConsequenceChildNode() {
+    void compareAndUpdateKeepsTheConsequenceFragmentAndReplacesItsTriples() {
         AdrId id = freshId();
         Adr original = adr(id, new AdrCode("ADR-1"),
                 List.of(new Consequence(1, "Original wording", ConsequenceType.NEUTRAL)), List.of());
@@ -311,10 +309,14 @@ class KognioRdfAdrRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), corrected,
                 "en", "en", "en", Map.of(1, "en"), Map.of(), null, RemovedPositions.NONE, RemovedPositions.NONE);
 
-        String askOldChildHasTriples = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + oldChildIri + "> ?p ?o } }";
+        assertEquals(id.value().value() + "#Consequence-1", oldChildIri);
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
-            assertFalse(handle.sparqlQuery().ask(askOldChildHasTriples),
-                    "the re-minted-away consequence child node must not survive as an orphan");
+            assertEquals(List.of(oldChildIri), handle.sparqlQuery().select(selectChild)
+                    .map(row -> row.getValue("c").orElseThrow().toString()).toList(),
+                    "the update keeps the one consequence fragment");
+            String statements = "SELECT ?o WHERE { GRAPH <" + ADR_GRAPH + "> { <" + oldChildIri + "> <"
+                    + ArkarchVocabulary.CONSEQUENCE_STATEMENT + "> ?o } }";
+            assertEquals(1, handle.sparqlQuery().select(statements).count(), "only the corrected statement remains");
         }
         assertEquals(List.of(new Consequence(1, "Corrected wording", ConsequenceType.POSITIVE)),
                 repository.findByCode(PROJECT, original.code(), null).orElseThrow().consequences());

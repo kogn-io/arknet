@@ -94,13 +94,13 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  *
  * <p><strong>Create vs. compare-and-set update (opaque identity).</strong> The transactional
  * mechanics - the in-transaction {@code contains} existence guards, the SHACL gate, the
- * commit-conflict translation and the head comparison - live in the shared {@link WriteFunnel},
+ * commit-conflict translation and the head comparison - live in the shared {@link VersionedWriteFunnel},
  * not here. {@link #create} rejects an existing subject with
  * {@link ResourceAlreadyExistsException} and a business-code collision (by
  * {@code dcterms:identifier}) with {@link DuplicateActorCodeException}; {@link #compareAndUpdate}
  * rejects a missing subject with {@link ActorNotFoundException}, a stale {@code expectedHead} with
  * {@link ActorConcurrentlyModifiedException}, and - via its own {@link #rejectCodeCollision} check,
- * since {@link WriteFunnel#compareAndUpdate} runs no such check itself - a business-code collision
+ * since {@link VersionedWriteFunnel#compareAndUpdate} runs no such check itself - a business-code collision
  * with {@link DuplicateActorCodeException} too, and otherwise replaces the subject's triples
  * wholesale. There is no unconditional update: every correction to an already-created actor goes
  * through the compare-and-set guard.</p>
@@ -116,7 +116,7 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance graph
  * against the actor SHACL shapes before the write transaction opens, throw
  * {@link WriteConstraintViolationException} on a violation, persist nothing - live in the shared
- * {@link WriteFunnel}. No {@code sh:class} constraint applies to anything this adapter
+ * {@link VersionedWriteFunnel}. No {@code sh:class} constraint applies to anything this adapter
  * writes, so the plain {@link ShaclWriteGate#enforce(io.kogn.rdf.terms.ReadableGraph)} suffices -
  * no validation-only asserted context is needed.</p>
  *
@@ -150,7 +150,7 @@ public class KognioRdfActorRepository implements ActorRepository {
     /**
      * The prefix every code this hexagon mints carries. Used only by {@link #findRetainedCodes} to
      * tell an actor's own retained code apart from a neighbouring bounded context's, since the
-     * provenance graph {@link WriteFunnel#findRetainedCodes} reads from is shared by all of them.
+     * provenance graph {@link VersionedWriteFunnel#findRetainedCodes} reads from is shared by all of them.
      */
     private static final String CODE_PREFIX = "ACTOR-";
 
@@ -337,7 +337,7 @@ public class KognioRdfActorRepository implements ActorRepository {
      * Deletes the actor identified by {@code code}, and every triple it carries in
      * {@link #ACTOR_GRAPH}, from the project (issue #335). Resolves the subject by code outside any
      * transaction (mirroring {@link #findByCode}'s own read), then hands the whole
-     * check-and-delete to {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first,
+     * check-and-delete to {@link VersionedWriteFunnel#delete}: {@link #rejectIfReferenced} runs first,
      * inside the funnel's own write transaction, and only once it finds nothing pointing at the
      * actor does the body remove the subject's triples wholesale.
      */
@@ -362,7 +362,7 @@ public class KognioRdfActorRepository implements ActorRepository {
     }
 
     /**
-     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained (issue
+     * Reads back the codes {@link VersionedWriteFunnel#delete}'s {@code code} parameter retained (issue
      * #350): the shared funnel keeps the number out of circulation, this hexagon only maps its raw
      * strings to {@link ActorCode}.
      */
@@ -387,7 +387,7 @@ public class KognioRdfActorRepository implements ActorRepository {
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
      * every named graph ({@code GRAPH ?g}), since a referencing edge would live in the use-case
      * BC's own model graph, not {@link #ACTOR_GRAPH}. Runs inside the live write transaction
-     * {@link WriteFunnel#delete} hands its {@code body}, so the check and the eventual delete
+     * {@link VersionedWriteFunnel#delete} hands its {@code body}, so the check and the eventual delete
      * share one atomic snapshot.
      */
     private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, ActorCode code) {

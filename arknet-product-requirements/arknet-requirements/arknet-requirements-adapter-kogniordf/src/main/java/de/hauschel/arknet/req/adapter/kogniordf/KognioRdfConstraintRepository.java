@@ -64,10 +64,10 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  * <p>Maps a {@link Constraint} to its opaque {@link ConstraintId} as the subject IRI, stored in
  * one named graph ({@code CONSTRAINTS_GRAPH}, separate from {@code REQUIREMENTS_GRAPH} - a
  * constraint is its own resource, not a field on a requirement): four mandatory triples
- * (identifier, type, title, statement). Both writes run through the shared {@link WriteFunnel}
+ * (identifier, type, title, statement). Both writes run through the shared {@link VersionedWriteFunnel}
  * (the very same instance {@link KognioRdfRequirementRepository} uses, wired by the composition
  * root over {@link KognioRdfRequirementRepositoryFactory#buildFunnel}), so every constraint gets a
- * PROV-O revision and an {@code arkprov:head} recorded - and, since issue #313, that head is also
+ * PROV-O revision and an {@code RevisionToken} recorded - and, since issue #313, that head is also
  * the concurrency token {@link #compareAndUpdate} compares against.</p>
  *
  * <p><strong>Multilingual title/statement (issue #313).</strong> {@code dcterms:title} and
@@ -156,8 +156,8 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
 
     /**
      * Compare-and-set update: replaces the constraint's triples only if its
-     * {@code arkprov:head} still equals {@code expectedHead} at the moment the shared
-     * {@link WriteFunnel} checks it inside the write transaction - closing the lost-update window
+     * {@code RevisionToken} still equals {@code expectedHead} at the moment the shared
+     * {@link VersionedWriteFunnel} checks it inside the write transaction - closing the lost-update window
      * a plain read (via {@link #findCurrentByCode}) followed by an unconditional replace would
      * otherwise leave open between the read and the write. Mirrors
      * {@code KognioRdfRequirementRepository#compareAndUpdate}, minus that method's term/constraint
@@ -322,7 +322,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
      * Deletes the constraint identified by {@code code}, and every triple it carries in
      * {@link #CONSTRAINTS_GRAPH}, from the project (kogn-io/arknet#481). Resolves the subject by
      * code outside any transaction (mirroring {@link #findByCode}'s own read), then hands the
-     * whole check-and-delete to {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs
+     * whole check-and-delete to {@link VersionedWriteFunnel#delete}: {@link #rejectIfReferenced} runs
      * first, inside the funnel's own write transaction, and only once it finds nothing pointing at
      * the constraint does the body remove the subject's triples wholesale. Mirrors
      * {@code KognioRdfActorRepository#delete} exactly.
@@ -350,7 +350,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
     }
 
     /**
-     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained
+     * Reads back the codes {@link VersionedWriteFunnel#delete}'s {@code code} parameter retained
      * (kogn-io/arknet#481): the shared funnel keeps the number out of circulation, this hexagon
      * only maps its raw strings to {@link ConstraintCode}. Queried once per subtype prefix - the
      * funnel's {@code findRetainedCodes} takes a single prefix, and a constraint's three counters
@@ -387,7 +387,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
      * the content graph, where a requirement's ({@code req_link_constraint}) and a use case's
      * ({@code uc_link_constraint}) edges live alike (ADR-63). Runs inside the
-     * live write transaction {@link WriteFunnel#delete} hands its {@code body}, so the check and
+     * live write transaction {@link VersionedWriteFunnel#delete} hands its {@code body}, so the check and
      * the eventual delete share one atomic snapshot. Mirrors
      * {@code KognioRdfActorRepository#rejectIfReferenced}.
      */
@@ -609,7 +609,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
      * misreport the project even where it would not misplace the counter.</p>
      *
      * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
-     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * (kogn-io/arknet#360).</strong> {@code VersionedWriteFunnel#create}'s uniqueness check is
      * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
      * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
      * A counter that filtered blank nodes out would therefore be blind to a code the write path

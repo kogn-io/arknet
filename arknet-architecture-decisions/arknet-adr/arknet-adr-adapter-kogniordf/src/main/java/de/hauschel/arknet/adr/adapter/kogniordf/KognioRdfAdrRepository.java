@@ -256,12 +256,12 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 buildCandidateGraph(subjectIri, adr, tag, tag, tag, consequenceTags, optionTags);
         Graph graph = candidate.graph();
 
-        funnel.create(new DatasetId(projectId.value()), subjectIriString, adr.code().value(),
-                crossReferenceAssertedContext(projectId, adr),
+        Graph createContext = crossReferenceAssertedContext(projectId, adr);
+        funnel.create(new DatasetId(projectId.value()), subjectIriString, adr.code().value(), createContext,
                 () -> new ResourceAlreadyExistsException(projectId, adr.id().value()),
                 () -> new DuplicateAdrCodeException(projectId, adr.code()),
                 (tx, draft) -> {
-                    rejectIfPeersVanished(tx, projectId, graphIri, adr);
+                    rejectIfPeersVanished(tx, projectId, graphIri, adr, createContext);
                     return replaceTriples(tx, draft, subjectIri, subject, graph, false, tag, tag, tag, null,
                             consequenceTags, optionTags, null, candidate, RemovedPositions.NONE,
                             RemovedPositions.NONE);
@@ -297,13 +297,14 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 subjectIri, updated, nameTag, contextTag, decisionTag, consequenceTags, optionTags);
         Graph graph = candidate.graph();
 
+        Graph updateContext = crossReferenceAssertedContext(projectId, updated);
         funnel.compareAndUpdate(new DatasetId(projectId.value()), subjectIriString,
                 expectedHead == null ? null : (io.kogn.rdf.versioning.RevisionToken) expectedHead.value(),
-                crossReferenceAssertedContext(projectId, updated),
+                updateContext,
                 () -> new AdrNotFoundException(projectId, updated.code()),
                 () -> new AdrConcurrentlyModifiedException(projectId, updated.code()),
                 (tx, draft) -> {
-                    rejectIfPeersVanished(tx, projectId, graphIri, updated);
+                    rejectIfPeersVanished(tx, projectId, graphIri, updated, updateContext);
                     return replaceTriples(tx, draft, subjectIri, subject, graph, true, nameTag, contextTag,
                             decisionTag, defaultTag, consequenceTags, optionTags, defaultTag, candidate,
                             removedConsequencePositions, removedConsideredOptionPositions);
@@ -493,10 +494,13 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * late, so {@link AdrPeerVanishedException} is thrown instead - see its own javadoc for why, and
      * for the recovery path (simply retry the call).</p>
      */
-    private void rejectIfPeersVanished(DatasetTx tx, ProjectId projectId, IRI graphIri, Adr adr) {
+    private void rejectIfPeersVanished(DatasetTx tx, ProjectId projectId, IRI graphIri, Adr adr,
+            ReadableGraph resolvedContext) {
         for (AdrId peer : relatedAndSupersedingPeers(adr)) {
             IRI peerIri = rdf.createIRI(peer.value().value());
-            if (!tx.contains(graphIri, peerIri, null, null)) {
+            // A peer the pre-transaction read never found is the gate's to reject, not a vanished one.
+            boolean resolvedBefore = resolvedContext.stream(peerIri, null, null).findAny().isPresent();
+            if (resolvedBefore && !tx.contains(graphIri, peerIri, null, null)) {
                 throw new AdrPeerVanishedException(projectId, peer);
             }
         }
@@ -696,7 +700,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
     /**
      * Deletes the decision identified by {@code code}, and every triple it carries in
      * {@link #ADR_GRAPH} (including every consequence/considered-option child's own triples), from
-     * the project. Passes {@code code} through to {@link WriteFunnel#delete}, which keeps it out of
+     * the project. Passes {@code code} through to {@link VersionedWriteFunnel#delete}, which keeps it out of
      * circulation on the tombstoned revision (issue #350) - shared with {@code term_delete}/
      * {@code actor_delete} rather than kept as a local mechanism, see {@link #findRetainedCodes}.
      */
@@ -766,7 +770,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
     }
 
     /**
-     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained (issue
+     * Reads back the codes {@link VersionedWriteFunnel#delete}'s {@code code} parameter retained (issue
      * #350): the shared funnel keeps the number out of circulation, this hexagon only maps its raw
      * strings to {@link AdrCode} and orders them by running number.
      */
@@ -1034,7 +1038,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * highest running number, so which of two identical duplicates survives does not matter.
      *
      * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
-     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * (kogn-io/arknet#360).</strong> {@code VersionedWriteFunnel#create}'s uniqueness check is
      * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
      * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
      * A counter that filtered blank nodes out would therefore be blind to a code the write path

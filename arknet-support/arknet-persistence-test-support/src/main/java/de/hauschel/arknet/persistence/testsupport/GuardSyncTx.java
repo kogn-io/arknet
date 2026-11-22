@@ -18,7 +18,7 @@ import io.kogn.rdf.terms.ReadableGraph;
  * for the rest of the transaction.
  *
  * <p>{@code N} defaults to two via the two-argument constructor, the number of in-transaction
- * existence guards {@code WriteFunnel#create}/{@code #createIfAbsent} issue when a business code
+ * existence guards {@code VersionedWriteFunnel#create}/{@code #createIfAbsent} issue when a business code
  * is checked - the subject-identity guard first, then (only reached once that one passed) the
  * business-code uniqueness guard. Pausing right after the second one therefore suspends a caller
  * at the exact point where it has decided "this code is free" but has written nothing yet. A

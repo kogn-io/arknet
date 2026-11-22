@@ -43,7 +43,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  * every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link
  * #findCurrentByCode} hands it out alongside the bounded context, {@link #compareAndUpdate}
  * rejects a stale one, exactly the CAS contract the real adapter enforces via
- * {@code arkprov:head}.</p>
+ * {@code RevisionToken}.</p>
  *
  * <p><strong>Multilingual, one value per field, not a per-language set (kogn-io/arknet#520).
  * </strong> Mirrors {@code InMemoryConstraintRepository}/{@code InMemoryRoleRepository} exactly:

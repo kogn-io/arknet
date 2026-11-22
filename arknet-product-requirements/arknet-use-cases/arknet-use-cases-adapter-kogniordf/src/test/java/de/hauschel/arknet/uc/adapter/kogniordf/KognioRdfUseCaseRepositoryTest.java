@@ -1045,15 +1045,13 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * A blank-node {@code usesTerm}/{@code constrainedBy} target is store-first-only (both
-     * shapes carry {@code sh:nodeKind sh:IRI}, but that only guards this adapter's own
-     * writes, not what a store-first write already put there) - {@link
-     * UseCase#usesTerms()}/{@link UseCase#constrainedBy()} can never carry it, so an update that
-     * never reads it back must still not silently drop it from the store, mirroring
-     * {@code KognioRdfRequirementRepositoryTest}'s identical regression test.
+     * A store-first {@code usesTerm}/{@code constrainedBy} edge onto a blank node is never read back
+     * into the domain type, but a replacing update keeps it. The gate validates the whole new slice,
+     * so the edge's {@code sh:nodeKind sh:IRI} violation now rejects the update instead of slipping
+     * past the gate: nothing is written, and both edges stay.
      */
     @Test
-    void updatePreservesABlankNodeUsesTermAndConstrainedByTargetItCannotReadBack() {
+    void updateKeepingABlankNodeUsesTermAndConstrainedByTargetIsRejectedAndTheEdgesStay() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
         seed(PROJECT_A, USE_CASES_GRAPH,
@@ -1068,11 +1066,10 @@ class KognioRdfUseCaseRepositoryTest {
                 current.scope(), current.trigger(), current.primaryRole(), current.supportingRoles(),
                 current.precondition(), current.postcondition(), current.steps(), current.extensions(),
                 current.usesTerms(), current.constrainedBy());
-        replaceViaCompareAndUpdate(PROJECT_A, revised);
+        assertThrows(WriteConstraintViolationException.class, () -> replaceViaCompareAndUpdate(PROJECT_A, revised));
 
-        assertEquals(1, countBlankUsesTermEdges(PROJECT_A), "the blank-node usesTerm edge must survive the update");
-        assertEquals(1, countBlankConstrainedByEdges(PROJECT_A),
-                "the blank-node constrainedBy edge must survive the update");
+        assertEquals(1, countBlankUsesTermEdges(PROJECT_A), "the blank-node usesTerm edge must stay");
+        assertEquals(1, countBlankConstrainedByEdges(PROJECT_A), "the blank-node constrainedBy edge must stay");
     }
 
     private long countBlankUsesTermEdges(ProjectId project) {

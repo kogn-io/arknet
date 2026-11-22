@@ -239,7 +239,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
     /**
      * Renders everything a past random sighting asked the next one to be evaluable with: both
      * racers' results (business code plus resource IRI), each result's current
-     * {@code arkprov:head} read fresh from the store after the race (the concurrency token -
+     * {@code RevisionToken} read fresh from the store after the race (the concurrency token -
      * shows whether the two results really are two distinct, independently committed revisions),
      * the loser's exception if any, the system load at failure time, and the full timestamped
      * timeline of guard/barrier/latch/commit events. Built lazily by an assertion's message
@@ -299,7 +299,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * Reads {@code boundedContext}'s current {@code arkprov:head} straight from
+     * Reads {@code boundedContext}'s current {@code RevisionToken} straight from
      * {@link #realLifecycle} after the race, outside any transaction - the same triple pattern
      * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#compareAndUpdate} reads inside its
      * transaction, but there is no accessor for that private read path, so this queries it directly
@@ -333,7 +333,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
 
     /**
      * Lost-update guard against the real store: a concurrent {@code bc_link_term} that commits between
-     * this caller's read (state plus {@code arkprov:head}) and its own write must cost the caller
+     * this caller's read (state plus {@code RevisionToken}) and its own write must cost the caller
      * nothing and lose neither edge. Before the fix, {@code linkTerm} read outside any transaction
      * and wrote back unconditionally, so the second writer silently dropped the first writer's
      * {@code arkddd:ubiquitousLanguageTerm} edge.

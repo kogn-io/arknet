@@ -45,7 +45,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  * {@code de.hauschel.arknet.persistence.VersionedWriteFunnel}'s head, minimally: a fresh opaque marker minted
  * on every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link #findCurrentByCode}
  * hands it out alongside the decision, {@link #compareAndUpdate} rejects a stale one, exactly the
- * CAS contract the real adapter enforces via {@code arkprov:head}.</p>
+ * CAS contract the real adapter enforces via {@code RevisionToken}.</p>
  */
 class InMemoryAdrRepository implements AdrRepository {
 

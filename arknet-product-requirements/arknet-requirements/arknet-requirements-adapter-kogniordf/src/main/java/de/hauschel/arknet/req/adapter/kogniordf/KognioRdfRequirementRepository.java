@@ -107,7 +107,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * identity is opaque and minted once, "insert or replace by identity" is no longer one coherent
  * operation. The transactional mechanics - the in-transaction existence checks for identity and
  * business-code collision, the SHACL gate, the commit-conflict translation, and the
- * head comparison - live in the shared {@link de.hauschel.arknet.persistence.WriteFunnel},
+ * head comparison - live in the shared {@link de.hauschel.arknet.persistence.VersionedWriteFunnel},
  * not here: {@link #create} and {@link #compareAndUpdate} only build the
  * candidate graph and, via {@code alreadyExists}/{@code duplicateCode}/{@code notFound}/
  * {@code headMismatch}, supply the exceptions the funnel throws - {@link
@@ -123,7 +123,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance
  * graph against the requirements SHACL shapes before the write transaction opens,
  * {@link WriteConstraintViolationException} on a violation, nothing persisted - live in the
- * shared {@link de.hauschel.arknet.persistence.WriteFunnel}. The gate itself is
+ * shared {@link de.hauschel.arknet.persistence.VersionedWriteFunnel}. The gate itself is
  * technology-neutral - only {@link KognioRdfRequirementRepositoryFactory} names RDF4J.</p>
  *
  * <p><strong>Term references arrive pre-resolved, identity-carrying.</strong>
@@ -348,8 +348,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     /**
      * Compare-and-set update (degenerated from a full-snapshot comparison to a head
      * comparison decision 4): replaces the requirement's triples only if
-     * its {@code arkprov:head} still equals {@code expectedHead} at the moment the shared
-     * {@link WriteFunnel} checks it inside the write transaction - closing the lost-update window
+     * its {@code RevisionToken} still equals {@code expectedHead} at the moment the shared
+     * {@link VersionedWriteFunnel} checks it inside the write transaction - closing the lost-update window
      * a plain read (via {@link #findCurrentByCode}) followed by an unconditional replace would
      * otherwise leave open between the read and the write.
      */
@@ -1047,7 +1047,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * state is always the correct response, not merely a convenient one.
      *
      * <p><strong>Exhausted retries never leak the raw store exception.</strong> The shared {@link
-     * de.hauschel.arknet.persistence.WriteFunnel} translates every write path's lost
+     * de.hauschel.arknet.persistence.VersionedWriteFunnel} translates every write path's lost
      * {@code ConcurrencyConflictException} into a bounded-context-owned signal before it reaches a
      * caller - this read path is the adapter's own, funnel-external retry loop, but the same
      * convention applies: a pathological, sustained storm of concurrent writers that outlasts
@@ -1372,7 +1372,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * list say something untrue about the project.</p>
      *
      * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
-     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * (kogn-io/arknet#360).</strong> {@code VersionedWriteFunnel#create}'s uniqueness check is
      * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
      * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
      * A counter that filtered blank nodes out would therefore be blind to a code the write path
@@ -1545,12 +1545,12 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@link #REQUIREMENTS_GRAPH} (including every acceptance criterion child's own triples), from
      * the project (kogn-io/arknet#566). Resolves the subject by code outside any transaction
      * (mirroring {@link #findByCode}'s own read), then hands the whole check-and-delete to
-     * {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
+     * {@link VersionedWriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
      * write transaction, and only once it finds nothing pointing at the requirement does the body
      * remove the subject's triples wholesale. Mirrors {@code KognioRdfConstraintRepository#delete},
      * with {@code KognioRdfAdrRepository#delete}'s {@code UNION} over the owned child resources.
      *
-     * <p>Passes {@code code} through to {@link WriteFunnel#delete}, which keeps it out of
+     * <p>Passes {@code code} through to {@link VersionedWriteFunnel#delete}, which keeps it out of
      * circulation on the tombstoned revision - the model triple carrying {@code dcterms:identifier}
      * is exactly what this delete removes, so the tombstone is the only place the number survives
      * (see {@link #findRetainedCodes}).</p>
@@ -1587,7 +1587,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     /**
-     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained
+     * Reads back the codes {@link VersionedWriteFunnel#delete}'s {@code code} parameter retained
      * (kogn-io/arknet#566): the shared funnel keeps the number out of circulation, this hexagon
      * only maps its raw strings to {@link RequirementCode}. Queried once per type prefix - the
      * funnel's {@code findRetainedCodes} takes a single prefix, and a requirement's two counters
@@ -1643,7 +1643,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
      * the content graph, where every bounded context's edges live (ADR-63) - a published copy or a
      * history version of a referencing resource is no reference. Runs
-     * inside the live write transaction {@link WriteFunnel#delete} hands its {@code body}, so the
+     * inside the live write transaction {@link VersionedWriteFunnel#delete} hands its {@code body}, so the
      * check and the eventual delete share one atomic snapshot. Mirrors
      * {@code KognioRdfConstraintRepository#rejectIfReferenced}.
      *

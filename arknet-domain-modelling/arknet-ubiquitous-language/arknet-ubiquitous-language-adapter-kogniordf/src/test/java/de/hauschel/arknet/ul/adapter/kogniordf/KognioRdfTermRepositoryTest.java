@@ -1819,7 +1819,7 @@ class KognioRdfTermRepositoryTest {
     /**
      * Wraps a real {@link DatasetLifecycle} and runs {@code beforeTransaction} right before every
      * write transaction opens - the exact point at which a concurrent writer's commit turns this
-     * caller's already-taken read (state plus {@code arkprov:head}) stale. The one-shot guard
+     * caller's already-taken read (state plus {@code RevisionToken}) stale. The one-shot guard
      * lives in the {@link Runnable} the test supplies, so a retried attempt runs unimpeded.
      */
     private static final class HeadAdvancingLifecycle implements DatasetLifecycle {
@@ -1908,7 +1908,7 @@ class KognioRdfTermRepositoryTest {
 
     /**
      * Regression test: {@code attemptUpdate} used to read the
-     * term's assembly and its {@code arkprov:head} via two <em>separate</em>
+     * term's assembly and its {@code RevisionToken} via two <em>separate</em>
      * {@code SparqlQuery#select} calls. That port's contract only guarantees that each individual
      * call is a self-contained read against the store's current committed state - nothing ties
      * two separate calls to the same snapshot. A concurrent writer's commit landing exactly

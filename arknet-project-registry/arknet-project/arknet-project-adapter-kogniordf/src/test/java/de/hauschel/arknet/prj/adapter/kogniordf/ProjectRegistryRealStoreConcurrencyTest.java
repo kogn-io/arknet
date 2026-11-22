@@ -84,7 +84,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * read-modify-write path behind {@code project_attach_anchor}/{@code project_rename} had no real
  * -store, real-thread proof of its own before this class. Two {@code compareAndUpdate} calls
  * against the very same, already-registered project, both reading the same
- * {@code arkprov:head}: both pass the funnel's synchronous head check because neither sees the
+ * {@code RevisionToken}: both pass the funnel's synchronous head check because neither sees the
  * other's uncommitted write, and only the second commit is rejected by the store - the funnel
  * translates that lost {@code SERIALIZABLE} conflict into the identical {@link StaleProjectException}
  * a synchronously stale caller would already get from the head comparison itself (see
@@ -327,7 +327,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
     /**
      * The {@code compareAndUpdate} counterpart of the {@code register} races above (issue #178):
      * two {@code project_attach_anchor}-shaped writes against the very same, already-registered
-     * project, both reading the same {@code arkprov:head}, held open until both have passed the
+     * project, both reading the same {@code RevisionToken}, held open until both have passed the
      * funnel's synchronous head check. Only the second commit is rejected by the store, and the
      * funnel must translate that genuine {@code SERIALIZABLE} conflict into the same
      * {@link StaleProjectException} a synchronously stale caller already gets - not a raw store
@@ -393,7 +393,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
 
     /**
      * The {@code updateAttributes} counterpart of the two {@code compareAndUpdate} races above
-     * (issue #230 review) - proof that {@code arkprov:head} is a concurrency token per
+     * (issue #230 review) - proof that {@code RevisionToken} is a concurrency token per
      * <em>resource</em>, not per <em>predicate</em>, even though {@link
      * KognioRdfProjectRegistry#updateAttributes} is a targeted patch that never touches
      * {@code label}/{@code arkprj:anchor} at all. Both calls here patch the very same field

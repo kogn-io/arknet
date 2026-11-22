@@ -409,7 +409,7 @@ class TermServiceRealStoreConcurrencyTest {
         }, "racer-delete");
         Thread referenceThread = new Thread(() -> {
             awaitLatch(deletePausedAfterReferenceCheck);
-            String insert = "INSERT DATA { GRAPH <https://example.org/req> { <https://example.org/req/1> <"
+            String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <https://example.org/req/1> <"
                     + ArkreqVocabulary.USES_TERM + "> <" + id.value().value() + "> } }";
             try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
                 handle.transactor().inTransaction(tx -> {
@@ -762,7 +762,7 @@ class TermServiceRealStoreConcurrencyTest {
     /**
      * Renders everything needed to make the next random sighting of this race evaluable: both
      * racers' results (business code plus resource IRI), each result's current
-     * {@code arkprov:head} read fresh from the store after the race (the concurrency token -
+     * {@code RevisionToken} read fresh from the store after the race (the concurrency token -
      * shows whether the two results really are two distinct, independently committed revisions),
      * the loser's exception if any, the system load at failure time, and the full timestamped
      * timeline of guard/barrier/latch/commit events. Built lazily by an assertion's message

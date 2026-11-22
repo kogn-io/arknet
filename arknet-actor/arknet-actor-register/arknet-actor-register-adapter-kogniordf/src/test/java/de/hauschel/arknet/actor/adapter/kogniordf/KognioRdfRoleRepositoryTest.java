@@ -61,6 +61,7 @@ import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
+import de.hauschel.arknet.persistence.ArkprocVocabulary;
 
 /**
  * Integration test for {@link KognioRdfRoleRepository} against an in-memory RDF4J-backed
@@ -151,7 +152,7 @@ class KognioRdfRoleRepositoryTest {
 
     /** Only {@code arkproc:Role} is written - never the abstract {@code arkproc:Actor}. */
     @Test
-    void writesOnlyTheRoleTypeIntoItsOwnNamedGraph() {
+    void writesOnlyTheRoleType() {
         Role stored = role(new RoleCode("ROLE-1"), null, List.of());
         repository.create(PROJECT_A, stored, "en");
 
@@ -159,8 +160,8 @@ class KognioRdfRoleRepositoryTest {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             assertTrue(handle.sparqlQuery().ask("ASK { GRAPH <" + ROLE_GRAPH + "> { <" + subject
                     + "> a <" + ROLE_TYPE + "> } }"));
-            assertFalse(handle.sparqlQuery().ask("ASK { GRAPH <https://w3id.org/arknet/model/content> { <"
-                    + subject + "> ?p ?o } }"), "a role must live in its own named graph, not the actor one");
+            assertFalse(handle.sparqlQuery().ask("ASK { GRAPH <" + ROLE_GRAPH + "> { <" + subject
+                    + "> a <" + ArkprocVocabulary.ACTOR_TYPE + "> } }"), "a role is no actor");
         }
     }
 
@@ -550,7 +551,7 @@ class KognioRdfRoleRepositoryTest {
     void deleteRejectsARoleStillReferencedAsPrimaryRole() {
         Role stored = role(new RoleCode("ROLE-1"), null, List.of());
         repository.create(PROJECT_A, stored, "en");
-        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
+        String reference = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <https://example.org/uc/1> <"
                 + ArkreqVocabulary.PRIMARY_ROLE + "> <" + stored.id().value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
@@ -571,7 +572,7 @@ class KognioRdfRoleRepositoryTest {
     void deleteRejectsARoleStillReferencedAsSupportingRole() {
         Role stored = role(new RoleCode("ROLE-1"), null, List.of());
         repository.create(PROJECT_A, stored, "en");
-        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
+        String reference = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <https://example.org/uc/1> <"
                 + ArkreqVocabulary.SUPPORTING_ROLE + "> <" + stored.id().value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {

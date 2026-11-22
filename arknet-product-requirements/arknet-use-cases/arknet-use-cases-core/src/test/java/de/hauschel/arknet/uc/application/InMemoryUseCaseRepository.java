@@ -36,7 +36,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * de.hauschel.arknet.persistence.VersionedWriteFunnel}'s head, minimally: a fresh opaque marker minted on
  * every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link
  * #findCurrentByCode} hands it out alongside the use case, {@link #compareAndUpdate} rejects a
- * stale one, exactly the CAS contract the real adapter enforces via {@code arkprov:head}.</p>
+ * stale one, exactly the CAS contract the real adapter enforces via {@code RevisionToken}.</p>
  */
 final class InMemoryUseCaseRepository implements UseCaseRepository {
 

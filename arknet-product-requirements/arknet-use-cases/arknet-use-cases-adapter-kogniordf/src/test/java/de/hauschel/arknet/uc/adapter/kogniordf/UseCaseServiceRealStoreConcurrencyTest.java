@@ -245,7 +245,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
     /**
      * Renders everything a future random sighting of this race needs to be evaluable with: both
      * racers' results (business code plus resource IRI), each result's current
-     * {@code arkprov:head} read fresh from the store after the race (the concurrency token -
+     * {@code RevisionToken} read fresh from the store after the race (the concurrency token -
      * shows whether the two results really are two distinct, independently committed revisions),
      * the loser's exception if any, the system load at failure time, and the full timestamped
      * timeline of guard/barrier/latch/commit events. Built lazily by an assertion's message
@@ -304,7 +304,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * Reads {@code useCase}'s current {@code arkprov:head} straight from
+     * Reads {@code useCase}'s current {@code RevisionToken} straight from
      * {@link #realLifecycle} after the race, outside any transaction - the same triple pattern
      * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#compareAndUpdate} reads inside its
      * transaction, but there is no accessor for that private read path, so this queries it directly
@@ -396,7 +396,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
 
     /**
      * Against the real store: a concurrent {@code uc_update} that commits between this
-     * caller's read (state plus {@code arkprov:head}) and its own write must cost the caller
+     * caller's read (state plus {@code RevisionToken}) and its own write must cost the caller
      * nothing and lose neither change. Before this fix, {@code uc_update} did not exist - a
      * read-modify-write over an unconditional {@code update} would have silently dropped the
      * first writer's change.

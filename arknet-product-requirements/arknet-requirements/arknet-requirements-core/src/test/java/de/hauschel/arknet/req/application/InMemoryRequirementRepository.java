@@ -40,7 +40,7 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  * de.hauschel.arknet.persistence.VersionedWriteFunnel}'s head, minimally: a fresh opaque marker minted on
  * every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link
  * #findCurrentByCode} hands it out alongside the requirement, {@link #compareAndUpdate} rejects a
- * stale one, exactly the CAS contract the real adapter enforces via {@code arkprov:head}.</p>
+ * stale one, exactly the CAS contract the real adapter enforces via {@code RevisionToken}.</p>
  *
  * <p><strong>Legacy acceptance criteria.</strong> {@link Requirement}'s constructor rejects an
  * empty {@code acceptanceCriteria} list unconditionally, so this fake - unlike the real

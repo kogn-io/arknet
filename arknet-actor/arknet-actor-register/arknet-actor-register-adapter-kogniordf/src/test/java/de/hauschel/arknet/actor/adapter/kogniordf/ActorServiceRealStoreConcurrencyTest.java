@@ -184,7 +184,7 @@ class ActorServiceRealStoreConcurrencyTest {
 
     /**
      * Lost-update guard against the real store: a concurrent {@code actor_update} that commits
-     * between this caller's read (state plus {@code arkprov:head}) and its own write must cost the
+     * between this caller's read (state plus {@code RevisionToken}) and its own write must cost the
      * caller nothing and lose neither correction. Without the compare-and-set guard, the second
      * writer would silently drop the first writer's field.
      *

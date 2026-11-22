@@ -713,7 +713,7 @@ class KognioRdfActorRepositoryTest {
     void deleteRejectsAnActorStillReferencedByAFilledByEdgeInAForeignGraph() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
         repository.create(PROJECT_A, stored, "de");
-        String reference = "INSERT DATA { GRAPH <https://example.org/roles> { <https://example.org/roles/1> <"
+        String reference = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <https://example.org/roles/1> <"
                 + ArkprocVocabulary.FILLED_BY + "> <" + stored.id().value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
@@ -742,7 +742,7 @@ class KognioRdfActorRepositoryTest {
     void deleteDoesNotRejectAnActorReferencedOnlyByAPrimaryRoleEdge() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
         repository.create(PROJECT_A, stored, "de");
-        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
+        String reference = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <https://example.org/uc/1> <"
                 + ArkreqVocabulary.PRIMARY_ROLE + "> <" + stored.id().value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {

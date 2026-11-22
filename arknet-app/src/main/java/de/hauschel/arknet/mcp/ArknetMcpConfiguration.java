@@ -24,6 +24,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
 import de.hauschel.arknet.mcp.dataset.DaemonStorageLock;
+import de.hauschel.arknet.mcp.dataset.LegacyLayoutRefusingDatasetLifecycle;
 import de.hauschel.arknet.mcp.dataset.LockConflictReportingDatasetLifecycle;
 import de.hauschel.arknet.mcp.report.ActorCards;
 import de.hauschel.arknet.mcp.report.AdrCards;
@@ -88,7 +89,7 @@ import de.hauschel.arknet.analysis.adapter.mcp.TraceabilityMcpTools;
 import de.hauschel.arknet.analysis.application.ModelAnalysisService;
 import de.hauschel.arknet.analysis.application.port.out.ModelSnapshots;
 import de.hauschel.arknet.analysis.application.port.out.ResourceHandleLookup;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepositoryFactory;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfTermLookup;
@@ -144,7 +145,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@code constraint_get}/{@code constraint_update}/{@code constraint_delete} over
  *       {@link ConstraintService} over
  *       {@link KognioRdfConstraintRepositoryFactory}, sharing the requirement repository's own
- *       {@link WriteFunnel} bean ({@link #requirementsWriteFunnel}) rather than building a
+ *       {@link VersionedWriteFunnel} bean ({@link #requirementsWriteFunnel}) rather than building a
  *       second, functionally identical one; {@code req_link_constraint} stays on
  *       {@link RequirementMcpTools} since it mutates the requirement.</li>
  *   <li><strong>ubiquitous-language</strong> ({@link UbiquitousLanguageMcpTools} over
@@ -221,7 +222,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       because an {@code arkproc:Actor} carries no reference to a term, a requirement or a bounded
  *       context in this scope - it exists as a resource of its own, independent of the actor facet
  *       the ubiquitous-language hexagon still sets on a {@code skos:Concept}. Its {@link
- *       WriteFunnel} is built once here as a bean of its own ({@link #actorWriteFunnel}) and
+ *       VersionedWriteFunnel} is built once here as a bean of its own ({@link #actorWriteFunnel}) and
  *       <em>shared</em> with this hexagon's second resource type below, the same way
  *       {@link ConstraintMcpTools}'s repository shares the requirements funnel - the two write
  *       through one gate because they share both resource files ({@code actor-shapes.ttl},
@@ -301,6 +302,10 @@ public class ArknetMcpConfiguration {
      * it first, at startup. arknet-app itself stays free of any direct RDF4J dependency either
      * way.</p>
      *
+     * <p>Wrapped once more, outermost, in {@link LegacyLayoutRefusingDatasetLifecycle}: a project
+     * dataset still in the storage layout of an earlier version is refused on first use with a
+     * message naming it, instead of being read as empty or written into beside its old model.</p>
+     *
      * <p>{@code destroyMethod = "close"} (issue #140): {@link LockConflictReportingDatasetLifecycle}
      * is {@link AutoCloseable}, closing every dataset {@code list()} reports through the neutral
      * port so a daemon shutdown releases them in an orderly way instead of relying on crash
@@ -311,29 +316,29 @@ public class ArknetMcpConfiguration {
     @DependsOn("daemonStorageLock")
     DatasetLifecycle datasetLifecycle(
             @Value("${arknet.rdf.storage:${user.home}/.arknet/rdf}") final Path storageDir) {
-        return new LockConflictReportingDatasetLifecycle(
+        return new LegacyLayoutRefusingDatasetLifecycle(new LockConflictReportingDatasetLifecycle(
                 KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir), storageDir,
-                KognioRdfRequirementRepositoryFactory.DEFAULT_LOCK_CONFLICT);
+                KognioRdfRequirementRepositoryFactory.DEFAULT_LOCK_CONFLICT));
     }
 
     // --- Requirements hexagon --------------------------------------------------
 
     /**
-     * The shared {@link WriteFunnel} every write path of the requirements hexagon runs through -
+     * The shared {@link VersionedWriteFunnel} every write path of the requirements hexagon runs through -
      * both {@link #requirementRepository} and {@link #constraintRepository} (issue #223): a
      * {@code Constraint} shares the requirements SHACL shapes and ontology axioms, so this bean is
      * built once and handed to both repositories rather than each building its own, functionally
      * identical one.
      */
     @Bean
-    WriteFunnel requirementsWriteFunnel(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+    VersionedWriteFunnel requirementsWriteFunnel(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
         return KognioRdfRequirementRepositoryFactory.buildFunnel(datasetLifecycle, displayLocale);
     }
 
     @Bean
     RequirementRepository requirementRepository(
             final DatasetLifecycle datasetLifecycle, final ResourceIdFactory resourceIdFactory,
-            final DisplayLocale displayLocale, final WriteFunnel requirementsWriteFunnel) {
+            final DisplayLocale displayLocale, final VersionedWriteFunnel requirementsWriteFunnel) {
         return KognioRdfRequirementRepositoryFactory.over(
                 datasetLifecycle, resourceIdFactory, displayLocale, requirementsWriteFunnel);
     }
@@ -347,7 +352,7 @@ public class ArknetMcpConfiguration {
     @Bean
     ConstraintRepository constraintRepository(
             final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale,
-            final WriteFunnel requirementsWriteFunnel) {
+            final VersionedWriteFunnel requirementsWriteFunnel) {
         return KognioRdfConstraintRepositoryFactory.over(
                 datasetLifecycle, displayLocale, requirementsWriteFunnel);
     }
@@ -773,7 +778,7 @@ public class ArknetMcpConfiguration {
     // --- Actor hexagon -----------------------------------------------------------
 
     /**
-     * The shared {@link WriteFunnel} every write path of the actor hexagon runs through - both
+     * The shared {@link VersionedWriteFunnel} every write path of the actor hexagon runs through - both
      * {@link #actorRepository} and {@link #roleRepository} (ADR-37/kogn-io/arknet#405 Part B): a
      * {@code Role} shares {@code actor-shapes.ttl}/{@code arknet-actor.ttl} with {@code Actor}, so
      * this bean is built once and handed to both repositories rather than each building its own,
@@ -782,7 +787,7 @@ public class ArknetMcpConfiguration {
      * {@code arkproc:Actor} while an instance is typed as one of the four concrete subclasses.
      */
     @Bean
-    WriteFunnel actorWriteFunnel(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+    VersionedWriteFunnel actorWriteFunnel(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
         return KognioRdfActorRepositoryFactory.buildFunnel(datasetLifecycle, displayLocale);
     }
 
@@ -795,7 +800,7 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     ActorRepository actorRepository(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale,
-            final WriteFunnel actorWriteFunnel) {
+            final VersionedWriteFunnel actorWriteFunnel) {
         return KognioRdfActorRepositoryFactory.over(datasetLifecycle, displayLocale, actorWriteFunnel);
     }
 
@@ -825,7 +830,7 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     RoleRepository roleRepository(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale,
-            final WriteFunnel actorWriteFunnel) {
+            final VersionedWriteFunnel actorWriteFunnel) {
         return KognioRdfRoleRepositoryFactory.over(datasetLifecycle, displayLocale, actorWriteFunnel);
     }
 

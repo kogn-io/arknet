@@ -61,12 +61,12 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  * Out-adapter: {@link RoleRepository} backed by the kognio-rdf substrate ({@code io.kogn.rdf},
  * embeddable RDF store) - the second resource type of the actor hexagon (ADR-37/
  * kogn-io/arknet#405), sitting alongside {@link KognioRdfActorRepository} in the same package and
- * sharing its {@link ShaclWriteGate}/{@link WriteFunnel} (see
+ * sharing its {@link ShaclWriteGate}/{@link VersionedWriteFunnel} (see
  * {@link KognioRdfRoleRepositoryFactory}): both resource types' shapes and axioms already live in
  * {@code actor-shapes.ttl}/{@code arknet-actor.ttl}. Its own named graph, though - {@link
  * #ROLE_GRAPH} ({@code .../model/roles}) is distinct from {@link KognioRdfActorRepository}'s
  * {@code .../model/actors}, since a shared gate (file-based: shapes + axioms) does not require a
- * shared graph (a {@link WriteFunnel} call is parameterised by graph on every invocation).
+ * shared graph (a {@link VersionedWriteFunnel} call is parameterised by graph on every invocation).
  *
  * <p>Maps a {@link Role} to its opaque {@link RoleId} as the subject IRI: {@code arkproc:Role},
  * the mandatory {@code dcterms:identifier} (the business code {@code ROLE-1}), one or more

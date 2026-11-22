@@ -1465,13 +1465,14 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * Blank-node regression: {@code arkarch:addressesRequirement} is not range-constrained to
-     * {@code IRI} at the RDF level, so a store-first edge can legally target a blank node.
-     * {@link ResourceId} cannot represent one, so the read path never surfaces it - but the write path
-     * must still capture and re-attach it across an unrelated update instead of erasing it.
+     * Blank-node regression: a store-first {@code arkarch:addressesRequirement} edge can target a
+     * blank node, which {@link ResourceId} cannot represent, so the read path never surfaces it. An
+     * unrelated update keeps the edge, and since the gate validates the whole new slice, the
+     * edge's IRI-only shape now rejects the update instead of slipping past the gate: nothing is
+     * written, the edge stays.
      */
     @Test
-    void compareAndUpdatePreservesABlankNodeAddressesRequirementEdge() {
+    void compareAndUpdateKeepingABlankNodeAddressesRequirementEdgeIsRejectedAndTheEdgeStays() {
         AdrId id = freshId();
         Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
                 List.of(), List.of(), null);
@@ -1481,15 +1482,16 @@ class KognioRdfAdrRepositoryTest {
                 + ArkarchVocabulary.ADDRESSES_REQUIREMENT + "> "
                 + "[ a <https://w3id.org/arknet/requirements#FunctionalRequirement> ] } }");
 
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), original.accept(DECIDED_ON), null, null, null, Map.of(), Map.of(), null,
-                RemovedPositions.NONE, RemovedPositions.NONE);
+        RevisionToken head = currentHeadOf(original.code());
+        assertThrows(WriteConstraintViolationException.class, () -> repository.compareAndUpdate(PROJECT_A, head,
+                original.accept(DECIDED_ON), null, null, null, Map.of(), Map.of(), null,
+                RemovedPositions.NONE, RemovedPositions.NONE));
 
         String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
                 + ArkarchVocabulary.ADDRESSES_REQUIREMENT + "> ?target . "
                 + "?target a <https://w3id.org/arknet/requirements#FunctionalRequirement> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertTrue(handle.sparqlQuery().ask(ask), "blank-node edge must survive the update and still "
-                    + "point at its typed node - not merely at some blank node");
+            assertTrue(handle.sparqlQuery().ask(ask), "the rejected update must leave the blank-node edge in place");
         }
     }
 
@@ -1564,7 +1566,7 @@ class KognioRdfAdrRepositoryTest {
                 repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-1"), null).orElseThrow();
 
         assertEquals(created, current.value());
-        assertEquals(headsOf(created.id().value().value()), List.of(current.head()));
+        assertEquals(headsOf(created.id().value().value()), List.of(current.head().value()));
     }
 
     @Test

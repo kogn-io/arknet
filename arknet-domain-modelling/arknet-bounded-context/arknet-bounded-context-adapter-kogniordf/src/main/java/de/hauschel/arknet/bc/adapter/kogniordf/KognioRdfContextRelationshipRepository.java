@@ -57,7 +57,7 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  * carries no human-readable business code of its own (unlike {@code BoundedContextCode}), so there is
  * no second uniqueness rule beyond the triple check and the identity collision - {@code code} is
  * passed as {@code null}, skipping that guard entirely, the same honest shape
- * {@code WriteFunnel#delete}'s code-retention overload already uses for a caller with nothing to
+ * {@code VersionedWriteFunnel#delete}'s code-retention overload already uses for a caller with nothing to
  * check there.</p>
  *
  * <p><strong>Relationship-type IRI mapping mirrors {@code Subdomain}'s.</strong> The eight private

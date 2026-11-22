@@ -170,7 +170,7 @@ import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
  * minted once, "insert or replace by identity" is no longer one coherent operation. The
  * transactional mechanics of that distinction - the in-transaction {@code contains}/head checks,
  * the SHACL gate, the commit-conflict translation - live in the shared
- * {@link WriteFunnel}, not here: {@link #create} only builds the candidate graph and
+ * {@link VersionedWriteFunnel}, not here: {@link #create} only builds the candidate graph and
  * rejects an existing subject with {@link ResourceAlreadyExistsException} or a colliding business
  * code with {@link DuplicateUseCaseCodeException}; {@link #compareAndUpdate} rejects a missing
  * subject with {@link UseCaseNotFoundException} and a stale {@code expectedHead} with
@@ -183,7 +183,7 @@ import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
  *
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate before the write
  * transaction opens, {@link WriteConstraintViolationException} on a violation, nothing
- * persisted - also live in {@link WriteFunnel}; {@link ShaclWriteGate} itself is no longer named
+ * persisted - also live in {@link VersionedWriteFunnel}; {@link ShaclWriteGate} itself is no longer named
  * here.</p>
  */
 public class KognioRdfUseCaseRepository implements UseCaseRepository {
@@ -224,7 +224,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * {@code UseCaseService} prepends, with no separator of its own (see {@code CodeCounter}).
      * Used only by {@link #findRetainedCodes} to tell a use case's own retained code apart from a
      * neighbouring bounded context's, since the provenance graph
-     * {@link WriteFunnel#findRetainedCodes} reads from is shared by all of them.
+     * {@link VersionedWriteFunnel#findRetainedCodes} reads from is shared by all of them.
      */
     private static final String CODE_PREFIX = "UC";
 
@@ -835,7 +835,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * difference.</p>
      *
      * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
-     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * (kogn-io/arknet#360).</strong> {@code VersionedWriteFunnel#create}'s uniqueness check is
      * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
      * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
      * A counter that filtered blank nodes out would therefore be blind to a code the write path
@@ -863,7 +863,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * {@link #USE_CASES_GRAPH} (including every main-flow/extension step child's own triples), from
      * the project (kogn-io/arknet#566). Resolves the subject by code outside any transaction
      * (mirroring {@link #findByCode}'s own read), then hands the whole check-and-delete to
-     * {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
+     * {@link VersionedWriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
      * write transaction, and only once it finds nothing pointing at the use case does the body
      * remove the subject's and its steps' triples wholesale. Mirrors
      * {@code KognioRdfConstraintRepository#delete}, with {@code adr_delete}'s child-resource
@@ -898,7 +898,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     /**
-     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained
+     * Reads back the codes {@link VersionedWriteFunnel#delete}'s {@code code} parameter retained
      * (kogn-io/arknet#566): the shared funnel keeps the number out of circulation, this hexagon
      * only maps its raw strings to {@link UseCaseCode}. One prefix ({@link #CODE_PREFIX}), unlike
      * the constraint hexagon's three - a use case has a single counter.
@@ -931,7 +931,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * Rejects the delete, without touching a single triple, if anything in the project still
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
      * the content graph, where every bounded context's edges live (ADR-63). Runs inside the live write
-     * transaction {@link WriteFunnel#delete} hands its {@code body}, so the check and the eventual
+     * transaction {@link VersionedWriteFunnel#delete} hands its {@code body}, so the check and the eventual
      * delete share one atomic snapshot. Mirrors
      * {@code KognioRdfConstraintRepository#rejectIfReferenced}, with the found shorthands sorted
      * before they reach the message: {@link Map#of} fixes no iteration order, and a caller reading
@@ -958,7 +958,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     /**
      * Reads a use case's current state together with its concurrency token (the
-     * {@code arkprov:head} revision IRI recorded by the last funnel write) - the read
+     * {@code RevisionToken} revision IRI recorded by the last funnel write) - the read
      * side of the read-modify-write round trip {@link #compareAndUpdate} guards the write side
      * of. Mirrors {@code KognioRdfRequirementRepository#findCurrentByCode}: reuses the same
      * subject lookup {@link #findByCode} does, then pairs the scalar/head read in one query call
