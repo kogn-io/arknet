@@ -23,7 +23,6 @@ import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
-import io.kogn.rdf.dataset.ConcurrencyConflictException;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.terms.Graph;
@@ -47,6 +46,8 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
+import de.hauschel.arknet.persistence.ReadTransactions;
+import de.hauschel.arknet.persistence.ReadConflictException;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.ChildFragments;
@@ -1037,22 +1038,18 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * <p><strong>Exhausted retries never leak the raw store exception.</strong> The shared {@link
      * de.hauschel.arknet.persistence.VersionedWriteFunnel} translates every write path's lost
      * {@code ConcurrencyConflictException} into a bounded-context-owned signal before it reaches a
-     * caller - this read path is the adapter's own, funnel-external retry loop, but the same
+     * caller - this read path runs through the shared {@link ReadTransactions}, and the same
      * convention applies: a pathological, sustained storm of concurrent writers that outlasts
      * {@link #MAX_READ_RETRY_ATTEMPTS} surfaces as {@link RequirementReadConflictException}, never
      * as the raw {@code io.kogn.rdf} type, with the last observed conflict preserved as {@linkplain
      * Throwable#getCause() cause}.
      */
     private <T> T readInTransaction(ProjectId projectId, DatasetHandle handle, Function<DatasetTx, T> work) {
-        ConcurrencyConflictException lastConflict = null;
-        for (int attempt = 1; attempt <= MAX_READ_RETRY_ATTEMPTS; attempt++) {
-            try {
-                return handle.transactor().inTransaction(work);
-            } catch (ConcurrencyConflictException e) {
-                lastConflict = e;
-            }
+        try {
+            return ReadTransactions.read(handle, MAX_READ_RETRY_ATTEMPTS, work);
+        } catch (ReadConflictException e) {
+            throw new RequirementReadConflictException(projectId, e.attempts(), e.getCause());
         }
-        throw new RequirementReadConflictException(projectId, MAX_READ_RETRY_ATTEMPTS, lastConflict);
     }
 
     /**
