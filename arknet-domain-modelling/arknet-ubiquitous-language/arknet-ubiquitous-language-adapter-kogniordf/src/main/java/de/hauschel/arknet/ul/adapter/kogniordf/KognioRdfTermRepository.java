@@ -620,10 +620,9 @@ public class KognioRdfTermRepository implements TermRepository {
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} or the
-     * ubiquitous-language BC's own {@code skos:broader}/{@code skos:related} - searched across
-     * every named graph
-     * ({@code GRAPH ?g}), since a referencing edge lives in its own BC's model graph, not
-     * {@link #TERMS_GRAPH}. Runs inside the live write transaction {@link VersionedWriteFunnel#delete} hands
+     * ubiquitous-language BC's own {@code skos:broader}/{@code skos:related} - searched in the
+     * one content graph every component writes into ({@link #TERMS_GRAPH}), where a referencing
+     * edge of any component lives. Runs inside the live write transaction {@link VersionedWriteFunnel#delete} hands
      * its {@code body}, so the check and the eventual delete share one atomic snapshot.
      */
     private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, TermCode code) {

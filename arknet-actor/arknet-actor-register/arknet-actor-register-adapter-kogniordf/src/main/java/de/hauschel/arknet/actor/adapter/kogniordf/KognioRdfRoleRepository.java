@@ -401,9 +401,9 @@ public class KognioRdfRoleRepository implements RoleRepository {
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - mirrors
-     * {@link KognioRdfActorRepository#rejectIfReferenced} exactly, including the graph-crossing
-     * {@code GRAPH ?g} search: a referencing {@code arkreq:primaryRole}/{@code supportingRole}
-     * edge lives in the use-case BC's own model graph, not {@link #ROLE_GRAPH}.
+     * {@link KognioRdfActorRepository#rejectIfReferenced} exactly: a referencing
+     * {@code arkreq:primaryRole}/{@code supportingRole} edge of a use case lives in the same
+     * content graph ({@link #ROLE_GRAPH}) the role does.
      */
     private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, RoleCode code) {
         IRI target = rdf.createIRI(subjectIri);

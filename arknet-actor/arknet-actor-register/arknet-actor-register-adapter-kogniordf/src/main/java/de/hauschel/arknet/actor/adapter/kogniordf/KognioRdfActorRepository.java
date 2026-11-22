@@ -384,9 +384,9 @@ public class KognioRdfActorRepository implements ActorRepository {
 
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still
-     * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
-     * every named graph ({@code GRAPH ?g}), since a referencing edge would live in the use-case
-     * BC's own model graph, not {@link #ACTOR_GRAPH}. Runs inside the live write transaction
+     * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched in the
+     * one content graph every component writes into ({@link #ACTOR_GRAPH}), where a referencing
+     * edge of any component lives. Runs inside the live write transaction
      * {@link VersionedWriteFunnel#delete} hands its {@code body}, so the check and the eventual delete
      * share one atomic snapshot.
      */

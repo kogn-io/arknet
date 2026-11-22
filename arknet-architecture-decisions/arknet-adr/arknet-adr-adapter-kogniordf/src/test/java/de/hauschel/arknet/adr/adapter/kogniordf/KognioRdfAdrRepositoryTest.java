@@ -1703,9 +1703,8 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * The tombstone the shared funnel leaves: the head pointer goes, the last
-     * revision is marked {@code prov:invalidatedAtTime}, and the chain up to it stays as the audit
-     * trail - "this existed, until here".
+     * The tombstone the shared funnel leaves: the draft goes, and the library records a tombstone
+     * entry in its history - "this existed, until here".
      */
     @Test
     void deleteRemovesTheDraftAndRecordsATombstone() {
@@ -1715,7 +1714,7 @@ class KognioRdfAdrRepositoryTest {
         repository.create(PROJECT_A, created, "en");
         String subject = created.id().value().value();
         // A second write that leaves the decision PROPOSED (delete's own status check runs next),
-        // so the revision chain has more than one entry to tombstone correctly.
+        // so the draft was rewritten once before it is deleted.
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(created.code()),
                 created.reviseReferences(List.of(), List.of(), List.of(), List.of(peer.id())), null, null, null,
                 Map.of(), Map.of(), null, RemovedPositions.NONE, RemovedPositions.NONE);

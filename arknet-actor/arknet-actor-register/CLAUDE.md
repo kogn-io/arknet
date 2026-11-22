@@ -29,9 +29,9 @@ Typ und Code stehen mit der Anlage fest; `actor_update` korrigiert ausschliessli
 `null` heisst dort "unangetastet lassen", nie "entfernen" -- dieselbe Regel wie bei `req_update`s `priority`; ein Entfernen der optionalen `description` braeuchte ein eigenes Signal und ist nicht gefordert.
 Ein Typwechsel bliebe sonst dieselbe Falle wie bei Constraint: alles, was den Akteur in Prosa referenziert, referenziert `ACTOR-N`, und nichts folgt einer Umnummerierung.
 
-**Schreibpfad mit CAS von Anfang an.** `ActorRepository` traegt `create` + `compareAndUpdate` und **keine** unbedingte Update-Methode; `ActorService#update` laeuft ueber `updateWithOptimisticRetry` (Zustand+`RevisionToken` aus `findCurrentByCode`, Mutation, `compareAndUpdate` mit dem beobachteten Head, Retry gegen einen frischen Read, `ActorConcurrentlyModifiedException` bei Erschoepfung).
+**Schreibpfad mit CAS von Anfang an.** `ActorRepository` traegt `create` + `compareAndUpdate` und **keine** unbedingte Update-Methode; `ActorService#update` laeuft ueber `updateWithOptimisticRetry` (Zustand+`RevisionToken` aus `findCurrentByCode`, Mutation, `compareAndUpdate` mit dem beobachteten `RevisionToken`, Retry gegen einen frischen Read, `ActorConcurrentlyModifiedException` bei Erschoepfung).
 `add()` vergibt den naechsten `ACTOR-N`-Code ueber den geteilten `CodeAssignment`-Retry (`arknet-shared-kernel`).
-Der Head schuetzt Trichter-Schreiber gegeneinander, nicht gegen store-first-Edits am Trichter vorbei.
+Das `RevisionToken` der Bibliothek schuetzt Trichter-Schreiber gegeneinander; ein Write ersetzt den ganzen Slice, auch was ein store-first-Edit am Trichter vorbei darin geaendert hat.
 Ein Update, das nichts aendert, schreibt nichts -- Wertgleichheit ist hier der ganze Test, es gibt keinen "gleicher Text, anderer Sprach-Tag ist trotzdem ein Write"-Fall wie bei `ConstraintService`.
 
 **Out-Adapter.** Schreibt in den Content-Graph des Projekts (ADR-63), eigenes `ShaclWriteGate` + eigener `VersionedWriteFunnel` (kein Teilen, anders als `KognioRdfConstraintRepository`, das sich den Trichter der requirements-BC leiht -- dort liegen beide Shapes in derselben Datei, hier gehoeren beide Ressourcen-Dateien diesem Hexagon allein).

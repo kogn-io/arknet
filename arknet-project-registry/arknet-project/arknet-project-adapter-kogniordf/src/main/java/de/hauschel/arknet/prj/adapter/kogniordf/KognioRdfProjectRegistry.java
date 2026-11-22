@@ -365,9 +365,9 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * {@inheritDoc}
      *
      * <p>Runs through {@link RegistryWrites#delete} like every other {@code *_delete} in this
-     * codebase: the existence check sits inside the write transaction, and the entry's last
-     * revision in the system dataset's provenance graph is tombstoned rather than erased. No
-     * business code is retained - a project has none, and its label is free for reuse the moment
+     * codebase: the existence check sits inside the write transaction, and the entry's triples are
+     * removed there. The system dataset lies outside the library versioning, so no tombstone and
+     * no history entry is written. No business code is retained - a project has none, and its label is free for reuse the moment
      * the entry is gone.</p>
      */
     @Override
