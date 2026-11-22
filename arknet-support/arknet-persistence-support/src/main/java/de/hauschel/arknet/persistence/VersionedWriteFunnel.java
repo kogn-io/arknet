@@ -4,8 +4,6 @@
 package de.hauschel.arknet.persistence;
 
 import java.time.Clock;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -45,8 +43,8 @@ import io.kogn.rdf.versioning.RevisionToken;
 /**
  * The versioned write path of every model resource (ADR-61..63): each resource is the draft
  * slice of its subject IRI in the one content graph of its project dataset, written only through
- * the slice operations of kognio-rdf's {@link ResourceVersioning}, and published explicitly into
- * an immutable, content-addressed version.
+ * the slice operations of kognio-rdf's {@link ResourceVersioning}, and published by the same
+ * write into an immutable, content-addressed version.
  *
  * <p><strong>Shape of a write.</strong> Every write method owns one transaction and runs the same
  * skeleton: bind the dataset to the content graph, read the subject's draft slice and its
@@ -54,7 +52,8 @@ import io.kogn.rdf.versioning.RevisionToken;
  * {@link SliceBuilder} produce the complete new slice (it sees the transaction and the current
  * draft, so it can keep what an update must preserve and ask the store whatever a reference check
  * needs), validate exactly that slice through the {@link ShaclWriteGate}, and hand it to
- * {@link ResourceVersioning#replaceDraft}. What is validated is therefore what is written, not a
+ * {@link ResourceVersioning#replaceDraft}, then publish it with {@link ResourceVersioning#publish}
+ * in the same transaction. What is validated is therefore what is written, not a
  * candidate a later body still merges into. A slice holds the subject IRI, its {@code #fragment}
  * IRIs and the blank nodes reachable from them; a triple on any other subject is rejected by the
  * library with an {@link IllegalArgumentException} and nothing is written. Every fragment IRI of a
@@ -69,13 +68,14 @@ import io.kogn.rdf.versioning.RevisionToken;
  * The token is an in-memory value: it carries a revision counter the library does not expose, so it
  * cannot be serialized and only guards a read and a write made within one process call.</p>
  *
- * <p><strong>Publish and delete.</strong> A write changes the draft only; {@link #publish} is the
- * explicit act that turns drafts into versions, for any number of resources in one transaction
- * (ADR-62). {@link #delete} removes the draft and the published slice and records a tombstone; a
+ * <p><strong>Every write publishes.</strong> A create or update writes the draft and publishes it
+ * in one transaction, so the published view always equals the draft and no write leaves an
+ * unpublished change behind: either both commit or neither does. A write that changes nothing
+ * creates no history entry; every other one adds exactly one. There is no separate publish
+ * operation. {@link #delete} removes the draft and the published slice and records a tombstone; a
  * business code handed in is kept on that tombstone in {@link #RETAINED_CODES_GRAPH}, so
- * {@link #findRetainedCodes} can keep it out of circulation even when the resource was never
- * published and the tombstone names no version. Both report a lost commit through a signal of
- * the caller, like every other write.</p>
+ * {@link #findRetainedCodes} can keep it out of circulation. A lost commit is reported through a
+ * signal of the caller, like every other write.</p>
  *
  * <p>Context differences are parameters: signals arrive as
  * {@link Supplier}s, the slice as a {@link SliceBuilder}. One instance per bounded context, built by
@@ -292,8 +292,7 @@ public final class VersionedWriteFunnel {
     /**
      * Runs a guarded update: the subject must have a non-empty draft and {@code expected} must
      * still be its current token. A stale token and a lost commit race both throw
-     * {@code revisionMismatch}; in neither case is anything written. A publish that created an
-     * entry counts as a write for the token: a token read before it is stale afterwards.
+     * {@code revisionMismatch}; in neither case is anything written.
      *
      * @param dataset          the dataset (project) to write into
      * @param subjectIri       the subject's opaque IRI, without a {@code #}
@@ -303,7 +302,7 @@ public final class VersionedWriteFunnel {
      * @param notFound         the signal for a subject with an empty draft
      * @param revisionMismatch the signal for a stale token or a lost commit race
      * @param slice            builds the new slice from the current draft
-     * @return the token for the next write of the subject
+     * @return the token for the next write of the subject, that of the published version
      */
     public RevisionToken compareAndUpdate(DatasetId dataset, String subjectIri, RevisionToken expected,
             ReadableGraph assertedContext, Supplier<RuntimeException> notFound,
@@ -392,54 +391,11 @@ public final class VersionedWriteFunnel {
     }
 
     /**
-     * Publishes the current drafts of the given subjects in one transaction - all or none. An
-     * unchanged draft creates no new entry; the result then names the latest one. Every subject is
-     * checked before anything is written: one with an empty draft (never written or deleted)
-     * throws {@code notFound} for that subject and publishes none of the others.
-     *
-     * @param dataset     the dataset (project)
-     * @param subjectIris the subjects to publish, each at most once
-     * @param details     creator and comment of the entries created
-     * @param notFound    the signal for a subject with an empty draft, given its IRI
-     * @param lostCommit  the signal for a publish that lost the store's commit-time conflict to a
-     *                    concurrent write; nothing is published then
-     * @return per subject the entry naming its current version
-     */
-    public PublishResult publish(DatasetId dataset, Collection<String> subjectIris, EntryDetails details,
-            Function<String, RuntimeException> notFound, Supplier<RuntimeException> lostCommit) {
-        Objects.requireNonNull(dataset, "dataset");
-        Objects.requireNonNull(subjectIris, "subjectIris");
-        Objects.requireNonNull(details, "details");
-        Objects.requireNonNull(notFound, "notFound");
-        Objects.requireNonNull(lostCommit, "lostCommit");
-
-        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
-            return handle.transactor().inTransaction(tx -> {
-                versioning.bindContentGraph(tx);
-                List<RevisionToken> tokens = new ArrayList<>(subjectIris.size());
-                for (String subjectIri : subjectIris) {
-                    DraftSlice draft = versioning.readDraft(tx, rdf.createIRI(subjectIri));
-                    if (draft.triples().isEmpty()) {
-                        throw notFound.apply(subjectIri);
-                    }
-                    tokens.add(draft.token());
-                }
-                return versioning.publish(tx, tokens, details);
-            });
-        } catch (RuntimeException e) {
-            if (isWriteConflict.test(e)) {
-                throw translateConflict(conflict -> lostCommit.get(), e);
-            }
-            throw e;
-        }
-    }
-
-    /**
      * Reads the subject's history: its publish entries and tombstones, oldest first.
      *
      * @param dataset    the dataset (project)
      * @param subjectIri the subject's opaque IRI, without a {@code #}
-     * @return the history entries; empty if never published or deleted
+     * @return the history entries; empty for a subject never written through a funnel
      */
     public List<HistoryEntry> history(DatasetId dataset, String subjectIri) {
         return read(dataset, tx -> versioning.history(tx, rdf.createIRI(subjectIri)));
@@ -547,7 +503,9 @@ public final class VersionedWriteFunnel {
             gate.enforce(next, assertedContext);
         }
         ChildFragments.recordIssued(tx, subject, next);
-        return versioning.replaceDraft(tx, subject, next, draft.token());
+        RevisionToken written = versioning.replaceDraft(tx, subject, next, draft.token());
+        PublishResult published = versioning.publish(tx, List.of(written), EntryDetails.NONE);
+        return published.results().get(subject).token();
     }
 
     private boolean codeTaken(DatasetTx tx, String code) {

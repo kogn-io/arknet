@@ -53,7 +53,6 @@ import io.kogn.rdf.versioning.ContentGraphMismatchException;
 import io.kogn.rdf.versioning.EntryDetails;
 import io.kogn.rdf.versioning.EntryKind;
 import io.kogn.rdf.versioning.HistoryEntry;
-import io.kogn.rdf.versioning.PublishResult;
 import io.kogn.rdf.versioning.PublishState;
 import io.kogn.rdf.versioning.ResourceVersioning;
 import io.kogn.rdf.versioning.ResourceVersioningNamedGraphs;
@@ -83,7 +82,6 @@ class VersionedWriteFunnelRealStoreTest {
     private final IRI criterion = rdf.createIRI(NS + "criterion");
     private final IRI text = rdf.createIRI(NS + "text");
     private final IRI alice = rdf.createIRI(NS + "agent/alice");
-    private final IRI bob = rdf.createIRI(NS + "agent/bob");
     private final MutableClock clock = new MutableClock(START);
     private final AtomicReference<ReadableGraph> validated = new AtomicReference<>();
 
@@ -105,40 +103,35 @@ class VersionedWriteFunnelRealStoreTest {
         lifecycle.shutDownAll();
     }
 
+    /**
+     * Every write publishes: a create and a changing update each leave exactly one new version and
+     * no unpublished change; an update that changes nothing adds no entry; a delete adds the
+     * tombstone naming the last version.
+     */
     @Test
-    void draftPublishUpdatePublish_historyCarriesBothVersionsWithTheirFragments() {
-        // given - a draft with two fragment children
+    void everyWritePublishesExactlyOneVersionAndLeavesNoUnpublishedChange() {
+        // when - created with two fragment children
         create(SUBJECT, CODE, "v1", "crit one", "crit two");
-        assertEquals(PublishState.NEVER_PUBLISHED, funnel.publishState(DATASET, SUBJECT));
-        assertTrue(funnel.history(DATASET, SUBJECT).isEmpty());
 
-        // when - published by alice, then republished unchanged by bob
-        PublishResult first = funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(alice),
-                NotFound::of, Signals::unexpected);
-        clock.advance(Duration.ofMinutes(5));
-        PublishResult unchanged = funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(bob),
-                NotFound::of, Signals::unexpected);
-
-        // then - one entry only, the repeated publish names it
+        // then - published at once, the published view equals the draft
         assertEquals(PublishState.PUBLISHED_UNCHANGED, funnel.publishState(DATASET, SUBJECT));
-        assertEquals(first.results(), unchanged.results());
         assertEquals(1, funnel.history(DATASET, SUBJECT).size());
+        assertEquals(draft(SUBJECT).size(), published(SUBJECT).size());
 
-        // when - one criterion changes under its stable fragment name, bob publishes
+        // when - rewritten unchanged, then one criterion changes under its stable fragment name
+        clock.advance(Duration.ofMinutes(5));
+        update(SUBJECT, "v1", "crit one", "crit two");
+        assertEquals(1, funnel.history(DATASET, SUBJECT).size(), "an unchanged write adds no version");
         update(SUBJECT, "v1", "crit one CHANGED", "crit two");
-        assertEquals(PublishState.PUBLISHED_WITH_UNPUBLISHED_CHANGES, funnel.publishState(DATASET, SUBJECT));
-        funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(bob).withComment("changed ac-1"),
-                NotFound::of, Signals::unexpected);
 
-        // then
+        // then - a second version, still nothing unpublished
+        assertEquals(PublishState.PUBLISHED_UNCHANGED, funnel.publishState(DATASET, SUBJECT));
         List<HistoryEntry> history = funnel.history(DATASET, SUBJECT);
         assertEquals(2, history.size());
         HistoryEntry h1 = history.get(0);
         HistoryEntry h2 = history.get(1);
         assertEquals(EntryKind.PUBLISH, h1.kind());
-        assertEquals(Optional.of(alice), h1.creator());
-        assertEquals(Optional.of(bob), h2.creator());
-        assertEquals(Optional.of("changed ac-1"), h2.comment());
+        assertEquals(EntryKind.PUBLISH, h2.kind());
         assertEquals(START, h1.created());
         assertEquals(START.plus(Duration.ofMinutes(5)), h2.created());
         assertTrue(h2.cid().isPresent());
@@ -149,7 +142,41 @@ class VersionedWriteFunnelRealStoreTest {
         assertEquals(Set.of("crit one", "crit two"), texts(v1));
         assertEquals(Set.of("crit one CHANGED", "crit two"),
                 texts(tx(t -> library.readVersionByCID(t, h2.cid().orElseThrow())).orElseThrow()));
-        assertEquals(6, tx(t -> library.readPublished(t, rdf.createIRI(SUBJECT))).size());
+        assertEquals(Set.of("crit one CHANGED", "crit two"), texts(published(SUBJECT)));
+
+        // when - deleted
+        funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE, Signals::unexpected, Signals::unexpected,
+                tx -> { });
+
+        // then - the tombstone names the last version
+        List<HistoryEntry> afterDelete = funnel.history(DATASET, SUBJECT);
+        assertEquals(3, afterDelete.size());
+        assertEquals(EntryKind.TOMBSTONE, afterDelete.get(2).kind());
+        assertEquals(h2.cid(), afterDelete.get(2).cid());
+        assertEquals(PublishState.DELETED, funnel.publishState(DATASET, SUBJECT));
+    }
+
+    /**
+     * The token a write returns is that of the published version: it is the subject's current
+     * token, the next write accepts it, and the token read before the write is stale.
+     */
+    @Test
+    void theTokenAfterAWriteIsThatOfThePublishedVersionAndAStaleOneIsStillRejected() {
+        RevisionToken created = funnel.create(DATASET, SUBJECT, CODE, null, Signals::unexpected,
+                Signals::unexpected, (tx, current) -> requirement(SUBJECT, CODE, "v1", "crit one"));
+        assertEquals(currentToken(SUBJECT), created);
+
+        RevisionToken updated = funnel.compareAndUpdate(DATASET, SUBJECT, created, null, Signals::unexpected,
+                RevisionMismatch::new, (tx, current) -> requirement(SUBJECT, CODE, "v2", "crit one"));
+
+        assertEquals(currentToken(SUBJECT), updated);
+        assertEquals(PublishState.PUBLISHED_UNCHANGED, funnel.publishState(DATASET, SUBJECT));
+        assertThrows(RevisionMismatch.class, () -> funnel.compareAndUpdate(DATASET, SUBJECT, created, null,
+                Signals::unexpected, RevisionMismatch::new, (tx, current) -> requirement(SUBJECT, CODE, "v3")));
+        funnel.compareAndUpdate(DATASET, SUBJECT, updated, null, Signals::unexpected, RevisionMismatch::new,
+                (tx, current) -> requirement(SUBJECT, CODE, "v3", "crit one"));
+        assertEquals(Set.of("v3"), titles(published(SUBJECT)));
+        assertEquals(3, funnel.history(DATASET, SUBJECT).size());
     }
 
     /**
@@ -282,7 +309,6 @@ class VersionedWriteFunnelRealStoreTest {
     @Test
     void deleteRecordsATombstoneNamingTheLastVersionAndRetainsTheCode() {
         create(SUBJECT, CODE, "v1", "crit one");
-        funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE, NotFound::of, Signals::unexpected);
         HistoryEntry published = funnel.history(DATASET, SUBJECT).get(0);
 
         String tombstoneIri = funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE.withCreator(alice),
@@ -303,23 +329,6 @@ class VersionedWriteFunnelRealStoreTest {
                 NotFound::new, Signals::unexpected, tx -> { }));
     }
 
-    /**
-     * A never-published resource leaves a tombstone without a version: its last content is gone
-     * from the library, only the retained code survives.
-     */
-    @Test
-    void deletingANeverPublishedDraftLeavesATombstoneWithoutContentButKeepsTheCode() {
-        create(SUBJECT, CODE, "v1", "crit one");
-
-        funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE, Signals::unexpected, Signals::unexpected,
-                tx -> { });
-
-        HistoryEntry tombstone = funnel.history(DATASET, SUBJECT).get(0);
-        assertEquals(EntryKind.TOMBSTONE, tombstone.kind());
-        assertTrue(tombstone.cid().isEmpty());
-        assertEquals(List.of(CODE), funnel.findRetainedCodes(DATASET, "FR-"));
-    }
-
     @Test
     void aGuardThrowingInsideDeleteKeepsTheResource() {
         create(SUBJECT, CODE, "v1", "crit one");
@@ -329,54 +338,9 @@ class VersionedWriteFunnelRealStoreTest {
                     throw new Referenced();
                 }));
 
-        assertEquals(PublishState.NEVER_PUBLISHED, funnel.publishState(DATASET, SUBJECT));
+        assertEquals(PublishState.PUBLISHED_UNCHANGED, funnel.publishState(DATASET, SUBJECT));
         assertEquals(Set.of("v1"), titles(draft(SUBJECT)));
         assertTrue(funnel.findRetainedCodes(DATASET, "FR-").isEmpty());
-    }
-
-    @Test
-    void publishOfSeveralResourcesCreatesOneEntryEach() {
-        create(SUBJECT, CODE, "a", "x");
-        create(OTHER, "FR-2", "b", "y");
-
-        PublishResult result = funnel.publish(DATASET, List.of(SUBJECT, OTHER), EntryDetails.NONE, NotFound::of,
-                Signals::unexpected);
-
-        assertEquals(2, result.results().size());
-        update(SUBJECT, "a2", "x");
-        long dirty = Set.of(SUBJECT, OTHER).stream()
-                .filter(iri -> funnel.publishState(DATASET, iri) != PublishState.PUBLISHED_UNCHANGED).count();
-        assertEquals(1, dirty);
-    }
-
-    /**
-     * The publishable subject comes first, the unknown one second: a publish running one
-     * transaction per subject, or writing before it checked every subject, would leave the first
-     * one published.
-     */
-    @Test
-    void publishIsAllOrNone_anUnknownSubjectLeavesTheOthersUnpublished() {
-        create(SUBJECT, CODE, "a", "x");
-
-        NotFound thrown = assertThrows(NotFound.class, () -> funnel.publish(DATASET, List.of(SUBJECT, OTHER),
-                EntryDetails.NONE, NotFound::of, Signals::unexpected));
-
-        assertEquals(OTHER, thrown.getMessage());
-        assertEquals(PublishState.NEVER_PUBLISHED, funnel.publishState(DATASET, SUBJECT));
-        assertTrue(funnel.history(DATASET, SUBJECT).isEmpty());
-    }
-
-    @Test
-    void publishOfADeletedSubjectIsNotFound() {
-        create(SUBJECT, CODE, "a", "x");
-        funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE, Signals::unexpected, Signals::unexpected,
-                tx -> { });
-
-        NotFound thrown = assertThrows(NotFound.class, () -> funnel.publish(DATASET, List.of(SUBJECT),
-                EntryDetails.NONE, NotFound::of, Signals::unexpected));
-
-        assertEquals(SUBJECT, thrown.getMessage());
-        assertEquals(1, funnel.history(DATASET, SUBJECT).size(), "only the tombstone");
     }
 
     @Test
@@ -494,24 +458,6 @@ class VersionedWriteFunnelRealStoreTest {
 
         assertTrue(exactlyOneLoser(outcomes) instanceof RevisionMismatch);
         assertEquals(PublishState.DELETED, funnel.publishState(DATASET, SUBJECT));
-    }
-
-    /** Two publishes of the same changed draft both read it; the loser gets the caller's signal. */
-    @Test
-    void aPublishThatLosesTheCommitThrowsTheLostCommitSignal() throws InterruptedException {
-        create(SUBJECT, CODE, "v1", "crit one");
-        CyclicBarrier bothRead = new CyclicBarrier(2);
-        VersionedWriteFunnel racing = new VersionedWriteFunnel(pausingFirstTransactionOfEachThread(bothRead),
-                recordingGate(false), CONTENT_GRAPH, VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT, clock);
-
-        List<Optional<RuntimeException>> outcomes = runTwo(
-                () -> racing.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE, NotFound::of,
-                        RevisionMismatch::new),
-                () -> racing.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE, NotFound::of,
-                        RevisionMismatch::new));
-
-        assertTrue(exactlyOneLoser(outcomes) instanceof RevisionMismatch);
-        assertEquals(1, funnel.history(DATASET, SUBJECT).size());
     }
 
     /**
@@ -632,6 +578,10 @@ class VersionedWriteFunnelRealStoreTest {
 
     private ReadableGraph draft(String subject) {
         return tx(t -> sameContentGraph().readDraft(t, rdf.createIRI(subject)).triples());
+    }
+
+    private ReadableGraph published(String subject) {
+        return tx(t -> sameContentGraph().readPublished(t, rdf.createIRI(subject)));
     }
 
     private ResourceVersioning sameContentGraph() {

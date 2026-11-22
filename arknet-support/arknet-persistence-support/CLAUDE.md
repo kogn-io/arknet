@@ -32,15 +32,16 @@ Ein Slice umfasst die Subjekt-IRI, ihre `#fragment`-IRIs und die daran erreichba
 `ChildFragments` benennt diese Kinder (ADR-64): `<parent>#<kind>-<n>`, wobei `n` einmal bei Anlage des Kindes vergeben wird, eins ueber der hoechsten je unter dem Elternteil vergebenen Nummer dieser Art, und nie wiederverwendet wird; die Reihenfolge traegt ein eigenes Positions-Tripel, nie der Name.
 Der Trichter haelt in `replace` jede Fragment-IRI eines geschriebenen Slice als `<parent> dcterms:hasPart <fragment>` in `ISSUED_FRAGMENTS_GRAPH` fest, in derselben Transaktion; die Eintraege ueberleben Kind und Elternteil und sind Buchhaltung, kein Modell.
 Welches gespeicherte Kind seinen Namen behaelt, entscheidet der Adapter aus dem, was die Schreiboperation ueber die Identitaet verraet (`ChildFragments#carried` mit der neuen Position je alter Position); alle anderen Positionen bekommen mit `ChildFragments#name` neue Nummern.
-Nebenlaeufigkeitsschutz ist das `RevisionToken` der Bibliothek: `compareAndUpdate` meldet ein veraltetes Token und einen verlorenen Commit-Konflikt ueber dasselbe `revisionMismatch`-Signal, `publish` und `delete` einen verlorenen Commit ueber ein `lostCommit`-Signal des Aufrufers.
-Ein `publish`, der einen Eintrag anlegt, zaehlt fuer das Token als Write: ein davor gelesenes Token ist danach veraltet.
+Nebenlaeufigkeitsschutz ist das `RevisionToken` der Bibliothek: `compareAndUpdate` meldet ein veraltetes Token und einen verlorenen Commit-Konflikt ueber dasselbe `revisionMismatch`-Signal, `delete` einen verlorenen Commit ueber ein `lostCommit`-Signal des Aufrufers.
+Das Token, das ein Write zurueckgibt, ist das der veroeffentlichten Version, also das aktuelle Token des Subjekts.
 Das Token ist nicht serialisierbar (sein Revisionszaehler ist package-private) und laesst sich nicht aus einem String zurueckbauen.
 Es reist darum nur als Objekt im selben Prozess, also durch einen Out-Port nur als opaker Traeger und nie ueber mehrere MCP-Aufrufe hinweg.
 `currentToken(tx, iri)` liest es in der Lesetransaktion des Aufrufers, damit es zum gelesenen Stand gehoert.
-`publish` ist der explizite Akt aus ADR-62, fuer mehrere Ressourcen in einer Transaktion; ein unveraenderter Draft erzeugt keinen neuen History-Eintrag.
-Ein Subjekt mit leerem Draft (nie geschrieben oder geloescht) wirft vor jedem Schreiben das `notFound`-Signal des Aufrufers mit seiner IRI, und keine der anderen Ressourcen wird veroeffentlicht.
+Jeder Write veroeffentlicht: `replace` schreibt den Draft und publiziert ihn in derselben Transaktion, also landen beide oder keiner, und kein Write hinterlaesst eine unveroeffentlichte Aenderung.
+Ein Write, der nichts aendert, erzeugt keinen History-Eintrag, jeder andere genau einen; einen eigenen Publish-Aufruf gibt es nicht.
+Die Fragment-Buchhaltung bleibt davon unberuehrt: `ChildFragments` vergibt Nummern aus `ISSUED_FRAGMENTS_GRAPH` und dem Draft, und der Publish laesst den Draft stehen.
 `delete` laesst die Bibliothek Draft und veroeffentlichten Slice entfernen und einen Tombstone schreiben und haengt einen uebergebenen Business-Code an dessen Eintrags-IRI in `RETAINED_CODES_GRAPH`, den `findRetainedCodes` nach Code-Praefix gefiltert liest; die Praefixe der Ressourcentypen ueberlappen nicht, weil Codes im ganzen Content-Graph eindeutig sind.
-Den Code haelt arknet selbst, weil der Tombstone einer nie veroeffentlichten Ressource keine Version nennt und ihr letzter Inhalt dann nicht mehr lesbar ist.
+Den Code haelt arknet selbst, weil er auf dem Modell-Tripel lebt, das der Delete entfernt.
 Die Code-Pruefung von `create` laeuft im ganzen Content-Graph, also ueber alle Ressourcentypen eines Projekts statt je Komponentengraph.
 Abgesichert durch `VersionedWriteFunnelRealStoreTest` gegen einen echten `NativeStore` unter `@TempDir`, inklusive ueberlappender Updates vom selben Token, ueberlappender Creates mit demselben Code und der ersten Writes auf einem frischen Dataset.
 

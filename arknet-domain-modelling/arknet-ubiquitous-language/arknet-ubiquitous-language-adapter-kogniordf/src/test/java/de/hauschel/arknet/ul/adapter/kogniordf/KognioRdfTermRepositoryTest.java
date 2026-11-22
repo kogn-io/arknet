@@ -1796,18 +1796,18 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
-    // ---- draft and token: every write changes the draft, nothing publishes ----------------
+    // ---- draft and token: every write changes the draft and publishes it ------------------
 
-    /** {@code create} writes a draft only: the term carries a token and was never published. */
+    /** {@code create} publishes at once: the term carries a token and exactly one version. */
     @Test
-    void createWritesADraftThatWasNeverPublished() {
+    void createPublishesExactlyOneVersion() {
         TermId id = freshId();
         repository.create(PROJECT_A, new Term(id, new TermCode("TERM-1"), "Gutschrift",
                 "Eine dem Kundenkonto gutgeschriebene Erstattung.", null), null);
 
         assertTrue(tokenOf(id).isPresent(), "create must leave a draft");
-        assertEquals(PublishState.NEVER_PUBLISHED, probe().publishState(DATASET_A, id.value().value()));
-        assertTrue(probe().history(DATASET_A, id.value().value()).isEmpty(), "a write is no publish");
+        assertEquals(PublishState.PUBLISHED_UNCHANGED, probe().publishState(DATASET_A, id.value().value()));
+        assertEquals(1, probe().history(DATASET_A, id.value().value()).size(), "a write is a publish");
     }
 
     /** The patch-{@code update} writes the draft through the compare-and-set: the token moves. */
@@ -2215,8 +2215,10 @@ class KognioRdfTermRepositoryTest {
 
         assertTrue(tokenOf(id).isEmpty(), "the draft must be gone");
         assertEquals(PublishState.DELETED, probe().publishState(DATASET_A, id.value().value()));
-        assertEquals(List.of(EntryKind.TOMBSTONE), probe().history(DATASET_A, id.value().value()).stream()
-                .map(HistoryEntry::kind).toList());
+        List<EntryKind> kinds = probe().history(DATASET_A, id.value().value()).stream().map(HistoryEntry::kind).toList();
+        assertEquals(EntryKind.TOMBSTONE, kinds.getLast(), "the delete must record a tombstone");
+        assertTrue(kinds.subList(0, kinds.size() - 1).stream().allMatch(EntryKind.PUBLISH::equals)
+                && kinds.size() > 1, "every write before the delete published a version");
     }
 
     /**

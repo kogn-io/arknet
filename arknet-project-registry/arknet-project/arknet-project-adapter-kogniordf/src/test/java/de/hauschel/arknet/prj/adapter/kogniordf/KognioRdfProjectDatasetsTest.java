@@ -15,7 +15,6 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -112,8 +111,6 @@ class KognioRdfProjectDatasetsTest {
                     slice.add(rdf.createIRI("urn:req:1"), VocabRdf.TYPE, rdf.createIRI(ARKREQ + "FunctionalRequirement"));
                     return slice;
                 });
-        funnel.publish(dataset, List.of("urn:req:1"), EntryDetails.NONE, IllegalStateException::new,
-                IllegalStateException::new);
         funnel.delete(dataset, "urn:req:1", "FR-1", EntryDetails.NONE, IllegalStateException::new,
                 IllegalStateException::new, tx -> { });
 

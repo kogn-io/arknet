@@ -288,8 +288,9 @@ public final class StoreReportTools {
     @McpTool(name = "resource_history",
             description = "History of ONE resource: its publish state and every entry the versioning recorded"
                     + " for it, oldest first - a publish naming a content-addressed version, or the tombstone"
-                    + " of a delete. A write changes the draft only and records no entry, so a resource that"
-                    + " was never published has an empty history - not an error. The id is a CURIE (e.g."
+                    + " of a delete. Every write publishes a version at once; there is no separate publish"
+                    + " step. A resource written only store-first, bypassing the tools, has an empty history"
+                    + " - not an error. The id is a CURIE (e.g."
                     + " req:FR-1) or a full IRI; as a convenience a bare business id (e.g. FR-1) is resolved"
                     + " via dcterms:identifier.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))

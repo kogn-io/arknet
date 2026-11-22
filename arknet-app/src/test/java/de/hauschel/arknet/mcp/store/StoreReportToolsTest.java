@@ -34,7 +34,6 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
-import io.kogn.rdf.versioning.EntryDetails;
 import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.dm.shared.TermCode;
@@ -828,21 +827,17 @@ class StoreReportToolsTest {
         }
     }
 
-    /** A write changes the draft only: a freshly created resource was never published. */
+    /** Every write publishes: a freshly created resource already has its one version. */
     @Test
-    void resourceHistoryOfAFreshlyCreatedResourceIsEmptyAndNeverPublished() {
+    void resourceHistoryOfAFreshlyCreatedResourceHoldsItsOneVersion() {
         String result = tools.resourceHistory(null, "FR-1", ANCHOR);
 
-        assertThat(result).contains("Publish state: NEVER_PUBLISHED").contains("# History (0)");
+        assertThat(result).contains("Publish state: PUBLISHED_UNCHANGED").contains("# History (1)");
     }
 
-    /**
-     * Two publishes around a change are two entries; the write in between shows as unpublished
-     * changes until the second publish.
-     */
+    /** The create and a changing update are two entries; nothing stays unpublished. */
     @Test
     void resourceHistoryListsEveryPublishAndThePublishState() {
-        publishFr1();
         RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         RequirementRepository.CurrentRequirement current =
                 requirements.findCurrentByCode(PROJECT, fr1.code(), null).orElseThrow();
@@ -851,20 +846,9 @@ class StoreReportToolsTest {
         requirements.compareAndUpdate(
                 PROJECT, current.head(), updated, null, null, null, noAcceptanceCriteriaLanguages(updated), null, null);
 
-        assertThat(tools.resourceHistory(null, "FR-1", ANCHOR))
-                .contains("Publish state: PUBLISHED_WITH_UNPUBLISHED_CHANGES").contains("# History (1)");
-
-        publishFr1();
-
         String result = tools.resourceHistory(null, "FR-1", ANCHOR);
         assertThat(result).contains("Publish state: PUBLISHED_UNCHANGED").contains("# History (2)");
         assertThat(result.lines().filter(line -> line.contains("  publish  ")).count()).isEqualTo(2);
-    }
-
-    private void publishFr1() {
-        KognioRdfRequirementRepositoryFactory.buildFunnel(lifecycle, DisplayLocale.DEFAULT).publish(
-                new DatasetId(PROJECT.value()), List.of(fr1.id().value().value()), EntryDetails.NONE,
-                IllegalStateException::new, IllegalStateException::new);
     }
 
     /**

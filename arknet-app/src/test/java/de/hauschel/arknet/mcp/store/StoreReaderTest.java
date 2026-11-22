@@ -26,7 +26,6 @@ import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
-import io.kogn.rdf.versioning.EntryDetails;
 import io.kogn.rdf.versioning.VersioningGraphs;
 import io.kogn.rdf.versioning.VocabVersioning;
 
@@ -179,13 +178,17 @@ class StoreReaderTest {
         assertThatIllegalArgumentException().isThrownBy(() -> storeReader.literalContaining(PROJECT, "   "));
     }
 
+    /**
+     * Every write publishes, so each version adds to the library's graphs; the search still finds
+     * the content graph's literal once.
+     */
     @Test
     void literalContainingDoesNotSurfaceThePublishedCopy() {
-        List<Triple> beforePublish = storeReader.literalContaining(PROJECT, "Login");
+        List<Triple> beforeSecondVersion = storeReader.literalContaining(PROJECT, "Login");
 
-        publish();
+        replaceViaCompareAndUpdate(requirementTitled("Login v2"));
 
-        assertThat(storeReader.literalContaining(PROJECT, "Login")).hasSameSizeAs(beforePublish)
+        assertThat(storeReader.literalContaining(PROJECT, "Login")).hasSameSizeAs(beforeSecondVersion)
                 .noneMatch(StoreReaderTest::isVersioning);
     }
 
@@ -214,27 +217,28 @@ class StoreReaderTest {
     }
 
     /**
-     * A publish copies the resource into the library's published view and records a history
+     * Every write copies the resource into the library's published view and records a history
      * entry. None of the read paths surfaces either: they read the content graph alone, so a
-     * published resource is shown once, as its draft, and no versioning vocabulary reaches a
-     * renderer.
+     * resource is shown once, and no versioning vocabulary reaches a renderer - also after a
+     * second version.
      */
     @Test
     void noReadPathSurfacesTheLibraryGraphs() {
-        List<Triple> outgoingBeforePublish = storeReader.outgoing(PROJECT, FR_1_IRI);
-        List<Triple> incomingBeforePublish = storeReader.incoming(PROJECT, FR_1_IRI);
-        int snapshotBeforePublish = snapshotTriples().size();
+        long versioningBefore = versioningStatementCount();
+        List<Triple> outgoingBefore = storeReader.outgoing(PROJECT, FR_1_IRI);
+        List<Triple> incomingBefore = storeReader.incoming(PROJECT, FR_1_IRI);
+        int snapshotBefore = snapshotTriples().size();
 
-        publish();
+        replaceViaCompareAndUpdate(requirementTitled("Login v2"));
 
         assertThat(versioningStatementCount())
-                .as("the publish must have written the library's graphs - else this test is vacuous")
-                .isPositive();
-        assertThat(storeReader.outgoing(PROJECT, FR_1_IRI)).hasSameSizeAs(outgoingBeforePublish)
+                .as("the second version must have written to the library's graphs - else this test is vacuous")
+                .isGreaterThan(versioningBefore);
+        assertThat(storeReader.outgoing(PROJECT, FR_1_IRI)).hasSameSizeAs(outgoingBefore)
                 .noneMatch(StoreReaderTest::isVersioning);
-        assertThat(storeReader.incoming(PROJECT, FR_1_IRI)).hasSameSizeAs(incomingBeforePublish)
+        assertThat(storeReader.incoming(PROJECT, FR_1_IRI)).hasSameSizeAs(incomingBefore)
                 .noneMatch(StoreReaderTest::isVersioning);
-        assertThat(snapshotTriples()).hasSize(snapshotBeforePublish).noneMatch(StoreReaderTest::isVersioning);
+        assertThat(snapshotTriples()).hasSize(snapshotBefore).noneMatch(StoreReaderTest::isVersioning);
     }
 
     /** Writes a minimal project self-description straight into the identity graph. */
@@ -261,13 +265,6 @@ class StoreReaderTest {
 
     private static boolean isVersioning(Triple triple) {
         return triple.predicate().startsWith(VocabVersioning.NAMESPACE);
-    }
-
-    /** Publishes FR-1 through the requirements hexagon's own funnel. */
-    private void publish() {
-        KognioRdfRequirementRepositoryFactory.buildFunnel(lifecycle, DisplayLocale.DEFAULT).publish(
-                new DatasetId(PROJECT.value()), List.of(FR_1_IRI), EntryDetails.NONE, IllegalStateException::new,
-                IllegalStateException::new);
     }
 
     private List<Triple> snapshotTriples() {
@@ -441,25 +438,20 @@ class StoreReaderTest {
         }
     }
 
-    /** A write changes the draft only: before any publish the history is empty. */
+    /** Every write publishes: right after the create the history holds its one version. */
     @Test
-    void historyIsEmptyBeforeThePublish() {
-        assertThat(storeReader.history(PROJECT, FR_1_IRI)).isEmpty();
-        assertThat(storeReader.publishState(PROJECT, FR_1_IRI)).isEqualTo("NEVER_PUBLISHED");
+    void historyHoldsTheCreatedVersionRightAfterTheCreate() {
+        assertThat(storeReader.history(PROJECT, FR_1_IRI)).hasSize(1);
+        assertThat(storeReader.publishState(PROJECT, FR_1_IRI)).isEqualTo("PUBLISHED_UNCHANGED");
     }
 
     /**
-     * Two publishes around a change are two entries, oldest first, each naming a content-addressed
-     * version; a write in between leaves the history alone until it is published.
+     * The create and a changing update are two entries, oldest first, each naming a
+     * content-addressed version, and nothing stays unpublished.
      */
     @Test
-    void historyListsEveryPublishOldestFirst() {
-        publish();
+    void historyListsEveryWriteOldestFirst() {
         replaceViaCompareAndUpdate(requirementTitled("Login v2"));
-        assertThat(storeReader.publishState(PROJECT, FR_1_IRI)).isEqualTo("PUBLISHED_WITH_UNPUBLISHED_CHANGES");
-        assertThat(storeReader.history(PROJECT, FR_1_IRI)).hasSize(1);
-
-        publish();
 
         List<VersionEntry> history = storeReader.history(PROJECT, FR_1_IRI);
         assertThat(history).extracting(VersionEntry::sequence).containsExactly(1L, 2L);

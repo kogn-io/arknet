@@ -40,8 +40,8 @@ public final class HistoryRenderer {
      * @param iri          the resource's IRI
      * @param publishState the resource's publish state, as {@link StoreReader#publishState} names it
      * @param entries      the resource's history entries, oldest first (as
-     *                     {@link StoreReader#history} returns them); empty for a resource that was
-     *                     never published
+     *                     {@link StoreReader#history} returns them); empty for a resource never
+     *                     written through the tools
      * @return the history text
      */
     public String render(String iri, String publishState, List<VersionEntry> entries) {
@@ -55,8 +55,8 @@ public final class HistoryRenderer {
 
         if (entries.isEmpty()) {
             out.append("# History (0)\n")
-                    .append("- never published - a write changes the draft only, and only a publish records"
-                            + " an entry\n");
+                    .append("- never published - every write through the tools publishes a version, so this"
+                            + " resource was only ever written store-first\n");
             return out.toString();
         }
 

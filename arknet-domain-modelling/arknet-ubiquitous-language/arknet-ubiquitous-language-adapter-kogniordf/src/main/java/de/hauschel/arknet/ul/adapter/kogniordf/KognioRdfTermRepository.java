@@ -133,15 +133,12 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * surfaces identically and is retried transparently, exactly the CAS guard {@code
  * RequirementRepository#compareAndUpdate} degenerated to for the same reason.</p>
  *
- * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate before the write transaction
- * opens, {@link WriteConstraintViolationException} on a violation, nothing persisted - live in the
- * shared {@link VersionedWriteFunnel}, for {@link #create} and {@link #update}
- * alike: {@link #attemptUpdate} builds the same validation-only {@code assertedContext} an earlier
- * version enforced itself (mirroring how the sibling requirements adapter asserts a referenced
- * term's type) - a predicate {@link #update} is not touching is asserted there for validation
- * only, from what was just read before the transaction, so {@code ulshapes:TermShape}'s
- * {@code prefLabel} shape still sees the resulting state truthfully without this class ever
- * persisting that assertion again.</p>
+ * <p><strong>SHACL write-gate.</strong> The gate runs in the shared {@link VersionedWriteFunnel},
+ * inside its write transaction and on the complete new slice, for {@link #create} and
+ * {@link #update} alike: {@link WriteConstraintViolationException} on a violation, nothing
+ * persisted. {@link #attemptUpdate} hands it a validation-only {@code assertedContext} (mirroring
+ * how the sibling requirements adapter asserts a referenced term's type), built from what was read
+ * before the transaction; that assertion is never persisted.</p>
  *
  * <p><strong>Display language.</strong> A concept may carry {@code skos:prefLabel} and
  * {@code skos:definition} in several languages ({@code "Kunde"@de}/{@code "Eine juristische..."@de},

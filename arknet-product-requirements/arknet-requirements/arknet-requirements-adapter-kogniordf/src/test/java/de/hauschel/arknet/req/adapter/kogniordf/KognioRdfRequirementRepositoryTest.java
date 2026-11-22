@@ -1917,8 +1917,10 @@ class KognioRdfRequirementRepositoryTest {
         repository.delete(PROJECT_A, stored.code());
 
         assertEquals(PublishState.DELETED, probe().publishState(DATASET_A, stored.id().value().value()));
-        assertEquals(List.of(EntryKind.TOMBSTONE), probe().history(DATASET_A, stored.id().value().value()).stream()
-                .map(HistoryEntry::kind).toList(), "the delete must record a tombstone");
+        List<EntryKind> kinds = probe().history(DATASET_A, stored.id().value().value()).stream().map(HistoryEntry::kind).toList();
+        assertEquals(EntryKind.TOMBSTONE, kinds.getLast(), "the delete must record a tombstone");
+        assertTrue(kinds.subList(0, kinds.size() - 1).stream().allMatch(EntryKind.PUBLISH::equals)
+                && kinds.size() > 1, "every write before the delete published a version");
     }
 
     /**

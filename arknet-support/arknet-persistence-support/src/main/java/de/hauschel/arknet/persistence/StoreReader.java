@@ -306,8 +306,8 @@ public final class StoreReader {
 
     /**
      * Reads a resource's history: the library's publish entries and tombstones for it, oldest
-     * first. A resource that was never published - written only as a draft - has no entry yet,
-     * and an empty list is not an error; telling that apart from "no such resource" is the
+     * first. Every write through the tools publishes, so only a resource written store-first has
+     * no entry, and an empty list is not an error; telling that apart from "no such resource" is the
      * caller's job. A blank-node handle (see {@link #isBlankNodeReference(String)}) yields an empty
      * list: only a subject's own IRI is versioned.
      *
@@ -330,7 +330,9 @@ public final class StoreReader {
     }
 
     /**
-     * Tells whether a resource's draft was ever published and whether it changed since.
+     * Tells whether a resource's draft was ever published and whether it changed since. Every
+     * write through the tools publishes, so a resource they wrote reads {@code PUBLISHED_UNCHANGED}
+     * or {@code DELETED}; the other two states remain for a store-first edit.
      *
      * @param projectId the project to read
      * @param iri       the resource's IRI, exactly as {@link HandleResolver} resolves it
