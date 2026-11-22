@@ -43,7 +43,7 @@ import de.hauschel.arknet.prj.domain.DatasetInUseException;
  *
  * <p><strong>History is counted apart.</strong> The library versioning keeps publish entries and
  * tombstones in a history graph of its own, which the model count leaves out, so
- * {@link #revisionCount} answers for it: a dataset without model resources can still hold
+ * {@link #historyEntryCount} answers for it: a dataset without model resources can still hold
  * history.</p>
  *
  * <p><strong>An open lease is waited for, briefly.</strong> {@link DatasetLifecycle#delete}
@@ -70,7 +70,7 @@ public final class KognioRdfProjectDatasets implements ProjectDatasets {
             + "GRAPH " + ContentGraph.SPARQL_IRIREF + " { ?s a ?type } } GROUP BY ?type";
 
     /** One history entry - a publish or a tombstone - is one subject with a sequence number. */
-    private static final String COUNT_REVISIONS = "SELECT (COUNT(DISTINCT ?e) AS ?count) WHERE { GRAPH <"
+    private static final String COUNT_HISTORY_ENTRIES = "SELECT (COUNT(DISTINCT ?e) AS ?count) WHERE { GRAPH <"
             + VersioningGraphs.HISTORY.getIRIString() + "> { ?e <" + VocabVersioning.SEQUENCE.getIRIString()
             + "> ?sequence } }";
 
@@ -117,13 +117,13 @@ public final class KognioRdfProjectDatasets implements ProjectDatasets {
     }
 
     @Override
-    public long revisionCount(final ProjectId projectId) {
+    public long historyEntryCount(final ProjectId projectId) {
         final DatasetId dataset = datasetOf(projectId);
         if (!lifecycle.list().contains(dataset)) {
             return 0L;
         }
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
-            return handle.sparqlQuery().select(COUNT_REVISIONS)
+            return handle.sparqlQuery().select(COUNT_HISTORY_ENTRIES)
                     .map(row -> Long.parseLong(((Literal) row.getValue("count").orElseThrow()).getLexicalForm()))
                     .findFirst()
                     .orElse(0L);

@@ -88,18 +88,18 @@ public interface DeleteProject {
     /**
      * What a {@link #delete} removed.
      *
-     * @param datasetId        the removed dataset, which is the project's id for a registered
-     *                         project
-     * @param project          the project as it was registered just before its deletion, or
-     *                         {@code null} if an unregistered dataset was removed - no registry
-     *                         entry existed then
-     * @param removedResources how many model resources of which type the dataset held when they
-     *                         were counted, empty if none
-     * @param removedRevisions how many entries the dataset's version history held when they were
-     *                         counted
+     * @param datasetId             the removed dataset, which is the project's id for a registered
+     *                              project
+     * @param project               the project as it was registered just before its deletion, or
+     *                              {@code null} if an unregistered dataset was removed - no registry
+     *                              entry existed then
+     * @param removedResources      how many model resources of which type the dataset held when
+     *                              they were counted, empty if none
+     * @param removedHistoryEntries how many entries the dataset's version history held when they
+     *                              were counted
      */
     record Deletion(ProjectId datasetId, Project project, Map<String, Long> removedResources,
-            long removedRevisions) {
+            long removedHistoryEntries) {
 
         /** Validates and defensively copies, keeping the order of {@code removedResources}. */
         public Deletion {
@@ -114,15 +114,15 @@ public interface DeleteProject {
 
         /** @return the deletion of a registered project, with its registry entry */
         public static Deletion ofProject(Project project, Map<String, Long> removedResources,
-                long removedRevisions) {
+                long removedHistoryEntries) {
             Objects.requireNonNull(project, "project");
-            return new Deletion(project.id(), project, removedResources, removedRevisions);
+            return new Deletion(project.id(), project, removedResources, removedHistoryEntries);
         }
 
         /** @return the deletion of a dataset that no registry entry pointed to */
         public static Deletion ofUnregisteredDataset(ProjectId datasetId, Map<String, Long> removedResources,
-                long removedRevisions) {
-            return new Deletion(datasetId, null, removedResources, removedRevisions);
+                long removedHistoryEntries) {
+            return new Deletion(datasetId, null, removedResources, removedHistoryEntries);
         }
 
         /** @return whether a registered project was deleted, not an unregistered dataset */

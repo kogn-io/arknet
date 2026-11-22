@@ -28,9 +28,9 @@ import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
  *
  * <p>Every argument is optional: {@code null} leaves that field unchanged, mirroring {@code
  * UpdateTerm}'s "{@code null} means unchanged" contract. A call with every argument {@code null}
- * is a no-op - no write, no revision, no moved head - for the same reason {@code term_update}'s
- * equivalent no-op is: recording one for an empty patch would grow the provenance trail without
- * cause and hand a concurrent CAS writer a spurious conflict it did not actually have.</p>
+ * is a no-op - no write, no changed state token - for the same reason {@code term_update}'s
+ * equivalent no-op is: an empty patch documents no change, so it never reaches the write path and
+ * cannot hand a concurrent CAS writer a spurious conflict it did not actually have.</p>
  *
  * <p>{@code maintainedLanguages} is the one three-state argument, the same tri-state {@code
  * adr_update}'s reference lists carry: {@code null} leaves the set untouched, a list replaces it

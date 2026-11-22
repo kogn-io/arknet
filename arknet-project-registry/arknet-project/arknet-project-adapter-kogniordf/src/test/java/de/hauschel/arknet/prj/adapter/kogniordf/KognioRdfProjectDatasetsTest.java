@@ -114,20 +114,20 @@ class KognioRdfProjectDatasetsTest {
         funnel.delete(dataset, "urn:req:1", "FR-1", EntryDetails.NONE, IllegalStateException::new,
                 IllegalStateException::new, tx -> { });
 
-        assertEquals(2L, datasets.revisionCount(PROJECT));
+        assertEquals(2L, datasets.historyEntryCount(PROJECT));
         assertEquals(Map.of(), datasets.modelResourceCounts(PROJECT));
     }
 
     @Test
-    void aDatasetWithoutHistoryHoldsNoRevisions() {
+    void aDatasetWithoutHistoryHoldsNoHistoryEntries() {
         insert(REQUIREMENTS_GRAPH, "<urn:req:1> a <" + ARKREQ + "FunctionalRequirement> .");
 
-        assertEquals(0L, datasets.revisionCount(PROJECT));
+        assertEquals(0L, datasets.historyEntryCount(PROJECT));
     }
 
     @Test
-    void countingTheRevisionsOfAMissingDatasetReportsNoneAndDoesNotCreateIt() {
-        assertEquals(0L, datasets.revisionCount(PROJECT));
+    void countingTheHistoryEntriesOfAMissingDatasetReportsNoneAndDoesNotCreateIt() {
+        assertEquals(0L, datasets.historyEntryCount(PROJECT));
 
         assertFalse(lifecycle.list().contains(new DatasetId(PROJECT.value())));
     }

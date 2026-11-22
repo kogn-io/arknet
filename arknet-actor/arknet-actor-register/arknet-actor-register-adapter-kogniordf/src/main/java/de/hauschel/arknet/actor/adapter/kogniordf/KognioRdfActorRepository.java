@@ -109,9 +109,9 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  * bounded-context adapter, which has to carry {@code arkddd:hasAggregate} and blank-node term
  * edges over its replace-by-identity write, an {@link Actor} has no side edges at all in this
  * scope: the aggregate carries every field this graph holds besides the language variants
- * {@link #replaceTriplesForUpdate} preserves. A resource that is also a glossary term keeps its
- * {@code skos:*} triples regardless - those live in the ubiquitous-language context's own named
- * graph, which this adapter's whole-subject delete is scoped away from.</p>
+ * {@link #replaceTriplesForUpdate} preserves. The slice replace covers every triple of the subject
+ * in the project's one content graph, so a store-first resource that is both an actor and a
+ * glossary term loses its {@code skos:*} triples on an actor update - nothing scopes them away.</p>
  *
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance graph
  * against the actor SHACL shapes before the write transaction opens, throw
