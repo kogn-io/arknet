@@ -32,6 +32,18 @@
             <groupId>io.kogn.rdf</groupId>
             <artifactId>rdf-dataset-hosting</artifactId>
         </dependency>
+        <!-- VersionedWriteFunnel writes every model resource as a draft slice of the one
+             content graph and publishes it into an immutable, content-addressed version
+             (ADR-61..63). rdf-cid is named explicitly rather than taken transitively: the funnel
+             constructs the content-addressed IRI generator itself. -->
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-versioning</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-cid</artifactId>
+        </dependency>
         <!-- WriteFunnel#delete logs a WARN when a code cannot be retained (no recorded revision
              to hang it on, issue #350). Explicit rather than only transitive; version managed by
              the rdf4j BOM imported in the root pom. -->
