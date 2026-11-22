@@ -793,6 +793,25 @@ class RequirementServiceTest {
         assertTrue(repository.findAll(WS, null).isEmpty());
     }
 
+    /**
+     * Issue #675's pattern: a requirement from before multilingual fields stores its texts and
+     * criteria untagged; an edge-only change in a project without a default language must carry
+     * them through untagged instead of asking for a write language.
+     */
+    @Test
+    void anUntaggedRequirementTakesAnEdgeOnlyChangeWithoutADefaultLanguage() {
+        Requirement written = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+        InMemoryRequirementRepository untagged = new InMemoryRequirementRepository();
+        untagged.create(WS, written, null);
+        RequirementService legacy = new RequirementService(untagged, resourceIdFactory, termLookup,
+                constraintRepository, schemaSource);
+
+        Requirement linked = legacy.linkTerm(WS, written.code(), "TERM-1", null);
+
+        assertEquals(List.of(new TermRef(TERM_1)), linked.usesTerms());
+        assertEquals(written.acceptanceCriteria(), linked.acceptanceCriteria());
+    }
+
     @Test
     void linkTermAddsTheTermToTheRequirement() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();

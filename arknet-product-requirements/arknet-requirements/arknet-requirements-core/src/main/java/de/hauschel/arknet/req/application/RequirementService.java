@@ -686,9 +686,14 @@ public class RequirementService implements AddRequirement, ListRequirements, Des
         }
         for (AcceptanceCriterion criterion : updated.acceptanceCriteria()) {
             // Resolved lazily, not via a blind put: a lifecycle call passes no language at all and
-            // must not be asked for one on behalf of a position it merely carries through.
-            languageByPosition.computeIfAbsent(criterion.position(),
-                    position -> LanguageTag.resolveWriteLanguage(language, defaultLanguage));
+            // must not be asked for one on behalf of a position it merely carries through. A
+            // carried-through criterion whose stored text has no language tag (a record from before
+            // multilingual fields) is mapped to null and stays untagged; asking for a write language
+            // there failed an edge-only change (issue #675's pattern).
+            if (!languageByPosition.containsKey(criterion.position())) {
+                languageByPosition.put(criterion.position(),
+                        LanguageTag.resolveWriteLanguage(language, defaultLanguage));
+            }
         }
         return languageByPosition;
     }

@@ -959,6 +959,25 @@ class UseCaseServiceTest {
         assertTrue(repository.findAll(WS, null).isEmpty());
     }
 
+    /**
+     * Issue #675: a use case from before multilingual fields stores its texts and steps untagged;
+     * an edge-only change in a project without a default language carries them through untagged
+     * instead of asking for a write language.
+     */
+    @Test
+    void anUntaggedUseCaseTakesAnEdgeOnlyChangeWithoutADefaultLanguage() {
+        UseCase written = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE);
+        InMemoryUseCaseRepository untagged = new InMemoryUseCaseRepository();
+        untagged.create(WS, written, null);
+        UseCaseService legacy = new UseCaseService(
+                untagged, resourceIdFactory, requirementLookup, roleLookup, termLookup, constraintLookup);
+
+        UseCase linked = legacy.linkTerm(WS, written.code(), "TERM-1", null);
+
+        assertEquals(List.of(new TermRef(TERM_1_ID)), linked.usesTerms());
+        assertEquals(written.steps(), linked.steps());
+    }
+
     @Test
     void linkTermAddsTheTermToTheUseCase() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
