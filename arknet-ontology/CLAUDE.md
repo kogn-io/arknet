@@ -14,7 +14,7 @@ Ein Namespace-Name behauptet nicht mehr, als der Namespace traegt.
 Ein Namespace-Name ist publizierte Sprache, er steht in jedem Tripel: ein Name, der einen ganzen Gegenstandsbereich ankuendigt, aber live nur einen einzelnen Begriff traegt, fuehrt jeden in die Irre, der aus der IRI auf den Inhalt schliesst.
 Traegt ein Namespace live weniger, als sein Name verspricht, wird der Name auf das eingeengt, was live ist -- wann, regelt der Absatz zur Aenderung einer Namespace-IRI unten.
 Ob ein Name mehr behauptet, als der Namespace traegt, ist eine Beurteilung und wird im Review entschieden, keine mechanische Pruefung.
-Das ist eine andere Regel als die Namespace-Spannweite (Architekturentscheidung im arknet-eigenen Store, ADR-12 bzw. dessen Nachfolger -- sinngemaess: ein Namespace spannt nicht ueber zwei Kontexte; der genaue Zuschnitt gilt so, wie er im Store steht) -- jene ist mechanisch pruefbar und eine Entscheidung ueber die Gestalt des Systems, diese hier eine Beurteilungsfrage ueber Benennung.
+Das ist eine andere Regel als die Namespace-Spannweite (Architekturentscheidung im arknet-eigenen Store, ADR-67 -- sinngemaess: jeder schreibende Bounded Context hat genau einen eigenen Namespace; der genaue Zuschnitt gilt so, wie er im Store steht) -- jene ist mechanisch pruefbar und eine Entscheidung ueber die Gestalt des Systems, diese hier eine Beurteilungsfrage ueber Benennung.
 
 Wann eine Namespace-IRI geaendert wird.
 Eine Namespace-IRI steht in jedem Tripel jedes Datasets; jede Aenderung ist eine Datenmigration.

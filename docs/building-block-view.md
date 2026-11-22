@@ -17,13 +17,17 @@ nothing the store already holds (glossary, records, context map).
   hold uniformly. In the build a Maven parent and nothing else: no hexagon, no core --
   module schema, no record behind it.
 - **Ubiquitous Language** (TERM-25): the one language of a Bounded Context.
-- **Component** (TERM-26): one or more form a Bounded Context and speak its
-  Ubiquitous Language; each has a responsibility of its own behind an interface. A
-  Component is a hexagon, built as the modules `core | adapter-<tech>`. An
+- **Component** (TERM-26): has a responsibility of its own and offers related
+  functionality to the outside behind an interface; whatever only serves other
+  Components and offers nothing to the outside itself is not a Component. A Component
+  belongs to at most one Bounded Context -- the one whose Ubiquitous Language it speaks --
+  and to none if it works the same way for every Resource without speaking the language
+  of any Bounded Context (ADR-69). A Component is a hexagon, built as the modules
+  `core | adapter-<tech>`. An
   `api` module is an extension stage, built only once a module outside the Component
   calls an in-port at compile time; arknet has no such caller (ADR-58).
 - **Application**: the only deployable unit, outside every Bounded Context, holding the
-  composition root (ADR-55).
+  composition root, which wires the Components and carries no application logic (ADR-70).
 - **Vocabulary** `<bc>-shared`: typed identities and ownerless value objects of one
   Bounded Context, no behaviour (ADR-57).
 - **Shared Kernel**: the model terms every context carries -- project identity,
@@ -109,7 +113,7 @@ tools read (`StoreReader`, `StoreSnapshot`, `StoreResource`, `Triple`, `RdfNode`
 `Prefixes`, `HandleResolver`, `ResourceRenderer`, `VersionEntry`) lives in
 `arknet-persistence-support`, alongside the vocabulary constants: it is the mechanism
 by which any published language is read, and both the component and the
-application's type-independent exception speak it.
+application's type-independent read path speak it.
 
 The three technical-library modules (`arknet-persistence-support`,
 `arknet-mcp-support`, `arknet-persistence-test-support`) sit under the aggregator
@@ -132,7 +136,7 @@ Outside every Bounded Context:
 
 | Role in the schema                 | Module                          | Note |
 |------------------------------------|---------------------------------|------|
-| Application (composition root)     | arknet-app                      | Spring Boot daemon; carries the type-independent exception (ADR-55: `store_overview`, `resource_get`, `resource_history`, `project_export`) and `text_search`, which reads literals without knowing a type. The HTML report still lives here and still composes the in-ports of every context; its target is Model Analysis (ADR-54, #560 step 2) |
+| Application (composition root)     | arknet-app                      | Spring Boot daemon; still carries the type-independent tools `store_overview`, `resource_get`, `resource_history` and `project_export` and `text_search`, which reads literals without knowing a type; their target is a Component for generic resource access that belongs to no Bounded Context (ADR-69, ADR-70), which does not exist yet. The HTML report still lives here and still composes the in-ports of every context; its target is Model Analysis (ADR-54, #560 step 2) |
 | Shared Kernel                      | arknet-shared-kernel            | ADR-56: ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale, LocalizedLiteral. `DependencyRulesTest` rule 12 lists the admitted terms, so a new type in the package turns a test red |
 | Technical library                  | arknet-persistence-support      | Under the `arknet-support` aggregator. SHACL gate, the versioned write path VersionedWriteFunnel (draft, publish and tombstone over kognio-rdf rdf-versioning, one content graph per project dataset), vocabulary constants and the type-independent read path over a project's dataset (StoreReader, the triple read model, Prefixes, HandleResolver, ResourceRenderer) -- no model term, hence neither Shared Kernel nor vocabulary |
 | Technical library                  | arknet-mcp-support              | Under the `arknet-support` aggregator. Support of the driving MCP adapters and the composition root: ProjectResolver/ResolvedProject, StaleTranslationHint/FieldLanguageLookup, WriteResponse, ToolParameterDescriptions. No core and no vocabulary module depends on it (rule 11) |
@@ -182,7 +186,7 @@ its own core only; no module of a Component depends on a module of another.
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
 | `<bc>-shared` once ownerless identities exist | built for both contexts that need one: `arknet-product-requirements-shared` (RequirementCode, ConstraintCode, TermRef) and `arknet-domain-modelling-shared` (TermCode) |
-| Application outside every Bounded Context     | present (arknet-app); it holds no evaluation, only wiring, the type-independent exception and the HTML report still to move |
+| Application outside every Bounded Context     | present (arknet-app); it holds no evaluation; besides the wiring it still carries the type-independent tools and the HTML report, both still to move (ADR-69, ADR-54) |
 | dependency rules as a checker                 | partial: ArchUnit carries the rule that no module of a Component depends on a module of another for Product & Requirements and Domain Modelling, plus that a driving adapter sees only in-ports and domain types, that a `<bc>-shared` hangs on nothing but the Shared Kernel, that no core or vocabulary module reaches into `arknet-mcp-support`, that the Shared Kernel holds exactly the terms ADR-56 admits, and that Model Analysis names no module of the contexts it reads; the other contexts still borrow in-ports (ADR-49) |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |
 
@@ -192,8 +196,9 @@ its own core only; no module of a Component depends on a module of another.
 - Persistence only through domain-near out-ports, records without graph access: ADR-8, ADR-45
 - Project identity: anchor, one dataset per project, system dataset: ADR-20, ADR-25, ADR-27
 - Operation: one shared daemon, Spring AI: ADR-16, ADR-14
-- Composition root without application logic: ADR-55 (succeeds ADR-51)
-- Namespaces follow context boundaries: ADR-12
+- Composition root wires the Components, no application logic: ADR-70 (succeeds ADR-55)
+- Generic resource access in one Component outside every Bounded Context: ADR-69
+- Every writing Bounded Context has exactly one namespace of its own: ADR-67
 - Foreign concepts through an anti-corruption layer: ADR-19
 - Single user, no tenancy in the cores: ADR-6
 
@@ -202,7 +207,7 @@ its own core only; no module of a Component depends on a module of another.
 - The rest of #560: the HTML report leaves the composition root into an
   `-adapter-html` of Model Analysis, with its read model separated from its rendering,
   which is what ends the report's borrowed in-ports into every context (ADR-49,
-  ADR-55). Sections 3 to 5 then describe one shape instead of two.
+  ADR-70). Sections 3 to 5 then describe one shape instead of two.
 - #77: the building-block view moves into the store; this file goes away. Before
   that, a successor of ADR-46 (components move from "outside" to "not yet built"),
   see the comment on #77.
