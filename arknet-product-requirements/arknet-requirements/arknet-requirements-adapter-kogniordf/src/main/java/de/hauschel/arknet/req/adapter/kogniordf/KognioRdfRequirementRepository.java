@@ -229,7 +229,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      */
     private static final String POSITION_PROPERTY = ARKREQ_NAMESPACE + "position";
 
-    /** The local-name prefix of an acceptance criterion's fragment, {@code <requirement>#AC-<n>}. */
+    /** The local-name prefix of an acceptance criterion's fragment, {@code <requirement>#AC-<id>}. */
     private static final String CRITERION_KIND = "AC";
 
     /** {@code arkreq:criterionText} (issue #266) - AcceptanceCriterion's testable "Done when ..." text. */
@@ -326,7 +326,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         //    shapes file, so a bare type assertion is not enough to satisfy it.
         RequirementCandidate candidate = buildCandidateGraph(
                 subjectIri, requirement, termIris, constraintIris, tag, tag, tag, criteriaTags,
-                ChildFragments.forNewParent(subjectIri, CRITERION_KIND, requirement.acceptanceCriteria().size()));
+                funnel.childFragments(subjectIri, rdf.createGraph())
+                        .name(CRITERION_KIND, requirement.acceptanceCriteria().size(), Map.of()));
         Graph graph = candidate.graph();
         Graph assertedContext = rdf.createGraph();
         for (IRI termIri : termIris) {
@@ -388,8 +389,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 () -> new RequirementConcurrentlyModifiedException(projectId, updated.code()),
                 (tx, draft) -> {
                     // A surviving criterion keeps its fragment at its new position; an appended one
-                    // gets the next number never issued under this requirement (ADR-64).
-                    ChildFragments fragments = ChildFragments.of(tx, subjectIri, draft);
+                    // gets a fresh opaque name (ADR-64).
+                    ChildFragments fragments = funnel.childFragments(subjectIri, draft);
                     Map<Integer, IRI> criterionIris = fragments.name(CRITERION_KIND,
                             updated.acceptanceCriteria().size(),
                             fragments.carried(rdf.createIRI(ACCEPTANCE_CRITERION_PROPERTY),
@@ -1557,7 +1558,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     .map(row -> iriOf(row, "s").getIRIString())
                     .orElseThrow(() -> new RequirementNotFoundException(projectId, code));
         }
-        // The library removes the requirement's whole slice, its #AC-n criteria included.
+        // The library removes the requirement's whole slice, its #AC-<id> criteria included.
         funnel.delete(dataset, subjectIriString, code.value(), EntryDetails.NONE,
                 () -> new RequirementNotFoundException(projectId, code),
                 () -> new RequirementConcurrentlyModifiedException(projectId, code),

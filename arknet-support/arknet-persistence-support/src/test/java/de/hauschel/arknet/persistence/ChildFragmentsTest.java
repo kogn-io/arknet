@@ -4,99 +4,98 @@
 package de.hauschel.arknet.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Path;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
-import java.util.function.Function;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import io.kogn.rdf.dataset.DatasetTx;
-import io.kogn.rdf.dataset.hosting.DatasetHandle;
-import io.kogn.rdf.dataset.hosting.DatasetId;
-import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
-import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
 
+/**
+ * {@link ChildFragments} names children {@code <parent>#<kind>-<opaque id>} (ADR-64): a kept child
+ * keeps its name, a new one gets a fresh id, and a minted name never collides with a child the
+ * parent already holds.
+ */
 class ChildFragmentsTest {
 
-    private static final DatasetId DATASET = new DatasetId("child-fragments");
     private static final String PARENT = "https://example.org/req/1";
+    private static final String UUID_SHAPE = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
     private final RDF rdf = new SimpleRdf();
     private final IRI parent = rdf.createIRI(PARENT);
     private final IRI edge = rdf.createIRI("https://example.org/criterion");
     private final IRI position = rdf.createIRI("https://example.org/position");
 
-    @TempDir
-    Path storageRoot;
-
-    private DatasetLifecycleRdf4j lifecycle;
-
-    @BeforeEach
-    void setUp() {
-        lifecycle = new DatasetLifecycleRdf4j(new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY),
-                storageRoot);
-    }
-
-    @AfterEach
-    void tearDown() {
-        lifecycle.shutDownAll();
-    }
-
     @Test
-    void aNewParentNumbersItsChildrenFromOne() {
-        assertEquals(Map.of(1, child("AC-1"), 2, child("AC-2")), ChildFragments.forNewParent(parent, "AC", 2));
+    void aNewParentNamesEachChildWithTheNextIdOfTheSource() {
+        Map<Integer, IRI> named = ChildFragments.of(parent, rdf.createGraph(), sequence("zz", "aa"))
+                .name("AC", 2, Map.of());
+
+        assertEquals(Map.of(1, child("AC-zz"), 2, child("AC-aa")), named);
     }
 
     /** Removing the first of three children leaves the other two their names at moved positions. */
     @Test
     void aSurvivingChildKeepsItsNameAtItsNewPosition() {
-        Graph draft = draft("AC-1", 1, "AC-2", 2, "AC-3", 3);
+        Graph draft = draft("AC-c", 1, "AC-a", 2, "AC-b", 3);
+        ChildFragments fragments = ChildFragments.of(parent, draft, sequence("new"));
 
-        Map<Integer, IRI> named = tx(tx -> {
-            ChildFragments fragments = ChildFragments.of(tx, parent, draft);
-            Map<Integer, IRI> kept = fragments.carried(edge, position,
-                    stored -> stored == 1 ? OptionalInt.empty() : OptionalInt.of(stored - 1));
-            return fragments.name("AC", 2, kept);
-        });
+        Map<Integer, IRI> kept = fragments.carried(edge, position,
+                stored -> stored == 1 ? OptionalInt.empty() : OptionalInt.of(stored - 1));
+        Map<Integer, IRI> named = fragments.name("AC", 3, kept);
 
-        assertEquals(Map.of(1, child("AC-2"), 2, child("AC-3")), named);
+        assertEquals(Map.of(1, child("AC-a"), 2, child("AC-b"), 3, child("AC-new")), named);
     }
 
-    /** The number of a removed child is never handed out again, even if it was the highest. */
+    /** A minted name the draft already holds - or this write already handed out - is drawn again. */
     @Test
-    void aNewChildNeverGetsTheNumberOfARemovedOne() {
-        tx(tx -> {
-            ChildFragments.recordIssued(tx, parent, draft("AC-1", 1, "AC-2", 2));
-            return null;
-        });
-        Graph draft = draft("AC-1", 1);
+    void aMintedNameThatIsAlreadyTakenUnderTheParentIsDrawnAgain() {
+        Graph draft = draft("AC-a", 1);
+        ChildFragments fragments = ChildFragments.of(parent, draft, sequence("a", "b", "b", "c"));
 
-        Map<Integer, IRI> named = tx(tx -> {
-            ChildFragments fragments = ChildFragments.of(tx, parent, draft);
-            return fragments.name("AC", 2, fragments.carried(edge, position, OptionalInt::of));
-        });
+        Map<Integer, IRI> named = fragments.name("AC", 3, fragments.carried(edge, position, OptionalInt::of));
 
-        assertEquals(Map.of(1, child("AC-1"), 2, child("AC-3")), named);
+        assertEquals(Map.of(1, child("AC-a"), 2, child("AC-b"), 3, child("AC-c")), named);
     }
 
-    /** Each kind counts on its own. */
     @Test
-    void theNumbersOfOneKindDoNotAdvanceAnother() {
-        Graph draft = draft("Step-1", 1, "Step-2", 2);
+    void aSourceYieldingOnlyTakenIdsFailsInsteadOfReusingAName() {
+        ChildFragments fragments = ChildFragments.of(parent, draft("AC-a", 1), () -> "a");
 
-        Map<Integer, IRI> named = tx(tx -> ChildFragments.of(tx, parent, draft).name("Extension", 1, Map.of()));
+        assertThrows(IllegalStateException.class, () -> fragments.name("AC", 1, Map.of()));
+    }
 
-        assertEquals(Map.of(1, child("Extension-1")), named);
+    @Test
+    void anIdThatIsNoPlainFragmentIsRejected() {
+        ChildFragments fragments = ChildFragments.of(parent, rdf.createGraph(), sequence("a#b"));
+
+        assertThrows(IllegalStateException.class, () -> fragments.name("AC", 1, Map.of()));
+    }
+
+    /** The production source mints a fresh UUID per child, the opacity of the top-level IRIs. */
+    @Test
+    void theRandomSourceMintsDistinctUuids() {
+        Map<Integer, IRI> named = ChildFragments.of(parent, rdf.createGraph(), ChildIdSource.random())
+                .name("Step", 2, Map.of());
+
+        named.values().forEach(iri -> assertTrue(iri.getIRIString().matches(PARENT + "#Step-" + UUID_SHAPE),
+                iri.getIRIString()));
+        assertNotEquals(named.get(1), named.get(2));
+    }
+
+    private ChildIdSource sequence(String... ids) {
+        Iterator<String> next = List.of(ids).iterator();
+        return next::next;
     }
 
     private Graph draft(Object... localNamesAndPositions) {
@@ -111,11 +110,5 @@ class ChildFragmentsTest {
 
     private IRI child(String localName) {
         return rdf.createIRI(PARENT + "#" + localName);
-    }
-
-    private <T> T tx(Function<DatasetTx, T> work) {
-        try (DatasetHandle handle = lifecycle.acquire(DATASET)) {
-            return handle.transactor().inTransaction(work::apply);
-        }
     }
 }

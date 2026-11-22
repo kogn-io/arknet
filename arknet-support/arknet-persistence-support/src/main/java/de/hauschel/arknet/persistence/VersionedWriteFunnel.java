@@ -56,9 +56,9 @@ import io.kogn.rdf.versioning.RevisionToken;
  * in the same transaction. What is validated is therefore what is written, not a
  * candidate a later body still merges into. A slice holds the subject IRI, its {@code #fragment}
  * IRIs and the blank nodes reachable from them; a triple on any other subject is rejected by the
- * library with an {@link IllegalArgumentException} and nothing is written. Every fragment IRI of a
- * written slice is recorded as issued in the same transaction (see {@link ChildFragments}), so a
- * child's number is never handed out twice.</p>
+ * library with an {@link IllegalArgumentException} and nothing is written. The fragment names of
+ * new children come from {@link #childFragments}, minted from the funnel's {@link ChildIdSource};
+ * the funnel keeps no record of them beside the slice.</p>
  *
  * <p><strong>Concurrency.</strong> The library's {@link RevisionToken} is the concurrency token:
  * {@link #compareAndUpdate} takes the token the caller read and reports a stale one through the
@@ -125,6 +125,7 @@ public final class VersionedWriteFunnel {
     private final ShaclWriteGate gate;
     private final ResourceVersioning versioning;
     private final Predicate<RuntimeException> isWriteConflict;
+    private final ChildIdSource childIds;
     private final RDF rdf = new SimpleRdf();
     private final Set<DatasetId> boundDatasets = ConcurrentHashMap.newKeySet();
 
@@ -157,6 +158,26 @@ public final class VersionedWriteFunnel {
      */
     public VersionedWriteFunnel(DatasetLifecycle lifecycle, ShaclWriteGate gate, String contentGraphIri,
             Predicate<RuntimeException> isWriteConflict, Clock clock) {
+        this(lifecycle, gate, contentGraphIri, isWriteConflict, clock, ChildIdSource.random());
+    }
+
+    /**
+     * Creates the funnel on an explicit clock and an explicit source of child ids - the seam a test
+     * uses to know or to provoke the fragment names a write mints.
+     *
+     * @param lifecycle       the dataset lifecycle to acquire datasets from (must not be {@code null})
+     * @param gate            the SHACL write-gate validating every new slice (must not be {@code null})
+     * @param contentGraphIri the content graph of every dataset this funnel writes (must not be
+     *                        {@code null})
+     * @param isWriteConflict recognises a lost write - pass {@link #DEFAULT_WRITE_CONFLICT} for the
+     *                        kognio-rdf-backed store (must not be {@code null})
+     * @param clock           the clock of history entries (must not be {@code null})
+     * @param childIds        the source of the opaque ids of new child resources (must not be
+     *                        {@code null})
+     */
+    public VersionedWriteFunnel(DatasetLifecycle lifecycle, ShaclWriteGate gate, String contentGraphIri,
+            Predicate<RuntimeException> isWriteConflict, Clock clock, ChildIdSource childIds) {
+        this.childIds = Objects.requireNonNull(childIds, "childIds");
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.gate = Objects.requireNonNull(gate, "gate");
         this.isWriteConflict = Objects.requireNonNull(isWriteConflict, "isWriteConflict");
@@ -164,6 +185,18 @@ public final class VersionedWriteFunnel {
         Objects.requireNonNull(clock, "clock");
         this.versioning = new ResourceVersioningNamedGraphs(rdf.createIRI(contentGraphIri),
                 new ContentAddressedIRIGeneratorSexpr(), clock);
+    }
+
+    /**
+     * The naming state of a parent's child resources for one write (ADR-64), minting new names from
+     * this funnel's {@link ChildIdSource}.
+     *
+     * @param parent       the parent's IRI, without a {@code #}
+     * @param currentDraft the parent's current draft slice, an empty graph for a create
+     * @return the naming state, for this one write
+     */
+    public ChildFragments childFragments(IRI parent, ReadableGraph currentDraft) {
+        return ChildFragments.of(parent, currentDraft, childIds);
     }
 
     /**
@@ -502,7 +535,6 @@ public final class VersionedWriteFunnel {
         } else {
             gate.enforce(next, assertedContext);
         }
-        ChildFragments.recordIssued(tx, subject, next);
         RevisionToken written = versioning.replaceDraft(tx, subject, next, draft.token());
         PublishResult published = versioning.publish(tx, List.of(written), EntryDetails.NONE);
         return published.results().get(subject).token();

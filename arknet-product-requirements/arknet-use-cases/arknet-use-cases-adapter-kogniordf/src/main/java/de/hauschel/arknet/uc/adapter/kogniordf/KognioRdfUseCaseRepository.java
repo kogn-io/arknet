@@ -80,10 +80,10 @@ import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
  *
  * <p><strong>Steps are fragments of the use case.</strong> Main-flow steps and extensions are
  * <em>separate</em> {@code arkreq:Step} resources whose IRI is a fragment of the use case's IRI,
- * {@code <use case>#Step-<n>} or {@code <use case>#Extension-<n>} (ADR-64). The number is issued
- * once, when the step is created, and kept across updates; it is no ordinal (the ordering is
- * carried by the integer {@code arkreq:position}, never an {@code rdf:List}) and never reused
- * (see {@link ChildFragments}). A step is reachable only through the
+ * {@code <use case>#Step-<id>} or {@code <use case>#Extension-<id>} (ADR-64). The opaque id is
+ * minted once, when the step is created, and kept across updates; it is no ordinal (the ordering
+ * is carried by the integer {@code arkreq:position}, never an {@code rdf:List}) and never comes
+ * back after a removal (see {@link ChildFragments}). A step is reachable only through the
  * {@code arkreq:mainStep}/{@code arkreq:extensionStep} edges (there is no read entry point by step
  * IRI). Naming the step node is a persistence concern of this adapter, whereas the use-case root's
  * identity is minted store-neutrally above the store.</p>
@@ -213,10 +213,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String EXTENSION_STEP_PROPERTY = ArkreqVocabulary.EXTENSION_STEP;
     private static final String POSITION_PROPERTY = ARKREQ_NAMESPACE + "position";
 
-    /** The local-name prefix of a main-flow step's fragment, {@code <use case>#Step-<n>}. */
+    /** The local-name prefix of a main-flow step's fragment, {@code <use case>#Step-<id>}. */
     private static final String STEP_KIND = "Step";
 
-    /** The local-name prefix of an extension's fragment, {@code <use case>#Extension-<n>}. */
+    /** The local-name prefix of an extension's fragment, {@code <use case>#Extension-<id>}. */
     private static final String EXTENSION_KIND = "Extension";
     private static final String STEP_TEXT_PROPERTY = ARKREQ_NAMESPACE + "stepText";
     private static final String STEP_REALISES_PROPERTY = ArkreqVocabulary.STEP_REALISES;
@@ -408,8 +408,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     () -> new DuplicateUseCaseCodeException(projectId, useCase.code()),
                     (tx, current) -> withChildren(graph, subjectIri, useCase, stepTagByPosition,
                             extensionTagByPosition,
-                            ChildFragments.forNewParent(subjectIri, STEP_KIND, useCase.steps().size()),
-                            ChildFragments.forNewParent(subjectIri, EXTENSION_KIND, useCase.extensions().size())));
+                            funnel.childFragments(subjectIri, rdf.createGraph())
+                                    .name(STEP_KIND, useCase.steps().size(), Map.of()),
+                            funnel.childFragments(subjectIri, rdf.createGraph())
+                                    .name(EXTENSION_KIND, useCase.extensions().size(), Map.of())));
         } else {
             funnel.compareAndUpdate(new DatasetId(projectId.value()), subjectIriString,
                     expectedHead == null ? null : (io.kogn.rdf.versioning.RevisionToken) expectedHead.value(),
@@ -419,8 +421,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     (tx, draft) -> {
                         // A surviving step keeps its fragment at its new position, an extension
                         // where the write lets its identity be told (see extensionFragments); a new
-                        // child gets the next number never issued under this use case (ADR-64).
-                        ChildFragments fragments = ChildFragments.of(tx, subjectIri, draft);
+                        // child gets a fresh opaque name (ADR-64).
+                        ChildFragments fragments = funnel.childFragments(subjectIri, draft);
                         Map<Integer, IRI> newStepIriByPosition = fragments.name(STEP_KIND, useCase.steps().size(),
                                 fragments.carried(rdf.createIRI(MAIN_STEP_PROPERTY), rdf.createIRI(POSITION_PROPERTY),
                                         removedMainStepPositions::survivingPositionOf));

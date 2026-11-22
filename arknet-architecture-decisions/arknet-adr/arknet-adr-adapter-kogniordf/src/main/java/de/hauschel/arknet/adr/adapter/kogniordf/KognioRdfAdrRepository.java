@@ -148,10 +148,10 @@ public class KognioRdfAdrRepository implements AdrRepository {
     private static final String NAME_PROPERTY = ARKNET_NAMESPACE + "name";
     private static final String POSITION_PROPERTY = ARKNET_NAMESPACE + "position";
 
-    /** The local-name prefix of a consequence's fragment, {@code <decision>#Consequence-<n>}. */
+    /** The local-name prefix of a consequence's fragment, {@code <decision>#Consequence-<id>}. */
     private static final String CONSEQUENCE_KIND = "Consequence";
 
-    /** The local-name prefix of a considered option's fragment, {@code <decision>#Option-<n>}. */
+    /** The local-name prefix of a considered option's fragment, {@code <decision>#Option-<id>}. */
     private static final String OPTION_KIND = "Option";
     private static final String STATUS_PROPERTY = ArkarchVocabulary.ADR_STATUS;
     private static final String CONTEXT_PROPERTY = ArkarchVocabulary.ADR_CONTEXT;
@@ -255,8 +255,10 @@ public class KognioRdfAdrRepository implements AdrRepository {
         Map<Integer, String> optionTags = new LinkedHashMap<>();
         adr.consideredOptions().forEach(o -> optionTags.put(o.position(), tag));
         AdrCandidate candidate = buildCandidateGraph(subjectIri, adr, tag, tag, tag, consequenceTags, optionTags,
-                ChildFragments.forNewParent(subjectIri, CONSEQUENCE_KIND, adr.consequences().size()),
-                ChildFragments.forNewParent(subjectIri, OPTION_KIND, adr.consideredOptions().size()));
+                funnel.childFragments(subjectIri, rdf.createGraph())
+                        .name(CONSEQUENCE_KIND, adr.consequences().size(), Map.of()),
+                funnel.childFragments(subjectIri, rdf.createGraph())
+                        .name(OPTION_KIND, adr.consideredOptions().size(), Map.of()));
         Graph graph = candidate.graph();
 
         Graph createContext = crossReferenceAssertedContext(projectId, adr);
@@ -305,8 +307,8 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 (tx, draft) -> {
                     rejectIfPeersVanished(tx, projectId, graphIri, updated, updateContext);
                     // A surviving consequence or option keeps its fragment at its new position; a
-                    // new one gets the next number never issued under this decision (ADR-64).
-                    ChildFragments fragments = ChildFragments.of(tx, subjectIri, draft);
+                    // new one gets a fresh opaque name (ADR-64).
+                    ChildFragments fragments = funnel.childFragments(subjectIri, draft);
                     Map<Integer, IRI> consequenceIris = fragments.name(CONSEQUENCE_KIND,
                             updated.consequences().size(),
                             fragments.carried(rdf.createIRI(CONSEQUENCE_PROPERTY), rdf.createIRI(POSITION_PROPERTY),

@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BrokenBarrierException;
@@ -180,20 +181,31 @@ class VersionedWriteFunnelRealStoreTest {
     }
 
     /**
-     * Every fragment a written slice holds is recorded as issued, and the record outlives the
-     * fragment: a later slice without it does not take the number back (ADR-64, stable names).
+     * No write keeps a record of fragment names beside the slice: the former bookkeeping graph of
+     * issued child names stays absent after a create and an update that removes a child (ADR-64,
+     * names are opaque ids, see {@link ChildFragments}).
      */
     @Test
-    void everyWrittenFragmentIsRecordedAsIssuedAndStaysIssuedAfterItsRemoval() {
+    void aWriteLeavesNoGraphOfIssuedFragmentNames() {
         create(SUBJECT, CODE, "v1", "crit one", "crit two");
         update(SUBJECT, "v2", "crit one");
 
-        Set<String> issued = tx(t -> t.match(rdf.createIRI(ChildFragments.ISSUED_FRAGMENTS_GRAPH),
-                rdf.createIRI(SUBJECT), null, null).stream()
-                .map(triple -> ((IRI) triple.getObject()).getIRIString())
-                .collect(Collectors.toSet()));
+        long recorded = tx(t -> t.match(rdf.createIRI("https://w3id.org/arknet/model/issued-fragments"),
+                null, null, null).stream().count());
 
-        assertEquals(Set.of(SUBJECT + "#AC-1", SUBJECT + "#AC-2"), issued);
+        assertEquals(0L, recorded);
+    }
+
+    /** The funnel mints new child names from the id source it was built with. */
+    @Test
+    void childFragmentsMintFromTheFunnelsIdSource() {
+        VersionedWriteFunnel seeded = new VersionedWriteFunnel(lifecycle, recordingGate(false), CONTENT_GRAPH,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT, clock, () -> "fixed-id");
+
+        Map<Integer, IRI> named = seeded.childFragments(rdf.createIRI(SUBJECT), rdf.createGraph())
+                .name("AC", 1, Map.of());
+
+        assertEquals(Map.of(1, rdf.createIRI(SUBJECT + "#AC-fixed-id")), named);
     }
 
     @Test

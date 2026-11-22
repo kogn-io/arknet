@@ -462,34 +462,45 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * ADR-64: a criterion's fragment name survives the removal of a sibling, and a criterion added
-     * later never gets the number of a removed one - not even of the highest.
+     * ADR-64: a criterion's opaque fragment name survives the removal of a sibling and the position
+     * shift that follows, a criterion added later gets a name never handed out before - not even
+     * that of the removed one - and the read order follows {@code arkreq:position}, not the name:
+     * the ids are minted in descending lexical order, against the positions.
      */
     @Test
-    void anAcceptanceCriterionKeepsItsFragmentAcrossARemovalAndANewOneNeverReusesANumber() {
+    void anAcceptanceCriterionKeepsItsOpaqueFragmentAndANewOneGetsAFreshNameOrderedByPosition() {
+        RequirementRepository seeded = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT,
+                new VersionedWriteFunnel(lifecycle, KognioRdfRequirementRepositoryFactory.buildGate(DisplayLocale.DEFAULT),
+                        ContentGraph.GRAPH_IRI, VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT,
+                        java.time.Clock.systemUTC(), List.of("z", "y", "x", "w", "v").iterator()::next));
         RequirementCode code = new RequirementCode("FR-1");
         Requirement created = new Requirement(freshId(), code, "Login", "The system shall authenticate a user.",
                 null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null,
                 List.of(new AcceptanceCriterion(1, "First criterion"), new AcceptanceCriterion(2, "Second criterion"),
                         new AcceptanceCriterion(3, "Third criterion")), List.of());
-        repository.create(PROJECT_A, created, null);
+        seeded.create(PROJECT_A, created, null);
         String subject = created.id().value().value();
+        assertEquals(Map.of(1, subject + "#AC-z", 2, subject + "#AC-y", 3, subject + "#AC-x"),
+                criterionFragmentsByPosition(subject));
 
         Requirement withoutFirst = withCriteria(created, "Second criterion", "Third criterion", "Fourth criterion");
-        repository.compareAndUpdate(PROJECT_A, repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head(),
+        seeded.compareAndUpdate(PROJECT_A, seeded.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head(),
                 withoutFirst, null, null, null, noAcceptanceCriteriaLanguages(withoutFirst),
                 new de.hauschel.arknet.req.domain.RemovedPositions(java.util.Set.of(1)), null);
 
-        assertEquals(Map.of(1, subject + "#AC-2", 2, subject + "#AC-3", 3, subject + "#AC-4"),
+        assertEquals(Map.of(1, subject + "#AC-y", 2, subject + "#AC-x", 3, subject + "#AC-w"),
                 criterionFragmentsByPosition(subject));
 
         Requirement withoutLast = withCriteria(created, "Second criterion", "Third criterion", "Fifth criterion");
-        repository.compareAndUpdate(PROJECT_A, repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head(),
+        seeded.compareAndUpdate(PROJECT_A, seeded.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head(),
                 withoutLast, null, null, null, noAcceptanceCriteriaLanguages(withoutLast),
                 new de.hauschel.arknet.req.domain.RemovedPositions(java.util.Set.of(3)), null);
 
-        assertEquals(Map.of(1, subject + "#AC-2", 2, subject + "#AC-3", 3, subject + "#AC-5"),
+        assertEquals(Map.of(1, subject + "#AC-y", 2, subject + "#AC-x", 3, subject + "#AC-v"),
                 criterionFragmentsByPosition(subject));
+        assertEquals(List.of(new AcceptanceCriterion(1, "Second criterion"), new AcceptanceCriterion(2, "Third criterion"),
+                new AcceptanceCriterion(3, "Fifth criterion")),
+                seeded.findByCode(PROJECT_A, code, null).orElseThrow().acceptanceCriteria());
     }
 
     private static Requirement withCriteria(Requirement base, String... texts) {

@@ -14,14 +14,13 @@ class InfrastructureGraphsTest {
 
     /** Pins the set itself: a graph added to or dropped from it changes what the model leaves out. */
     @Test
-    void theInfrastructureGraphsAreTheLibraryGraphsTheRetainedCodesTheIssuedFragmentsAndTheSelfDescription() {
+    void theInfrastructureGraphsAreTheLibraryGraphsTheRetainedCodesAndTheSelfDescription() {
         assertEquals(List.of(
                 "https://w3id.org/kognio/rdf/versioning/graph/published",
                 "https://w3id.org/kognio/rdf/versioning/graph/content-store",
                 "https://w3id.org/kognio/rdf/versioning/graph/history",
                 "https://w3id.org/kognio/rdf/versioning/graph/config",
                 VersionedWriteFunnel.RETAINED_CODES_GRAPH,
-                ChildFragments.ISSUED_FRAGMENTS_GRAPH,
                 ArkprjVocabulary.IDENTITY_GRAPH), InfrastructureGraphs.IRIS);
     }
 

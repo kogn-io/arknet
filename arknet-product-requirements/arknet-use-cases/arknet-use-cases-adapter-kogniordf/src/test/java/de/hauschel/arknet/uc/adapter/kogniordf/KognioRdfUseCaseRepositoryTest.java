@@ -218,27 +218,43 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * ADR-64: a step keeps its fragment name when a sibling is removed, an unchanged extension keeps
-     * its name when another is inserted before it, and a new child never gets a used number.
+     * ADR-64: a step keeps its opaque fragment name when a sibling is removed, an unchanged
+     * extension keeps its name when another is inserted before it, a new child gets a name never
+     * handed out before, and the read order follows {@code arkreq:position}, not the name: the ids
+     * are minted in descending lexical order, against the positions.
      */
     @Test
-    void stepsAndExtensionsKeepTheirFragmentsAcrossARemovalAndAnInsert() {
+    void stepsAndExtensionsKeepTheirOpaqueFragmentsAndReadInPositionOrder() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, flow(List.of("First step", "Second step", "Third step"),
+        UseCaseRepository seeded = new KognioRdfUseCaseRepository(lifecycle, DisplayLocale.DEFAULT,
+                new de.hauschel.arknet.persistence.VersionedWriteFunnel(lifecycle,
+                        KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT), ContentGraph.GRAPH_IRI,
+                        de.hauschel.arknet.persistence.VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT,
+                        java.time.Clock.systemUTC(), List.of("z", "y", "x", "w", "v", "u", "t").iterator()::next));
+        seeded.create(PROJECT_A, flow(List.of("First step", "Second step", "Third step"),
                 List.of("1a. First extension", "2a. Second extension")), null);
-        RevisionToken head = repository.findCurrentByCode(PROJECT_A, CODE_1, null).orElseThrow().head();
+        String subject = ID_1.value().value();
+        assertEquals(java.util.Map.of("1", subject + "#Step-z", "2", subject + "#Step-y", "3", subject + "#Step-x"),
+                childFragmentsByPosition(subject, "mainStep"));
+        assertEquals(java.util.Map.of("1", subject + "#Extension-w", "2", subject + "#Extension-v"),
+                childFragmentsByPosition(subject, "extensionStep"));
+        RevisionToken head = seeded.findCurrentByCode(PROJECT_A, CODE_1, null).orElseThrow().head();
 
         UseCase changed = flow(List.of("Second step", "Third step", "Fourth step"),
                 List.of("1b. Inserted extension", "1a. First extension", "2a. Second extension"));
-        repository.compareAndUpdate(PROJECT_A, head, changed, null, null, null, null, null, null,
+        seeded.compareAndUpdate(PROJECT_A, head, changed, null, null, null, null, null, null,
                 java.util.Map.of(), java.util.Map.of(), null, 0,
                 new de.hauschel.arknet.uc.domain.RemovedPositions(java.util.Set.of(1)));
 
-        String subject = ID_1.value().value();
-        assertEquals(java.util.Map.of("1", subject + "#Step-2", "2", subject + "#Step-3", "3", subject + "#Step-4"),
+        assertEquals(java.util.Map.of("1", subject + "#Step-y", "2", subject + "#Step-x", "3", subject + "#Step-u"),
                 childFragmentsByPosition(subject, "mainStep"));
-        assertEquals(java.util.Map.of("1", subject + "#Extension-3", "2", subject + "#Extension-1",
-                "3", subject + "#Extension-2"), childFragmentsByPosition(subject, "extensionStep"));
+        assertEquals(java.util.Map.of("1", subject + "#Extension-t", "2", subject + "#Extension-w",
+                "3", subject + "#Extension-v"), childFragmentsByPosition(subject, "extensionStep"));
+        UseCase found = seeded.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
+        assertEquals(List.of("Second step", "Third step", "Fourth step"),
+                found.steps().stream().map(Step::text).toList());
+        assertEquals(List.of("1b. Inserted extension", "1a. First extension", "2a. Second extension"),
+                found.extensions());
     }
 
     private static UseCase flow(List<String> steps, List<String> extensions) {

@@ -308,7 +308,8 @@ class KognioRdfAdrRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), corrected,
                 "en", "en", "en", Map.of(1, "en"), Map.of(), null, RemovedPositions.NONE, RemovedPositions.NONE);
 
-        assertEquals(id.value().value() + "#Consequence-1", oldChildIri);
+        assertTrue(oldChildIri.matches(java.util.regex.Pattern.quote(id.value().value())
+                + "#Consequence-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"), oldChildIri);
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             assertEquals(List.of(oldChildIri), handle.sparqlQuery().select(selectChild)
                     .map(row -> row.getValue("c").orElseThrow().toString()).toList(),
@@ -360,18 +361,29 @@ class KognioRdfAdrRepositoryMultilingualTest {
     }
 
     /**
-     * ADR-64: a consequence or considered option keeps its fragment name when a sibling is removed,
-     * and a child added later never gets the number of a removed one.
+     * ADR-64: a consequence or considered option keeps its opaque fragment name when a sibling is
+     * removed, a child added later gets a name never handed out before, and the read order follows
+     * {@code arknet:position}, not the name: the ids are minted in descending lexical order,
+     * against the positions.
      */
     @Test
-    void consequencesAndOptionsKeepTheirFragmentsAndANewChildNeverReusesANumber() {
+    void consequencesAndOptionsKeepTheirOpaqueFragmentsAndReadInPositionOrder() {
+        KognioRdfAdrRepository seeded = new KognioRdfAdrRepository(lifecycle, DisplayLocale.DEFAULT,
+                new VersionedWriteFunnel(lifecycle, KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT),
+                        ContentGraph.GRAPH_IRI, VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT,
+                        java.time.Clock.systemUTC(), List.of("z", "y", "x", "w", "v", "u").iterator()::next));
         AdrId id = freshId();
         Adr original = adr(id, new AdrCode("ADR-1"),
                 List.of(new Consequence(1, "First wording", ConsequenceType.NEUTRAL),
                         new Consequence(2, "Second wording", ConsequenceType.POSITIVE)),
                 List.of(new ConsideredOption(1, "Option A", "Rationale A", OptionOutcome.CHOSEN),
                         new ConsideredOption(2, "Option B", "Rationale B", OptionOutcome.REJECTED)));
-        repository.create(PROJECT, original, "en");
+        seeded.create(PROJECT, original, "en");
+        String subject = id.value().value();
+        assertEquals(Map.of("1", subject + "#Consequence-z", "2", subject + "#Consequence-y"),
+                childFragmentsByPosition(subject, ArkarchVocabulary.CONSEQUENCE));
+        assertEquals(Map.of("1", subject + "#Option-x", "2", subject + "#Option-w"),
+                childFragmentsByPosition(subject, ArkarchVocabulary.CONSIDERED_OPTION));
         RemovedPositions firstConsequence = new RemovedPositions(Set.of(1));
         RemovedPositions secondOption = new RemovedPositions(Set.of(2));
         Adr changed = original
@@ -382,15 +394,19 @@ class KognioRdfAdrRepositoryMultilingualTest {
                 .withoutConsequences(PROJECT, firstConsequence)
                 .withoutConsideredOptions(PROJECT, secondOption);
 
-        repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), changed,
+        seeded.compareAndUpdate(PROJECT, currentHeadOf(original.code()), changed,
                 "en", "en", "en", Map.of(1, "en", 2, "en"), Map.of(1, "en", 2, "en"), null,
                 firstConsequence, secondOption);
 
-        String subject = id.value().value();
-        assertEquals(Map.of("1", subject + "#Consequence-2", "2", subject + "#Consequence-3"),
+        assertEquals(Map.of("1", subject + "#Consequence-y", "2", subject + "#Consequence-v"),
                 childFragmentsByPosition(subject, ArkarchVocabulary.CONSEQUENCE));
-        assertEquals(Map.of("1", subject + "#Option-1", "2", subject + "#Option-3"),
+        assertEquals(Map.of("1", subject + "#Option-x", "2", subject + "#Option-u"),
                 childFragmentsByPosition(subject, ArkarchVocabulary.CONSIDERED_OPTION));
+        Adr found = seeded.findByCode(PROJECT, original.code(), null).orElseThrow();
+        assertEquals(List.of("Second wording", "Third wording"),
+                found.consequences().stream().map(Consequence::statement).toList());
+        assertEquals(List.of("Option A", "Option C"),
+                found.consideredOptions().stream().map(ConsideredOption::name).toList());
     }
 
     private Map<String, String> childFragmentsByPosition(String subject, String edge) {
