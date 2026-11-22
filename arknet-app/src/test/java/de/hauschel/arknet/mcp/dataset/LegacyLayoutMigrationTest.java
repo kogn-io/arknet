@@ -176,8 +176,12 @@ class LegacyLayoutMigrationTest {
             LegacyLayoutMigrationReport report = migration(raw).migrate(raw, DATASET);
 
             assertThat(report.outcome()).isEqualTo(LegacyLayoutMigrationReport.Outcome.MIGRATED);
-            assertThat(report.droppedEdges()).containsExactly(
-                    "<" + before.requirementIri() + "> <https://w3id.org/arknet/requirements#usesTerm>");
+            assertThat(report.droppedEdges()).singleElement().satisfies(edge -> {
+                assertThat(edge.subject()).isEqualTo(before.requirementIri());
+                assertThat(edge.code()).isEqualTo("FR-1");
+                assertThat(edge.property()).isEqualTo("https://w3id.org/arknet/requirements#usesTerm");
+                assertThat(edge.kind()).isEqualTo(LegacyLayoutMigrationReport.ObjectKind.BLANK_NODE);
+            });
             assertThat(report.retainedCodes()).containsExactly("FR-3");
             assertThat(report.resourcesByType()).containsEntry("requirement", 2).containsEntry("use case", 2)
                     .containsEntry("glossary term", 2).containsEntry("bounded context", 2)
@@ -240,14 +244,15 @@ class LegacyLayoutMigrationTest {
 
             assertThat(report.outcome()).isEqualTo(LegacyLayoutMigrationReport.Outcome.MIGRATED);
             assertThat(report.resourcesByType()).containsEntry("requirement", 5);
-            assertThat(report.carriedPastGate()).hasSize(3)
+            assertThat(report.carriedPastGate()).hasSize(2)
                     .anySatisfy(line -> assertThat(line).startsWith("requirement FR-10 (")
                             .contains(LegacyLayoutFixture.WITHOUT_CRITERION).contains("acceptanceCriterion"))
                     .anySatisfy(line -> assertThat(line).startsWith("requirement FR-11 (")
-                            .contains(LegacyLayoutFixture.LITERAL_CRITERION).contains("acceptanceCriterion"))
-                    .anySatisfy(line -> assertThat(line).startsWith("requirement FR-12 (")
-                            .contains(LegacyLayoutFixture.LITERAL_TERM_EDGE).contains("usesTerm"));
-            assertThat(report.summary()).contains("carried over past the current write gate: 3");
+                            .contains(LegacyLayoutFixture.LITERAL_CRITERION).contains("acceptanceCriterion"));
+            assertThat(report.summary()).contains("carried over past the current write gate: 2");
+            // the literal criterion of FR-11 sits on an object property too, but is content and stays
+            assertThat(report.droppedEdges()).noneSatisfy(edge -> assertThat(edge.property())
+                    .isEqualTo("https://w3id.org/arknet/requirements#acceptanceCriterion"));
         } finally {
             raw.shutDownAll();
         }
@@ -323,31 +328,40 @@ class LegacyLayoutMigrationTest {
     }
 
     /**
-     * The real behaviour for a carried literal term edge, pinned: readable, but no tool can repair
-     * it - every write of the requirement carries the edge through, as the earlier adapter did for
-     * a reference it cannot represent, and the gate rejects it. Whether a tool should clear such an
-     * edge is an open decision, not part of the migration.
+     * Decision for FR-12: a literal on a property whose shape requires another resource is dropped
+     * and listed with its value; the resource then passes the gate and takes regular writes.
      */
     @Test
-    void aCarriedLiteralTermEdgeStaysReadableButNoToolWriteGetsPastTheGate() {
+    void aLiteralTermEdgeIsDroppedAndListedAndTheRequirementPassesTheGate() {
         legacyStoreWithLegacyOnlyForms();
+        DatasetLifecycle raw = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+        try {
+            LegacyLayoutMigrationReport report = migration(raw).migrate(raw, DATASET);
+
+            assertThat(report.droppedEdges()).filteredOn(edge -> "FR-12".equals(edge.code())).singleElement()
+                    .satisfies(edge -> {
+                        assertThat(edge.subject()).isEqualTo(LegacyLayoutFixture.LITERAL_TERM_EDGE);
+                        assertThat(edge.property()).isEqualTo("https://w3id.org/arknet/requirements#usesTerm");
+                        assertThat(edge.kind()).isEqualTo(LegacyLayoutMigrationReport.ObjectKind.LITERAL);
+                        assertThat(edge.value()).isEqualTo("\"Kunde\"@de");
+                        assertThat(edge.line()).contains("FR-12").contains("\"Kunde\"@de").contains("literal");
+                    });
+            assertThat(report.carriedPastGate()).noneSatisfy(line -> assertThat(line).contains("FR-12"));
+        } finally {
+            raw.shutDownAll();
+        }
 
         inDaemon(context -> {
             RequirementService requirements = context.getBean(RequirementService.class);
             RequirementCode code = new RequirementCode("FR-12");
-
-            assertThatThrownBy(() -> requirements.linkTerm(PROJECT, code, "TERM-2", EN))
-                    .isInstanceOf(WriteConstraintViolationException.class)
-                    .hasMessageContaining("arkreq:usesTerm must reference a glossary term");
-            assertThatThrownBy(() -> requirements.update(PROJECT, code, "Renamed legacy requirement", null, null,
-                    null, null, null, null, null, EN, EN))
-                    .isInstanceOf(WriteConstraintViolationException.class)
-                    .hasMessageContaining("arkreq:usesTerm must reference a glossary term");
-            // clearing the term list is a no-op: the record shows no term, so there is nothing to clear
-            requirements.update(PROJECT, code, null, null, null, null, null, null, null, List.of(), EN, EN);
-            VersionedWriteFunnel funnel = context.getBean("requirementsWriteFunnel", VersionedWriteFunnel.class);
-            assertThat(funnel.history(DATASET, LegacyLayoutFixture.LITERAL_TERM_EDGE)).hasSize(1);
             assertThat(requirements.get(PROJECT, code, EN).orElseThrow().usesTerms()).isEmpty();
+
+            Requirement renamed = requirements.update(PROJECT, code, "Renamed legacy requirement", null, null,
+                    null, null, null, null, null, EN, EN);
+            Requirement linked = requirements.linkTerm(PROJECT, code, "TERM-2", EN);
+
+            assertThat(renamed.title()).isEqualTo("Renamed legacy requirement");
+            assertThat(linked.usesTerms()).hasSize(1);
         });
     }
 

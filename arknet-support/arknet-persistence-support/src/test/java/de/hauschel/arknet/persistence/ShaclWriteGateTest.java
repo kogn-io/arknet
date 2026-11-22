@@ -122,6 +122,26 @@ class ShaclWriteGateTest {
         assertSame(options, validation.options);
     }
 
+    @Test
+    void objectPropertiesAreThePathsOfShapesRequiringAResource() {
+        String sh = "http://www.w3.org/ns/shacl#";
+        Graph shapes = rdf.createGraph();
+        IRI byKind = rdf.createIRI("https://example.org/shape/byKind");
+        IRI byClass = rdf.createIRI("https://example.org/shape/byClass");
+        IRI text = rdf.createIRI("https://example.org/shape/text");
+        shapes.add(byKind, rdf.createIRI(sh + "path"), rdf.createIRI("https://example.org/refersTo"));
+        shapes.add(byKind, rdf.createIRI(sh + "nodeKind"), rdf.createIRI(sh + "IRI"));
+        shapes.add(byClass, rdf.createIRI(sh + "path"), rdf.createIRI("https://example.org/partOf"));
+        shapes.add(byClass, rdf.createIRI(sh + "class"), rdf.createIRI("https://example.org/Whole"));
+        shapes.add(text, rdf.createIRI(sh + "path"), rdf.createIRI("https://example.org/title"));
+        shapes.add(text, rdf.createIRI(sh + "minCount"), rdf.createLiteral("1"));
+        ShaclWriteGate gate = new ShaclWriteGate(new RecordingValidation(new ShaclReport(true, List.of())), shapes,
+                emptyGraph(), ValidationOptions.defaults(), DisplayLocale.DEFAULT);
+
+        assertEquals(java.util.Set.of("https://example.org/refersTo", "https://example.org/partOf"),
+                gate.objectProperties());
+    }
+
     /**
      * The other half of the validationGraph workaround: an {@code assertedContext}
      * graph passed to {@link ShaclWriteGate#enforce(ReadableGraph, ReadableGraph)} must be

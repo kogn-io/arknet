@@ -120,7 +120,7 @@ final class LegacyLayoutFixture {
     static final String WITHOUT_CRITERION = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000010";
     /** A requirement whose criterion is a literal, as written from 2026-07-17 to 2026-08-05. */
     static final String LITERAL_CRITERION = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000011";
-    /** A requirement whose {@code usesTerm} object is a literal, a store-first edit kept past the gate. */
+    /** A requirement whose {@code usesTerm} object is a literal, a store-first edit the earlier adapter kept. */
     static final String LITERAL_TERM_EDGE = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000012";
 
     /**
@@ -128,8 +128,9 @@ final class LegacyLayoutFixture {
      * rejects, frozen as the triples the earlier requirements adapter stored them - typed resource,
      * untagged {@code dcterms:title}/{@code dcterms:description}, {@code arkreq:status} - and not
      * derived from this version's write paths, which never produce them: FR-10 without any
-     * criterion, FR-11 with a literal criterion, FR-12 with a proper criterion resource but a
-     * literal {@code usesTerm} object.
+     * criterion, FR-11 with a literal criterion (both carried past the gate), FR-12 with a proper
+     * criterion resource but a literal {@code usesTerm} object (the edge is dropped, the record
+     * passes the gate).
      */
     static String legacyOnlyForms() {
         String req = "https://w3id.org/arknet/requirements#";
@@ -143,7 +144,7 @@ final class LegacyLayoutFixture {
                 + req + "acceptanceCriterion> \"Done when it is shown\" . "
                 + "<" + LITERAL_TERM_EDGE + ">" + head + "<" + dct + "identifier> \"FR-12\" ; <" + dct
                 + "title> \"Legacy literal term edge\" ; <" + dct + "description> \"Term edge as a literal.\" ; <"
-                + req + "usesTerm> \"TERM-1\" ; <" + req + "acceptanceCriterion> <" + LITERAL_TERM_EDGE + "-ac> . "
+                + req + "usesTerm> \"Kunde\"@de ; <" + req + "acceptanceCriterion> <" + LITERAL_TERM_EDGE + "-ac> . "
                 + "<" + LITERAL_TERM_EDGE + "-ac> a <" + req + "AcceptanceCriterion> ; <" + req
                 + "position> \"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; <" + req
                 + "criterionText> \"It is linked\"@en . } }";

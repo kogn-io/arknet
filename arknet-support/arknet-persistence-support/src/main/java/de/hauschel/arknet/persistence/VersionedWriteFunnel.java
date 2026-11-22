@@ -188,6 +188,16 @@ public final class VersionedWriteFunnel {
     }
 
     /**
+     * The properties whose object this funnel's gate requires to be another resource, see
+     * {@link ShaclWriteGate#objectProperties()}.
+     *
+     * @return the property IRIs
+     */
+    public Set<String> objectProperties() {
+        return gate.objectProperties();
+    }
+
+    /**
      * The naming state of a parent's child resources for one write (ADR-64), minting new names from
      * this funnel's {@link ChildIdSource}.
      *

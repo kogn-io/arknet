@@ -14,8 +14,9 @@ import java.util.stream.Collectors;
  * @param dataset          the dataset id
  * @param outcome          whether the dataset needed a migration and whether it succeeded
  * @param resourcesByType  the migrated resources per resource type, each published once
- * @param droppedEdges     every edge not carried over because its object is a blank node, as
- *                         {@code <resource> <property>}
+ * @param droppedEdges     every edge not carried over because its object is not an IRI: a blank
+ *                         node on any property, or a literal on a property whose shape requires
+ *                         another resource
  * @param droppedSubjects  every subject of the old component graphs that is neither a resource of a
  *                         known type nor a child of one, with the number of its triples dropped
  * @param retainedCodes    the codes of resources deleted under the earlier layout, kept out of
@@ -28,7 +29,7 @@ import java.util.stream.Collectors;
  *                         {@link Outcome#FAILED}
  */
 public record LegacyLayoutMigrationReport(String dataset, Outcome outcome, Map<String, Integer> resourcesByType,
-        List<String> droppedEdges, List<String> droppedSubjects, List<String> retainedCodes,
+        List<DroppedEdge> droppedEdges, List<String> droppedSubjects, List<String> retainedCodes,
         List<String> carriedPastGate, String failure) {
 
     /** Whether a dataset needed a migration and how it went. */
@@ -39,6 +40,47 @@ public record LegacyLayoutMigrationReport(String dataset, Outcome outcome, Map<S
         MIGRATED,
         /** The migration was rolled back; the dataset still holds the earlier layout. */
         FAILED
+    }
+
+    /** What kind of object made an edge be dropped. */
+    public enum ObjectKind {
+        /** A blank node, which the versioned write path cannot name. */
+        BLANK_NODE,
+        /** A literal on a property whose shape requires another resource. */
+        LITERAL
+    }
+
+    /**
+     * One edge the migration did not carry over.
+     *
+     * @param subject  the IRI of the edge's subject
+     * @param code     the subject's business code, {@code null} for a child resource
+     * @param property the property IRI
+     * @param kind     the kind of the dropped object
+     * @param value    the dropped object as written: a blank-node label, or a literal's text with its
+     *                 language tag or datatype in Turtle form
+     */
+    public record DroppedEdge(String subject, String code, String property, ObjectKind kind, String value) {
+
+        /**
+         * Requires every component but {@code code}.
+         */
+        public DroppedEdge {
+            Objects.requireNonNull(subject, "subject");
+            Objects.requireNonNull(property, "property");
+            Objects.requireNonNull(kind, "kind");
+            Objects.requireNonNull(value, "value");
+        }
+
+        /**
+         * The report line of this edge.
+         *
+         * @return {@code [<code> ]<subject> <property> <value> (<kind>)}
+         */
+        public String line() {
+            return (code == null ? "" : code + " ") + "<" + subject + "> <" + property + "> " + value + " ("
+                    + kind.name().toLowerCase(java.util.Locale.ROOT).replace('_', ' ') + ")";
+        }
     }
 
     /**
@@ -82,7 +124,7 @@ public record LegacyLayoutMigrationReport(String dataset, Outcome outcome, Map<S
                 .map(entry -> entry.getKey() + "=" + entry.getValue())
                 .collect(Collectors.joining(", "));
         return "dataset '" + dataset + "': migrated to the content graph, each resource published once ["
-                + counts + "]; dropped blank-node edges: " + droppedEdges.size()
+                + counts + "]; dropped edges with a non-IRI object: " + droppedEdges.size()
                 + "; dropped unattached subjects: " + droppedSubjects.size()
                 + "; retained codes of deleted resources: " + retainedCodes.size()
                 + "; carried over past the current write gate: " + carriedPastGate.size();

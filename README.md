@@ -494,15 +494,17 @@ migrates each such project dataset to the one content graph, in one transaction
 per dataset: every resource is written through its context's SHACL gate and
 published once, child resources are renamed to fragments of their parent, the
 revision trail is dropped (codes of deleted resources stay reserved), and an edge
-to a blank node is dropped. A record that earlier versions kept past their own
-gate but the current gate rejects - a requirement without an acceptance
-criterion, a criterion stored as a plain literal, a reference edge whose object
-is a literal - is carried over unchanged and listed; it stays readable, and its
-next update has to pass the gate (an acceptance criterion is added by patching
-the placeholder at position 1; a literal reference edge cannot be cleared by any
-tool yet). The daemon log carries the report under `legacy layout migration`:
-one summary line per project (resources per type, dropped edges, retained codes,
-records carried past the gate) and one line per listed item. A project whose
+whose object is not an IRI - a blank node, or a literal on a property whose
+shape requires another resource, such as `arkreq:usesTerm "Kunde"@de` - is
+dropped and listed with resource, property and the dropped value. A record that
+earlier versions kept past their own gate but the current gate rejects - a
+requirement without an acceptance criterion, or one whose criterion is a plain
+literal (kept: the literal is the criterion's text) - is carried over unchanged
+and listed; it stays readable, and its next update has to pass the gate (the
+criterion is added by patching the placeholder at position 1). The daemon log
+carries the report under `legacy layout migration`: one summary line per project
+(resources per type, dropped edges, retained codes, records carried past the
+gate) and one line per listed item. A project whose
 migration fails for a technical reason is rolled back to its old layout, its
 tools refuse it with a message pointing to that log, and the next start retries. The
 registry's system dataset is not versioned and not migrated. Keep a copy of the

@@ -74,15 +74,16 @@ import org.slf4j.LoggerFactory;
  * <p><strong>What is not moved.</strong> The revision trail of the provenance graph has no content
  * and is dropped (ADR-61); only the business code a deletion hung on its last revision is kept,
  * through {@link VersionedWriteFunnel#retainCode}, so a code counter never hands it out again. An
- * edge whose object is a blank node is dropped and listed, as is every triple on a blank-node
- * subject and every subject that is neither a resource nor a child of one - nothing is lost
- * without a line in the {@link LegacyLayoutMigrationReport}.</p>
+ * edge whose object is a blank node, or a literal on a property whose shape requires another
+ * resource (except a literal acceptance criterion, see {@link #droppedObjectKind}), is dropped and
+ * listed with its value, as is every triple on a blank-node subject and every subject that is
+ * neither a resource nor a child of one - nothing is lost without a line in the
+ * {@link LegacyLayoutMigrationReport}.</p>
  *
  * <p><strong>Past the gate.</strong> A resource whose stored form the current gate rejects - a form
  * an earlier version wrote or kept past its own gate, such as a requirement without an acceptance
- * criterion, a criterion stored as a literal, or a reference edge whose object is a literal - is
- * carried over unchanged through {@link VersionedWriteFunnel#importPublishedPastGate}, still
- * published once, and listed in the report with the violation. It stays readable; its next regular
+ * criterion or a criterion stored as a literal - is carried over unchanged through
+ * {@link VersionedWriteFunnel#importPublishedPastGate}, still published once, and listed in the report with the violation. It stays readable; its next regular
  * update runs through the gate and has to close the gap.</p>
  *
  * <p><strong>All or nothing.</strong> A dataset is migrated in one transaction: the writes, the
@@ -133,6 +134,7 @@ public final class LegacyLayoutMigration {
 
     private final RDF rdf = new SimpleRdf();
     private final Map<String, VersionedWriteFunnel> funnelByType;
+    private final Set<String> objectProperties;
 
     /**
      * @param funnelByType the funnel each resource type of {@link #RESOURCE_TYPES} is written
@@ -144,6 +146,9 @@ public final class LegacyLayoutMigration {
             Objects.requireNonNull(funnelByType.get(type), "no funnel for " + type);
         }
         this.funnelByType = Map.copyOf(funnelByType);
+        Set<String> properties = new HashSet<>();
+        funnelByType.values().forEach(funnel -> properties.addAll(funnel.objectProperties()));
+        this.objectProperties = Set.copyOf(properties);
     }
 
     /**
@@ -224,16 +229,22 @@ public final class LegacyLayoutMigration {
                 tx.snapshot(rdf.createIRI(graph)).stream().forEach(legacy::add);
             }
         }
-        List<String> droppedEdges = new ArrayList<>();
+        List<LegacyLayoutMigrationReport.DroppedEdge> droppedEdges = new ArrayList<>();
         Graph kept = rdf.createGraph();
         Map<BlankNodeOrIRI, Integer> blankSubjects = new LinkedHashMap<>();
         for (Triple triple : legacy) {
             if (triple.getSubject() instanceof BlankNode) {
                 blankSubjects.merge(triple.getSubject(), 1, Integer::sum);
-            } else if (triple.getObject() instanceof BlankNode) {
-                droppedEdges.add(render(triple.getSubject()) + " " + render(triple.getPredicate()));
             } else {
-                kept.add(triple);
+                Optional<LegacyLayoutMigrationReport.ObjectKind> dropped = droppedObjectKind(triple);
+                if (dropped.isPresent()) {
+                    droppedEdges.add(new LegacyLayoutMigrationReport.DroppedEdge(
+                            ((IRI) triple.getSubject()).getIRIString(), code(legacy, triple.getSubject()),
+                            triple.getPredicate().getIRIString(), dropped.get(),
+                            triple.getObject().ntriplesString()));
+                } else {
+                    kept.add(triple);
+                }
             }
         }
 
@@ -291,6 +302,40 @@ public final class LegacyLayoutMigration {
         }
         return new LegacyLayoutMigrationReport(dataset, LegacyLayoutMigrationReport.Outcome.MIGRATED, counts,
                 droppedEdges, droppedSubjects, retainedCodes, carriedPastGate, null);
+    }
+
+    /**
+     * Whether an edge is dropped, and for which kind of object: a blank node on any property, the
+     * versioned write path cannot name it; a literal on a property whose shape requires another
+     * resource ({@link #objectProperties}), which no reference can be read from and the gate would
+     * reject on every later write.
+     *
+     * <p>Exception: a literal acceptance criterion, which an earlier version stored as the
+     * criterion's text (2026-07-17 to 2026-08-05). Its shape requires a resource too, but the
+     * literal is the content itself, so it is kept and the requirement is carried past the gate,
+     * to be repaired by an update.</p>
+     */
+    private Optional<LegacyLayoutMigrationReport.ObjectKind> droppedObjectKind(Triple triple) {
+        if (triple.getObject() instanceof BlankNode) {
+            return Optional.of(LegacyLayoutMigrationReport.ObjectKind.BLANK_NODE);
+        }
+        String property = triple.getPredicate().getIRIString();
+        if (triple.getObject() instanceof Literal && objectProperties.contains(property)
+                && !property.equals(ArkreqVocabulary.ACCEPTANCE_CRITERION)) {
+            return Optional.of(LegacyLayoutMigrationReport.ObjectKind.LITERAL);
+        }
+        return Optional.empty();
+    }
+
+    private static String code(List<Triple> legacy, BlankNodeOrIRI subject) {
+        return legacy.stream()
+                .filter(triple -> triple.getSubject().equals(subject)
+                        && VocabDct.IDENTIFIER.equals(triple.getPredicate()))
+                .map(Triple::getObject)
+                .filter(Literal.class::isInstance)
+                .map(code -> ((Literal) code).getLexicalForm())
+                .findFirst()
+                .orElse(null);
     }
 
     private Map<IRI, String> classify(ReadableGraph graph) {
@@ -475,8 +520,8 @@ public final class LegacyLayoutMigration {
             case MIGRATED -> {
                 LOG.info("legacy layout migration: {}", report.summary());
                 report.droppedEdges().forEach(edge ->
-                        LOG.warn("legacy layout migration: dataset '{}': dropped blank-node edge {}",
-                                report.dataset(), edge));
+                        LOG.warn("legacy layout migration: dataset '{}': dropped edge with a non-IRI object {}",
+                                report.dataset(), edge.line()));
                 report.droppedSubjects().forEach(subject ->
                         LOG.warn("legacy layout migration: dataset '{}': dropped unattached subject {}",
                                 report.dataset(), subject));
