@@ -37,7 +37,32 @@ class SentenceBoundariesTest {
         assertThat(SentenceBoundaries.sameSentence("Kunde z. B. FR-2", 0, 5, 12, 16)).isTrue();
         assertThat(SentenceBoundaries.sameSentence("Kunde i. d. R. FR-2", 0, 5, 15, 19)).isTrue();
         assertThat(SentenceBoundaries.sameSentence("Kunde e.g. FR-2", 0, 5, 11, 15)).isTrue();
-        assertThat(SentenceBoundaries.sameSentence("Kunde u. a. FR-2", 0, 5, 12, 16)).isTrue();
+        assertThat(SentenceBoundaries.sameSentence("Kunde e. g. FR-2", 0, 5, 12, 16)).isTrue();
+        assertThat(SentenceBoundaries.sameSentence("Kunde i.e. FR-2", 0, 5, 11, 15)).isTrue();
+        assertThat(SentenceBoundaries.sameSentence("Kunde i. e. FR-2", 0, 5, 12, 16)).isTrue();
+    }
+
+    @Test
+    void uADotAIsAmbiguousAndEndsTheSentence() {
+        assertThat(SentenceBoundaries.sameSentence("Kunde u. a. FR-2", 0, 5, 12, 16)).isFalse();
+    }
+
+    @Test
+    void sAfterANumberIsAUnitAndEndsTheSentence() {
+        assertThat(SentenceBoundaries.sameSentence("Kunde 2 s. FR-2", 0, 5, 11, 15)).isFalse();
+        assertThat(SentenceBoundaries.sameSentence("Kunde 2s. FR-2", 0, 5, 10, 14)).isFalse();
+        assertThat(SentenceBoundaries.sameSentence("Kunde 2\u00A0s. FR-2", 0, 5, 11, 15)).isFalse();
+    }
+
+    @Test
+    void theGermanLegalFormEGDoesNotCountAsTheAbbreviationEG() {
+        assertThat(SentenceBoundaries.sameSentence("Kunde e. G. FR-2", 0, 5, 12, 16)).isFalse();
+        assertThat(SentenceBoundaries.sameSentence("Kunde e.G. FR-2", 0, 5, 11, 15)).isFalse();
+    }
+
+    @Test
+    void aCapitalSDoesNotCountAsTheAbbreviationS() {
+        assertThat(SentenceBoundaries.sameSentence("Kunde S. FR-2", 0, 5, 9, 13)).isFalse();
     }
 
     @Test
