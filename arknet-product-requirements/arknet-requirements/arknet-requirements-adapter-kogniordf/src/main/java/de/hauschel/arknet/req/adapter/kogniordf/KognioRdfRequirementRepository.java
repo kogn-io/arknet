@@ -143,10 +143,8 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * it. For a ref that {@link #readUsesTerms} produced it may never have held: that read filters
  * for IRI-ness only and states no type condition, so a store-first edge can carry a
  * non-{@code Concept} target into the context, where asserting the type satisfies the gate's
- * {@code sh:class} with the very fact under test. The MCP tools cannot reach the case, and it is
- * no worse than before this change (such an edge survived there too, preserved by the same
- * blank-node preservation mechanism and equally unscrutinised) - but what makes it safe is that
- * it is unreachable, not that anything checked it.</p>
+ * {@code sh:class} with the very fact under test. The MCP tools cannot reach the case - what
+ * makes it safe is that it is unreachable, not that anything checked it.</p>
  *
  * <p><strong>Row multiplication on {@code priority}/{@code qualityCategory}.</strong>
  * Both properties carry no {@code sh:Violation}-severity {@code sh:maxCount} (unlike
@@ -490,9 +488,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * <p>Reduced complement of what {@link #readUsesTerms} can now read: since reading
      * no longer joins into the terms graph (a usesTerm edge's target IRI <em>is</em> the
      * {@code TermRef}, no re-derivation needed), the only edges {@code Requirement#usesTerms()}
-     * can never carry are ones whose target is not an IRI at all - a store-first edge
-     * may legally point at a blank node ({@code [ a skos:Concept ]}), which {@code ResourceId}
-     * cannot represent. The preservation query below finds exactly those.</p>
+     * can never carry are ones whose target is not an IRI at all - an edit made outside arknet
+     * can point the edge at a blank node ({@code [ a skos:Concept ]}), which {@code ResourceId}
+     * cannot represent. The capture query below finds exactly those and carries them into the new
+     * slice, where the gate's {@code sh:nodeKind sh:IRI} rejects the update.</p>
      *
      * <p><strong>Same preservation, for {@code title}/{@code description}/{@code rationale}'s
      * other language variants.</strong> They may each legally carry several language-tagged
@@ -557,10 +556,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
                 + "FILTER(!isIRI(?term)) }";
-        // constrainedBy's shape carries sh:nodeKind sh:IRI - unlike usesTerm, a non-IRI target is
-        // SHACL-illegal at write time - but that gate only guards this adapter's own writes, never
-        // a store-first edit, so the same non-IRI edge can and does exist here too; the
-        // same preserve-past-the-gate mechanism applies, for the same reason.
+        // Same capture for constrainedBy: no arknet tool writes a non-IRI target, so such an edge
+        // can only come from an edit made outside arknet.
         String selectUnjoinableConstrainedBy = "SELECT ?constraint WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + CONSTRAINED_BY_PROPERTY
                 + "> ?constraint } FILTER(!isIRI(?constraint)) }";
@@ -569,11 +566,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         // selectUnjoinableUsesTerms above) before deleteExisting wipes it, inside this same
         // transaction - a separate read beforehand would leave a TOCTOU window the caller's own
         // head comparison deliberately avoids. The binding is read as a bare RDFTerm, not
-        // cast to IRI: arkreq:usesTerm carries no sh:nodeKind constraint, so its target is
-        // RDF-legally allowed to be a blank node, and a store-first edge can and does point at
-        // one - exactly the non-IRI target selectUnjoinableUsesTerms filters for. Casting here
-        // would trade the earlier silent data loss for a crash on every update of the affected
-        // requirement - a regression, not a fix.
+        // cast to IRI: the target selectUnjoinableUsesTerms filters for is exactly the non-IRI
+        // one (a blank node written outside arknet), and casting would crash instead of
+        // reaching the gate.
         List<RDFTerm> unjoinableUsesTerms = tx.select(selectUnjoinableUsesTerms).map(row -> termOf(row, "term"))
                 .toList();
         List<RDFTerm> unjoinableConstrainedBy = tx.select(selectUnjoinableConstrainedBy)
@@ -590,9 +585,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         Map<Integer, List<Literal>> preservedCriteriaTextsByPosition = otherLanguageAcceptanceCriterionTexts(
                 tx, subject, criteriaTagByPosition, defaultTag, removedAcceptanceCriterionPositions);
         Graph next = Slices.copyOf(graph);
-        // Carry the preserved edges into the new slice. The gate validates the whole slice, so a
-        // preserved non-IRI target is validated too; a blank-node target is part of the slice
-        // and keeps its own triples (Slices#addBlankNodeClosure), or the write would drop them.
+        // Carry the captured edges into the new slice, so the update never drops them silently;
+        // a blank-node target keeps its own triples (Slices#addBlankNodeClosure). The gate
+        // validates the whole slice, and both shapes carry sh:nodeKind sh:IRI, so an update of a
+        // requirement that still has such an edge is rejected and nothing is written.
         if (!unjoinableUsesTerms.isEmpty()) {
             Graph preservedEdges = rdf.createGraph();
             for (RDFTerm termNode : unjoinableUsesTerms) {
@@ -1651,13 +1647,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * Reads the {@code arkreq:usesTerm} edges of one requirement back as term references, ordered
      * by target IRI (RDF has no intrinsic statement order, and {@link Requirement} compares its
      * {@code usesTerms} list positionally). Excludes any edge whose target is not an IRI -
-     * {@code arkreq:usesTerm} carries no {@code sh:nodeKind} constraint, so a store-first
-     * edge may legally target a blank node, which
+     * {@code arkreq:usesTerm}'s shape carries {@code sh:nodeKind sh:IRI}, but an edit made
+     * outside arknet can still point the edge at a blank node, which
      * {@link de.hauschel.arknet.kernel.ResourceId} cannot represent; such an edge never appears in
      * {@link Requirement#usesTerms()}. Every edge written through {@code req_link_term} targets a
      * resolved subject IRI by construction, so this exclusion cannot bite via the MCP tools; a
-     * store-first blank-node edge instead survives a later update via
-     * {@link #replaceTriplesForUpdate}, which re-attaches it after rewriting the subject's triples.
+     * blank-node edge is instead carried into the slice of a later update by
+     * {@link #replaceTriplesForUpdate}, where the gate rejects that update.
      *
      * <p><strong>History.</strong> The edge's target IRI <em>is</em> the
      * {@link TermRef} now - {@link TermRef#value()} wraps it directly - so this reads only the
@@ -2064,7 +2060,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     /**
      * Reads a binding as the bare {@link RDFTerm} it is, without narrowing it to {@link IRI} -
      * unlike {@link #iriOf}, deliberately used where the binding's kind is not known in advance
-     * (e.g. an {@code arkreq:usesTerm} target, which may legally be a blank node).
+     * (e.g. an {@code arkreq:usesTerm} target an edit made outside arknet may have pointed at a
+     * blank node).
      */
     private static RDFTerm termOf(BindingSet row, String name) {
         return row.getValue(name)

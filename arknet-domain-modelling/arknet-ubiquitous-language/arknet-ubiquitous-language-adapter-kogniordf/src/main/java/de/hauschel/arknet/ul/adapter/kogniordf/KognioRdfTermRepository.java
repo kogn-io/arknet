@@ -854,6 +854,10 @@ public class KognioRdfTermRepository implements TermRepository {
                         assertNoCycle(tx::select, projectId, code, subjectIriString,
                                 finalBroaderCode, finalBroaderTargetIri);
                     }
+                    // The new slice starts as the whole draft, so a skos:broader/skos:related
+                    // edge onto a blank node (only an edit made outside arknet writes one) is
+                    // carried into it; the gate validates the whole slice against
+                    // sh:nodeKind sh:IRI and rejects the update.
                     Graph next = Slices.copyOf(draft);
                     if (prefLabel != null && explicitTag != null) {
                         removeOfLanguage(next, subjectIri, PREF_LABEL_PROPERTY, explicitTag, defaultTag);

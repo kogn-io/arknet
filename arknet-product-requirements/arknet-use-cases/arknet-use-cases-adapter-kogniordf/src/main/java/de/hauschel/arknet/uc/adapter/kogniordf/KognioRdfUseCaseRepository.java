@@ -435,8 +435,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                         // in the first place: both shapes carry sh:nodeKind sh:IRI, but that only
                         // guards this adapter's own writes - a store-first edge may
                         // still target a blank node, which ResourceId cannot represent - read()
-                        // below excludes it the same way (FILTER(isIRI(...))). Mirrors
-                        // KognioRdfRequirementRepository#replaceTriplesForUpdate's
+                        // below excludes it the same way (FILTER(isIRI(...))). No arknet tool
+                        // writes such an edge; it can only come from an edit made outside arknet.
+                        // Mirrors KognioRdfRequirementRepository#replaceTriplesForUpdate's
                         // unjoinableUsesTerms/unjoinableConstrainedBy capture exactly.
                         String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
                                 + "GRAPH <" + USE_CASES_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY
@@ -490,8 +491,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
                         Graph next = Slices.copyOf(candidate);
 
-                        // Carry the unjoinable edges into the new slice; the gate validates the
-                        // whole slice, and a blank-node target keeps its own triples.
+                        // Carry the unjoinable edges into the new slice, so the update never
+                        // drops them silently; a blank-node target keeps its own triples. The
+                        // gate validates the whole slice against sh:nodeKind sh:IRI, so an update
+                        // of a use case that still has such an edge is rejected.
                         if (!unjoinableUsesTerms.isEmpty() || !unjoinableConstrainedBy.isEmpty()) {
                             Graph preservedEdges = rdf.createGraph();
                             for (RDFTerm termNode : unjoinableUsesTerms) {
@@ -1274,8 +1277,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * {@code usesTerm}'s shape carries {@code sh:nodeKind sh:IRI}, but that only guards this
      * adapter's own writes, so a store-first edge may still target a blank node, which
      * {@link ResourceId} cannot represent; such an edge never appears in
-     * {@link UseCase#usesTerms()} but survives a later update via the unjoinable-edge
-     * preservation in {@link #write}. Mirrors
+     * {@link UseCase#usesTerms()}; {@link #write} carries it into the slice of a later update,
+     * where the gate rejects that update. Mirrors
      * {@code KognioRdfRequirementRepository#readUsesTerms}.
      */
     private List<TermRef> readUsesTerms(DatasetHandle handle, String subject) {

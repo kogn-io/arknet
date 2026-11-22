@@ -522,7 +522,11 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * (kogn-io/arknet#357 - the pre-#357 shape their own structured resources replace; see class
      * javadoc). None of the three is a field of {@link Adr} any more, so the candidate graph never
      * carries them forward on its own.</li>
-     * <li>{@code addressesRequirement}/{@code affectsContext} edges whose target is not an IRI.</li>
+     * <li>{@code addressesRequirement}/{@code affectsContext} edges whose target is not an IRI. No
+     * arknet tool writes such an edge; it can only come from an edit made outside arknet. It is
+     * carried into the new slice so the update never drops it silently, and since the gate
+     * validates the whole slice and both shapes carry {@code sh:nodeKind sh:IRI}, the update of a
+     * decision that still has such an edge is rejected.</li>
      * <li>Every other-language variant of {@code name}/{@code context}/{@code decision} not written
      * by this call, and of each consequence/considered-option's own multilingual text, keyed by
      * {@code arknet:position} rather than by the about-to-be-deleted child IRI (mirrors

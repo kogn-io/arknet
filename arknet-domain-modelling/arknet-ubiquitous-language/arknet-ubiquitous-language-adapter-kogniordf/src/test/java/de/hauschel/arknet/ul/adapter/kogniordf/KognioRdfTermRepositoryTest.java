@@ -88,6 +88,8 @@ class KognioRdfTermRepositoryTest {
     private static final DatasetId DATASET_A = new DatasetId(PROJECT_A.value());
     private static final String SKOS_CONCEPT = "http://www.w3.org/2004/02/skos/core#Concept";
     private static final String TERMS_GRAPH = ContentGraph.GRAPH_IRI;
+    private static final String SKOS_RELATED = "http://www.w3.org/2004/02/skos/core#related";
+    private static final String SKOS_BROADER = "http://www.w3.org/2004/02/skos/core#broader";
 
     /**
      * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
@@ -675,6 +677,68 @@ class KognioRdfTermRepositoryTest {
 
         assertEquals(List.of(), result.related());
         assertEquals(List.of(), repository.findByCode(PROJECT_A, code, null).orElseThrow().related());
+    }
+
+    // ---- skos:related / skos:broader: store-first edges to a blank node no tool can write ----
+
+    /**
+     * A store-first {@code skos:related} edge onto a blank node - {@code [ a skos:Concept ]}
+     * written directly into the content graph - is copied into the new slice with the rest of the
+     * draft by an update that does not itself replace {@code related}. The gate validates the whole
+     * slice, so {@code ulshapes:Term-related}'s {@code sh:nodeKind sh:IRI} rejects the update: the
+     * rejection names the property, nothing is written, and the edge stays.
+     */
+    @Test
+    void updateOfATermWithABlankNodeRelatedEdgeIsRejectedAndTheEdgeStays() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Anker", "Ein Merkmal.", null), null);
+        givenEdgeToFreshBlankNodeConcept(id, SKOS_RELATED);
+
+        WriteConstraintViolationException rejection = assertThrows(WriteConstraintViolationException.class,
+                () -> repository.update(PROJECT_A, code, null, "Neue Fassung.", null, null, null, null));
+
+        assertTrue(rejection.getMessage().contains(SKOS_RELATED),
+                "the rejection must name the offending property, got: " + rejection.getMessage());
+        assertTrue(edgeTargetsABlankNode(id, SKOS_RELATED),
+                "the rejected update must leave the blank-node edge in place");
+        assertEquals(List.of("Ein Merkmal."), definitionsOf(PROJECT_A, id));
+    }
+
+    /** {@code skos:broader} counterpart of {@link #updateOfATermWithABlankNodeRelatedEdgeIsRejectedAndTheEdgeStays}. */
+    @Test
+    void updateOfATermWithABlankNodeBroaderEdgeIsRejectedAndTheEdgeStays() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Anker", "Ein Merkmal.", null), null);
+        givenEdgeToFreshBlankNodeConcept(id, SKOS_BROADER);
+
+        WriteConstraintViolationException rejection = assertThrows(WriteConstraintViolationException.class,
+                () -> repository.update(PROJECT_A, code, null, "Neue Fassung.", null, null, null, null));
+
+        assertTrue(rejection.getMessage().contains(SKOS_BROADER),
+                "the rejection must name the offending property, got: " + rejection.getMessage());
+        assertTrue(edgeTargetsABlankNode(id, SKOS_BROADER),
+                "the rejected update must leave the blank-node edge in place");
+        assertEquals(List.of("Ein Merkmal."), definitionsOf(PROJECT_A, id));
+    }
+
+    private void givenEdgeToFreshBlankNodeConcept(final TermId subjectId, final String predicate) {
+        String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
+                + "<" + subjectId.value().value() + "> <" + predicate + "> [ a <" + SKOS_CONCEPT + "> ] } }";
+        try (DatasetHandle handle = lifecycle.acquire(DATASET_A)) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    private boolean edgeTargetsABlankNode(final TermId subjectId, final String predicate) {
+        try (DatasetHandle handle = lifecycle.acquire(DATASET_A)) {
+            return handle.sparqlQuery().ask("ASK { GRAPH <" + TERMS_GRAPH + "> { <" + subjectId.value().value()
+                    + "> <" + predicate + "> ?o . ?o a <" + SKOS_CONCEPT + "> FILTER(isBlank(?o)) } }");
+        }
     }
 
     @Test
