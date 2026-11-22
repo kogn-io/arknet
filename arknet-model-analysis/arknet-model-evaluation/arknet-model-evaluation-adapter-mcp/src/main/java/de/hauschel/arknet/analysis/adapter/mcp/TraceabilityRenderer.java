@@ -48,6 +48,12 @@ public final class TraceabilityRenderer {
         this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
     }
 
+    private static final String TRACE_MATRIX_NOT_SEEN =
+            "Not seen here: whether a listed term or use case covers the requirement's content "
+                    + "(a filled line says an edge exists, nothing more); realises edges on extension steps, "
+                    + "which carry none at tool level today (kogn-io/arknet#317), so none appears here; "
+                    + "acceptance criteria, constraints and architecture decisions.";
+
     /**
      * Scope note of {@code trace_matrix}: an empty "none" line reads as a verdict, a filled one as
      * coverage; neither is what the matrix measures.
@@ -56,13 +62,20 @@ public final class TraceabilityRenderer {
             "Checked here: which glossary terms (arkreq:usesTerm) each requirement uses and which use "
                     + "cases realise it through arkreq:stepRealises on any of their steps "
                     + "(main flow or extension).\n"
-                    + "Not seen here: whether a listed term or use case covers the requirement's content "
-                    + "(a filled line says an edge exists, nothing more); realises edges on extension steps, "
-                    + "which carry none at tool level today (kogn-io/arknet#317), so none appears here; "
-                    + "acceptance criteria, constraints and architecture decisions.";
+                    + TRACE_MATRIX_NOT_SEEN;
 
     /**
-     * Renders {@code trace_matrix}: one line per requirement (FR and NFR alike) listing the
+     * Scope note of {@code trace_matrix} with {@code withTerms=false}: says that the term lines were
+     * left out on request, so their absence does not read as "no requirement uses a term".
+     */
+    static final String TRACE_MATRIX_SCOPE_WITHOUT_TERMS =
+            "Checked here: which use cases realise each requirement through arkreq:stepRealises on any "
+                    + "of their steps (main flow or extension). The glossary terms each requirement uses "
+                    + "(arkreq:usesTerm) are left out (withTerms=false).\n"
+                    + TRACE_MATRIX_NOT_SEEN;
+
+    /**
+     * Renders {@code trace_matrix} in full: one block per requirement (FR and NFR alike) listing the
      * glossary terms it uses and the use case(s) realising it.
      *
      * @param projectId the project the graph was read from
@@ -70,10 +83,30 @@ public final class TraceabilityRenderer {
      * @return the digest text
      */
     public String traceMatrix(ProjectId projectId, TraceabilityGraph graph) {
-        return traceMatrixLines(projectId, graph) + "\n" + TRACE_MATRIX_SCOPE;
+        return traceMatrix(projectId, graph, true);
     }
 
-    private String traceMatrixLines(ProjectId projectId, TraceabilityGraph graph) {
+    /**
+     * Renders {@code trace_matrix}: one block per requirement (FR and NFR alike) listing the use
+     * case(s) realising it and, with {@code withTerms}, the glossary terms it uses.
+     *
+     * <p>A requirement with a business code is headed by code and label only: the code already
+     * says FR or NFR, and on a large project the repeated type tag was a tenth of the answer
+     * (kogn-io/arknet#725). A requirement without a code keeps the tag, as its shortened IRI does
+     * not show its type. The term lists are the largest part of the answer (about half on the
+     * largest measured project), hence the switch.</p>
+     *
+     * @param projectId the project the graph was read from
+     * @param graph     the traceability graph to report on
+     * @param withTerms {@code false} to leave out the "uses terms" lines
+     * @return the digest text
+     */
+    public String traceMatrix(ProjectId projectId, TraceabilityGraph graph, boolean withTerms) {
+        return traceMatrixLines(projectId, graph, withTerms) + "\n"
+                + (withTerms ? TRACE_MATRIX_SCOPE : TRACE_MATRIX_SCOPE_WITHOUT_TERMS);
+    }
+
+    private String traceMatrixLines(ProjectId projectId, TraceabilityGraph graph, boolean withTerms) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(graph, "graph");
         List<String> requirementIris = graph.requirementIris();
@@ -86,12 +119,21 @@ public final class TraceabilityRenderer {
             return out.toString();
         }
         for (String requirementIri : requirementIris) {
-            out.append(displayLine(graph, requirementIri)).append('\n');
-            out.append("    uses terms  : ").append(codesOrNone(graph, graph.usedTerms(requirementIri))).append('\n');
+            out.append(requirementLine(graph, requirementIri)).append('\n');
+            if (withTerms) {
+                out.append("    uses terms  : ").append(codesOrNone(graph, graph.usedTerms(requirementIri)))
+                        .append('\n');
+            }
             out.append("    realised by : ")
                     .append(codesOrNone(graph, graph.realisingUseCases(requirementIri))).append('\n');
         }
         return out.toString();
+    }
+
+    private String requirementLine(TraceabilityGraph graph, String requirementIri) {
+        return graph.identifierOf(requirementIri)
+                .map(code -> code + graph.labelOf(requirementIri).map(label -> " \"" + label + '"').orElse(""))
+                .orElseGet(() -> displayLine(graph, requirementIri));
     }
 
     /**

@@ -77,16 +77,22 @@ public final class TraceabilityMcpTools {
     @McpTool(name = "trace_matrix",
             description = "Traceability matrix: for every requirement (FR and NFR) in the project, which"
                     + " glossary terms it uses (arkreq:usesTerm) and which use case(s) realise it (via their"
-                    + " step flow's arkreq:stepRealises). One line per requirement, business codes not IRIs."
-                    + " Reports edges only, not whether a listed term or use case covers the requirement's"
-                    + " content; the output says so.",
+                    + " step flow's arkreq:stepRealises). One block per requirement, headed by its business"
+                    + " code and title, codes not IRIs. Reports edges only, not whether a listed term or use"
+                    + " case covers the requirement's content; the output says so. On a large project the"
+                    + " term lists are about half of the answer: withTerms=false drops them when only the"
+                    + " realising use cases matter.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String traceMatrix(
             final McpSyncRequestContext context,
+            @McpToolParam(description = "Whether each requirement lists the glossary terms it uses. false"
+                    + " leaves out those lines and says so in the output; the realising use cases stay."
+                    + " Default true.", required = false)
+            final Boolean withTerms,
             @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        return renderer.traceMatrix(project.id(), readGraph(project));
+        return renderer.traceMatrix(project.id(), readGraph(project), !Boolean.FALSE.equals(withTerms));
     }
 
     @McpTool(name = "orphan_check",

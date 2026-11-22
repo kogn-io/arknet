@@ -122,7 +122,7 @@ class TraceabilityMcpToolsTest {
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
                     List.of(), null), "en");
 
-            String matrix = tools.traceMatrix(null, ANCHOR);
+            String matrix = tools.traceMatrix(null, null, ANCHOR);
 
             assertThat(matrix).contains("# Traceability matrix -- project " + project.value());
             assertThat(matrix).contains(fr1.code().value()).contains(fr2.code().value());
@@ -131,6 +131,11 @@ class TraceabilityMcpToolsTest {
             // FR-2 uses nothing and is realised by nothing.
             String fr2Block = matrix.substring(matrix.indexOf(fr2.code().value()));
             assertThat(fr2Block).contains("uses terms  : (none)").contains("realised by : (none)");
+
+            String withoutTerms = tools.traceMatrix(null, false, ANCHOR);
+            assertThat(withoutTerms).doesNotContain("uses terms").contains("realised by : UC1")
+                    .contains("left out (withTerms=false)");
+            assertThat(tools.traceMatrix(null, true, ANCHOR)).isEqualTo(matrix);
         });
     }
 
