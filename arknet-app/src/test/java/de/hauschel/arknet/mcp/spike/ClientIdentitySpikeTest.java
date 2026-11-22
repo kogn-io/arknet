@@ -36,6 +36,7 @@ import io.modelcontextprotocol.spec.McpSchema;
 import tools.jackson.databind.json.JsonMapper;
 
 import de.hauschel.arknet.mcp.LoopbackHostSecurity;
+import de.hauschel.arknet.mcpsupport.ProjectResolver;
 
 /**
  * SPIKE (issue #73), a measuring instrument, not a regression test: what does a real MCP session
@@ -78,10 +79,10 @@ class ClientIdentitySpikeTest {
             seen.put("clientInfo.name", info == null ? null : info.name());
             seen.put("clientInfo.title", info == null ? null : info.title());
             seen.put("clientInfo.version", info == null ? null : info.version());
-            seen.put("sessionId.present", context.sessionId() != null && !context.sessionId().isBlank());
+            seen.put("sessionId", context.sessionId());
             seen.put("requestMeta", context.requestMeta());
             final McpTransportContext transport = context.transportContext();
-            seen.put("transport.anchor", transport == null ? null : transport.get("arknet.project.anchor"));
+            seen.put("transport.anchor", transport == null ? null : transport.get(ProjectResolver.ANCHOR_KEY));
             seen.put("transport.actor", transport == null ? null : transport.get(ACTOR_KEY));
             seen.put("transport.allHeaders", transport == null ? null : transport.get(ALL_HEADERS_KEY));
             return seen.toString();
@@ -115,7 +116,7 @@ class ClientIdentitySpikeTest {
             final Map<String, Object> values = new LinkedHashMap<>();
             final String anchor = request.headers().firstHeader(ANCHOR_HEADER);
             if (anchor != null) {
-                values.put("arknet.project.anchor", anchor);
+                values.put(ProjectResolver.ANCHOR_KEY, anchor);
             }
             final String actor = request.headers().firstHeader(ACTOR_HEADER);
             if (actor != null) {
@@ -145,6 +146,11 @@ class ClientIdentitySpikeTest {
                 .build();
         client.initialize();
         return client;
+    }
+
+    private static String sessionId(final String line) {
+        final int start = line.indexOf("sessionId=") + "sessionId=".length();
+        return line.substring(start, line.indexOf(',', start));
     }
 
     private String probe(final McpSyncClient client, final Map<String, Object> meta) {
@@ -192,15 +198,25 @@ class ClientIdentitySpikeTest {
             inspector.closeGracefully();
         }
 
-        final McpSyncClient liar = connect("claude-code", "Claude Code", "9.9.9", "human:fred");
+        // E: two sessions open at the same time, probes interleaved - each must see its own identity.
+        final McpSyncClient first = connect("claude-code", "Claude Code", "9.9.9", "agent:one");
+        final McpSyncClient second = connect("claude-code", "Claude Code", "9.9.9", "agent:two");
         try {
-            observed.put("E agent claiming human actor", probe(liar, null));
+            observed.put("E1 concurrent session one", probe(first, null));
+            observed.put("E2 concurrent session two", probe(second, null));
+            observed.put("E3 concurrent session one again", probe(first, null));
+            assertThat(observed.get("E1 concurrent session one")).contains("transport.actor=agent:one");
+            assertThat(observed.get("E2 concurrent session two")).contains("transport.actor=agent:two");
+            assertThat(observed.get("E3 concurrent session one again")).contains("transport.actor=agent:one");
+            assertThat(sessionId(observed.get("E1 concurrent session one")))
+                    .isNotEqualTo(sessionId(observed.get("E2 concurrent session two")));
         } finally {
-            liar.closeGracefully();
+            first.closeGracefully();
+            second.closeGracefully();
         }
 
         observed.forEach((k, v) -> System.out.println("SPIKE73 " + k + " -> " + v));
-        assertThat(observed).hasSize(7);
+        assertThat(observed).hasSize(9);
         assertThat(observed.get("A agent, 1st call")).contains("clientInfo.name=claude-code");
     }
 
