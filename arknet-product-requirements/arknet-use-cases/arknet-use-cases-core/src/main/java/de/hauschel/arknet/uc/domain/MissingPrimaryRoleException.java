@@ -9,10 +9,10 @@ import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when a write would carry {@link RoleRef#LEGACY_PLACEHOLDER} forward as a use case's
- * primary role: the use case was written before v0.8.0, has no {@code arkreq:primaryRole} on
- * record and is shown with the read-time placeholder. Persisting the placeholder would turn the
- * gap into a role reference that points at nothing, so every change is refused until the update
- * names a real role. The use-cases counterpart of the requirements context's
+ * primary role: the use case has no {@code arkreq:primaryRole} IRI on record (written before v0.8.0,
+ * or a store-first use case whose role is a blank node) and is shown with the read-time placeholder.
+ * Persisting the placeholder would turn the gap into a role reference that points at nothing, so
+ * every change is refused unless the same update names a real role. The use-cases counterpart of the requirements context's
  * {@code MissingAcceptanceCriteriaException}.
  *
  * <p>An expected domain outcome (not a programming error): driving adapters - e.g. the MCP tools
@@ -34,10 +34,9 @@ public class MissingPrimaryRoleException extends RuntimeException {
     public MissingPrimaryRoleException(ProjectId projectId, UseCaseCode code) {
         super("use case " + Objects.requireNonNull(code, "code").value()
                 + " in project " + Objects.requireNonNull(projectId, "projectId").value()
-                + " has no primary role on record - it was written before arkreq:primaryRole existed and is "
-                + "shown with the read-time placeholder " + RoleRef.LEGACY_PLACEHOLDER.value().value()
-                + "; set a real role via uc_update (primaryRole: ROLE-n) before this use case can be changed "
-                + "in any other way");
+                + " has no primary role on record and is shown with the read-time placeholder "
+                + RoleRef.LEGACY_PLACEHOLDER.value().value()
+                + "; name a real role via uc_update (primaryRole: ROLE-n) - the same call may carry other changes");
         this.projectId = projectId;
         this.code = code;
     }

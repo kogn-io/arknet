@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.eclipse.rdf4j.model.IRI;
@@ -541,12 +542,13 @@ class KognioRdfUseCaseRepositoryTest {
      * Regression test for the {@code primaryRole} blank-node bug:
      * {@code arkreq:primaryRole} carries no {@code sh:nodeKind} constraint, so a store-first
      * use case may legally target a blank node with it. Reading such a use case back
-     * must not throw a {@link ClassCastException} out of {@code readBySubject}, and the malformed
-     * use case - which has no main flow either - is treated as "not found" rather than crashing
-     * the rest of {@link UseCaseRepository#findAll}'s result list.
+     * must not throw a {@link ClassCastException} out of {@code primaryRoleOf}: the blank node
+     * is dropped by the read query and the use case - which has a complete main flow, so the
+     * read reaches the role - is read with {@link RoleRef#LEGACY_PLACEHOLDER}, while the rest of
+     * {@link UseCaseRepository#findAll}'s result list stays intact.
      */
     @Test
-    void findAllSkipsUseCaseWithBlankNodePrimaryRoleInsteadOfFailingTheWholeList() {
+    void aUseCaseWithABlankNodePrimaryRoleIsReadWithThePlaceholderRole() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
 
@@ -557,13 +559,19 @@ class KognioRdfUseCaseRepositoryTest {
                         + "<http://purl.org/dc/terms/title> \"Orphan use case\" ; "
                         + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Some goal\" ; "
                         + "<https://w3id.org/arknet/requirements#primaryRole> _:orphanRole ; "
-                        + "<http://purl.org/dc/terms/identifier> \"" + orphanCode.value() + "\" .");
+                        + "<https://w3id.org/arknet/requirements#mainStep> <https://w3id.org/arknet/id/uc-orphan-s1> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"" + orphanCode.value() + "\" . "
+                        + "<https://w3id.org/arknet/id/uc-orphan-s1> a <https://w3id.org/arknet/requirements#Step> ; "
+                        + "<https://w3id.org/arknet/requirements#position> 1 ; "
+                        + "<https://w3id.org/arknet/requirements#stepText> \"Do it\" .");
 
         List<UseCase> all = repository.findAll(PROJECT_A, null);
-        assertEquals(1, all.size());
-        assertEquals(CODE_1, all.get(0).code());
+        assertEquals(2, all.size());
+        assertEquals(Set.of(CODE_1, orphanCode), Set.copyOf(all.stream().map(UseCase::code).toList()));
 
-        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, orphanCode, null));
+        UseCase orphan = repository.findByCode(PROJECT_A, orphanCode, null).orElseThrow();
+        assertEquals(RoleRef.LEGACY_PLACEHOLDER, orphan.primaryRole());
+        assertEquals("Orphan use case", orphan.title());
     }
 
     /**

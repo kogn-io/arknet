@@ -1004,6 +1004,7 @@ class UseCaseServiceTest {
                 () -> legacy.update(WS, code, UseCaseCorrection.builder().build(), DEFAULT_LANGUAGE));
         assertTrue(linkRefused.getMessage().contains(code.value()));
         assertTrue(linkRefused.getMessage().contains("primaryRole"));
+        assertTrue(linkRefused.getMessage().contains("the same call may carry other changes"));
         assertEquals(RoleRef.LEGACY_PLACEHOLDER, legacy.get(WS, code, null).orElseThrow().primaryRole());
 
         UseCase repaired = legacy.update(WS, code, UseCaseCorrection.builder().primaryRole("ROLE-2").build(),

@@ -67,6 +67,7 @@ import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.versioning.PublishState;
 import java.nio.file.Path;
 import java.util.List;
@@ -378,6 +379,37 @@ class LegacyLayoutMigrationTest {
         });
     }
 
+    /**
+     * A literal criterion next to an existing criterion resource is placed after it: positions stay
+     * unique and gapless, no criterion is lost, and the report names the new position.
+     */
+    @Test
+    void aLiteralCriterionNextToACriterionResourceIsPlacedAfterIt() {
+        legacyStore();
+        DatasetLifecycle raw = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+        try {
+            update(raw, DATASET, LegacyLayoutFixture.mixedCriterionForm());
+            LegacyLayoutMigrationReport report = migration(raw).migrate(raw, DATASET);
+
+            assertThat(report.outcome()).isEqualTo(LegacyLayoutMigrationReport.Outcome.MIGRATED);
+            assertThat(report.convertedCriteria()).singleElement().satisfies(line -> assertThat(line)
+                    .startsWith("FR-14 (").contains(LegacyLayoutFixture.MIXED_CRITERION).contains("1 literal")
+                    .contains("2. \"" + LegacyLayoutFixture.MIXED_LITERAL_CRITERION_TEXT + "\"")
+                    .doesNotContain("1. \""));
+            assertThat(criterionPositions(raw, LegacyLayoutFixture.MIXED_CRITERION)).containsExactly(
+                    "1 \"" + LegacyLayoutFixture.MIXED_RESOURCE_CRITERION_TEXT + "\"@en",
+                    "2 \"" + LegacyLayoutFixture.MIXED_LITERAL_CRITERION_TEXT + "\"" + XSD_STRING);
+        } finally {
+            raw.shutDownAll();
+        }
+
+        inDaemon(context -> assertThat(context.getBean(RequirementService.class)
+                .get(PROJECT, new RequirementCode("FR-14"), EN).orElseThrow().acceptanceCriteria())
+                .extracting(criterion -> criterion.text())
+                .containsExactly(LegacyLayoutFixture.MIXED_RESOURCE_CRITERION_TEXT,
+                        LegacyLayoutFixture.MIXED_LITERAL_CRITERION_TEXT));
+    }
+
     @Test
     void anUpdateClosingTheGapRepairsACarriedRecordAndOneLeavingItOpenIsRejected() {
         legacyStoreWithLegacyOnlyForms();
@@ -669,6 +701,19 @@ class LegacyLayoutMigrationTest {
                     + requirement + "> <https://w3id.org/arknet/requirements#acceptanceCriterion> ?criterion . "
                     + "?criterion <https://w3id.org/arknet/requirements#criterionText> ?text } }")
                     .map(row -> row.getValue("text").orElseThrow().ntriplesString())
+                    .collect(Collectors.toList());
+        }
+    }
+
+    /** {@code requirement}'s criteria as "position text" in position order, the text in N-Triples form. */
+    private static List<String> criterionPositions(DatasetLifecycle lifecycle, String requirement) {
+        try (DatasetHandle handle = lifecycle.acquire(DATASET)) {
+            return handle.sparqlQuery().select("SELECT ?pos ?text WHERE { GRAPH <" + ContentGraph.GRAPH_IRI + "> { <"
+                    + requirement + "> <https://w3id.org/arknet/requirements#acceptanceCriterion> ?criterion . "
+                    + "?criterion <https://w3id.org/arknet/requirements#position> ?pos ; "
+                    + "<https://w3id.org/arknet/requirements#criterionText> ?text } } ORDER BY ?pos ?text")
+                    .map(row -> ((Literal) row.getValue("pos").orElseThrow()).getLexicalForm() + " "
+                            + row.getValue("text").orElseThrow().ntriplesString())
                     .collect(Collectors.toList());
         }
     }

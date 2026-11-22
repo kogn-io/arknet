@@ -186,6 +186,30 @@ final class LegacyLayoutFixture {
                 + "identifier> \"ACTOR-9\" ; <https://w3id.org/arknet/core#name> \"Legacy clerk\" . } }";
     }
 
+    /** A requirement holding a criterion resource and a literal criterion side by side, a store-first edit. */
+    static final String MIXED_CRITERION = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000014";
+    /** The text of FR-14's criterion resource at position 1. */
+    static final String MIXED_RESOURCE_CRITERION_TEXT = "Already a resource";
+    /** The text of FR-14's literal criterion. */
+    static final String MIXED_LITERAL_CRITERION_TEXT = "Still a literal";
+
+    /**
+     * FR-14, which no released write path leaves behind: a criterion resource at position 1 next to
+     * an untagged literal criterion. The migration has to place the literal after the resource.
+     */
+    static String mixedCriterionForm() {
+        String req = "https://w3id.org/arknet/requirements#";
+        String dct = "http://purl.org/dc/terms/";
+        return "INSERT DATA { GRAPH <" + BASE + "requirements> { "
+                + "<" + MIXED_CRITERION + "> a <" + req + "FunctionalRequirement> ; <" + req + "status> <" + req
+                + "Proposed> ; <" + dct + "identifier> \"FR-14\" ; <" + dct + "title> \"Mixed criteria\" ; <"
+                + dct + "description> \"Resource and literal.\" ; <" + req + "acceptanceCriterion> <"
+                + MIXED_CRITERION + "-ac> , \"" + MIXED_LITERAL_CRITERION_TEXT + "\" . "
+                + "<" + MIXED_CRITERION + "-ac> a <" + req + "AcceptanceCriterion> ; <" + req
+                + "position> \"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; <" + req + "criterionText> \""
+                + MIXED_RESOURCE_CRITERION_TEXT + "\"@en . } }";
+    }
+
     /** Records, in the earlier funnel's form, that a resource with {@code code} was deleted. */
     static String deletedRevision(String code) {
         String revision = "https://w3id.org/arknet/revision/" + UUID.randomUUID();
