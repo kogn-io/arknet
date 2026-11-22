@@ -41,7 +41,7 @@ final class InMemoryProjectDatasets implements ProjectDatasets {
         return this;
     }
 
-    /** Declares that a project's dataset holds {@code count} revisions in its provenance trail. */
+    /** Declares that a project's dataset holds {@code count} entries in its version history. */
     InMemoryProjectDatasets withRevisions(ProjectId projectId, long count) {
         revisions.put(projectId, count);
         return this;

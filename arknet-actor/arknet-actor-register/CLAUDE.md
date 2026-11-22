@@ -35,7 +35,7 @@ Das `RevisionToken` der Bibliothek schuetzt Trichter-Schreiber gegeneinander; ei
 Ein Update, das nichts aendert, schreibt nichts -- Wertgleichheit ist hier der ganze Test, es gibt keinen "gleicher Text, anderer Sprach-Tag ist trotzdem ein Write"-Fall wie bei `ConstraintService`.
 
 **Out-Adapter.** Schreibt in den Content-Graph des Projekts (ADR-63), eigenes `ShaclWriteGate` + eigener `VersionedWriteFunnel` (kein Teilen, anders als `KognioRdfConstraintRepository`, das sich den Trichter der requirements-BC leiht -- dort liegen beide Shapes in derselben Datei, hier gehoeren beide Ressourcen-Dateien diesem Hexagon allein).
-`create`/`compareAndUpdate` pruefen Identitaet, Code-Kollision und Head per `DatasetTx#contains` bzw. In-Tx-Read **innerhalb** der Schreibtransaktion (kein TOCTOU).
+`create`/`compareAndUpdate` pruefen Identitaet, Code-Kollision und Token per `DatasetTx#contains` bzw. In-Tx-Read **innerhalb** der Schreibtransaktion (kein TOCTOU).
 `replaceExistingTriples` ist ein schlichtes Whole-Subject-Delete ohne jede Kantenbewahrung: innerhalb dieses Graphen traegt ein Actor kein Feld, das der Record nicht abbildet, und keine Kante, der zu folgen waere -- und die `skos:*`-Tripel einer Ressource, die zusaetzlich Glossarbegriff ist, liegen im Graphen der ul-BC, also per Konstruktion ausserhalb der Reichweite dieses Deletes.
 Geschrieben wird ausschliesslich der **konkrete** Typ (`HumanActor`/`SystemActor`/`LegalActor`/`GroupActor`), nie die abstrakte Oberklasse -- ein Test nagelt fest, dass `arkproc:Actor` nicht im Graphen steht.
 

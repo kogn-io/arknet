@@ -117,7 +117,7 @@ class RoleServiceConcurrencyTest {
      * {@code arkproc:filledBy} is a set in the store: naming the same two occupants in the other
      * order states the same occupancy and must therefore write nothing. Pinned against a store that
      * reports a conflict on every write, so a write would surface as
-     * {@link RoleConcurrentlyModifiedException} rather than as a silent extra PROV revision.
+     * {@link RoleConcurrentlyModifiedException} rather than as a silent extra version history entry.
      */
     @Test
     void aReorderedButOtherwiseIdenticalOccupancyIsStillANoOp() {

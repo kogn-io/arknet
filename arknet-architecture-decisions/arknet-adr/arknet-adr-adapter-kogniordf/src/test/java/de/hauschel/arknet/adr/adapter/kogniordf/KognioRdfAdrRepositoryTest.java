@@ -1494,6 +1494,35 @@ class KognioRdfAdrRepositoryTest {
         }
     }
 
+    /**
+     * The {@code arkarch:affectsContext} sibling of the regression above: a store-first edge onto
+     * a blank node is carried into the new slice, and the edge's IRI-only shape rejects the update -
+     * nothing is written, the edge stays.
+     */
+    @Test
+    void compareAndUpdateKeepingABlankNodeAffectsContextEdgeIsRejectedAndTheEdgeStays() {
+        AdrId id = freshId();
+        Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), null);
+        repository.create(PROJECT_A, original, "en");
+
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
+                + ArkarchVocabulary.AFFECTS_CONTEXT + "> "
+                + "[ a <https://w3id.org/arknet/ddd#BoundedContext> ] } }");
+
+        RevisionToken head = currentHeadOf(original.code());
+        assertThrows(WriteConstraintViolationException.class, () -> repository.compareAndUpdate(PROJECT_A, head,
+                original.accept(DECIDED_ON), null, null, null, Map.of(), Map.of(), null,
+                RemovedPositions.NONE, RemovedPositions.NONE));
+
+        String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
+                + ArkarchVocabulary.AFFECTS_CONTEXT + "> ?target . "
+                + "?target a <https://w3id.org/arknet/ddd#BoundedContext> FILTER(isBlank(?target)) } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertTrue(handle.sparqlQuery().ask(ask), "the rejected update must leave the blank-node edge in place");
+        }
+    }
+
     @Test
     void projectsAreIsolated() {
         repository.create(PROJECT_A, adr(new AdrCode("ADR-1")), "en");

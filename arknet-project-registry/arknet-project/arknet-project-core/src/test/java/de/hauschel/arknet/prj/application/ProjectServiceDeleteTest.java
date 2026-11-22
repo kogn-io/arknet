@@ -465,18 +465,18 @@ class ProjectServiceDeleteTest {
     }
 
     @Test
-    void theRefusalUsesTheSingularForExactlyOneRevision() {
+    void theRefusalUsesTheSingularForExactlyOneHistoryEntry() {
         Project project = service.register("arknet", pathAnchor("/home/fred/DEV/arknet"), null, null, null, null);
         projectDatasets.withRevisions(project.id(), 1);
 
         UnconfirmedProjectDeletionException ex = assertThrows(UnconfirmedProjectDeletionException.class,
                 () -> service.delete("arknet", List.of(ELSEWHERE), false));
 
-        assertTrue(ex.getMessage().contains("content that would be lost with it: 1 revision."),
+        assertTrue(ex.getMessage().contains("content that would be lost with it: 1 history entry."),
                 ex.getMessage());
     }
 
-    /** History alone is content: a project without a single resource but with revisions is not empty. */
+    /** History alone is content: a project without a single resource but with history entries is not empty. */
     @Test
     void aProjectHoldingOnlyRevisionHistoryNeedsConfirmationAndTheRefusalCountsTheRevisions() {
         Project project = service.register("arknet", pathAnchor("/home/fred/DEV/arknet"), null, null, null, null);
@@ -487,7 +487,7 @@ class ProjectServiceDeleteTest {
 
         assertEquals(7L, ex.revisions());
         assertEquals(Map.of(), ex.resourceCounts());
-        assertTrue(ex.getMessage().contains("7 revisions"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("7 history entries"), ex.getMessage());
         assertEquals(Optional.of(project), service.findById(project.id()));
         assertFalse(projectDatasets.wasDeleted(project.id()));
     }

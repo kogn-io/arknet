@@ -642,13 +642,13 @@ class ProjectMcpToolsTest {
     }
 
     @Test
-    void deleteAnswerUsesTheSingularForExactlyOneRevision() {
+    void deleteAnswerUsesTheSingularForExactlyOneHistoryEntry() {
         deleteProject.result = DeleteProject.Deletion.ofProject(PLUGIN, Map.of(), 1L);
 
         final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", true, null);
 
-        assertTrue(rendered.contains("1 revision."), rendered);
-        assertFalse(rendered.contains("1 revisions"), rendered);
+        assertTrue(rendered.contains("1 history entry."), rendered);
+        assertFalse(rendered.contains("1 history entries"), rendered);
     }
 
     @Test
@@ -660,7 +660,7 @@ class ProjectMcpToolsTest {
 
         assertTrue(rendered.contains("Deleted project arknet-plugin (id: p-2)"), rendered);
         assertTrue(rendered.contains("3 arkreq:FunctionalRequirement"), rendered);
-        assertTrue(rendered.contains("12 revisions"), rendered);
+        assertTrue(rendered.contains("12 history entries"), rendered);
         assertTrue(rendered.endsWith("\n\nproject: arknet-plugin"), rendered);
     }
 
@@ -668,7 +668,7 @@ class ProjectMcpToolsTest {
     void deleteAnswerSaysSoWhenTheProjectHeldNoModelResources() {
         final String rendered = adapter.delete(contextWithOrigin("/home/f/DEV/arknet"), "arknet-plugin", false, null);
 
-        assertTrue(rendered.contains("no model resources and no revisions when counted"), rendered);
+        assertTrue(rendered.contains("no model resources and no history entries when counted"), rendered);
     }
 
     @Test

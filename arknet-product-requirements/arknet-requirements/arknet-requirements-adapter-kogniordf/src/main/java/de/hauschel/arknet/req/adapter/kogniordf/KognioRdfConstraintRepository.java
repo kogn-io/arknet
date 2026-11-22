@@ -66,9 +66,9 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  * constraint is its own resource, not a field on a requirement): four mandatory triples
  * (identifier, type, title, statement). Both writes run through the shared {@link VersionedWriteFunnel}
  * (the very same instance {@link KognioRdfRequirementRepository} uses, wired by the composition
- * root over {@link KognioRdfRequirementRepositoryFactory#buildFunnel}), so every constraint gets a
- * PROV-O revision and an {@code RevisionToken} recorded - and, since issue #313, that head is also
- * the concurrency token {@link #compareAndUpdate} compares against.</p>
+ * root over {@link KognioRdfRequirementRepositoryFactory#buildFunnel}), so every write of a constraint
+ * publishes a new version and yields a {@code RevisionToken} - the concurrency token
+ * {@link #compareAndUpdate} compares against.</p>
  *
  * <p><strong>Multilingual title/statement (issue #313).</strong> {@code dcterms:title} and
  * {@code arkreq:constraintStatement} each carry one language-tagged literal per language

@@ -48,12 +48,12 @@ import de.hauschel.arknet.prj.domain.Project;
  *       write transaction, would reopen exactly the TOCTOU window the funnel's in-transaction
  *       {@code contains} checks exist to close. There is also nothing here for a concurrency
  *       token to protect: the registry (via {@link KognioRdfProjectRegistry#compareAndUpdate}) is
- *       the single, CAS-guarded, revisioned source of truth for a project's anchors and label -
+ *       the single, CAS-guarded source of truth for a project's anchors and label -
  *       see {@link ProjectSelfDescription}'s own javadoc for why the application service always
- *       calls the registry first. A second, independent revision chain over the very same
- *       information in the project's own dataset would only fill that dataset's provenance graph
- *       with routing noise; it would never answer a question the registry's revision trail does
- *       not already answer. The self-description is a rebuildable duplicate of registry state
+ *       calls the registry first. A second, independently versioned copy of the very same
+ *       information in the project's own dataset would only fill that dataset's version history
+ *       with routing noise; it would never answer a question the registry record does not already
+ *       answer. The self-description is a rebuildable duplicate of registry state
  *       not a second model object with its own history worth tracking.</li>
  * </ul>
  *

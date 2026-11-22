@@ -48,7 +48,7 @@ Kein eigenes `adr_link_term`-Tool: gesetzt/korrigiert wird die Kante wie `addres
 Alle fuenf Kanten stecken **im** `Adr`-Record, nicht daneben -- sonst loescht der naechste replace-by-identity-Write sie still (Lehre aus req/bc).
 `relatedTo` war vor seinem Bau eine der Kanten, die der Out-Adapter ueber den Write hinweg *bewahren* musste; jetzt reist sie im Kandidatengraph mit, und die Bewahrung waere sogar schaedlich (sie machte das Loeschen per `adr_update` unmoeglich).
 
-**Schreibpfad von Anfang an mit CAS.** `AdrRepository` traegt `create` + `compareAndUpdate` und **keine** unbedingte Update-Methode; `AdrService#accept`/`#supersede` laufen ueber `updateWithOptimisticRetry` (Kernfelder+`RevisionToken` aus `findCurrentByCode`, Mutation, `compareAndUpdate` mit dem beobachteten Head, Retry gegen einen frischen Read, `AdrConcurrentlyModifiedException` bei Erschoepfung).
+**Schreibpfad von Anfang an mit CAS.** `AdrRepository` traegt `create` + `compareAndUpdate` und **keine** unbedingte Update-Methode; `AdrService#accept`/`#supersede` laufen ueber `updateWithOptimisticRetry` (Kernfelder+`RevisionToken` aus `findCurrentByCode`, Mutation, `compareAndUpdate` mit dem beobachteten Token, Retry gegen einen frischen Read, `AdrConcurrentlyModifiedException` bei Erschoepfung).
 Das ist die Nachruestung, die req und bc je nachtraeglich brauchten -- hier ab dem ersten Commit.
 `add()` vergibt den naechsten `ADR-N`-Code ueber den geteilten `CodeAssignment`-Retry.
 Die Cross-BC-Aufloesung sitzt bewusst **vor** dem Retry: ein unbekanntes `FR-9` ist keine Code-Kollision.

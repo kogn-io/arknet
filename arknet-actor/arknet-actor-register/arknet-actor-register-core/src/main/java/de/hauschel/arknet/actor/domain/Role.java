@@ -81,7 +81,7 @@ public record Role(
         // is an RDF edge, i.e. an unordered set, so neither a repeated mention nor the order a
         // caller happened to name the occupants in may reach this record's equality - otherwise
         // re-stating the same occupancy in a different order would read as a change and cost a
-        // PROV revision behind which nothing changed.
+        // version history entry behind which nothing changed.
         filledBy = filledBy.stream()
                 .distinct()
                 .sorted(Comparator.comparing(occupant -> occupant.value().value()))

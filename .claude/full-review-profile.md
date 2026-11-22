@@ -179,9 +179,9 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   from the port interfaces alone. Example: `DatasetTransactorRdf4j`'s own class javadoc
   documents an RDF4J `MemoryStore` value-interning race that makes an `ASK`/`SELECT` guard
   unreliable for a brand-new, not-yet-persisted IRI, while `DatasetTx#contains` is immune
-  (it looks values up instead of interning them). `WriteFunnel`'s two `create` existence
-  checks already use `contains()` for exactly this reason; its `readHead`'s `SELECT` doesn't
-  need to, because it only ever reads already-persisted state (an existing resource's head).
+  (it looks values up instead of interning them). `VersionedWriteFunnel`'s existence and code
+  checks already use `contains()` for exactly this reason; its `currentToken` doesn't need to,
+  because it only ever reads already-persisted state (an existing resource's draft token).
   Confirm a concurrency/isolation-adjacent suspicion against this checkout before filing it as
   a finding — two suspicions in the persistence-support review below turned out to be
   unfounded once checked here.
@@ -278,7 +278,7 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
 - Shared SHACL write gate as its own module — the reason
   `arknet-persistence-support` exists separately from the kernel despite both being "shared
   technique".
-- Write funnel, revision as concurrency token — relevant whenever a review
+- Write funnel, library draft token as concurrency token — relevant whenever a review
   touches a write path's transaction/concurrency behavior (Phase 2).
 - Generic store read path / Borrowed In-Port pattern —
   relevant whenever a review touches `arknet-app`'s `mcp/store`/`mcp/report` or the

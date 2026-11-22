@@ -372,7 +372,7 @@ public class ProjectService
      *
      * <p>The guards run before anything is removed, in this order: the reference must name exactly
      * one registered project - or, if it names none, an unregistered dataset -, that project must
-     * not be the caller's own, and a dataset still holding model resources or revisions needs
+     * not be the caller's own, and a dataset still holding model resources or version history needs
      * {@code confirmed}. Only then is the registry entry removed, and after it the dataset - see
      * {@link DeleteProject} for why that order. An unregistered dataset has no registry entry and
      * no own project to guard; only the dataset is removed.</p>

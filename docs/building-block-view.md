@@ -188,7 +188,7 @@ its own core only; no module of a Component depends on a module of another.
 
 ## 6. Cross-cutting concepts (pointers only)
 
-- Write funnel, revision, concurrency token: ADR-3, ADR-28, ADR-32
+- Write funnel, versioning, concurrency token, content graph, child fragments: ADR-3, ADR-61, ADR-63, ADR-64
 - Persistence only through domain-near out-ports, records without graph access: ADR-8, ADR-45
 - Project identity: anchor, one dataset per project, system dataset: ADR-20, ADR-25, ADR-27
 - Operation: one shared daemon, Spring AI: ADR-16, ADR-14

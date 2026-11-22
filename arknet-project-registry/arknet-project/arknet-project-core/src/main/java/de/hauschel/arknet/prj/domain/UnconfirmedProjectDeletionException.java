@@ -13,14 +13,14 @@ import java.util.stream.Stream;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
- * Thrown when a project or an unregistered dataset that still holds model resources or revision
+ * Thrown when a project or an unregistered dataset that still holds model resources or version
  * history is to be deleted without an explicit confirmation.
  *
  * <p>The other {@code *_delete} tools refuse while something still references the resource; a
  * project has no such outside reference - it is the outermost container - so the guard here is a
  * different one: the caller has to say, in a parameter of its own, that losing the model is
  * intended. The message states what would be lost, resource type by resource type plus the number
- * of revisions, before anything is removed, so that confirmation is given knowing the size of it.
+ * of version history entries, before anything is removed, so that confirmation is given knowing the size of it.
  * History counts: a dataset without a single model resource still needs the confirmation.</p>
  */
 public class UnconfirmedProjectDeletionException extends RuntimeException {
@@ -37,7 +37,8 @@ public class UnconfirmedProjectDeletionException extends RuntimeException {
      * @param project        the project that was asked to be deleted
      * @param resourceCounts how many model resources of which type the project's dataset holds,
      *                       possibly empty if only history is held
-     * @param revisions      how many revisions the dataset's provenance trail holds
+     * @param revisions      how many entries the dataset's version history holds (publishes and
+     *                       tombstones)
      */
     public UnconfirmedProjectDeletionException(Project project, Map<String, Long> resourceCounts,
             long revisions) {
@@ -50,7 +51,8 @@ public class UnconfirmedProjectDeletionException extends RuntimeException {
      * @param datasetId      the dataset that was asked to be deleted
      * @param resourceCounts how many model resources of which type the dataset holds, possibly
      *                       empty if only history is held
-     * @param revisions      how many revisions the dataset's provenance trail holds
+     * @param revisions      how many entries the dataset's version history holds (publishes and
+     *                       tombstones)
      */
     public UnconfirmedProjectDeletionException(ProjectId datasetId, Map<String, Long> resourceCounts,
             long revisions) {
@@ -70,7 +72,7 @@ public class UnconfirmedProjectDeletionException extends RuntimeException {
             long revisions) {
         String counts = Stream.concat(
                 resourceCounts.entrySet().stream().map(entry -> entry.getValue() + " " + entry.getKey()),
-                revisions > 0 ? Stream.of(revisions == 1 ? "1 revision" : revisions + " revisions") : Stream.empty())
+                revisions > 0 ? Stream.of(revisions == 1 ? "1 history entry" : revisions + " history entries") : Stream.empty())
                 .collect(Collectors.joining(", "));
         String subject = label == null
                 ? "The unregistered dataset '" + datasetId.value() + "'"
@@ -85,7 +87,7 @@ public class UnconfirmedProjectDeletionException extends RuntimeException {
         return datasetId;
     }
 
-    /** @return how many revisions the dataset's provenance trail holds */
+    /** @return how many entries the dataset's version history holds */
     public long revisions() {
         return revisions;
     }

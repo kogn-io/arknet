@@ -40,9 +40,9 @@ import de.hauschel.arknet.prj.domain.UnknownProjectException;
  * unregistered dataset and removable by calling this port with its id - never a registered project
  * whose model is gone.</p>
  *
- * <p>The model's revision trail goes with the dataset. The registry entry's own revisions in the
- * system dataset are tombstoned the way every delete tombstones its resource's last revision;
- * beyond that, no record that the project once existed is written.</p>
+ * <p>The model's version history goes with the dataset. The registry entry is removed from the
+ * system dataset, which keeps no version history; no record that the project once existed is
+ * written.</p>
  */
 public interface DeleteProject {
 
@@ -51,7 +51,7 @@ public interface DeleteProject {
      *
      * <p>A registered project is looked up by id or label first; only if none matches is the value
      * compared with the ids of unregistered datasets. A dataset that holds model resources or
-     * revisions - history alone counts - is only removed when {@code confirmed}. Resources written
+     * version history entries - history alone counts - is only removed when {@code confirmed}. Resources written
      * by another context between the count and the removal are not noticed: those contexts do not
      * take this port's per-project lock, so they are removed without the confirmation they would
      * have needed, and the answer reports what was found at the time of counting.</p>
@@ -63,7 +63,7 @@ public interface DeleteProject {
      *                      none; only used to refuse deleting a project any of them resolves to,
      *                      never to pick the project to delete
      * @param confirmed     whether the caller explicitly accepts losing the model resources and
-     *                      revisions the dataset still holds; irrelevant for one that holds none
+     *                      history entries the dataset still holds; irrelevant for one that holds none
      * @return what was deleted and what went with it
      * @throws UnknownProjectException             if neither a registered project has this id or
      *                                             label nor an unregistered dataset this id,
@@ -76,7 +76,7 @@ public interface DeleteProject {
      * @throws OwnProjectDeletionException         if any of {@code callerAnchors} belongs to the
      *                                             very project to be deleted
      * @throws UnconfirmedProjectDeletionException if the dataset still holds model resources or
-     *                                             revisions and {@code confirmed} is {@code false};
+     *                                             history entries and {@code confirmed} is {@code false};
      *                                             nothing is removed
      * @throws ProjectDatasetRetainedException     if the dataset was not removed - held open by a
      *                                             concurrent call or failing to be removed for any
@@ -95,7 +95,7 @@ public interface DeleteProject {
      *                         entry existed then
      * @param removedResources how many model resources of which type the dataset held when they
      *                         were counted, empty if none
-     * @param removedRevisions how many revisions the dataset's provenance trail held when they were
+     * @param removedRevisions how many entries the dataset's version history held when they were
      *                         counted
      */
     record Deletion(ProjectId datasetId, Project project, Map<String, Long> removedResources,

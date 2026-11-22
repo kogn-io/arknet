@@ -511,8 +511,9 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * Removes a project's registry entry without exception: every triple of the project subject -
      * unlike {@link #deleteProjectAndItsAnchors}, description, default language and maintained
      * language set included, since nothing is re-added afterwards - and every anchor node it held.
-     * Runs as the body of {@link RegistryWrites#delete}, so the funnel's existence check has already
-     * passed and its tombstone of the entry's last revision follows in the same transaction.
+     * Runs as the body of {@link RegistryWrites#delete}, so its existence check has already passed in
+     * the same transaction; the system dataset keeps no version history, so nothing of the entry
+     * remains.
      */
     private void deleteEntirely(DatasetTx tx, String projectSubject) {
         List<IRI> anchors = anchorsOf(tx, projectSubject);
