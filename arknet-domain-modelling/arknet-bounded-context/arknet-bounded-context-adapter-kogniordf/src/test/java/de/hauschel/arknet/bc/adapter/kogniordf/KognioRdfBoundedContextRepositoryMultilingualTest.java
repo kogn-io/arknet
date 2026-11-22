@@ -34,7 +34,6 @@ import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 
 /**
  * Integration tests for the multilingual {@code arknet:name}/{@code arkddd:domainVision} behaviour
@@ -51,7 +50,7 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 class KognioRdfBoundedContextRepositoryMultilingualTest {
 
     private static final String BOUNDED_CONTEXT_TYPE = "https://w3id.org/arknet/ddd#BoundedContext";
-    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
+    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/content";
     private static final String NAME_PROPERTY = "https://w3id.org/arknet/core#name";
     private static final String DOMAIN_VISION_PROPERTY = "https://w3id.org/arknet/ddd#domainVision";
     private static final String IDENTIFIER_PROPERTY = "http://purl.org/dc/terms/identifier";
@@ -72,7 +71,7 @@ class KognioRdfBoundedContextRepositoryMultilingualTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         repository = KognioRdfBoundedContextRepositoryFactory.over(
-                datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                datasetLifecycle, DisplayLocale.DEFAULT);
     }
 
     @AfterEach

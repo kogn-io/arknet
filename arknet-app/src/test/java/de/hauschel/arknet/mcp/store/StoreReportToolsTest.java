@@ -76,6 +76,7 @@ import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.persistence.ContentGraph;
 
 /**
  * End-to-end test of the generic store report against a real kognio-rdf store shared by
@@ -608,7 +609,7 @@ class StoreReportToolsTest {
                 new NewTerm("Anmeldung", "Der Nachweis der eigenen Identitaet.", null, null), "de");
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { <"
+                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <"
                         + deTerm.id().value().value() + "> "
                         + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Login\"@en } }");
                 return null;
@@ -820,29 +821,23 @@ class StoreReportToolsTest {
                 rdf.createIRI(FR_1_IRI));
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.add(rdf.createIRI(subjectIri + "-graph"), graph);
+                tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                 return null;
             });
         }
     }
 
-    /**
-     * Happy path for issue #251: {@code setUp}'s create is the only write {@code fr1} has gone
-     * through so far, so its history is exactly one revision, and it is the current one.
-     */
+    /** Every write publishes: a freshly created resource already has its one version. */
     @Test
-    void resourceHistoryShowsExactlyOneCurrentRevisionForAFreshlyCreatedResource() {
+    void resourceHistoryOfAFreshlyCreatedResourceHoldsItsOneVersion() {
         String result = tools.resourceHistory(null, "FR-1", ANCHOR);
 
-        assertThat(result).contains("# History (1)").contains("(current)");
+        assertThat(result).contains("Publish state: PUBLISHED_UNCHANGED").contains("# History (1)");
     }
 
-    /**
-     * A further write through the funnel must extend the history and move the current marker to
-     * the new revision, without losing the first one.
-     */
+    /** The create and a changing update are two entries; nothing stays unpublished. */
     @Test
-    void resourceHistoryReflectsAFurtherWriteThroughTheFunnelAndMovesTheCurrentMarker() {
+    void resourceHistoryListsEveryPublishAndThePublishState() {
         RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         RequirementRepository.CurrentRequirement current =
                 requirements.findCurrentByCode(PROJECT, fr1.code(), null).orElseThrow();
@@ -852,9 +847,8 @@ class StoreReportToolsTest {
                 PROJECT, current.head(), updated, null, null, null, noAcceptanceCriteriaLanguages(updated), null, null);
 
         String result = tools.resourceHistory(null, "FR-1", ANCHOR);
-
-        assertThat(result).contains("# History (2)");
-        assertThat(result.lines().filter(line -> line.contains("(current)")).count()).isEqualTo(1);
+        assertThat(result).contains("Publish state: PUBLISHED_UNCHANGED").contains("# History (2)");
+        assertThat(result.lines().filter(line -> line.contains("  publish  ")).count()).isEqualTo(2);
     }
 
     /**
@@ -881,7 +875,7 @@ class StoreReportToolsTest {
                 rdf.createLiteral("Store-first resource"));
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.add(rdf.createIRI("https://w3id.org/arknet/id/store-report-test-store-first-graph"), graph);
+                tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                 return null;
             });
         }

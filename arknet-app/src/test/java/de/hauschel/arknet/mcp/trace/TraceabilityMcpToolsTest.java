@@ -386,7 +386,7 @@ class TraceabilityMcpToolsTest {
                     .getBean(io.kogn.rdf.dataset.hosting.DatasetLifecycle.class)
                     .acquire(new io.kogn.rdf.dataset.hosting.DatasetId(project.value()))) {
                 handle.transactor().inTransaction(tx -> {
-                    tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { <"
+                    tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <"
                             + term.id().value().value() + "> "
                             + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Business Code\"@en } }");
                     return null;

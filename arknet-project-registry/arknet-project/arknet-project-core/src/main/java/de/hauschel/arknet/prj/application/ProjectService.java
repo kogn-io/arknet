@@ -372,7 +372,7 @@ public class ProjectService
      *
      * <p>The guards run before anything is removed, in this order: the reference must name exactly
      * one registered project - or, if it names none, an unregistered dataset -, that project must
-     * not be the caller's own, and a dataset still holding model resources or revisions needs
+     * not be the caller's own, and a dataset still holding model resources or version history needs
      * {@code confirmed}. Only then is the registry entry removed, and after it the dataset - see
      * {@link DeleteProject} for why that order. An unregistered dataset has no registry entry and
      * no own project to guard; only the dataset is removed.</p>
@@ -415,9 +415,9 @@ public class ProjectService
         }
         return withProjectLock(target.id(), () -> {
             Map<String, Long> resources = projectDatasets.modelResourceCounts(target.id());
-            long revisions = projectDatasets.revisionCount(target.id());
-            if (needsConfirmation(resources, revisions) && !confirmed) {
-                throw new UnconfirmedProjectDeletionException(target, resources, revisions);
+            long historyEntries = projectDatasets.historyEntryCount(target.id());
+            if (needsConfirmation(resources, historyEntries) && !confirmed) {
+                throw new UnconfirmedProjectDeletionException(target, resources, historyEntries);
             }
             try {
                 registry.delete(target.id());
@@ -433,7 +433,7 @@ public class ProjectService
                 // entry is already gone, so the state and its remedy are the same.
                 throw new ProjectDatasetRetainedException(target, e);
             }
-            return Deletion.ofProject(target, resources, revisions);
+            return Deletion.ofProject(target, resources, historyEntries);
         });
     }
 
@@ -458,22 +458,22 @@ public class ProjectService
                         + "while it was being deleted. Name it by its id or label again.");
             }
             Map<String, Long> resources = projectDatasets.modelResourceCounts(dataset);
-            long revisions = projectDatasets.revisionCount(dataset);
-            if (needsConfirmation(resources, revisions) && !confirmed) {
-                throw new UnconfirmedProjectDeletionException(dataset, resources, revisions);
+            long historyEntries = projectDatasets.historyEntryCount(dataset);
+            if (needsConfirmation(resources, historyEntries) && !confirmed) {
+                throw new UnconfirmedProjectDeletionException(dataset, resources, historyEntries);
             }
             try {
                 projectDatasets.delete(dataset);
             } catch (RuntimeException e) {
                 throw new ProjectDatasetRetainedException(dataset, e);
             }
-            return Deletion.ofUnregisteredDataset(dataset, resources, revisions);
+            return Deletion.ofUnregisteredDataset(dataset, resources, historyEntries);
         });
     }
 
     /** A dataset is empty only if it holds neither model resources nor history. */
-    private static boolean needsConfirmation(Map<String, Long> resources, long revisions) {
-        return !resources.isEmpty() || revisions > 0;
+    private static boolean needsConfirmation(Map<String, Long> resources, long historyEntries) {
+        return !resources.isEmpty() || historyEntries > 0;
     }
 
     private static String requireReference(String reference) {

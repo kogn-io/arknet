@@ -32,8 +32,8 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  * field, so {@link #compareAndUpdate} exists for text corrections and further language variants
  * only - there is no {@code constraint_set_status} equivalent for it to back.</p>
  *
- * <p>Both writes run through the shared {@link de.hauschel.arknet.persistence.WriteFunnel}, so
- * each records a PROV-O revision and an {@code arkprov:head} - the very token
+ * <p>Both writes run through the shared {@link de.hauschel.arknet.persistence.VersionedWriteFunnel}, so
+ * each publishes a new version and yields a {@code RevisionToken} - the very token
  * {@link #findCurrentByCode} hands out and {@link #compareAndUpdate} compares against.</p>
  *
  * <p>The {@link ProjectId} routing key identifies which architecture model a constraint belongs

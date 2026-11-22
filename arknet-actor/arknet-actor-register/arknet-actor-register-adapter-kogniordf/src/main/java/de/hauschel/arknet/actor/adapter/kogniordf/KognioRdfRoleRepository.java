@@ -27,6 +27,7 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.EntryDetails;
 
 import de.hauschel.arknet.actor.application.port.in.ResolveRoles;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
@@ -48,22 +49,24 @@ import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.ReadTransactions;
+import de.hauschel.arknet.persistence.Slices;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 
 /**
  * Out-adapter: {@link RoleRepository} backed by the kognio-rdf substrate ({@code io.kogn.rdf},
  * embeddable RDF store) - the second resource type of the actor hexagon (ADR-37/
  * kogn-io/arknet#405), sitting alongside {@link KognioRdfActorRepository} in the same package and
- * sharing its {@link ShaclWriteGate}/{@link WriteFunnel} (see
+ * sharing its {@link ShaclWriteGate}/{@link VersionedWriteFunnel} (see
  * {@link KognioRdfRoleRepositoryFactory}): both resource types' shapes and axioms already live in
  * {@code actor-shapes.ttl}/{@code arknet-actor.ttl}. Its own named graph, though - {@link
  * #ROLE_GRAPH} ({@code .../model/roles}) is distinct from {@link KognioRdfActorRepository}'s
  * {@code .../model/actors}, since a shared gate (file-based: shapes + axioms) does not require a
- * shared graph (a {@link WriteFunnel} call is parameterised by graph on every invocation).
+ * shared graph (a {@link VersionedWriteFunnel} call is parameterised by graph on every invocation).
  *
  * <p>Maps a {@link Role} to its opaque {@link RoleId} as the subject IRI: {@code arkproc:Role},
  * the mandatory {@code dcterms:identifier} (the business code {@code ROLE-1}), one or more
@@ -106,7 +109,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
 public class KognioRdfRoleRepository implements RoleRepository {
 
     private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
-    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
+    private static final String ROLE_GRAPH = ContentGraph.GRAPH_IRI;
 
     private static final String ROLE_TYPE = ArkprocVocabulary.ROLE_TYPE;
     private static final String FILLED_BY_PROPERTY = ArkprocVocabulary.FILLED_BY;
@@ -136,7 +139,7 @@ public class KognioRdfRoleRepository implements RoleRepository {
 
     private final DatasetLifecycle lifecycle;
     private final DisplayLocale displayLocale;
-    private final WriteFunnel funnel;
+    private final VersionedWriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -152,7 +155,7 @@ public class KognioRdfRoleRepository implements RoleRepository {
      *                      {@link KognioRdfActorRepository} writes through (must not be
      *                      {@code null})
      */
-    KognioRdfRoleRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {
+    KognioRdfRoleRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, VersionedWriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
@@ -166,14 +169,12 @@ public class KognioRdfRoleRepository implements RoleRepository {
 
         String subjectIriString = role.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
-        IRI graphIri = rdf.createIRI(ROLE_GRAPH);
         Graph graph = buildCandidateGraph(subjectIri, role, tag, tag);
 
-        funnel.create(new DatasetId(projectId.value()), ROLE_GRAPH, subjectIriString,
-                role.code().value(), graph, null,
+        funnel.create(new DatasetId(projectId.value()), subjectIriString, role.code().value(), null,
                 () -> new ResourceAlreadyExistsException(projectId, role.id().value()),
                 () -> new DuplicateRoleCodeException(projectId, role.code()),
-                tx -> tx.add(graphIri, graph));
+                (tx, current) -> graph);
     }
 
     /**
@@ -196,13 +197,13 @@ public class KognioRdfRoleRepository implements RoleRepository {
         IRI graphIri = rdf.createIRI(ROLE_GRAPH);
         Graph graph = buildCandidateGraph(subjectIri, updated, nameTag, descriptionTag);
 
-        funnel.compareAndUpdate(new DatasetId(projectId.value()), ROLE_GRAPH, subjectIriString,
-                expectedHead == null ? null : expectedHead.value(), graph, null,
+        funnel.compareAndUpdate(new DatasetId(projectId.value()), subjectIriString,
+                expectedHead == null ? null : (io.kogn.rdf.versioning.RevisionToken) expectedHead.value(), null,
                 () -> new RoleNotFoundException(projectId, updated.code()),
                 () -> new RoleConcurrentlyModifiedException(projectId, updated.code()),
-                tx -> {
+                (tx, draft) -> {
                     rejectCodeCollision(tx, graphIri, subjectIri, updated.code(), projectId);
-                    replaceTriplesForUpdate(tx, graphIri, subjectIri, subject, graph, nameTag, descriptionTag,
+                    return replaceTriplesForUpdate(tx, subjectIri, subject, graph, nameTag, descriptionTag,
                             defaultTag);
                 });
     }
@@ -249,18 +250,14 @@ public class KognioRdfRoleRepository implements RoleRepository {
      * preservation - it carries no language tag, so {@code graph} already holds every occupant
      * {@code updated} was built with.
      */
-    private void replaceTriplesForUpdate(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
+    private Graph replaceTriplesForUpdate(DatasetTx tx, IRI subjectIri, String subject, Graph graph,
             String nameTag, String descriptionTag, String defaultTag) {
-        String deleteExisting = "DELETE { GRAPH <" + ROLE_GRAPH + "> { " + subject + " ?p ?o } } WHERE { "
-                + "GRAPH <" + ROLE_GRAPH + "> { " + subject + " ?p ?o } }";
-
         // Captured inside this same transaction, never by a separate read beforehand - that would
         // leave a TOCTOU window the caller's own head comparison deliberately avoids.
         List<Literal> preservedNames = otherLanguageLiterals(tx, subject, NAME_PROPERTY, nameTag, defaultTag);
         List<Literal> preservedDescriptions =
                 otherLanguageLiterals(tx, subject, DESCRIPTION_PROPERTY, descriptionTag, defaultTag);
-        tx.update(deleteExisting);
-        tx.add(graphIri, graph);
+        Graph next = Slices.copyOf(graph);
         if (!preservedNames.isEmpty() || !preservedDescriptions.isEmpty()) {
             Graph preservedLanguageVariants = rdf.createGraph();
             for (Literal name : preservedNames) {
@@ -269,8 +266,9 @@ public class KognioRdfRoleRepository implements RoleRepository {
             for (Literal description : preservedDescriptions) {
                 preservedLanguageVariants.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), description);
             }
-            tx.add(graphIri, preservedLanguageVariants);
+            Slices.addAll(next, preservedLanguageVariants);
         }
+        return next;
     }
 
     /**
@@ -325,14 +323,10 @@ public class KognioRdfRoleRepository implements RoleRepository {
                     .map(row -> iriOf(row, "s").getIRIString())
                     .orElseThrow(() -> new RoleNotFoundException(projectId, code));
         }
-        String subject = SparqlTerms.iriRef(subjectIriString);
-
-        funnel.delete(dataset, ROLE_GRAPH, subjectIriString, code.value(),
+        funnel.delete(dataset, subjectIriString, code.value(), EntryDetails.NONE,
                 () -> new RoleNotFoundException(projectId, code),
-                tx -> {
-                    rejectIfReferenced(tx, subjectIriString, projectId, code);
-                    tx.update("DELETE WHERE { GRAPH <" + ROLE_GRAPH + "> { " + subject + " ?p ?o } }");
-                });
+                () -> new RoleConcurrentlyModifiedException(projectId, code),
+                tx -> rejectIfReferenced(tx, subjectIriString, projectId, code));
     }
 
     @Override
@@ -407,15 +401,15 @@ public class KognioRdfRoleRepository implements RoleRepository {
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - mirrors
-     * {@link KognioRdfActorRepository#rejectIfReferenced} exactly, including the graph-crossing
-     * {@code GRAPH ?g} search: a referencing {@code arkreq:primaryRole}/{@code supportingRole}
-     * edge lives in the use-case BC's own model graph, not {@link #ROLE_GRAPH}.
+     * {@link KognioRdfActorRepository#rejectIfReferenced} exactly: a referencing
+     * {@code arkreq:primaryRole}/{@code supportingRole} edge of a use case lives in the same
+     * content graph ({@link #ROLE_GRAPH}) the role does.
      */
     private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, RoleCode code) {
         IRI target = rdf.createIRI(subjectIri);
         List<String> referencing = new ArrayList<>();
         REFERENCING_PREDICATES.forEach((predicateIri, shorthand) -> {
-            String query = "ASK { GRAPH ?g { ?s <" + predicateIri + "> ?target } }";
+            String query = "ASK { GRAPH <" + ROLE_GRAPH + "> { ?s <" + predicateIri + "> ?target } }";
             if (tx.ask(query, Map.of("target", target))) {
                 referencing.add(shorthand);
             }
@@ -460,12 +454,12 @@ public class KognioRdfRoleRepository implements RoleRepository {
         // trip sees (issue #456), mirroring KognioRdfConstraintRepository#findCurrentByCode.
         DisplayLocale effective = this.displayLocale.withRequestedOverride(canonicalizeLenient(defaultLanguage));
 
-        String query = "SELECT ?s ?head WHERE { GRAPH <" + ROLE_GRAPH + "> { " + roleByCodeWhereClause(code) + "} "
-                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+        String query = "SELECT ?s WHERE { GRAPH <" + ROLE_GRAPH + "> { " + roleByCodeWhereClause(code) + "} }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            SparqlQuery sparql = handle.sparqlQuery();
+            // State and token in one read transaction, so the token belongs to exactly this state.
+            return ReadTransactions.read(handle, tx -> {
+            SparqlQuery sparql = tx;
             Optional<BindingSet> found = sparql.select(query).findFirst();
             if (found.isEmpty()) {
                 return Optional.empty();
@@ -482,12 +476,10 @@ public class KognioRdfRoleRepository implements RoleRepository {
                     selected.name().value(),
                     selected.description() == null ? null : selected.description().value(),
                     readFilledBy(sparql::select, subject));
-            RevisionToken head = row.getValue("head")
-                    .filter(IRI.class::isInstance)
-                    .map(value -> new RevisionToken(((IRI) value).getIRIString()))
-                    .orElse(null);
+            RevisionToken head = new RevisionToken(funnel.currentToken(tx, subjectIriString));
             return Optional.of(new CurrentRole(role, head, selected.name().languageTag(),
                     selected.description() == null ? null : selected.description().languageTag()));
+            });
         }
     }
 

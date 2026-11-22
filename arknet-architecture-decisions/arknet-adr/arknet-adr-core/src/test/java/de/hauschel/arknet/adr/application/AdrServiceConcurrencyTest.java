@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
 import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
+import de.hauschel.arknet.adr.application.port.out.RevisionToken;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrDisplayFallback;
@@ -265,7 +266,7 @@ class AdrServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Adr updated,
                 String nameLanguage, String contextLanguage, String decisionLanguage,
                 Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
                 String defaultLanguage, RemovedPositions removedConsequencePositions,
@@ -433,7 +434,7 @@ class AdrServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Adr updated,
                 String nameLanguage, String contextLanguage, String decisionLanguage,
                 Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
                 String defaultLanguage, RemovedPositions removedConsequencePositions,

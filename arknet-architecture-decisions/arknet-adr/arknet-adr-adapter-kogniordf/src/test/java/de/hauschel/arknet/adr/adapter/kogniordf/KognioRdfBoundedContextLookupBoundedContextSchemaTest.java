@@ -29,7 +29,6 @@ import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 
 /**
@@ -60,7 +59,7 @@ class KognioRdfBoundedContextLookupBoundedContextSchemaTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         boundedContextRepository = KognioRdfBoundedContextRepositoryFactory.over(
-                datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                datasetLifecycle, DisplayLocale.DEFAULT);
         adrBoundedContextLookup = new KognioRdfBoundedContextLookup(datasetLifecycle);
     }
 

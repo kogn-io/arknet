@@ -59,9 +59,8 @@ class ProjectVocabularyMatchesOntologyTest {
      * <p>{@link ArkprjVocabulary#REGISTRY_GRAPH} and {@link ArkprjVocabulary#IDENTITY_GRAPH} are
      * deliberately absent from the expected set: unlike every other constant here they do not
      * name a term in the {@code arkprj:} namespace at all but a named graph IRI in
-     * {@code https://w3id.org/arknet/model/...} - the same role
-     * {@link de.hauschel.arknet.persistence.ArkprovVocabulary#PROVENANCE_GRAPH} plays for the
-     * provenance vocabulary. {@link ArkprjVocabulary#NAMESPACE} itself is the prefix, not a term.
+     * {@code https://w3id.org/arknet/model/...}. {@link ArkprjVocabulary#NAMESPACE} itself is the
+     * prefix, not a term.
      *
      * <p>{@code arkprj:AnchorType} is excluded from the ontology side for the opposite reason:
      * it is a genuine {@code arkprj:} term, but the adapter never writes this class IRI as a

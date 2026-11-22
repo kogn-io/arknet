@@ -85,7 +85,7 @@ class RoleTest {
      * {@code arkproc:filledBy} is a set in the store, read back without a promised solution order,
      * so the order a caller happened to name the occupants in must not survive into the aggregate -
      * otherwise re-stating the same occupancy differently ordered would read as a change and cost a
-     * PROV revision behind which nothing changed ({@code RoleService}'s no-op contract).
+     * version history entry behind which nothing changed ({@code RoleService}'s no-op contract).
      */
     @Test
     void ordersFilledByCanonicallySoTheCallersOrderNeverReachesEquality() {

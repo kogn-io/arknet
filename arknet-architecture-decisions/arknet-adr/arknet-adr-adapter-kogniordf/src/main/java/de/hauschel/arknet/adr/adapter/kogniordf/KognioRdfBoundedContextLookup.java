@@ -13,6 +13,7 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.vocab.VocabDct;
 
+import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -46,7 +47,7 @@ public final class KognioRdfBoundedContextLookup implements BoundedContextLookup
     // each carried too.
     private static final String BOUNDED_CONTEXT_TYPE = ArkdddVocabulary.BOUNDED_CONTEXT_TYPE;
     // Mirrors the graph IRI the bounded-context out-adapter writes into.
-    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
+    private static final String BOUNDED_CONTEXT_GRAPH = ContentGraph.GRAPH_IRI;
 
     private final DatasetLifecycle lifecycle;
 

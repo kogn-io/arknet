@@ -31,10 +31,8 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.RevisionToken;
 import de.hauschel.arknet.prj.domain.Anchor;
@@ -73,7 +71,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * in-transaction {@code contains} existence check, the label-uniqueness check (via
  * {@code dcterms:identifier}, since the label <em>is</em> {@code dcterms:identifier} - see the
  * ontology's "identity vs. label" note, no separate label property), the SHACL gate and the
- * commit-conflict translation - live in the shared {@link WriteFunnel}, not here.
+ * commit-conflict translation - live in the shared {@link RegistryWrites}, not here.
  * {@link #register} rejects an existing identity with {@link ResourceAlreadyExistsException} and
  * a label collision with {@link DuplicateProjectLabelException}; {@link #compareAndUpdate}
  * rejects a missing identity with {@link ProjectNotFoundException} and a stale
@@ -84,7 +82,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * {@code ASK} guard.</strong> The anchor model's central invariant - an anchor belongs to at
  * most one project - is checked in {@link #checkAnchorUniqueness} using
  * {@code DatasetTx#contains(graph, anchorIri, null, null)} against the write's own
- * {@link DatasetTx}, the same pattern the shared {@link WriteFunnel} already uses for its own
+ * {@link DatasetTx}, the same pattern the shared {@link RegistryWrites} already uses for its own
  * existence checks: an {@code ASK} query on a not-yet-known IRI is not
  * conflict-protected under {@code SERIALIZABLE} the way {@code contains} is. This is exactly why
  * {@link ProjectGraphs}'s deterministic anchor IRI matters - the check needs a concrete subject to
@@ -101,7 +99,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * {@link de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException} for
  * {@code ProjectService}'s {@code register} and {@code adopt} to retry rather than leaving it to
  * the caller. The shared
- * {@link WriteFunnel} takes that decision as a parameter for exactly this reason.</p>
+ * {@link RegistryWrites} takes that decision as a parameter for exactly this reason.</p>
  *
  * <p><strong>Replace-by-identity leaves no orphaned anchor nodes.</strong> {@link #replaceExistingProject}
  * first deletes the project subject's own triples <em>and</em> the triples of every
@@ -119,7 +117,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance graph
  * against the project SHACL shapes before the write transaction opens, throw
  * {@link WriteConstraintViolationException} on a violation, persist nothing - live in the shared
- * {@link WriteFunnel}. No validation-only asserted context is needed: unlike the
+ * {@link RegistryWrites}. No validation-only asserted context is needed: unlike the
  * requirements adapter's {@code arkreq:usesTerm}, nothing in this candidate graph references a
  * subject outside of it.</p>
  */
@@ -129,7 +127,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
 
     private final DatasetLifecycle lifecycle;
     private final DisplayLocale displayLocale;
-    private final WriteFunnel funnel;
+    private final RegistryWrites funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -141,12 +139,12 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * @param displayLocale the display-language preference selecting which {@code
      *                      dcterms:description} the read paths surface for a multilingual
      *                      project (must not be {@code null})
-     * @param funnel        the shared write funnel running the SHACL gate, dataset
-     *                      acquisition and existence/head checks for every {@link #register}/
+     * @param funnel        the registry's own {@link RegistryWrites} running the SHACL gate, dataset
+     *                      acquisition and existence/state-token checks for every {@link #register}/
      *                      {@link #compareAndUpdate}/{@link #updateAttributes} (must not be
      *                      {@code null})
      */
-    KognioRdfProjectRegistry(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {
+    KognioRdfProjectRegistry(DatasetLifecycle lifecycle, DisplayLocale displayLocale, RegistryWrites funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
@@ -178,7 +176,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
         }
 
         funnel.create(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString, project.label(),
-                candidate, null,
+                candidate,
                 () -> new ResourceAlreadyExistsException(project.id()),
                 () -> new DuplicateProjectLabelException(project.label()),
                 conflict -> attributeLostRegistration(project, conflict),
@@ -194,7 +192,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
         Graph candidate = ProjectGraphs.buildGraph(project);
 
         funnel.compareAndUpdate(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString,
-                expectedHead == null ? null : expectedHead.value(), candidate, null,
+                expectedHead == null ? null : (String) expectedHead.value(), candidate, null,
                 () -> new ProjectNotFoundException(project.id()),
                 () -> new StaleProjectException(project.id()),
                 tx -> replaceExistingProject(tx, graphIri, projectSubject, project, candidate));
@@ -256,7 +254,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
         }
 
         funnel.compareAndUpdate(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString,
-                expectedHead == null ? null : expectedHead.value(), writeCandidate, assertedContext,
+                expectedHead == null ? null : (String) expectedHead.value(), writeCandidate, assertedContext,
                 () -> new ProjectNotFoundException(projectId),
                 () -> new StaleProjectException(projectId),
                 tx -> {
@@ -366,10 +364,10 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     /**
      * {@inheritDoc}
      *
-     * <p>Runs through {@link WriteFunnel#delete} like every other {@code *_delete} in this
-     * codebase: the existence check sits inside the write transaction, and the entry's last
-     * revision in the system dataset's provenance graph is tombstoned rather than erased. No
-     * business code is retained - a project has none, and its label is free for reuse the moment
+     * <p>Runs through {@link RegistryWrites#delete} like every other {@code *_delete} in this
+     * codebase: the existence check sits inside the write transaction, and the entry's triples are
+     * removed there. The system dataset lies outside the library versioning, so no tombstone and
+     * no history entry is written. No business code is retained - a project has none, and its label is free for reuse the moment
      * the entry is gone.</p>
      */
     @Override
@@ -385,7 +383,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     /**
      * Names what a registration that lost a commit race actually collided with.
      *
-     * <p>{@link WriteFunnel#create}'s own conflict translation cannot do this: a lost commit tells
+     * <p>{@link RegistryWrites#create}'s own conflict translation cannot do this: a lost commit tells
      * it only that somebody wrote first, and this context guards <em>two</em> uniqueness rules, not
      * one - the label via the funnel's {@code code} parameter, the anchor via
      * {@link #checkAnchorUniqueness} inside the body. Reporting every lost
@@ -435,7 +433,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * the same id and the same label first; without the filter that winner's own label would be
      * misread as another project's, and the lost race would surface as a wrong
      * {@link DuplicateProjectLabelException} instead of an unattributed conflict, whose retry then
-     * meets {@link WriteFunnel#create}'s {@code alreadyExists} guard and is rejected as an existing
+     * meets {@link RegistryWrites#create}'s {@code alreadyExists} guard and is rejected as an existing
      * resource.</p>
      */
     private boolean labelHeldByAnotherProject(Project project) {
@@ -513,8 +511,9 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * Removes a project's registry entry without exception: every triple of the project subject -
      * unlike {@link #deleteProjectAndItsAnchors}, description, default language and maintained
      * language set included, since nothing is re-added afterwards - and every anchor node it held.
-     * Runs as the body of {@link WriteFunnel#delete}, so the funnel's existence check has already
-     * passed and its tombstone of the entry's last revision follows in the same transaction.
+     * Runs as the body of {@link RegistryWrites#delete}, so its existence check has already passed in
+     * the same transaction; the system dataset keeps no version history, so nothing of the entry
+     * remains.
      */
     private void deleteEntirely(DatasetTx tx, String projectSubject) {
         List<IRI> anchors = anchorsOf(tx, projectSubject);
@@ -539,10 +538,10 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
 
     /**
      * Enforces label uniqueness inside the write transaction. Redundant, but harmless, on the
-     * {@link #register} path - {@link WriteFunnel#create} already runs the identical check via
+     * {@link #register} path - {@link RegistryWrites#create} already runs the identical check via
      * its {@code code} parameter (here bound to {@code project.label()}) before this body ever
-     * runs. It is not redundant on the {@link #compareAndUpdate} path: unlike {@link WriteFunnel#create},
-     * {@link WriteFunnel#compareAndUpdate} takes no business-code parameter and therefore performs
+     * runs. It is not redundant on the {@link #compareAndUpdate} path: unlike {@link RegistryWrites#create},
+     * {@link RegistryWrites#compareAndUpdate} takes no business-code parameter and therefore performs
      * no such check itself - {@link ProjectRegistry}'s own contract nonetheless promises
      * {@link DuplicateProjectLabelException} on a rename that collides with a different project's
      * label, so this adapter enforces it itself, here, after {@link #deleteProjectAndItsAnchors}
@@ -677,15 +676,16 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
 
         String projectIriString = ProjectGraphs.projectIri(id);
         String projectSubject = SparqlTerms.iriRef(projectIriString);
-        String query = "SELECT ?label ?description ?defaultLanguage ?head WHERE { GRAPH <"
+        String query = "SELECT ?label ?description ?defaultLanguage WHERE { GRAPH <"
                 + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
                 + projectSubject + " <" + VocabDct.IDENTIFIER.getIRIString() + "> ?label . "
                 + "OPTIONAL { " + projectSubject + " <" + ArkprjVocabulary.DESCRIPTION + "> ?description } "
-                + "OPTIONAL { " + projectSubject + " <" + ArkprjVocabulary.DEFAULT_LANGUAGE + "> ?defaultLanguage } } "
-                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + projectSubject + " <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+                + "OPTIONAL { " + projectSubject + " <" + ArkprjVocabulary.DEFAULT_LANGUAGE + "> ?defaultLanguage } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(SYSTEM_DATASET)) {
+            // The token is read first, the state after it, so it is never fresher than the state.
+            RevisionToken head = new RevisionToken(
+                    RegistryWrites.stateToken(handle.sparqlQuery()::select, projectIriString));
             List<BindingSet> rows = handle.sparqlQuery().select(query).toList();
             if (rows.isEmpty()) {
                 return Optional.empty();
@@ -696,11 +696,6 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
             List<Anchor> anchors = readAnchors(handle.sparqlQuery()::select, projectSubject);
             List<String> maintained = readMaintainedLanguages(handle.sparqlQuery()::select, projectSubject);
             Project project = new Project(id, label, anchors, description, defaultLanguage, maintained);
-            RevisionToken head = rows.stream()
-                    .flatMap(row -> row.getValue("head").filter(IRI.class::isInstance).map(IRI.class::cast).stream())
-                    .findFirst()
-                    .map(iri -> new RevisionToken(iri.getIRIString()))
-                    .orElse(null);
             return Optional.of(new ProjectRegistry.CurrentProject(project, head));
         }
     }

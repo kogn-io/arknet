@@ -36,6 +36,9 @@ import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.PublishState;
+import io.kogn.rdf.versioning.EntryKind;
+import io.kogn.rdf.versioning.HistoryEntry;
 
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
@@ -55,11 +58,12 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 
 /**
  * Integration test for {@link KognioRdfActorRepository} against an in-memory RDF4J-backed
@@ -68,8 +72,10 @@ import de.hauschel.arknet.persistence.WriteFunnel;
 class KognioRdfActorRepositoryTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
+
+    private static final DatasetId DATASET_A = new DatasetId(PROJECT_A.value());
     private static final ProjectId PROJECT_B = new ProjectId("b");
-    private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
+    private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/content";
     private static final String HUMAN_ACTOR_TYPE = "https://w3id.org/arknet/process#HumanActor";
     private static final String GROUP_ACTOR_TYPE = "https://w3id.org/arknet/process#GroupActor";
     private static final String IDENTIFIER_PROPERTY = "http://purl.org/dc/terms/identifier";
@@ -94,7 +100,8 @@ class KognioRdfActorRepositoryTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
-        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(datasetLifecycle, gate, ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = new KognioRdfActorRepository(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
@@ -263,8 +270,6 @@ class KognioRdfActorRepositoryTest {
                 () -> repository.compareAndUpdate(PROJECT_A, head, recodedToCollide, "de", "de", null));
         assertEquals("PaymentService", repository.findByCode(PROJECT_A, new ActorCode("ACTOR-2"), null)
                 .orElseThrow().name(), "the rejected write must not have changed anything");
-        assertEquals(1, revisionsOf(id.value().value()).size(),
-                "the rejected write must not have recorded a revision");
     }
 
     /**
@@ -429,7 +434,7 @@ class KognioRdfActorRepositoryTest {
     /**
      * The counter's node-kind blindness, pinned (kogn-io/arknet#360): an {@code ACTOR-2} on an
      * anonymous subject is part of the answer, because the query holds no
-     * {@code FILTER(isIRI(?s))}. Deliberate - {@code WriteFunnel#create} tests code uniqueness
+     * {@code FILTER(isIRI(?s))}. Deliberate - {@code VersionedWriteFunnel#create} tests code uniqueness
      * through {@code tx.contains(graph, null, dcterms:identifier, code)}, whose wildcard subject
      * matches a blank node too, and would reject an {@code actor_add} for that very code. A counter
      * ignoring it would hand the same refused number to every retry of the assignment and the
@@ -577,19 +582,15 @@ class KognioRdfActorRepositoryTest {
         repository.create(PROJECT_A, stored, "de");
         String subject = stored.id().value().value();
 
-        List<String> afterCreate = revisionsOf(subject);
+        List<Object> afterCreate = headsOf(subject);
         assertEquals(1, afterCreate.size(), "create must record exactly one revision");
         assertEquals(afterCreate, headsOf(subject), "the head must point at the sole revision");
 
         repository.compareAndUpdate(PROJECT_A, new RevisionToken(afterCreate.get(0)),
                 new Actor(stored.id(), stored.code(), stored.type(), "Antragsbearbeiter", null), "de", "de", null);
-
-        assertEquals(2, revisionsOf(subject).size(), "update must record exactly one more revision");
-        List<String> heads = headsOf(subject);
+        List<Object> heads = headsOf(subject);
         assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
         assertFalse(heads.get(0).equals(afterCreate.get(0)), "the head must have moved");
-        assertEquals(List.of(afterCreate.get(0)), objectsOf(heads.get(0), ArkprovVocabulary.WAS_REVISION_OF),
-                "the new head must supersede the previous one via prov:wasRevisionOf");
     }
 
     @Test
@@ -599,12 +600,6 @@ class KognioRdfActorRepositoryTest {
         assertThrows(DuplicateActorCodeException.class,
                 () -> repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.SYSTEM, null), "de"));
 
-        String all = "SELECT ?r WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?r a <" + ArkprovVocabulary.REVISION_TYPE + "> } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertEquals(1, handle.sparqlQuery().select(all).count(),
-                    "the rejected write must not have recorded a revision");
-        }
     }
 
     // ---- compare-and-set -------------------------------------------------------------------
@@ -665,36 +660,6 @@ class KognioRdfActorRepositoryTest {
 
         assertEquals("Renamed by the winner",
                 repository.findByCode(PROJECT_A, original.code(), null).orElseThrow().name());
-        assertEquals(2, revisionsOf(id.value().value()).size(),
-                "the rejected write must not have recorded a revision");
-    }
-
-    /**
-     * An actor written before the funnel recorded revisions carries no head at all. Its {@code null}
-     * head is a legitimate expectation, not a missing one - so a caller that observed "no head yet"
-     * may still write, and the write records the first revision.
-     */
-    @Test
-    void compareAndUpdateAcceptsANullHeadWhenTheResourceHasNoneYet() {
-        ActorId id = freshId();
-        Actor original = new Actor(id, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Sachbearbeiter", null);
-        repository.create(PROJECT_A, original, "de");
-        // Strips the head the create recorded, leaving the state from before the revision trail existed.
-        String dropHead = "DELETE WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + id.value().value() + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            handle.transactor().inTransaction(tx -> {
-                tx.update(dropHead);
-                return null;
-            });
-        }
-        assertNull(currentHeadOf(original.code()), "precondition: the actor carries no head");
-
-        repository.compareAndUpdate(PROJECT_A, null,
-                new Actor(id, original.code(), original.type(), "Antragsbearbeiter", null), "de", "de", null);
-
-        assertEquals("Antragsbearbeiter", repository.findByCode(PROJECT_A, original.code(), null).orElseThrow().name());
-        assertEquals(1, headsOf(id.value().value()).size(), "the write must have recorded a head again");
     }
 
     // ---- delete (issue #335) -----------------------------------------------------------------
@@ -719,26 +684,22 @@ class KognioRdfActorRepositoryTest {
     }
 
     /**
-     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
-     * the {@code arkprov:head} pointer is removed and the last revision is marked
-     * {@code prov:invalidatedAtTime} rather than erased.
+     * The tombstone contract {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#delete} documents:
+     * the draft is removed and the library history records a tombstone.
      */
     @Test
-    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+    void deleteRemovesTheDraftAndRecordsATombstone() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
         repository.create(PROJECT_A, stored, "de");
         String subject = stored.id().value().value();
-        String lastRevision = headsOf(subject).get(0);
 
         repository.delete(PROJECT_A, stored.code());
 
-        assertTrue(headsOf(subject).isEmpty(), "the head pointer must be removed");
-        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
-                    "the last revision must be tombstoned, not erased");
-        }
+        assertEquals(PublishState.DELETED, probe().publishState(DATASET_A, subject));
+        List<EntryKind> kinds = probe().history(DATASET_A, subject).stream().map(HistoryEntry::kind).toList();
+        assertEquals(EntryKind.TOMBSTONE, kinds.getLast(), "the delete must record a tombstone");
+        assertTrue(kinds.subList(0, kinds.size() - 1).stream().allMatch(EntryKind.PUBLISH::equals)
+                && kinds.size() > 1, "every write before the delete published a version");
     }
 
     /**
@@ -754,7 +715,7 @@ class KognioRdfActorRepositoryTest {
     void deleteRejectsAnActorStillReferencedByAFilledByEdgeInAForeignGraph() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
         repository.create(PROJECT_A, stored, "de");
-        String reference = "INSERT DATA { GRAPH <https://example.org/roles> { <https://example.org/roles/1> <"
+        String reference = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <https://example.org/roles/1> <"
                 + ArkprocVocabulary.FILLED_BY + "> <" + stored.id().value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
@@ -783,7 +744,7 @@ class KognioRdfActorRepositoryTest {
     void deleteDoesNotRejectAnActorReferencedOnlyByAPrimaryRoleEdge() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
         repository.create(PROJECT_A, stored, "de");
-        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
+        String reference = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <https://example.org/uc/1> <"
                 + ArkreqVocabulary.PRIMARY_ROLE + "> <" + stored.id().value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
@@ -803,7 +764,7 @@ class KognioRdfActorRepositoryTest {
      * still points at the actor - real as of ADR-37/kogn-io/arknet#405 Part B, unlike
      * {@link #deleteRejectsAnActorStillReferencedAsPrimaryActor}'s hand-inserted triple: this test
      * writes the referencing role through {@link KognioRdfRoleRepository} itself, sharing this
-     * test's own {@link WriteFunnel}, exactly the way a real {@code role_add} would. Pins
+     * test's own {@link VersionedWriteFunnel}, exactly the way a real {@code role_add} would. Pins
      * {@code REFERENCING_PREDICATES}' {@code arkproc:filledBy} entry (added in Part A, ahead of a
      * real writer) now that one exists.
      */
@@ -811,8 +772,8 @@ class KognioRdfActorRepositoryTest {
     void deleteRejectsAnActorStillReferencedByARolesFilledBy() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
         repository.create(PROJECT_A, stored, "de");
-        WriteFunnel funnel = new WriteFunnel(lifecycle, KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT),
-                WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(lifecycle, KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT), ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         KognioRdfRoleRepository roles = new KognioRdfRoleRepository(lifecycle, DisplayLocale.DEFAULT, funnel);
         roles.create(PROJECT_A, new Role(
                 new RoleId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID())),
@@ -841,14 +802,11 @@ class KognioRdfActorRepositoryTest {
      * naming a second actor later.
      */
     @Test
-    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+    void deleteKeepsTheBusinessCodeOnTheTombstone() {
         Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
         repository.create(PROJECT_A, stored, "de");
-        String lastRevision = headsOf(stored.id().value().value()).get(0);
 
         repository.delete(PROJECT_A, stored.code());
-
-        assertEquals(List.of("ACTOR-1"), identifiersOf(lastRevision));
         assertEquals(List.of(new ActorCode("ACTOR-1")), repository.findRetainedCodes(PROJECT_A));
     }
 
@@ -874,10 +832,8 @@ class KognioRdfActorRepositoryTest {
     void findRetainedCodesIgnoresAnotherContextsRetainedCode() {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.update("INSERT DATA { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                        + "<https://w3id.org/arknet/revision/foreign> <" + ArkprovVocabulary.INVALIDATED_AT_TIME
-                        + "> \"2026-08-23T10:00:00Z\"^^<http://www.w3.org/2001/XMLSchema#dateTime> ; "
-                        + "<http://purl.org/dc/terms/identifier> \"TERM-9\" } }");
+                tx.update("INSERT DATA { GRAPH <" + VersionedWriteFunnel.RETAINED_CODES_GRAPH + "> { "
+                        + "<urn:uuid:foreign-tombstone> <http://purl.org/dc/terms/identifier> \"TERM-9\" } }");
                 return null;
             });
         }
@@ -926,21 +882,11 @@ class KognioRdfActorRepositoryTest {
         return repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
     }
 
-    private List<String> revisionsOf(String subjectIri) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
-                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + subjectIri + "> } }");
+    /** The draft's current token as a one-element list, or empty for an empty draft. */
+    private List<Object> headsOf(String subjectIri) {
+        return probe().token(DATASET_A, subjectIri).<Object>map(token -> token).stream().toList();
     }
 
-    private List<String> headsOf(String subjectIri) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIri + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
-    }
-
-    private List<String> objectsOf(String subjectIri, String predicateIri) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIri + "> <" + predicateIri + "> ?v } }");
-    }
 
     private List<String> selectIris(String query) {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -950,14 +896,8 @@ class KognioRdfActorRepositoryTest {
         }
     }
 
-    /** The {@code dcterms:identifier} literals a revision carries in the provenance graph. */
-    private List<String> identifiersOf(String revisionIri) {
-        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
-                    .toList();
-        }
+
+    private VersioningProbe probe() {
+        return new VersioningProbe(lifecycle, ContentGraph.GRAPH_IRI);
     }
 }

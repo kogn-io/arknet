@@ -30,14 +30,16 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.PublishState;
+import io.kogn.rdf.versioning.EntryKind;
+import io.kogn.rdf.versioning.HistoryEntry;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.domain.Constraint;
@@ -48,6 +50,8 @@ import de.hauschel.arknet.req.domain.ConstraintReferencedException;
 import de.hauschel.arknet.req.domain.ConstraintType;
 import de.hauschel.arknet.req.domain.DuplicateConstraintCodeException;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 
 /**
  * Integration test for {@link KognioRdfConstraintRepository} against an in-memory RDF4J-backed
@@ -59,8 +63,10 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 class KognioRdfConstraintRepositoryTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
+
+    private static final DatasetId DATASET_A = new DatasetId(PROJECT_A.value());
     private static final ProjectId PROJECT_B = new ProjectId("b");
-    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
+    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/content";
 
     @TempDir
     Path storageRoot;
@@ -73,7 +79,7 @@ class KognioRdfConstraintRepositoryTest {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
-        WriteFunnel funnel = KognioRdfRequirementRepositoryFactory.buildFunnel(datasetLifecycle, DisplayLocale.DEFAULT);
+        VersionedWriteFunnel funnel = KognioRdfRequirementRepositoryFactory.buildFunnel(datasetLifecycle, DisplayLocale.DEFAULT);
         repository = KognioRdfConstraintRepositoryFactory.over(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
@@ -200,7 +206,7 @@ class KognioRdfConstraintRepositoryTest {
 
     /**
      * The blank-node variant of the previous test (kogn-io/arknet#360). Nothing in this query
-     * restricts {@code ?s} to an IRI, on purpose: {@code WriteFunnel#create} probes for a taken
+     * restricts {@code ?s} to an IRI, on purpose: {@code VersionedWriteFunnel#create} probes for a taken
      * code with a wildcard subject ({@code tx.contains(graph, null, dcterms:identifier, code)}) and
      * would therefore decline a {@code constraint_add} for {@code TCON-2} while an anonymous
      * subject holds it. A counter that did not see it would keep handing the blocked number to
@@ -268,7 +274,7 @@ class KognioRdfConstraintRepositoryTest {
      * this - only a store-first write, the case kogn-io/arknet#360 concerns.
      */
     private void givenBareCodedSubject(ProjectId projectId, ConstraintId id, String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/constraints> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#TechnicalConstraint> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -286,7 +292,7 @@ class KognioRdfConstraintRepositoryTest {
      * its code.
      */
     private void givenBareBlankNodeSubject(ProjectId projectId, String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/constraints> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "[] a <https://w3id.org/arknet/requirements#TechnicalConstraint> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -304,7 +310,7 @@ class KognioRdfConstraintRepositoryTest {
      * (kogn-io/arknet#401).
      */
     private void givenPopulatedBlankNodeSubject(ProjectId projectId, String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/constraints> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "[] a <https://w3id.org/arknet/requirements#TechnicalConstraint> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Anonymous\" ; "
@@ -337,6 +343,23 @@ class KognioRdfConstraintRepositoryTest {
     @Test
     void findByIdsWithNoIdsReturnsAnEmptyList() {
         assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of()));
+    }
+
+    /** Every type shares the content graph: an id of a requirement resolves to no constraint code. */
+    @Test
+    void findByIdsLeavesOutAnIdentityThatNamesNoConstraint() {
+        ResourceId requirement = ResourceId.of("https://w3id.org/arknet/id/fr-1");
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
+                + "<" + requirement.value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"FR-1\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+
+        assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of(requirement)));
     }
 
     @Test
@@ -402,27 +425,23 @@ class KognioRdfConstraintRepositoryTest {
     }
 
     /**
-     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
-     * the {@code arkprov:head} pointer is removed and the last revision is marked
-     * {@code prov:invalidatedAtTime} rather than erased.
+     * The tombstone contract {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#delete} documents:
+     * the draft is removed and the library history records a tombstone.
      */
     @Test
-    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+    void deleteRemovesTheDraftAndRecordsATombstone() {
         Constraint stored = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
                 "Must run on the JVM.", ConstraintType.TECHNICAL);
         create(PROJECT_A, stored);
         String subject = stored.id().value().value();
-        String lastRevision = headsOf(subject).get(0);
 
         repository.delete(PROJECT_A, stored.code());
 
-        assertTrue(headsOf(subject).isEmpty(), "the head pointer must be removed");
-        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
-                    "the last revision must be tombstoned, not erased");
-        }
+        assertEquals(PublishState.DELETED, probe().publishState(DATASET_A, subject));
+        List<EntryKind> kinds = probe().history(DATASET_A, subject).stream().map(HistoryEntry::kind).toList();
+        assertEquals(EntryKind.TOMBSTONE, kinds.getLast(), "the delete must record a tombstone");
+        assertTrue(kinds.subList(0, kinds.size() - 1).stream().allMatch(EntryKind.PUBLISH::equals)
+                && kinds.size() > 1, "every write before the delete published a version");
     }
 
     /**
@@ -432,15 +451,12 @@ class KognioRdfConstraintRepositoryTest {
      * constraint later.
      */
     @Test
-    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+    void deleteKeepsTheBusinessCodeOnTheTombstone() {
         Constraint stored = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
                 "Must run on the JVM.", ConstraintType.TECHNICAL);
         create(PROJECT_A, stored);
-        String lastRevision = headsOf(stored.id().value().value()).get(0);
 
         repository.delete(PROJECT_A, stored.code());
-
-        assertEquals(List.of("TCON-1"), identifiersOf(lastRevision));
         assertEquals(List.of(new ConstraintCode("TCON-1")), repository.findRetainedCodes(PROJECT_A));
     }
 
@@ -467,7 +483,7 @@ class KognioRdfConstraintRepositoryTest {
         Constraint stored = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
                 "Must run on the JVM.", ConstraintType.TECHNICAL);
         create(PROJECT_A, stored);
-        String reference = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String reference = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<https://w3id.org/arknet/id/requirement-1> <" + ArkreqVocabulary.CONSTRAINED_BY + "> <"
                 + stored.id().value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -493,7 +509,7 @@ class KognioRdfConstraintRepositoryTest {
         Constraint stored = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
                 "Must run on the JVM.", ConstraintType.TECHNICAL);
         create(PROJECT_A, stored);
-        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
+        String reference = "INSERT DATA { GRAPH <" + ContentGraph.GRAPH_IRI + "> { <https://example.org/uc/1> <"
                 + ArkreqVocabulary.CONSTRAINED_BY + "> <" + stored.id().value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
@@ -507,10 +523,6 @@ class KognioRdfConstraintRepositoryTest {
 
     // ---- helpers (delete) ----------------------------------------------------------------------
 
-    private List<String> headsOf(String subjectIri) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIri + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
-    }
 
     private List<String> selectIris(String query) {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -520,14 +532,8 @@ class KognioRdfConstraintRepositoryTest {
         }
     }
 
-    /** The {@code dcterms:identifier} literals a revision carries in the provenance graph. */
-    private List<String> identifiersOf(String revisionIri) {
-        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
-                    .toList();
-        }
+
+    private VersioningProbe probe() {
+        return new VersioningProbe(lifecycle, ContentGraph.GRAPH_IRI);
     }
 }

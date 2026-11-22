@@ -37,11 +37,11 @@ import de.hauschel.arknet.kernel.ResourceId;
  * identity's code rejects the same way, while updating to the identity's own already-held code (the
  * only case any caller today, {@code actor_update}, exercises) does not.</p>
  *
- * <p><strong>Concurrency token.</strong> Mirrors the real {@code WriteFunnel}'s head, minimally: a
+ * <p><strong>Concurrency token.</strong> Mirrors the real {@code VersionedWriteFunnel}'s head, minimally: a
  * fresh opaque marker minted on every {@link #create}/{@link #compareAndUpdate}, tracked per
  * identity - {@link #findCurrentByCode} hands it out alongside the actor,
  * {@link #compareAndUpdate} rejects a stale one, exactly the CAS contract the real adapter enforces
- * via {@code arkprov:head}.</p>
+ * via {@code RevisionToken}.</p>
  *
  * <p><strong>One value per field, not a per-language set (kogn-io/arknet#520).</strong> Mirrors
  * {@code InMemoryConstraintRepository}: this fake stores a single name/description value per

@@ -29,11 +29,11 @@ import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.versioning.VersioningGraphs;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ExportMetadataVocabulary;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.pr.shared.RequirementCode;
@@ -63,7 +63,7 @@ class StoreExporterTest {
     private static final ProjectId PROJECT = new ProjectId("store-exporter-test");
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-exporter-test-fr-1";
     private static final String FR_2_IRI = "https://w3id.org/arknet/id/store-exporter-test-fr-2";
-    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
+    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/content";
     private static final String DCTERMS_TITLE = "http://purl.org/dc/terms/title";
 
     @TempDir
@@ -113,16 +113,16 @@ class StoreExporterTest {
     }
 
     /**
-     * A backup must not hide the provenance graph {@link StoreReader} excludes for report
-     * purposes - every guarded write records a PROV-O revision there, and losing it
-     * would silently drop change history from the backup.
+     * A backup must not hide the graphs {@link StoreReader} leaves out for report purposes - the
+     * library's binding of the content graph lives in one of them, and a restore without it would
+     * no longer be bound to its content graph.
      */
     @Test
-    void exportTrigContainsBothTheRequirementsGraphAndTheProvenanceGraph() {
+    void exportTrigContainsTheContentGraphAndTheLibraryConfiguration() {
         String trig = exportTrig();
 
         assertThat(trig).contains("<" + REQUIREMENTS_GRAPH + ">");
-        assertThat(trig).contains("<" + ArkprovVocabulary.PROVENANCE_GRAPH + ">");
+        assertThat(trig).contains("<" + VersioningGraphs.CONFIG.getIRIString() + ">");
     }
 
     /**

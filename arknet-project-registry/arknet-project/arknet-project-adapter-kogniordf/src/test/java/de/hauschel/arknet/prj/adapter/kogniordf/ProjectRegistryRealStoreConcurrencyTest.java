@@ -70,7 +70,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  *
  * <p><strong>What the {@code register} races prove.</strong> Two things the four model contexts' tests cannot cover,
  * because this context differs from them in two ways. First: it guards <em>two</em> uniqueness
- * rules, the label (through {@link de.hauschel.arknet.persistence.WriteFunnel}'s {@code code}
+ * rules, the label (through {@link RegistryWrites#create}'s {@code code}
  * parameter) and the anchor ({@link KognioRdfProjectRegistry#checkAnchorUniqueness}
  * decision 4) - so "you lost the commit race" does not by itself say which rule was broken.
  * Second: there is no {@code CodeAssignment} retry to heal the loser (there is no {@code PRJ-N}
@@ -84,12 +84,13 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * read-modify-write path behind {@code project_attach_anchor}/{@code project_rename} had no real
  * -store, real-thread proof of its own before this class. Two {@code compareAndUpdate} calls
  * against the very same, already-registered project, both reading the same
- * {@code arkprov:head}: both pass the funnel's synchronous head check because neither sees the
- * other's uncommitted write, and only the second commit is rejected by the store - the funnel
+ * {@code RevisionToken}: both pass {@link RegistryWrites}' synchronous state-token check because
+ * neither sees the other's uncommitted write, and only the second commit is rejected by the store -
+ * {@code RegistryWrites}
  * translates that lost {@code SERIALIZABLE} conflict into the identical {@link StaleProjectException}
- * a synchronously stale caller would already get from the head comparison itself (see
- * {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate}'s "two ways to observe a
- * conflict, one signal" javadoc). The proof is that this second, harder-to-reach interleaving
+ * a synchronously stale caller would already get from the token comparison itself (see
+ * {@link RegistryWrites#compareAndUpdate}: a stale token and a lost commit race both throw the
+ * same signal). The proof is that this second, harder-to-reach interleaving
  * collapses onto the same signal rather than surfacing a raw store exception or, worse, silently
  * losing one writer's change - and that the loser's whole transaction, including its
  * {@link KognioRdfProjectRegistry#deleteProjectAndItsAnchors} deletes, rolls back rather than
@@ -118,12 +119,12 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * transaction has passed and nothing has been written yet. The hook deliberately hangs on the
  * first write rather than on a counted {@code contains} call the way {@code
  * BoundedContextServiceRealStoreConcurrencyTest} does: this write path issues four such guards
- * (the funnel's identity and label checks, then the body's own label and per-anchor checks), and
+ * ({@link RegistryWrites}' identity and label checks, then the body's own label and per-anchor checks), and
  * a count would silently stop pinning the intended moment the day one of them is added or dropped.
  * "The last guard has passed" is what matters, and "about to write" says exactly that. The same
  * decorator serves the {@code compareAndUpdate} races unchanged: that path's own last guard
- * ({@link KognioRdfProjectRegistry#checkAnchorUniqueness}, reached after the funnel's subject and
- * head checks and after {@link KognioRdfProjectRegistry#deleteProjectAndItsAnchors}'s deletes)
+ * ({@link KognioRdfProjectRegistry#checkAnchorUniqueness}, reached after {@code RegistryWrites}' subject and
+ * state-token checks and after {@link KognioRdfProjectRegistry#deleteProjectAndItsAnchors}'s deletes)
  * also sits immediately before that transaction's first {@code add}. A
  * {@link CountDownLatch} then holds the loser until the winner's transaction has fully committed,
  * so which of the two loses is deterministic instead of flaky. The decorator disarms itself after
@@ -168,7 +169,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
      *
      * <p>Before the {@code commitConflict} translator existed, the loser was thrown
      * {@link DuplicateProjectLabelException} for a label no project had ever registered, because
-     * {@code WriteFunnel#create} reported every lost commit as a code collision. Both
+     * the registry's create path reported every lost commit as a code collision. Both
      * callers deliberately register a different label here, so nothing but the anchor can be the
      * real cause and a label complaint cannot be right by accident.</p>
      */
@@ -221,7 +222,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
     }
 
     /**
-     * The label rule under the same overlapping race: both callers pass the funnel's synchronous
+     * The label rule under the same overlapping race: both callers pass {@link RegistryWrites}' synchronous
      * {@code dcterms:identifier} check because neither sees the other's uncommitted write, and the
      * loser must still be told its label is taken - here it genuinely is.
      */
@@ -327,9 +328,9 @@ class ProjectRegistryRealStoreConcurrencyTest {
     /**
      * The {@code compareAndUpdate} counterpart of the {@code register} races above (issue #178):
      * two {@code project_attach_anchor}-shaped writes against the very same, already-registered
-     * project, both reading the same {@code arkprov:head}, held open until both have passed the
-     * funnel's synchronous head check. Only the second commit is rejected by the store, and the
-     * funnel must translate that genuine {@code SERIALIZABLE} conflict into the same
+     * project, both reading the same {@code RevisionToken}, held open until both have passed the
+     * {@link RegistryWrites}' synchronous state-token check. Only the second commit is rejected by the
+     * store, and {@code RegistryWrites} must translate that genuine {@code SERIALIZABLE} conflict into the same
      * {@link StaleProjectException} a synchronously stale caller already gets - not a raw store
      * exception, and not a silent merge that would keep the loser's anchor around as an orphan
      * with no owner.
@@ -393,13 +394,13 @@ class ProjectRegistryRealStoreConcurrencyTest {
 
     /**
      * The {@code updateAttributes} counterpart of the two {@code compareAndUpdate} races above
-     * (issue #230 review) - proof that {@code arkprov:head} is a concurrency token per
+     * (issue #230 review) - proof that {@code RevisionToken} is a concurrency token per
      * <em>resource</em>, not per <em>predicate</em>, even though {@link
      * KognioRdfProjectRegistry#updateAttributes} is a targeted patch that never touches
      * {@code label}/{@code arkprj:anchor} at all. Both calls here patch the very same field
      * ({@code arkprj:defaultLanguage}) with a different value, both read the very same head, and
-     * both pass the funnel's synchronous head check because neither sees the other's uncommitted
-     * write - only the second commit is rejected by the store, exactly like {@link
+     * both pass {@link RegistryWrites}' synchronous state-token check because neither sees the
+     * other's uncommitted write - only the second commit is rejected by the store, exactly like {@link
      * #concurrentRenamesOfTheSameProject_leaveOneWinnerAndTellTheLoserItsHeadIsStale}. Were the
      * two calls patching genuinely disjoint predicates instead (e.g. one {@code description}, the
      * other {@code defaultLanguage}), the store's finer-grained conflict detection could let both

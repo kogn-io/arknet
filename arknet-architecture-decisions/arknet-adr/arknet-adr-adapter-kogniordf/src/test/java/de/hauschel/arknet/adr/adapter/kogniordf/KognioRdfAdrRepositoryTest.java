@@ -35,6 +35,9 @@ import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.PublishState;
+import io.kogn.rdf.versioning.EntryKind;
+import io.kogn.rdf.versioning.HistoryEntry;
 
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.domain.Adr;
@@ -58,12 +61,13 @@ import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
+import de.hauschel.arknet.adr.application.port.out.RevisionToken;
 
 /**
  * Integration test for {@link KognioRdfAdrRepository} against an in-memory RDF4J-backed kognio-rdf
@@ -72,10 +76,12 @@ import de.hauschel.arknet.persistence.WriteFunnel;
 class KognioRdfAdrRepositoryTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
+
+    private static final DatasetId DATASET_A = new DatasetId(PROJECT_A.value());
     /** Any fixed day - these tests exercise persistence, not which day a transition stamps. */
     private static final LocalDate DECIDED_ON = LocalDate.of(2026, 8, 23);
     private static final ProjectId PROJECT_B = new ProjectId("b");
-    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/adr";
+    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/content";
 
     private DatasetLifecycleRdf4j lifecycle;
     private KognioRdfAdrRepository repository;
@@ -87,9 +93,10 @@ class KognioRdfAdrRepositoryTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
-        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(datasetLifecycle, gate, ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = new KognioRdfAdrRepository(
-                datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT, funnel);
+                datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
     @AfterEach
@@ -409,7 +416,7 @@ class KognioRdfAdrRepositoryTest {
     /**
      * Node kind is the other half of the same promise (kogn-io/arknet#360): the counting query
      * carries no {@code FILTER(isIRI(?s))}, so {@code ADR-2} counts even when a blank node holds
-     * it. That is not laxity but agreement with the writer - {@code WriteFunnel#create} decides
+     * it. That is not laxity but agreement with the writer - {@code VersionedWriteFunnel#create} decides
      * code uniqueness with {@code tx.contains(graph, null, dcterms:identifier, code)}, a wildcard
      * subject that never asks for a node kind, and would turn down an {@code adr_add} for
      * {@code ADR-2}. Were the counter to look past that code, the {@code CodeAssignment} retry
@@ -1298,7 +1305,7 @@ class KognioRdfAdrRepositoryTest {
         Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
                 List.of(), List.of(), null);
         repository.create(PROJECT_A, original, "en");
-        String headBeforeTheStoreFirstEdit = headsOf(id.value().value()).get(0);
+        RevisionToken headBeforeTheStoreFirstEdit = new RevisionToken(headsOf(id.value().value()).get(0));
 
         String supersededByIri = "https://w3id.org/arknet/id/" + UUID.randomUUID();
         update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
@@ -1457,13 +1464,14 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * Blank-node regression: {@code arkarch:addressesRequirement} is not range-constrained to
-     * {@code IRI} at the RDF level, so a store-first edge can legally target a blank node.
-     * {@link ResourceId} cannot represent one, so the read path never surfaces it - but the write path
-     * must still capture and re-attach it across an unrelated update instead of erasing it.
+     * Blank-node regression: a store-first {@code arkarch:addressesRequirement} edge can target a
+     * blank node, which {@link ResourceId} cannot represent, so the read path never surfaces it. An
+     * unrelated update keeps the edge, and since the gate validates the whole new slice, the
+     * edge's IRI-only shape now rejects the update instead of slipping past the gate: nothing is
+     * written, the edge stays.
      */
     @Test
-    void compareAndUpdatePreservesABlankNodeAddressesRequirementEdge() {
+    void compareAndUpdateKeepingABlankNodeAddressesRequirementEdgeIsRejectedAndTheEdgeStays() {
         AdrId id = freshId();
         Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
                 List.of(), List.of(), null);
@@ -1473,15 +1481,45 @@ class KognioRdfAdrRepositoryTest {
                 + ArkarchVocabulary.ADDRESSES_REQUIREMENT + "> "
                 + "[ a <https://w3id.org/arknet/requirements#FunctionalRequirement> ] } }");
 
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), original.accept(DECIDED_ON), null, null, null, Map.of(), Map.of(), null,
-                RemovedPositions.NONE, RemovedPositions.NONE);
+        RevisionToken head = currentHeadOf(original.code());
+        assertThrows(WriteConstraintViolationException.class, () -> repository.compareAndUpdate(PROJECT_A, head,
+                original.accept(DECIDED_ON), null, null, null, Map.of(), Map.of(), null,
+                RemovedPositions.NONE, RemovedPositions.NONE));
 
         String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
                 + ArkarchVocabulary.ADDRESSES_REQUIREMENT + "> ?target . "
                 + "?target a <https://w3id.org/arknet/requirements#FunctionalRequirement> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertTrue(handle.sparqlQuery().ask(ask), "blank-node edge must survive the update and still "
-                    + "point at its typed node - not merely at some blank node");
+            assertTrue(handle.sparqlQuery().ask(ask), "the rejected update must leave the blank-node edge in place");
+        }
+    }
+
+    /**
+     * The {@code arkarch:affectsContext} sibling of the regression above: a store-first edge onto
+     * a blank node is carried into the new slice, and the edge's IRI-only shape rejects the update -
+     * nothing is written, the edge stays.
+     */
+    @Test
+    void compareAndUpdateKeepingABlankNodeAffectsContextEdgeIsRejectedAndTheEdgeStays() {
+        AdrId id = freshId();
+        Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), null);
+        repository.create(PROJECT_A, original, "en");
+
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
+                + ArkarchVocabulary.AFFECTS_CONTEXT + "> "
+                + "[ a <https://w3id.org/arknet/ddd#BoundedContext> ] } }");
+
+        RevisionToken head = currentHeadOf(original.code());
+        assertThrows(WriteConstraintViolationException.class, () -> repository.compareAndUpdate(PROJECT_A, head,
+                original.accept(DECIDED_ON), null, null, null, Map.of(), Map.of(), null,
+                RemovedPositions.NONE, RemovedPositions.NONE));
+
+        String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
+                + ArkarchVocabulary.AFFECTS_CONTEXT + "> ?target . "
+                + "?target a <https://w3id.org/arknet/ddd#BoundedContext> FILTER(isBlank(?target)) } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertTrue(handle.sparqlQuery().ask(ask), "the rejected update must leave the blank-node edge in place");
         }
     }
 
@@ -1527,19 +1565,15 @@ class KognioRdfAdrRepositoryTest {
         repository.create(PROJECT_A, created, "en");
         String subject = created.id().value().value();
 
-        List<String> afterCreate = revisionsOf(subject);
+        List<Object> afterCreate = headsOf(subject);
         assertEquals(1, afterCreate.size(), "create must record exactly one revision");
         assertEquals(afterCreate, headsOf(subject), "the head must point at the sole revision");
 
-        repository.compareAndUpdate(PROJECT_A, afterCreate.get(0), created.accept(DECIDED_ON), null, null, null, Map.of(), Map.of(), null,
+        repository.compareAndUpdate(PROJECT_A, new RevisionToken(afterCreate.get(0)), created.accept(DECIDED_ON), null, null, null, Map.of(), Map.of(), null,
                 RemovedPositions.NONE, RemovedPositions.NONE);
-
-        assertEquals(2, revisionsOf(subject).size(), "update must record exactly one more revision");
-        List<String> heads = headsOf(subject);
+        List<Object> heads = headsOf(subject);
         assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
         assertFalse(heads.get(0).equals(afterCreate.get(0)), "the head must have moved");
-        assertEquals(List.of(afterCreate.get(0)), objectsOf(heads.get(0), ArkprovVocabulary.WAS_REVISION_OF),
-                "the new head must supersede the previous one via prov:wasRevisionOf");
     }
 
     @Test
@@ -1549,12 +1583,6 @@ class KognioRdfAdrRepositoryTest {
         assertThrows(DuplicateAdrCodeException.class,
                 () -> repository.create(PROJECT_A, adr(new AdrCode("ADR-1")), "en"));
 
-        String all = "SELECT ?r WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?r a <" + ArkprovVocabulary.REVISION_TYPE + "> } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertEquals(1, handle.sparqlQuery().select(all).count(),
-                    "the rejected write must not have recorded a revision");
-        }
     }
 
     @Test
@@ -1566,7 +1594,7 @@ class KognioRdfAdrRepositoryTest {
                 repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-1"), null).orElseThrow();
 
         assertEquals(created, current.value());
-        assertEquals(headsOf(created.id().value().value()), List.of(current.head()));
+        assertEquals(headsOf(created.id().value().value()), List.of(current.head().value()));
     }
 
     @Test
@@ -1589,7 +1617,7 @@ class KognioRdfAdrRepositoryTest {
         Adr created = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, created, "en");
         String subject = created.id().value().value();
-        String expectedHead = currentHeadOf(created.code());
+        RevisionToken expectedHead = currentHeadOf(created.code());
 
         update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + subject + "> <"
                 + ArkarchVocabulary.ADR_CONTEXT + "> \"a second, store-first context value\" } }");
@@ -1616,7 +1644,7 @@ class KognioRdfAdrRepositoryTest {
         Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.ACCEPTED, null, null, null,
                 List.of(), List.of(), null);
         repository.create(PROJECT_A, original, "en");
-        String staleHead = currentHeadOf(original.code());
+        RevisionToken staleHead = currentHeadOf(original.code());
 
         repository.compareAndUpdate(PROJECT_A, staleHead, original.supersededBy(winner.id()), null, null, null, Map.of(), Map.of(), null,
                 RemovedPositions.NONE, RemovedPositions.NONE);
@@ -1627,8 +1655,6 @@ class KognioRdfAdrRepositoryTest {
 
         assertEquals(winner.id(),
                 repository.findByCode(PROJECT_A, original.code(), null).orElseThrow().supersededBy());
-        assertEquals(2, revisionsOf(id.value().value()).size(),
-                "the rejected write must not have recorded a revision");
     }
 
     // ---- delete ------------------------------------------------------------------------
@@ -1706,34 +1732,29 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * The tombstone the shared funnel leaves: the head pointer goes, the last
-     * revision is marked {@code prov:invalidatedAtTime}, and the chain up to it stays as the audit
-     * trail - "this existed, until here".
+     * The tombstone the shared funnel leaves: the draft goes, and the library records a tombstone
+     * entry in its history - "this existed, until here".
      */
     @Test
-    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+    void deleteRemovesTheDraftAndRecordsATombstone() {
         Adr peer = adr(new AdrCode("ADR-2"));
         repository.create(PROJECT_A, peer, "en");
         Adr created = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, created, "en");
         String subject = created.id().value().value();
         // A second write that leaves the decision PROPOSED (delete's own status check runs next),
-        // so the revision chain has more than one entry to tombstone correctly.
+        // so the draft was rewritten once before it is deleted.
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(created.code()),
                 created.reviseReferences(List.of(), List.of(), List.of(), List.of(peer.id())), null, null, null,
                 Map.of(), Map.of(), null, RemovedPositions.NONE, RemovedPositions.NONE);
-        String lastRevision = headsOf(subject).get(0);
 
         repository.delete(PROJECT_A, created.code());
 
-        assertTrue(headsOf(subject).isEmpty(), "the head pointer must be removed");
-        assertEquals(2, revisionsOf(subject).size(), "the revision chain must survive the delete");
-        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
-                    "the last revision must be tombstoned, not erased");
-        }
+        assertEquals(PublishState.DELETED, probe().publishState(DATASET_A, subject));
+        List<EntryKind> kinds = probe().history(DATASET_A, subject).stream().map(HistoryEntry::kind).toList();
+        assertEquals(EntryKind.TOMBSTONE, kinds.getLast(), "the delete must record a tombstone");
+        assertTrue(kinds.subList(0, kinds.size() - 1).stream().allMatch(EntryKind.PUBLISH::equals)
+                && kinds.size() > 1, "every write before the delete published a version");
     }
 
     /**
@@ -1742,14 +1763,11 @@ class KognioRdfAdrRepositoryTest {
      * it can outlive its resource, and what keeps {@code ADR-1} from naming a second decision later.
      */
     @Test
-    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+    void deleteKeepsTheBusinessCodeOnTheTombstone() {
         Adr created = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, created, "en");
-        String lastRevision = headsOf(created.id().value().value()).get(0);
 
         repository.delete(PROJECT_A, created.code());
-
-        assertEquals(List.of("ADR-1"), identifiersOf(lastRevision));
         assertEquals(List.of(new AdrCode("ADR-1")), repository.findRetainedCodes(PROJECT_A));
     }
 
@@ -1773,28 +1791,8 @@ class KognioRdfAdrRepositoryTest {
      */
     @Test
     void findRetainedCodesIgnoresAnotherContextsRetainedCode() {
-        update("INSERT DATA { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "<https://w3id.org/arknet/revision/foreign> <" + ArkprovVocabulary.INVALIDATED_AT_TIME
-                + "> \"2026-08-23T10:00:00Z\"^^<http://www.w3.org/2001/XMLSchema#dateTime> ; "
-                + "<http://purl.org/dc/terms/identifier> \"TERM-9\" } }");
-
-        assertEquals(List.of(), repository.findRetainedCodes(PROJECT_A));
-    }
-
-    /**
-     * Only a <em>tombstoned</em> revision retains a code. A code sitting on a live decision's
-     * revision - which nothing in this adapter writes, but a store-first edit can - is not
-     * a retained one: counting it would raise the numbering over a decision that is still there and
-     * already carries that very code.
-     */
-    @Test
-    void findRetainedCodesIgnoresACodeOnARevisionThatWasNeverTombstoned() {
-        Adr created = adr(new AdrCode("ADR-1"));
-        repository.create(PROJECT_A, created, "en");
-        String liveRevision = headsOf(created.id().value().value()).get(0);
-
-        update("INSERT DATA { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <" + liveRevision
-                + "> <http://purl.org/dc/terms/identifier> \"ADR-1\" } }");
+        update("INSERT DATA { GRAPH <" + VersionedWriteFunnel.RETAINED_CODES_GRAPH + "> { "
+                + "<urn:uuid:foreign-tombstone> <http://purl.org/dc/terms/identifier> \"TERM-9\" } }");
 
         assertEquals(List.of(), repository.findRetainedCodes(PROJECT_A));
     }
@@ -1871,7 +1869,7 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /** The head a caller would observe right now - what a well-behaved compare-and-set passes. */
-    private String currentHeadOf(AdrCode code) {
+    private RevisionToken currentHeadOf(AdrCode code) {
         return repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
     }
 
@@ -1899,21 +1897,11 @@ class KognioRdfAdrRepositoryTest {
         }
     }
 
-    private List<String> revisionsOf(String subjectIri) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
-                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + subjectIri + "> } }");
+    /** The draft's current token as a one-element list, or empty for an empty draft. */
+    private List<Object> headsOf(String subjectIri) {
+        return probe().token(DATASET_A, subjectIri).<Object>map(token -> token).stream().toList();
     }
 
-    private List<String> headsOf(String subjectIri) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIri + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
-    }
-
-    private List<String> objectsOf(String subjectIri, String predicateIri) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIri + "> <" + predicateIri + "> ?v } }");
-    }
 
     /** Every triple of one subject in the ADR graph, as {@code predicate=object} pairs. */
     private List<String> triplesOf(String subjectIri) {
@@ -1925,16 +1913,6 @@ class KognioRdfAdrRepositoryTest {
         }
     }
 
-    /** The {@code dcterms:identifier} literals a revision carries in the provenance graph. */
-    private List<String> identifiersOf(String revisionIri) {
-        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
-                    .toList();
-        }
-    }
 
     private List<String> selectIris(String query) {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -1942,5 +1920,9 @@ class KognioRdfAdrRepositoryTest {
                     .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
                     .toList();
         }
+    }
+
+    private VersioningProbe probe() {
+        return new VersioningProbe(lifecycle, ContentGraph.GRAPH_IRI);
     }
 }

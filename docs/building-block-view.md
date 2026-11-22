@@ -106,7 +106,7 @@ its `-adapter-kogniordf` serves the two out-ports (`ModelSnapshots`,
 `ResourceHandleLookup`) out of the shared store read path, and its `-adapter-mcp`
 carries the five evaluation tools and `store_check`. The generic read model those
 tools read (`StoreReader`, `StoreSnapshot`, `StoreResource`, `Triple`, `RdfNode`,
-`Prefixes`, `HandleResolver`, `ResourceRenderer`, `Revision`) lives in
+`Prefixes`, `HandleResolver`, `ResourceRenderer`, `VersionEntry`) lives in
 `arknet-persistence-support`, alongside the vocabulary constants: it is the mechanism
 by which any published language is read, and both the component and the
 application's type-independent exception speak it.
@@ -134,7 +134,7 @@ Outside every Bounded Context:
 |------------------------------------|---------------------------------|------|
 | Application (composition root)     | arknet-app                      | Spring Boot daemon; carries the type-independent exception (ADR-55: `store_overview`, `resource_get`, `resource_history`, `project_export`) and `text_search`, which reads literals without knowing a type. The HTML report still lives here and still composes the in-ports of every context; its target is Model Analysis (ADR-54, #560 step 2) |
 | Shared Kernel                      | arknet-shared-kernel            | ADR-56: ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale, LocalizedLiteral. `DependencyRulesTest` rule 12 lists the admitted terms, so a new type in the package turns a test red |
-| Technical library                  | arknet-persistence-support      | Under the `arknet-support` aggregator. SHACL gate, WriteFunnel, the versioned write path VersionedWriteFunnel (draft, publish and tombstone over kognio-rdf rdf-versioning), vocabulary constants and the type-independent read path over a project's dataset (StoreReader, the triple read model, Prefixes, HandleResolver, ResourceRenderer) -- no model term, hence neither Shared Kernel nor vocabulary |
+| Technical library                  | arknet-persistence-support      | Under the `arknet-support` aggregator. SHACL gate, the versioned write path VersionedWriteFunnel (draft, publish and tombstone over kognio-rdf rdf-versioning, one content graph per project dataset), vocabulary constants and the type-independent read path over a project's dataset (StoreReader, the triple read model, Prefixes, HandleResolver, ResourceRenderer) -- no model term, hence neither Shared Kernel nor vocabulary |
 | Technical library                  | arknet-mcp-support              | Under the `arknet-support` aggregator. Support of the driving MCP adapters and the composition root: ProjectResolver/ResolvedProject, StaleTranslationHint/FieldLanguageLookup, WriteResponse, ToolParameterDescriptions. No core and no vocabulary module depends on it (rule 11) |
 | Technical library (test scope)     | arknet-persistence-test-support | Under the `arknet-support` aggregator. Guarded* decorators |
 | Published Language (schema)        | arknet-ontology                 | .ttl ontologies and shapes |
@@ -188,7 +188,7 @@ its own core only; no module of a Component depends on a module of another.
 
 ## 6. Cross-cutting concepts (pointers only)
 
-- Write funnel, revision, concurrency token: ADR-3, ADR-28, ADR-32
+- Write funnel, versioning, concurrency token, content graph, child fragments: ADR-3, ADR-61, ADR-63, ADR-64
 - Persistence only through domain-near out-ports, records without graph access: ADR-8, ADR-45
 - Project identity: anchor, one dataset per project, system dataset: ADR-20, ADR-25, ADR-27
 - Operation: one shared daemon, Spring AI: ADR-16, ADR-14

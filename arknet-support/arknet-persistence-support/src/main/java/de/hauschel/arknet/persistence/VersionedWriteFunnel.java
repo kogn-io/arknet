@@ -4,8 +4,6 @@
 package de.hauschel.arknet.persistence;
 
 import java.time.Clock;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -45,8 +43,8 @@ import io.kogn.rdf.versioning.RevisionToken;
 /**
  * The versioned write path of every model resource (ADR-61..63): each resource is the draft
  * slice of its subject IRI in the one content graph of its project dataset, written only through
- * the slice operations of kognio-rdf's {@link ResourceVersioning}, and published explicitly into
- * an immutable, content-addressed version.
+ * the slice operations of kognio-rdf's {@link ResourceVersioning}, and published by the same
+ * write into an immutable, content-addressed version.
  *
  * <p><strong>Shape of a write.</strong> Every write method owns one transaction and runs the same
  * skeleton: bind the dataset to the content graph, read the subject's draft slice and its
@@ -54,10 +52,13 @@ import io.kogn.rdf.versioning.RevisionToken;
  * {@link SliceBuilder} produce the complete new slice (it sees the transaction and the current
  * draft, so it can keep what an update must preserve and ask the store whatever a reference check
  * needs), validate exactly that slice through the {@link ShaclWriteGate}, and hand it to
- * {@link ResourceVersioning#replaceDraft}. What is validated is therefore what is written, not a
+ * {@link ResourceVersioning#replaceDraft}, then publish it with {@link ResourceVersioning#publish}
+ * in the same transaction. What is validated is therefore what is written, not a
  * candidate a later body still merges into. A slice holds the subject IRI, its {@code #fragment}
  * IRIs and the blank nodes reachable from them; a triple on any other subject is rejected by the
- * library with an {@link IllegalArgumentException} and nothing is written.</p>
+ * library with an {@link IllegalArgumentException} and nothing is written. The fragment names of
+ * new children come from {@link #childFragments}, minted from the funnel's {@link ChildIdSource};
+ * the funnel keeps no record of them beside the slice.</p>
  *
  * <p><strong>Concurrency.</strong> The library's {@link RevisionToken} is the concurrency token:
  * {@link #compareAndUpdate} takes the token the caller read and reports a stale one through the
@@ -67,14 +68,16 @@ import io.kogn.rdf.versioning.RevisionToken;
  * The token is an in-memory value: it carries a revision counter the library does not expose, so it
  * cannot be serialized and only guards a read and a write made within one process call.</p>
  *
- * <p><strong>Publish and delete.</strong> A write changes the draft only; {@link #publish} is the
- * explicit act that turns drafts into versions, for any number of resources in one transaction
- * (ADR-62). {@link #delete} removes the draft and the published slice and records a tombstone; a
+ * <p><strong>Every write publishes.</strong> A create or update writes the draft and publishes it
+ * in one transaction, so the published view always equals the draft and no write leaves an
+ * unpublished change behind: either both commit or neither does. A write that changes nothing
+ * creates no history entry; every other one adds exactly one. There is no separate publish
+ * operation. {@link #delete} removes the draft and the published slice and records a tombstone; a
  * business code handed in is kept on that tombstone in {@link #RETAINED_CODES_GRAPH}, so
- * {@link #findRetainedCodes} can keep it out of circulation even when the resource was never
- * published and the tombstone names no version.</p>
+ * {@link #findRetainedCodes} can keep it out of circulation. A lost commit is reported through a
+ * signal of the caller, like every other write.</p>
  *
- * <p>Context differences are parameters, as in {@link WriteFunnel}: signals arrive as
+ * <p>Context differences are parameters: signals arrive as
  * {@link Supplier}s, the slice as a {@link SliceBuilder}. One instance per bounded context, built by
  * that context's repository factory with that context's gate; all instances of a dataset must name
  * the same content graph, or the library rejects the second with a
@@ -122,6 +125,7 @@ public final class VersionedWriteFunnel {
     private final ShaclWriteGate gate;
     private final ResourceVersioning versioning;
     private final Predicate<RuntimeException> isWriteConflict;
+    private final ChildIdSource childIds;
     private final RDF rdf = new SimpleRdf();
     private final Set<DatasetId> boundDatasets = ConcurrentHashMap.newKeySet();
 
@@ -154,6 +158,26 @@ public final class VersionedWriteFunnel {
      */
     public VersionedWriteFunnel(DatasetLifecycle lifecycle, ShaclWriteGate gate, String contentGraphIri,
             Predicate<RuntimeException> isWriteConflict, Clock clock) {
+        this(lifecycle, gate, contentGraphIri, isWriteConflict, clock, ChildIdSource.random());
+    }
+
+    /**
+     * Creates the funnel on an explicit clock and an explicit source of child ids - the seam a test
+     * uses to know or to provoke the fragment names a write mints.
+     *
+     * @param lifecycle       the dataset lifecycle to acquire datasets from (must not be {@code null})
+     * @param gate            the SHACL write-gate validating every new slice (must not be {@code null})
+     * @param contentGraphIri the content graph of every dataset this funnel writes (must not be
+     *                        {@code null})
+     * @param isWriteConflict recognises a lost write - pass {@link #DEFAULT_WRITE_CONFLICT} for the
+     *                        kognio-rdf-backed store (must not be {@code null})
+     * @param clock           the clock of history entries (must not be {@code null})
+     * @param childIds        the source of the opaque ids of new child resources (must not be
+     *                        {@code null})
+     */
+    public VersionedWriteFunnel(DatasetLifecycle lifecycle, ShaclWriteGate gate, String contentGraphIri,
+            Predicate<RuntimeException> isWriteConflict, Clock clock, ChildIdSource childIds) {
+        this.childIds = Objects.requireNonNull(childIds, "childIds");
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.gate = Objects.requireNonNull(gate, "gate");
         this.isWriteConflict = Objects.requireNonNull(isWriteConflict, "isWriteConflict");
@@ -161,6 +185,18 @@ public final class VersionedWriteFunnel {
         Objects.requireNonNull(clock, "clock");
         this.versioning = new ResourceVersioningNamedGraphs(rdf.createIRI(contentGraphIri),
                 new ContentAddressedIRIGeneratorSexpr(), clock);
+    }
+
+    /**
+     * The naming state of a parent's child resources for one write (ADR-64), minting new names from
+     * this funnel's {@link ChildIdSource}.
+     *
+     * @param parent       the parent's IRI, without a {@code #}
+     * @param currentDraft the parent's current draft slice, an empty graph for a create
+     * @return the naming state, for this one write
+     */
+    public ChildFragments childFragments(IRI parent, ReadableGraph currentDraft) {
+        return ChildFragments.of(parent, currentDraft, childIds);
     }
 
     /**
@@ -299,7 +335,7 @@ public final class VersionedWriteFunnel {
      * @param notFound         the signal for a subject with an empty draft
      * @param revisionMismatch the signal for a stale token or a lost commit race
      * @param slice            builds the new slice from the current draft
-     * @return the token for the next write of the subject
+     * @return the token for the next write of the subject, that of the published version
      */
     public RevisionToken compareAndUpdate(DatasetId dataset, String subjectIri, RevisionToken expected,
             ReadableGraph assertedContext, Supplier<RuntimeException> notFound,
@@ -335,15 +371,18 @@ public final class VersionedWriteFunnel {
      * @param code       the business code to keep out of circulation, or {@code null}
      * @param details    creator and comment of the tombstone
      * @param notFound   the signal for a subject with an empty draft
+     * @param lostCommit the signal for a delete that lost the store's commit-time conflict to a
+     *                   concurrent write
      * @param guard      checks run before the deletion, given the transaction
      * @return the tombstone entry's IRI
      */
     public String delete(DatasetId dataset, String subjectIri, String code, EntryDetails details,
-            Supplier<RuntimeException> notFound, Consumer<DatasetTx> guard) {
+            Supplier<RuntimeException> notFound, Supplier<RuntimeException> lostCommit, Consumer<DatasetTx> guard) {
         Objects.requireNonNull(dataset, "dataset");
         Objects.requireNonNull(subjectIri, "subjectIri");
         Objects.requireNonNull(details, "details");
         Objects.requireNonNull(notFound, "notFound");
+        Objects.requireNonNull(lostCommit, "lostCommit");
         Objects.requireNonNull(guard, "guard");
 
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
@@ -362,6 +401,11 @@ public final class VersionedWriteFunnel {
                 }
                 return tombstone.entryIRI().getIRIString();
             });
+        } catch (RuntimeException e) {
+            if (isWriteConflict.test(e)) {
+                throw translateConflict(conflict -> lostCommit.get(), e);
+            }
+            throw e;
         }
     }
 
@@ -380,46 +424,11 @@ public final class VersionedWriteFunnel {
     }
 
     /**
-     * Publishes the current drafts of the given subjects in one transaction - all or none. An
-     * unchanged draft creates no new entry; the result then names the latest one. Every subject is
-     * checked before anything is written: one with an empty draft (never written or deleted)
-     * throws {@code notFound} for that subject and publishes none of the others.
-     *
-     * @param dataset     the dataset (project)
-     * @param subjectIris the subjects to publish, each at most once
-     * @param details     creator and comment of the entries created
-     * @param notFound    the signal for a subject with an empty draft, given its IRI
-     * @return per subject the entry naming its current version
-     */
-    public PublishResult publish(DatasetId dataset, Collection<String> subjectIris, EntryDetails details,
-            Function<String, RuntimeException> notFound) {
-        Objects.requireNonNull(dataset, "dataset");
-        Objects.requireNonNull(subjectIris, "subjectIris");
-        Objects.requireNonNull(details, "details");
-        Objects.requireNonNull(notFound, "notFound");
-
-        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
-            return handle.transactor().inTransaction(tx -> {
-                versioning.bindContentGraph(tx);
-                List<RevisionToken> tokens = new ArrayList<>(subjectIris.size());
-                for (String subjectIri : subjectIris) {
-                    DraftSlice draft = versioning.readDraft(tx, rdf.createIRI(subjectIri));
-                    if (draft.triples().isEmpty()) {
-                        throw notFound.apply(subjectIri);
-                    }
-                    tokens.add(draft.token());
-                }
-                return versioning.publish(tx, tokens, details);
-            });
-        }
-    }
-
-    /**
      * Reads the subject's history: its publish entries and tombstones, oldest first.
      *
      * @param dataset    the dataset (project)
      * @param subjectIri the subject's opaque IRI, without a {@code #}
-     * @return the history entries; empty if never published or deleted
+     * @return the history entries; empty for a subject never written through a funnel
      */
     public List<HistoryEntry> history(DatasetId dataset, String subjectIri) {
         return read(dataset, tx -> versioning.history(tx, rdf.createIRI(subjectIri)));
@@ -437,8 +446,10 @@ public final class VersionedWriteFunnel {
     }
 
     /**
-     * Reads back the business codes {@link #delete} kept, filtered on a prefix - the same contract
-     * as {@link WriteFunnel#findRetainedCodes}.
+     * Reads back the business codes {@link #delete} kept, filtered on a prefix. Codes are unique
+     * across the whole content graph, so a prefix that is itself the start of another type's
+     * prefix would read that type's codes too; the code prefixes of arknet's resource types do
+     * not overlap.
      *
      * @param dataset    the dataset (project)
      * @param codePrefix the prefix the codes start with, for instance {@code "FR-"}
@@ -462,7 +473,7 @@ public final class VersionedWriteFunnel {
     private <T> T read(DatasetId dataset, Function<DatasetTx, T> work) {
         Objects.requireNonNull(dataset, "dataset");
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
-            return handle.transactor().inTransaction(work);
+            return ReadTransactions.read(handle, work);
         }
     }
 
@@ -524,7 +535,9 @@ public final class VersionedWriteFunnel {
         } else {
             gate.enforce(next, assertedContext);
         }
-        return versioning.replaceDraft(tx, subject, next, draft.token());
+        RevisionToken written = versioning.replaceDraft(tx, subject, next, draft.token());
+        PublishResult published = versioning.publish(tx, List.of(written), EntryDetails.NONE);
+        return published.results().get(subject).token();
     }
 
     private boolean codeTaken(DatasetTx tx, String code) {

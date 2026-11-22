@@ -13,6 +13,7 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.vocab.VocabDct;
 
+import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
@@ -76,7 +77,7 @@ public final class KognioRdfRoleLookup implements RoleLookup {
     // The graph IRI the role out-adapter (KognioRdfRoleRepository) writes into, shared via
     // ArkprocVocabulary (kogn-io/arknet#524). The bounded contexts share one project dataset;
     // resolving a role means reading across into that sibling graph.
-    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
+    private static final String ROLE_GRAPH = ContentGraph.GRAPH_IRI;
 
     private final DatasetLifecycle lifecycle;
 

@@ -36,7 +36,7 @@ class KognioRdfConstraintLookupTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
     private static final ProjectId PROJECT_B = new ProjectId("b");
-    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
+    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/content";
 
     @TempDir
     Path storageRoot;
@@ -158,6 +158,16 @@ class KognioRdfConstraintLookupTest {
         String otherProject = givenConstraint(PROJECT_B, "TCON-1");
 
         assertEquals(Map.of(), constraintLookup.resolveCodes(PROJECT_A, ResourceId.of(otherProject)));
+    }
+
+    /** The reverse direction leaves an identity out that names a resource of another type. */
+    @Test
+    void doesNotResolveTheIdentityOfAResourceThatIsNoConstraintBackToACode() {
+        String foreign = "https://w3id.org/arknet/model/requirement/FR-1";
+        insert("<" + foreign + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"FR-1\"", PROJECT_A);
+
+        assertEquals(Map.of(), constraintLookup.resolveCodes(PROJECT_A, ResourceId.of(foreign)));
     }
 
     @Test

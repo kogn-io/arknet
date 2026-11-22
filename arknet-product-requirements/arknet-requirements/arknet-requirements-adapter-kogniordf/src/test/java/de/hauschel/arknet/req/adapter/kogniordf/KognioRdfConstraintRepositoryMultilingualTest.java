@@ -33,7 +33,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.Constraint;
@@ -56,7 +56,7 @@ import de.hauschel.arknet.req.domain.ConstraintType;
  */
 class KognioRdfConstraintRepositoryMultilingualTest {
 
-    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
+    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/content";
     private static final String STATEMENT_PROPERTY = "https://w3id.org/arknet/requirements#constraintStatement";
     private static final String TITLE_PROPERTY = VocabDct.NAMESPACE + "title";
     private static final ProjectId PROJECT_A = new ProjectId("a");
@@ -72,7 +72,7 @@ class KognioRdfConstraintRepositoryMultilingualTest {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
-        WriteFunnel funnel = KognioRdfRequirementRepositoryFactory.buildFunnel(datasetLifecycle, DisplayLocale.DEFAULT);
+        VersionedWriteFunnel funnel = KognioRdfRequirementRepositoryFactory.buildFunnel(datasetLifecycle, DisplayLocale.DEFAULT);
         repository = KognioRdfConstraintRepositoryFactory.over(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 

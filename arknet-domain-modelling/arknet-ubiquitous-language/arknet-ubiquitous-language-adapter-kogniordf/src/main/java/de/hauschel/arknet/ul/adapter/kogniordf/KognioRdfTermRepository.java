@@ -34,6 +34,8 @@ import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.EntryDetails;
+import io.kogn.rdf.versioning.RevisionToken;
 
 import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -43,11 +45,13 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.ReadTransactions;
+import de.hauschel.arknet.persistence.Slices;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
@@ -91,7 +95,7 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
  * minted once, "insert or replace by identity" was never one coherent operation for
  * {@link #create}. The transactional mechanics of that check - the in-transaction {@code contains}
- * check, the SHACL gate, the commit-conflict translation - live in the shared {@link WriteFunnel},
+ * check, the SHACL gate, the commit-conflict translation - live in the shared {@link VersionedWriteFunnel},
  * not here; {@link #create} only builds the candidate graph and rejects an existing
  * subject with {@link ResourceAlreadyExistsException}.</p>
  *
@@ -122,22 +126,19 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * ran its own transaction and translated a genuine {@code
  * SERIALIZABLE} write conflict (the "second interleaving" scenario) on the caller's own patched
  * predicate into {@link TermConcurrentlyModifiedException}. {@link #update} now retries {@link
- * #attemptUpdate} (bounded by {@link #MAX_RETRY_ATTEMPTS}) against the shared {@link WriteFunnel}:
- * each attempt reads the term's current state and {@code arkprov:head} together, then
+ * #attemptUpdate} (bounded by {@link #MAX_RETRY_ATTEMPTS}) against the shared {@link VersionedWriteFunnel}:
+ * each attempt reads the term's current state and {@code RevisionToken} together, then
  * asks the funnel to apply the patch only if that head still matches - a head conflict, whether
  * from a losing synchronous comparison or a losing commit under {@code SERIALIZABLE} isolation,
  * surfaces identically and is retried transparently, exactly the CAS guard {@code
  * RequirementRepository#compareAndUpdate} degenerated to for the same reason.</p>
  *
- * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate before the write transaction
- * opens, {@link WriteConstraintViolationException} on a violation, nothing persisted - live in the
- * shared {@link WriteFunnel}, for {@link #create} and {@link #update}
- * alike: {@link #attemptUpdate} builds the same validation-only {@code assertedContext} an earlier
- * version enforced itself (mirroring how the sibling requirements adapter asserts a referenced
- * term's type) - a predicate {@link #update} is not touching is asserted there for validation
- * only, from what was just read before the transaction, so {@code ulshapes:TermShape}'s
- * {@code prefLabel} shape still sees the resulting state truthfully without this class ever
- * persisting that assertion again.</p>
+ * <p><strong>SHACL write-gate.</strong> The gate runs in the shared {@link VersionedWriteFunnel},
+ * inside its write transaction and on the complete new slice, for {@link #create} and
+ * {@link #update} alike: {@link WriteConstraintViolationException} on a violation, nothing
+ * persisted. {@link #attemptUpdate} hands it a validation-only {@code assertedContext} (mirroring
+ * how the sibling requirements adapter asserts a referenced term's type), built from what was read
+ * before the transaction; that assertion is never persisted.</p>
  *
  * <p><strong>Display language.</strong> A concept may carry {@code skos:prefLabel} and
  * {@code skos:definition} in several languages ({@code "Kunde"@de}/{@code "Eine juristische..."@de},
@@ -202,7 +203,7 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final Logger LOG = LoggerFactory.getLogger(KognioRdfTermRepository.class);
 
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
-    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
+    private static final String TERMS_GRAPH = ContentGraph.GRAPH_IRI;
     private static final String GLOSSARY_SCHEME = "https://w3id.org/arknet/model/glossary";
 
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
@@ -217,7 +218,7 @@ public class KognioRdfTermRepository implements TermRepository {
     /**
      * The prefix every code this hexagon mints carries. Used only by {@link #findRetainedCodes} to
      * tell a term's own retained code apart from a neighbouring bounded context's, since the
-     * provenance graph {@link WriteFunnel#findRetainedCodes} reads from is shared by all of them.
+     * provenance graph {@link VersionedWriteFunnel#findRetainedCodes} reads from is shared by all of them.
      */
     private static final String CODE_PREFIX = "TERM-";
 
@@ -232,7 +233,7 @@ public class KognioRdfTermRepository implements TermRepository {
 
     private final DatasetLifecycle lifecycle;
     private final DisplayLocale displayLocale;
-    private final WriteFunnel funnel;
+    private final VersionedWriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -246,7 +247,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * @param funnel        the shared write funnel every write runs through - both
      *                      {@link #create} and {@link #update} (must not be {@code null})
      */
-    KognioRdfTermRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {
+    KognioRdfTermRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, VersionedWriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
@@ -286,8 +287,9 @@ public class KognioRdfTermRepository implements TermRepository {
         String tag = canonicalLanguageTag(language);
         graph.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(term.prefLabel(), tag));
         graph.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), literalOf(term.definition(), tag));
-        // The per-project glossary itself, typed once (idempotent - RDF set semantics).
-        graph.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
+        // The per-project glossary itself is no resource of its own, so its type lies outside the
+        // term's slice: asserted to the gate, never written.
+        assertedContext.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
 
         if (broaderTargetIri != null) {
             graph.add(subjectIri, rdf.createIRI(BROADER_PROPERTY), rdf.createIRI(broaderTargetIri));
@@ -296,13 +298,10 @@ public class KognioRdfTermRepository implements TermRepository {
             graph.add(subjectIri, rdf.createIRI(RELATED_PROPERTY), rdf.createIRI(relatedTargetIri));
         }
 
-        IRI graphIri = rdf.createIRI(TERMS_GRAPH);
-
-        funnel.create(datasetId, TERMS_GRAPH, subjectIriString, term.code().value(),
-                graph, assertedContext,
+        funnel.create(datasetId, subjectIriString, term.code().value(), assertedContext,
                 () -> new ResourceAlreadyExistsException(projectId, term.id().value()),
                 () -> new DuplicateTermCodeException(projectId, term.code()),
-                tx -> tx.add(graphIri, graph));
+                (tx, current) -> graph);
     }
 
     /**
@@ -435,7 +434,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * <p>Only {@link #update} calls this - see {@link TermCycleException}'s javadoc for why
      * {@link #create} structurally cannot trigger it. {@link #attemptUpdate} calls it twice per
      * attempt: once before the write transaction (a fast, friendly rejection for the ordinary
-     * sequential case) and once more inside {@link WriteFunnel#compareAndUpdate}'s write body,
+     * sequential case) and once more inside {@link VersionedWriteFunnel#compareAndUpdate}'s write body,
      * against {@code tx::select} rather than the pre-transaction {@code selectFn} - the second call
      * is what actually guards against two terms racing to close a cycle from opposite ends; see
      * that call site.</p>
@@ -478,8 +477,8 @@ public class KognioRdfTermRepository implements TermRepository {
      * The read of whatever is being preserved now happens <em>before</em> the write
      * transaction, exactly like {@link #create} - the SHACL gate therefore runs before the
      * transaction opens again, not inside it. What used to be a single in-adapter-transaction
-     * merge is now a compare-and-set on the {@link WriteFunnel}: {@link #attemptUpdate} reads the
-     * term's current state and {@code arkprov:head} together, then asks the funnel to patch it
+     * merge is now a compare-and-set on the {@link VersionedWriteFunnel}: {@link #attemptUpdate} reads the
+     * term's current state and {@code RevisionToken} together, then asks the funnel to patch it
      * only if that head still matches. Two callers changing <em>different</em> fields at the same
      * time now both succeed only if neither loses the race on the shared head - unlike the
      * predicate-scoped conflict detection this replaces, a head conflict on either field now
@@ -494,10 +493,10 @@ public class KognioRdfTermRepository implements TermRepository {
      * {@code term_update} MCP tool exposes is {@code required = false}, so a caller can invoke this
      * method with every correctable argument ({@code prefLabel}, {@code definition},
      * {@code broader}, {@code related}) {@code null}.
-     * Such a call never reaches the funnel: no write, no SHACL gate, no {@code arkprov:head}
-     * comparison. A revision documents a model change; recording one for an
-     * empty patch would grow the immutable provenance trail without cause and would move the head,
-     * handing a concurrent CAS writer a spurious conflict it did not actually have. The
+     * Such a call never reaches the funnel: no write, no SHACL gate, no {@code RevisionToken}
+     * comparison. A write documents a model change; an empty patch has none, so it is kept out of
+     * the funnel's transaction entirely instead of relying on the funnel recording no history
+     * entry for an unchanged slice. The
      * requirements BC guards the same case symmetrically in
      * {@code RequirementService#updateWithOptimisticRetry}, comparing the mutated value against the
      * one just read instead of comparing arguments, since its mutation is a whole-value transform
@@ -541,7 +540,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * Deletes the term identified by {@code code}, and every triple it carries in
      * {@link #TERMS_GRAPH}, from the project (issue #335). Resolves the subject outside any
      * transaction (mirroring {@link #attemptUpdate}'s own pre-transaction reads), then hands the
-     * whole check-and-delete to {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs
+     * whole check-and-delete to {@link VersionedWriteFunnel#delete}: {@link #rejectIfReferenced} runs
      * first, inside the funnel's own write transaction (so a concurrent writer racing to add a
      * reference is resolved by the store's {@code SERIALIZABLE} isolation rather than a window
      * between a separate pre-check and this write), and only once it finds nothing pointing at the
@@ -558,18 +557,14 @@ public class KognioRdfTermRepository implements TermRepository {
             subjectIriString = resolveTermSubjectIri(handle.sparqlQuery()::select, code)
                     .orElseThrow(() -> new TermNotFoundException(projectId, code));
         }
-        String subject = SparqlTerms.iriRef(subjectIriString);
-
-        funnel.delete(dataset, TERMS_GRAPH, subjectIriString, code.value(),
+        funnel.delete(dataset, subjectIriString, code.value(), EntryDetails.NONE,
                 () -> new TermNotFoundException(projectId, code),
-                tx -> {
-                    rejectIfReferenced(tx, subjectIriString, projectId, code);
-                    tx.update("DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " ?p ?o } }");
-                });
+                () -> new TermConcurrentlyModifiedException(projectId, code),
+                tx -> rejectIfReferenced(tx, subjectIriString, projectId, code));
     }
 
     /**
-     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained (issue
+     * Reads back the codes {@link VersionedWriteFunnel#delete}'s {@code code} parameter retained (issue
      * #350): the shared funnel keeps the number out of circulation, this hexagon only maps its raw
      * strings to {@link TermCode}.
      */
@@ -622,10 +617,9 @@ public class KognioRdfTermRepository implements TermRepository {
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} or the
-     * ubiquitous-language BC's own {@code skos:broader}/{@code skos:related} - searched across
-     * every named graph
-     * ({@code GRAPH ?g}), since a referencing edge lives in its own BC's model graph, not
-     * {@link #TERMS_GRAPH}. Runs inside the live write transaction {@link WriteFunnel#delete} hands
+     * ubiquitous-language BC's own {@code skos:broader}/{@code skos:related} - searched in the
+     * one content graph every component writes into ({@link #TERMS_GRAPH}), where a referencing
+     * edge of any component lives. Runs inside the live write transaction {@link VersionedWriteFunnel#delete} hands
      * its {@code body}, so the check and the eventual delete share one atomic snapshot.
      */
     private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, TermCode code) {
@@ -647,9 +641,9 @@ public class KognioRdfTermRepository implements TermRepository {
         }
     }
 
-    /** {@code true} if any named graph holds a triple {@code ?s <predicateIri> target}. */
+    /** {@code true} if the content graph holds a triple {@code ?s <predicateIri> target}. */
     private boolean isReferencedVia(DatasetTx tx, IRI target, String predicateIri) {
-        String query = "ASK { GRAPH ?g { ?s <" + predicateIri + "> ?target } }";
+        String query = "ASK { GRAPH <" + TERMS_GRAPH + "> { ?s <" + predicateIri + "> ?target } }";
         return tx.ask(query, Map.of("target", target));
     }
 
@@ -657,7 +651,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * One attempt of {@link #update}'s CAS retry loop: reads the term's current state and head
      * together, from a single query ({@link #readCurrentByCode}), outside any transaction, builds
      * the same candidate/context {@code update} always built, and hands the granular patch to
-     * {@link WriteFunnel#compareAndUpdate} as the write body - the funnel checks the head again
+     * {@link VersionedWriteFunnel#compareAndUpdate} as the write body - the funnel checks the head again
      * inside its own transaction and runs the body only if it still matches.
      *
      * <p><strong>Why one combined read, not two.</strong> An earlier
@@ -689,7 +683,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * the gate, mirroring the {@code prefLabel} "untouched" branch below. This
      * pre-transaction check alone only catches a concurrent change that had already fully
      * committed by the time it ran; {@link #assertNoCycle} runs a second time, against {@code
-     * tx::select}, inside the write body handed to {@link WriteFunnel#compareAndUpdate} - see that
+     * tx::select}, inside the write body handed to {@link VersionedWriteFunnel#compareAndUpdate} - see that
      * call site for why two terms racing to close a cycle from opposite ends needs an in-transaction
      * re-check, not just this one.</p>
      *
@@ -725,7 +719,7 @@ public class KognioRdfTermRepository implements TermRepository {
         Graph referenceTargetAssertedContext = rdf.createGraph();
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             Function<String, Stream<BindingSet>> selectFn = handle.sparqlQuery()::select;
-            currentTerm = readCurrentByCode(selectFn, code)
+            currentTerm = ReadTransactions.read(handle, tx -> readCurrentByCode(tx, code))
                     .orElseThrow(() -> new TermNotFoundException(projectId, code));
             if (broader != null && broader.isPresent()) {
                 TermCode resolvedBroaderCode = broader.get();
@@ -758,7 +752,7 @@ public class KognioRdfTermRepository implements TermRepository {
             }
         }
         TermAssembly current = currentTerm.assembly();
-        String currentHead = currentTerm.head();
+        RevisionToken currentToken = currentTerm.token();
 
         if (prefLabel == null && definition == null && broader == null && related == null) {
             // No field to patch - a true no-op: the funnel is never
@@ -777,8 +771,6 @@ public class KognioRdfTermRepository implements TermRepository {
 
         String subjectIriString = current.id.value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
-        String subject = SparqlTerms.iriRef(subjectIriString);
-        IRI graphIri = rdf.createIRI(TERMS_GRAPH);
 
         // Only the predicate(s) actually being replaced go into the gate's candidate; an
         // untouched-but-shape-relevant predicate (the type triple always, the caller's own
@@ -832,11 +824,10 @@ public class KognioRdfTermRepository implements TermRepository {
         String finalBroaderTargetIri = broaderTargetIri;
         TermCode finalBroaderCode = broaderCode;
         List<String> finalRelatedTargetIris = relatedTargetIris;
-        funnel.compareAndUpdate(dataset, TERMS_GRAPH, subjectIriString, currentHead,
-                writeCandidate, assertedContext,
+        funnel.compareAndUpdate(dataset, subjectIriString, currentToken, assertedContext,
                 () -> new TermNotFoundException(projectId, code),
                 () -> new TermConcurrentlyModifiedException(projectId, code),
-                tx -> {
+                (tx, draft) -> {
                     if (broader != null && broader.isPresent()) {
                         // Re-verify inside the very transaction the CAS head check also runs in
                         // (issue #252 review, "two terms racing into a cycle together"). The
@@ -860,28 +851,32 @@ public class KognioRdfTermRepository implements TermRepository {
                         assertNoCycle(tx::select, projectId, code, subjectIriString,
                                 finalBroaderCode, finalBroaderTargetIri);
                     }
+                    // The new slice starts as the whole draft, so a skos:broader/skos:related
+                    // edge onto a blank node (only an edit made outside arknet writes one) is
+                    // carried into it; the gate validates the whole slice against
+                    // sh:nodeKind sh:IRI and rejects the update.
+                    Graph next = Slices.copyOf(draft);
                     if (prefLabel != null && explicitTag != null) {
-                        tx.update(deleteTriplesOfLanguage(subject, PREF_LABEL_PROPERTY, explicitTag, defaultTag));
-                        tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, literalOf(prefLabel, explicitTag)));
+                        removeOfLanguage(next, subjectIri, PREF_LABEL_PROPERTY, explicitTag, defaultTag);
+                        next.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(prefLabel, explicitTag));
                     } else if (prefLabel != null) {
                         // Rename: the old word goes under every tag, the new one comes back under
                         // every tag renameTags derived - the one write that is not language-scoped.
-                        tx.update(deleteAllTriplesOf(subject, PREF_LABEL_PROPERTY));
+                        Slices.removeAll(next, subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY));
                         for (String tag : renameTags) {
-                            tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, literalOf(prefLabel, tag)));
+                            next.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(prefLabel, tag));
                         }
                     }
                     if (definition != null) {
-                        tx.update(deleteTriplesOfLanguage(subject, DEFINITION_PROPERTY, writeTag, defaultTag));
-                        tx.add(graphIri, singleTriple(subjectIri, DEFINITION_PROPERTY, literalOf(definition, writeTag)));
+                        removeOfLanguage(next, subjectIri, DEFINITION_PROPERTY, writeTag, defaultTag);
+                        next.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), literalOf(definition, writeTag));
                     }
                     if (broader != null) {
                         // Both "set/replace" and "explicit clear" start by removing the existing
                         // triple (if any); only "set/replace" reinserts one.
-                        tx.update(deleteAllTriplesOf(subject, BROADER_PROPERTY));
+                        Slices.removeAll(next, subjectIri, rdf.createIRI(BROADER_PROPERTY));
                         if (broader.isPresent()) {
-                            tx.add(graphIri, singleTriple(subjectIri, BROADER_PROPERTY,
-                                    rdf.createIRI(finalBroaderTargetIri)));
+                            next.add(subjectIri, rdf.createIRI(BROADER_PROPERTY), rdf.createIRI(finalBroaderTargetIri));
                         }
                     }
                     if (related != null) {
@@ -889,12 +884,12 @@ public class KognioRdfTermRepository implements TermRepository {
                         // asserts goes, whatever the caller now names comes back. An edge another
                         // term asserts towards this one lives on that term's subject and is
                         // untouched here - it is that term's own term_update to drop.
-                        tx.update(deleteAllTriplesOf(subject, RELATED_PROPERTY));
+                        Slices.removeAll(next, subjectIri, rdf.createIRI(RELATED_PROPERTY));
                         for (String relatedTargetIri : finalRelatedTargetIris) {
-                            tx.add(graphIri, singleTriple(subjectIri, RELATED_PROPERTY,
-                                    rdf.createIRI(relatedTargetIri)));
+                            next.add(subjectIri, rdf.createIRI(RELATED_PROPERTY), rdf.createIRI(relatedTargetIri));
                         }
                     }
+                    return next;
                 });
 
         return resultingTerm(current, prefLabel, definition, broader, related, defaultTag);
@@ -944,10 +939,6 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     /** Deletes every existing triple of {@code subject} on {@code predicateIri} - a no-op if none exists. */
-    private static String deleteAllTriplesOf(String subject, String predicateIri) {
-        return "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } }";
-    }
-
     /**
      * Canonicalizes a BCP-47 tag (e.g. {@code "DE"} -&gt; {@code "de"}), or {@code null} unchanged
      * - and rejects one that is not well-formed at all, via the shared kernel {@link LanguageTag}
@@ -973,65 +964,27 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     /**
-     * Deletes only the existing triple(s) of {@code subject} on {@code predicateIri} whose literal
-     * carries the same language tag as {@code language} - every other language-tagged (or
-     * untagged) variant of a multi-valued predicate such as {@code skos:prefLabel}/
-     * {@code skos:definition} survives untouched. A no-op if no literal with that tag exists.
+     * Removes from {@code slice} the values of {@code predicateIri} carrying {@code language},
+     * compared case-insensitively (kognio-rdf stores every tag lower-cased, older data kept the
+     * written case), plus an untagged value when {@code language} is the project's default - such
+     * a value is a stale duplicate of the one now written under its proper tag. Not
+     * {@code langMatches}: that would let {@code de} sweep away a {@code de-CH} variant too.
      *
-     * <p>This is the fix for the bug {@code term_update} used to have: an earlier version deleted
-     * <strong>every</strong> value of the predicate regardless of language before writing the one
-     * new literal, silently discarding every other language variant a store-first term
-     * legally carried. {@code lang(?o)} is {@code ""} for a plain, untagged literal, which is
-     * exactly what {@code language == null} maps {@code tag} to below - so an untagged correction
-     * scopes its delete to the untagged slot alone, the same way a tagged one scopes to its own
-     * tag.</p>
-     *
-     * <p><strong>Widening the filter for a default-language write (issue #258).</strong> {@code
-     * language} is normally never {@code null} by the time a real {@code term_update} call reaches
-     * here - {@link #attemptUpdate} already fell back to the project's {@code defaultLanguage}
-     * for a caller that named none, and {@code TermService#update} rejected a call that would
-     * resolve to no language at all - but this out-adapter's own port contract still permits a
-     * caller-supplied {@code null} without a project default (untagged write), so this method
-     * stays null-tolerant for that lower-level case. When {@code language} is non-{@code null} and
-     * (canonicalized) equals
-     * {@code defaultLanguage} (canonicalized), the literal about to be written <em>is</em>, by
-     * construction, what an omitted {@code language} argument would have resolved to - so an
-     * existing <em>untagged</em> literal on this predicate is no longer a genuine other-language
-     * variant, it is a stale duplicate of the value now being written under its proper tag. The
-     * filter widens from matching only {@code tag} to also matching the untagged slot ({@code
-     * lang(?o) = ""}) in exactly that case, sweeping the stale untagged literal away instead of
-     * leaving it stranded next to the newly-tagged one - a lazy, incremental normalisation
-     * triggered only by the next {@code term_update} that happens to touch this field, not a batch
-     * migration. {@code language == null} (an untagged write itself) never widens: the untagged
-     * slot is already exactly what is being replaced.</p>
-     *
-     * @param language        the BCP-47 tag of the literal being replaced, or {@code null} for
-     *                        untagged
+     * @param language        the tag of the value being written, or {@code null} for untagged
      * @param defaultLanguage the target project's configured default language, canonicalized, or
      *                        {@code null} if it has none
      */
-    private static String deleteTriplesOfLanguage(
-            String subject, String predicateIri, String language, String defaultLanguage) {
-        // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
-        // DELETE {...} WHERE {...} form is required to scope the delete by language.
-        // LCASE: kognio-rdf 0.4.0 stores every tag lower-cased (de-CH -> de-ch), while older data
-        // and arknet's canonical form keep the region upper-case - compare case-insensitively.
-        // Not langMatches: that would let "de" sweep away a de-CH variant too.
-        String tag = language == null ? "" : SparqlTerms.escape(language.toLowerCase(Locale.ROOT));
-        String filter = "LCASE(lang(?o)) = \"" + tag + "\"";
-        if (language != null && language.equals(defaultLanguage)) {
-            filter += " || lang(?o) = \"\"";
-        }
-        return "DELETE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } } "
-                + "WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o . "
-                + "FILTER(" + filter + ") } }";
-    }
-
-    /** A one-triple graph, for the common "insert exactly one new value" case in {@link #update}. */
-    private Graph singleTriple(IRI subject, String predicateIri, RDFTerm object) {
-        Graph graph = rdf.createGraph();
-        graph.add(subject, rdf.createIRI(predicateIri), object);
-        return graph;
+    private void removeOfLanguage(Graph slice, IRI subject, String predicateIri, String language,
+            String defaultLanguage) {
+        String tag = language == null ? "" : language.toLowerCase(Locale.ROOT);
+        boolean sweepUntagged = language != null && language.equals(defaultLanguage);
+        Slices.removeAll(slice, subject, rdf.createIRI(predicateIri), object -> {
+            if (!(object instanceof Literal literal)) {
+                return false;
+            }
+            String existing = literal.getLanguageTag().orElse("").toLowerCase(Locale.ROOT);
+            return existing.equals(tag) || (sweepUntagged && existing.isEmpty());
+        });
     }
 
     /** Converts a {@link LocalizedLiteral} back to the RDF {@link Literal} it was read from. */
@@ -1203,78 +1156,41 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     /**
-     * One term's current state ({@link TermAssembly}) together with its {@code arkprov:head}
-     * concurrency token, read from a single query - see {@link #readCurrentByCode}
-     * for why this must be one query, not two.
+     * One term's current state ({@link TermAssembly}) together with the library's concurrency token
+     * of its draft, read in one transaction - see {@link #readCurrentByCode}.
      */
-    private record CurrentTerm(TermAssembly assembly, String head) {
+    private record CurrentTerm(TermAssembly assembly, RevisionToken token) {
     }
 
     /**
-     * Reads one term's full current state together with its {@code arkprov:head} concurrency
-     * token in a single query (mirroring
-     * {@code KognioRdfRequirementRepository#findCurrentByCode}) - used by {@link #attemptUpdate},
-     * whose compare-and-set write must know both the state to patch and the token to check.
-     * Shares {@link #termByCodeWhereClause} with {@link #readAssemblyByCode} so the two
-     * single-term read paths cannot drift apart field-by-field (already taught
-     * this lesson once).
+     * Reads one term's full current state together with its draft's concurrency token, both
+     * inside the one read transaction {@code tx} - used by {@link #attemptUpdate}, whose
+     * compare-and-set write must know both the state to patch and the token to check. Shares
+     * {@link #termByCodeWhereClause} with {@link #readAssemblyByCode} so the two single-term read
+     * paths cannot drift apart field-by-field.
      *
-     * <p><strong>Why the state and the head must come from the same query.</strong>
-     * {@code SparqlQuery#select}'s port contract guarantees only that each individual call is a
-     * self-contained read against the store's current committed state - two separate calls are
-     * two independent snapshots, with no guarantee that nothing committed in between them. An
-     * earlier version read the assembly and the head via two separate calls; a concurrent
-     * writer's commit landing between them left the first call's assembly stale (pre-commit)
-     * paired with the second call's head, which was already fresh (post-commit) - the funnel's
-     * head comparison in {@link #attemptUpdate} then wrongly matched against a state that was no
-     * longer current, and the bounded retry loop in {@link #update} never got a chance to catch
-     * it. Joining {@code ?head} into this query instead makes the pairing atomic: both values
-     * always come from the same snapshot, so a concurrent commit either precedes or follows this
-     * whole read, never falls inside it.</p>
-     *
-     * <p>The head is single-valued and therefore identical on every row this query binds for one
-     * subject (the mandatory {@code prefLabel}/{@code definition} joins in
-     * {@link #termByCodeWhereClause} can still multiply a subject into several rows)
-     * - it is kept <em>per subject</em> and paired with the assembly this method
-     * actually returns, exactly as the row grouping into {@link TermAssembly} already does for
-     * the other per-subject fields. Keying it by subject rather than taking the first head seen
-     * matters because {@code dcterms:identifier} carries no {@code sh:maxCount}: a store-first
-     * store can hold two subjects under the same code, and the returned token must be
-     * the token of the subject whose state is returned with it - a head belonging to the other
-     * subject would make {@link #attemptUpdate}'s compare-and-set check a foreign resource's
-     * revision.</p>
+     * <p><strong>Why one transaction.</strong> Two separate reads are two independent snapshots; a
+     * concurrent commit between them would pair a stale state with a fresh token, and the
+     * compare-and-set would accept a write based on a state that is no longer current. Reading
+     * both inside {@code tx} makes the pairing atomic. The token is the one of the subject whose
+     * state is returned: {@code dcterms:identifier} carries no {@code sh:maxCount}, so a
+     * store-first store can hold two subjects under the same code.</p>
      */
-    private Optional<CurrentTerm> readCurrentByCode(
-            Function<String, Stream<BindingSet>> selectFn, TermCode code) {
+    private Optional<CurrentTerm> readCurrentByCode(DatasetTx tx, TermCode code) {
         String query = "SELECT ?s ?prefLabel ?definition "
-                + "?broaderSubject ?broaderCode ?relatedSubject ?relatedCode ?head WHERE { GRAPH <"
+                + "?broaderSubject ?broaderCode ?relatedSubject ?relatedCode WHERE { GRAPH <"
                 + TERMS_GRAPH + "> { "
                 + termByCodeWhereClause(code)
-                + "} "
-                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+                + "} }";
 
         Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
-        Map<String, String> headBySubject = new LinkedHashMap<>();
-        selectFn.apply(query).forEach(row -> {
+        tx.select(query).forEach(row -> {
             TermAssembly assembly = assemblyFor(bySubject, row, code);
             assembly.addPrefLabel(literalOf(row, "prefLabel"));
             assembly.addDefinition(literalOf(row, "definition"));
-            String head = headOf(row);
-            if (head != null) {
-                headBySubject.putIfAbsent(assembly.id.value().value(), head);
-            }
         });
         return bySubject.values().stream().findFirst()
-                .map(assembly -> new CurrentTerm(assembly, headBySubject.get(assembly.id.value().value())));
-    }
-
-    /** Extracts a row's {@code ?head} binding as an IRI string, or {@code null} if absent or not an IRI. */
-    private static String headOf(BindingSet row) {
-        return row.getValue("head")
-                .filter(IRI.class::isInstance)
-                .map(value -> ((IRI) value).getIRIString())
-                .orElse(null);
+                .map(assembly -> new CurrentTerm(assembly, funnel.currentToken(tx, assembly.id.value().value())));
     }
 
     @Override
@@ -1349,7 +1265,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * duplicates changes nothing about the result.</p>
      *
      * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
-     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * (kogn-io/arknet#360).</strong> {@code VersionedWriteFunnel#create}'s uniqueness check is
      * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
      * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
      * A counter that filtered blank nodes out would therefore be blind to a code the write path

@@ -26,7 +26,8 @@ import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 
 /**
  * Assembles a {@link KognioRdfContextRelationshipRepository} over a concrete kognio-rdf dataset
@@ -96,7 +97,8 @@ public final class KognioRdfContextRelationshipRepositoryFactory {
     public static ContextRelationshipRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(displayLocale), WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(lifecycle, buildGate(displayLocale), ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfContextRelationshipRepository(lifecycle, funnel);
     }
 

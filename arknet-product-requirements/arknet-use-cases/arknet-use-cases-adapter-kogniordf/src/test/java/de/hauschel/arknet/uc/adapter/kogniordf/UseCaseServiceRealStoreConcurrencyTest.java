@@ -42,7 +42,6 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.pr.shared.ConstraintCode;
 import de.hauschel.arknet.pr.shared.RequirementCode;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
 import de.hauschel.arknet.uc.application.UseCaseService;
@@ -56,6 +55,8 @@ import de.hauschel.arknet.uc.application.port.out.TermLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 
 /**
  * Regression tests against a real RDF4J-backed store (on-disk {@code NativeStore}): the second
@@ -65,7 +66,7 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
  * one's transaction even begins") with a repository decorator and no real transactions at all.
  *
  * <p>Mirrors {@code BoundedContextServiceRealStoreConcurrencyTest} exactly: the shared
- * {@link de.hauschel.arknet.persistence.WriteFunnel} translates a genuine store-level commit conflict
+ * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel} translates a genuine store-level commit conflict
  * (two callers' code-uniqueness guards both passing before either commits, under {@code
  * SERIALIZABLE} isolation, kogn-io/rdf-core#18) into the same {@link
  * de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException} the synchronous guard throws, so
@@ -223,7 +224,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
         assertNotEquals(winnerResult.get().code(), loserResult.get().code(), diagnostics);
 
         List<UseCase> stored = KognioRdfUseCaseRepositoryFactory.over(
-                realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT).findAll(WS, null);
+                realLifecycle, DisplayLocale.DEFAULT).findAll(WS, null);
         assertEquals(2, stored.size(), diagnostics);
         assertTrue(stored.stream().map(UseCase::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())), diagnostics);
@@ -244,7 +245,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
     /**
      * Renders everything a future random sighting of this race needs to be evaluable with: both
      * racers' results (business code plus resource IRI), each result's current
-     * {@code arkprov:head} read fresh from the store after the race (the concurrency token -
+     * {@code RevisionToken} read fresh from the store after the race (the concurrency token -
      * shows whether the two results really are two distinct, independently committed revisions),
      * the loser's exception if any, the system load at failure time, and the full timestamped
      * timeline of guard/barrier/latch/commit events. Built lazily by an assertion's message
@@ -264,9 +265,9 @@ class UseCaseServiceRealStoreConcurrencyTest {
             report.append("concurrency race diagnostics").append(System.lineSeparator());
             report.append("  system: ").append(systemDiagnostics()).append(System.lineSeparator());
             report.append("  racer-A (winner) result: ").append(describe(winner)).append(System.lineSeparator());
-            report.append("  racer-A (winner) arkprov:head: ").append(headOf(winner)).append(System.lineSeparator());
+            report.append("  racer-A (winner) draft token: ").append(headOf(winner)).append(System.lineSeparator());
             report.append("  racer-B (loser) result: ").append(describe(loser)).append(System.lineSeparator());
-            report.append("  racer-B (loser) arkprov:head: ").append(headOf(loser)).append(System.lineSeparator());
+            report.append("  racer-B (loser) draft token: ").append(headOf(loser)).append(System.lineSeparator());
             report.append("  racer-B (loser) failure: ").append(failure == null
                     ? "none" : failure.getClass().getName() + ": " + failure.getMessage())
                     .append(System.lineSeparator());
@@ -303,9 +304,9 @@ class UseCaseServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * Reads {@code useCase}'s current {@code arkprov:head} straight from
+     * Reads {@code useCase}'s current {@code RevisionToken} straight from
      * {@link #realLifecycle} after the race, outside any transaction - the same triple pattern
-     * {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate} reads inside its
+     * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#compareAndUpdate} reads inside its
      * transaction, but there is no accessor for that private read path, so this queries it directly
      * via {@link io.kogn.rdf.dataset.SparqlQuery}.
      *
@@ -324,15 +325,11 @@ class UseCaseServiceRealStoreConcurrencyTest {
             return "skipped (thread interrupted before this read)";
         }
         String subjectIriString = useCase.id().value().value();
-        String query = "SELECT ?head WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIriString + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
-        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
-            Optional<String> head = handle.sparqlQuery().select(query)
-                    .findFirst()
-                    .flatMap(row -> row.getValue("head"))
-                    .filter(IRI.class::isInstance)
-                    .map(value -> ((IRI) value).getIRIString());
-            return head.orElse("none (no revision recorded through the funnel)");
+        try {
+            return new VersioningProbe(realLifecycle, ContentGraph.GRAPH_IRI)
+                    .token(new DatasetId(WS.value()), subjectIriString)
+                    .map(Object::toString)
+                    .orElse("none (empty draft)");
         } catch (Throwable t) {
             String interruptNote = Thread.currentThread().isInterrupted() ? ", thread interrupted" : "";
             return "unavailable: " + t.getClass().getName() + ": " + t.getMessage() + interruptNote;
@@ -380,7 +377,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
             // This service pins the code-assignment interleaving inside the transaction; nothing to do before.
         });
         UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
-                guarded, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                guarded, DisplayLocale.DEFAULT);
         return new UseCaseService(repository, new UuidResourceIdFactory(), UNUSED_REQUIREMENT_LOOKUP,
                 CUSTOMER_ROLE_LOOKUP, UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_LOOKUP);
     }
@@ -392,14 +389,14 @@ class UseCaseServiceRealStoreConcurrencyTest {
      */
     private static UseCaseService serviceOver(DatasetLifecycle lifecycle) {
         UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
-                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                lifecycle, DisplayLocale.DEFAULT);
         return new UseCaseService(repository, new UuidResourceIdFactory(), UNUSED_REQUIREMENT_LOOKUP,
                 CUSTOMER_ROLE_LOOKUP, UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_LOOKUP);
     }
 
     /**
      * Against the real store: a concurrent {@code uc_update} that commits between this
-     * caller's read (state plus {@code arkprov:head}) and its own write must cost the caller
+     * caller's read (state plus {@code RevisionToken}) and its own write must cost the caller
      * nothing and lose neither change. Before this fix, {@code uc_update} did not exist - a
      * read-modify-write over an unconditional {@code update} would have silently dropped the
      * first writer's change.

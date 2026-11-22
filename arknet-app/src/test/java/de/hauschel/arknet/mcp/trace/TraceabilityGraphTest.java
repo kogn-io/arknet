@@ -51,11 +51,10 @@ import de.hauschel.arknet.bc.domain.ContextRelationshipId;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.persistence.StoreSnapshot;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepositoryFactory;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
@@ -86,6 +85,7 @@ import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.dm.shared.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.persistence.ContentGraph;
 
 /**
  * Lower-level, pure-graph tests: a real kognio-rdf store, seeded through the real repositories
@@ -130,13 +130,13 @@ class TraceabilityGraphTest {
                 KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         TermRepository terms = KognioRdfTermRepositoryFactory.over(lifecycle);
         UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
-                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
-        WriteFunnel requirementsFunnel = KognioRdfRequirementRepositoryFactory.buildFunnel(
+                lifecycle, DisplayLocale.DEFAULT);
+        VersionedWriteFunnel requirementsFunnel = KognioRdfRequirementRepositoryFactory.buildFunnel(
                 lifecycle, DisplayLocale.DEFAULT);
         ConstraintRepository constraints = KognioRdfConstraintRepositoryFactory.over(
                 lifecycle, DisplayLocale.DEFAULT, requirementsFunnel);
         ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(lifecycle, DisplayLocale.DEFAULT);
+        VersionedWriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(lifecycle, DisplayLocale.DEFAULT);
         RoleRepository roles = KognioRdfRoleRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, actorFunnel);
 
         // CON-1: bound to FR-1 via constrainedBy. CON-2: never referenced (orphan, issue #223).
@@ -210,7 +210,7 @@ class TraceabilityGraphTest {
         // graph-level accessors are what is under test here, text-mention matching is a
         // TraceabilityRenderer concern (see TraceabilityRendererTest).
         BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
-                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                lifecycle, DisplayLocale.DEFAULT);
         boundedContexts.create(PROJECT, new BoundedContext(
                 new BoundedContextId(ResourceId.of(BC_1_IRI)), new BoundedContextCode("BC-1"), "Ordering",
                 "Wir verarbeiten Bestellungen.", null, null,
@@ -780,7 +780,7 @@ class TraceabilityGraphTest {
                     rdf.createLiteral(labelB, languageB));
             try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
                 handle.transactor().inTransaction(tx -> {
-                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-multilingual-graph"), graph);
+                    tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                     return null;
                 });
             }
@@ -808,7 +808,7 @@ class TraceabilityGraphTest {
             }
             try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
                 handle.transactor().inTransaction(tx -> {
-                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-broader-graph"), graph);
+                    tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                     return null;
                 });
             }
@@ -835,7 +835,7 @@ class TraceabilityGraphTest {
             }
             try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
                 handle.transactor().inTransaction(tx -> {
-                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-related-graph"), graph);
+                    tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                     return null;
                 });
             }
@@ -860,7 +860,7 @@ class TraceabilityGraphTest {
                     rdf.createLiteral(description));
             try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
                 handle.transactor().inTransaction(tx -> {
-                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-description-graph"), graph);
+                    tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                     return null;
                 });
             }
@@ -890,7 +890,7 @@ class TraceabilityGraphTest {
             // ROLE-1 is already taken by the base fixture's own role (buildBaseFixture) - this
             // fixture's own role code must not collide with it.
             String roleIri = "https://w3id.org/arknet/id/trace-test-role-filledby";
-            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+            VersionedWriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
                     lifecycle, DisplayLocale.DEFAULT);
             RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
                     lifecycle, DisplayLocale.DEFAULT, actorFunnel);
@@ -915,7 +915,7 @@ class TraceabilityGraphTest {
         void rolesFilledByAnActorContainsBothRolesThatOccupyIt() {
             String roleIri1 = "https://w3id.org/arknet/id/trace-test-role-filledby-1";
             String roleIri2 = "https://w3id.org/arknet/id/trace-test-role-filledby-2";
-            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+            VersionedWriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
                     lifecycle, DisplayLocale.DEFAULT);
             RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
                     lifecycle, DisplayLocale.DEFAULT, actorFunnel);
@@ -939,7 +939,7 @@ class TraceabilityGraphTest {
             String bc2Iri = "https://w3id.org/arknet/id/trace-test-bc-2";
             String relationshipIri = "https://w3id.org/arknet/id/trace-test-context-relationship";
             BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             boundedContexts.create(PROJECT, new BoundedContext(
                     new BoundedContextId(ResourceId.of(bc2Iri)), new BoundedContextCode("BC-2"), "Billing",
                     "Wir stellen Rechnungen.", null, null, List.of()), "en");
@@ -969,7 +969,7 @@ class TraceabilityGraphTest {
             String bc2Iri = "https://w3id.org/arknet/id/trace-test-bc-2-unlinked";
             String relationshipIri = "https://w3id.org/arknet/id/trace-test-context-relationship-unlinked";
             BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             boundedContexts.create(PROJECT, new BoundedContext(
                     new BoundedContextId(ResourceId.of(bc2Iri)), new BoundedContextCode("BC-3"), "Payments",
                     "Wir verarbeiten Zahlungen.", null, null, List.of()), "en");
@@ -1003,7 +1003,7 @@ class TraceabilityGraphTest {
             String bc2Iri = "https://w3id.org/arknet/id/trace-test-bc-2-term-unlinked";
             String termIri = "https://w3id.org/arknet/id/trace-test-term-unlinked";
             BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             BoundedContextId id = new BoundedContextId(ResourceId.of(bc2Iri));
             boundedContexts.create(PROJECT, new BoundedContext(
                     id, new BoundedContextCode("BC-4"), "Fulfilment", "Wir versenden Bestellungen.", null, null,
@@ -1077,7 +1077,7 @@ class TraceabilityGraphTest {
         @Test
         void useCaseFieldTextsCoversEveryOptionalFieldAndEveryStepAndExtension() {
             UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             useCases.create(PROJECT, new UseCase(
                     new UseCaseId(ResourceId.of(UC_2_IRI)), new UseCaseCode("UC2"), "Manage cart",
                     "Customer manages the cart", "Checkout subsystem", "Customer opens the cart",
@@ -1099,7 +1099,7 @@ class TraceabilityGraphTest {
         @Test
         void unlinkedMentionsFlagsAUseCaseGoalMentionWithNoUsesTermEdge() {
             UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             useCases.create(PROJECT, new UseCase(
                     new UseCaseId(ResourceId.of(UC_2_IRI)), new UseCaseCode("UC2"), "Reset",
                     "Customer resets their Passwort", null, null,
@@ -1128,7 +1128,7 @@ class TraceabilityGraphTest {
         void unlinkedMentionsFlagsATermSharingItsLabelWithTheUseCasesOwnRole() {
             String roleIri = "https://w3id.org/arknet/id/trace-test-unlinked-role-samename";
             String termIri = "https://w3id.org/arknet/id/trace-test-unlinked-term-samename";
-            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+            VersionedWriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
                     lifecycle, DisplayLocale.DEFAULT);
             RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
                     lifecycle, DisplayLocale.DEFAULT, actorFunnel);
@@ -1138,7 +1138,7 @@ class TraceabilityGraphTest {
             seedTermWithBroader(termIri, "TERM-UM-1", "Reviewer", "Someone who reviews a submission.", null);
 
             UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             String useCaseIri = "https://w3id.org/arknet/id/trace-test-unlinked-uc-samename";
             useCases.create(PROJECT, new UseCase(
                     new UseCaseId(ResourceId.of(useCaseIri)), new UseCaseCode("UC-UM1"), "Approve submission",
@@ -1167,7 +1167,7 @@ class TraceabilityGraphTest {
         @Test
         void unlinkedMentionsExemptsAUseCasesPrimaryRoleOnlyWhenItIsAlsoRegisteredAsATerm() {
             String roleTermIri = "https://w3id.org/arknet/id/trace-test-unlinked-role-and-term";
-            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+            VersionedWriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
                     lifecycle, DisplayLocale.DEFAULT);
             RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
                     lifecycle, DisplayLocale.DEFAULT, actorFunnel);
@@ -1182,13 +1182,13 @@ class TraceabilityGraphTest {
                     rdf.createLiteral("Approver"));
             try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
                 handle.transactor().inTransaction(tx -> {
-                    tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-unlinked-role-and-term-graph"), graph);
+                    tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
                     return null;
                 });
             }
 
             UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
-                    lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                    lifecycle, DisplayLocale.DEFAULT);
             String useCaseIri = "https://w3id.org/arknet/id/trace-test-unlinked-uc-role-and-term";
             useCases.create(PROJECT, new UseCase(
                     new UseCaseId(ResourceId.of(useCaseIri)), new UseCaseCode("UC-UM2"), "Approve request",

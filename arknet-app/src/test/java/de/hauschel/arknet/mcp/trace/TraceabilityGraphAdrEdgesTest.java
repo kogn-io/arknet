@@ -39,7 +39,6 @@ import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.persistence.StoreSnapshot;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
@@ -81,7 +80,7 @@ class TraceabilityGraphAdrEdgesTest {
     private static final String ADR_4_IRI = "https://w3id.org/arknet/id/trace-adr-adr-4";
     private static final String ADR_5_IRI = "https://w3id.org/arknet/id/trace-adr-adr-5";
     private static final String ADR_6_IRI = "https://w3id.org/arknet/id/trace-adr-adr-6";
-    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/adr";
+    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/content";
 
     @TempDir
     Path storageDir;
@@ -95,9 +94,9 @@ class TraceabilityGraphAdrEdgesTest {
         RequirementRepository requirements =
                 KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
-                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                lifecycle, DisplayLocale.DEFAULT);
         AdrRepository adrs =
-                KognioRdfAdrRepositoryFactory.over(lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                KognioRdfAdrRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         TermRepository terms = KognioRdfTermRepositoryFactory.over(lifecycle);
 
         terms.create(PROJECT, new Term(new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"),

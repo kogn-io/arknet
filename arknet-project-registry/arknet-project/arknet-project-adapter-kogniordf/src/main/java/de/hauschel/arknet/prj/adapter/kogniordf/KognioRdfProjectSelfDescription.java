@@ -30,7 +30,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * {@code project}'s own dataset ({@code new DatasetId(project.id().value())}), named graph
  * {@link ArkprjVocabulary#IDENTITY_GRAPH}.
  *
- * <p><strong>With the SHACL gate, without the shared {@link WriteFunnel}.</strong> Both halves of
+ * <p><strong>With the SHACL gate, without the shared {@code RegistryWrites}.</strong> Both halves of
  * that sentence are deliberate:</p>
  *
  * <ul>
@@ -39,7 +39,7 @@ import de.hauschel.arknet.prj.domain.Project;
  *       the candidate graph before opening the transaction, exactly like every funnelled write
  *       does, and throws the identical {@link WriteConstraintViolationException} on a
  *       violation.</li>
- *   <li><strong>Without the funnel.</strong> {@link WriteFunnel} exists to guard the distinction
+ *   <li><strong>Without the funnel.</strong> {@code RegistryWrites} exists to guard the distinction
  *       between "insert" and "replace" - {@code create} rejects an existing identity,
  *       {@code compareAndUpdate} rejects a stale one. {@link #describe} has no such distinction to
  *       guard: it is an idempotent replace-by-identity with no create/update branch, because this
@@ -48,12 +48,12 @@ import de.hauschel.arknet.prj.domain.Project;
  *       write transaction, would reopen exactly the TOCTOU window the funnel's in-transaction
  *       {@code contains} checks exist to close. There is also nothing here for a concurrency
  *       token to protect: the registry (via {@link KognioRdfProjectRegistry#compareAndUpdate}) is
- *       the single, CAS-guarded, revisioned source of truth for a project's anchors and label -
+ *       the single, CAS-guarded source of truth for a project's anchors and label -
  *       see {@link ProjectSelfDescription}'s own javadoc for why the application service always
- *       calls the registry first. A second, independent revision chain over the very same
- *       information in the project's own dataset would only fill that dataset's provenance graph
- *       with routing noise; it would never answer a question the registry's revision trail does
- *       not already answer. The self-description is a rebuildable duplicate of registry state
+ *       calls the registry first. A second, independently versioned copy of the very same
+ *       information in the project's own dataset would only fill that dataset's version history
+ *       with routing noise; it would never answer a question the registry record does not already
+ *       answer. The self-description is a rebuildable duplicate of registry state
  *       not a second model object with its own history worth tracking.</li>
  * </ul>
  *

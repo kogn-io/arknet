@@ -19,6 +19,7 @@ import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.EntryDetails;
 
 import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
@@ -31,7 +32,8 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 
 /**
  * Out-adapter: {@link ContextRelationshipRepository} backed by the kognio-rdf substrate
@@ -49,13 +51,13 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  *
  * <p><strong>Idempotent create over the (upstream, downstream, relationshipType) triple, not pure
  * create (issue #565).</strong> {@link #createIfAbsent} first looks for a relationship already
- * carrying the exact same triple - inside the same write transaction {@link WriteFunnel#createIfAbsent}
+ * carrying the exact same triple - inside the same write transaction {@link VersionedWriteFunnel#createIfAbsent}
  * runs its identity/code guards in, closing the check-then-act race a separate read beforehand would
  * leave open (see {@link ContextRelationshipRepository}'s class javadoc). {@link ContextRelationship}
  * carries no human-readable business code of its own (unlike {@code BoundedContextCode}), so there is
  * no second uniqueness rule beyond the triple check and the identity collision - {@code code} is
  * passed as {@code null}, skipping that guard entirely, the same honest shape
- * {@code WriteFunnel#delete}'s code-retention overload already uses for a caller with nothing to
+ * {@code VersionedWriteFunnel#delete}'s code-retention overload already uses for a caller with nothing to
  * check there.</p>
  *
  * <p><strong>Relationship-type IRI mapping mirrors {@code Subdomain}'s.</strong> The eight private
@@ -97,7 +99,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * <p><strong>Read paths (issue #565).</strong> {@link #findByContext}/{@link #findAll} back
  * {@code bc_get}/{@code bc_list}'s new relationship display - plain reads, no transaction, no
  * SHACL gate. {@link #deleteByEdge} backs {@code bc_unlink_context}: it first resolves the subject
- * IRI matching the given triple with a plain read, then removes it via {@link WriteFunnel#delete},
+ * IRI matching the given triple with a plain read, then removes it via {@link VersionedWriteFunnel#delete},
  * whose own existence re-check inside the delete transaction is what actually closes the race
  * against a concurrent delete of the same relationship - the same two-step shape
  * {@code KognioRdfActorRepository#delete} already uses to resolve a business code to a subject IRI
@@ -106,7 +108,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
 public class KognioRdfContextRelationshipRepository implements ContextRelationshipRepository {
 
     /** Shares {@code KognioRdfBoundedContextRepository}'s named graph, not a private one of its own. */
-    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
+    private static final String BOUNDED_CONTEXT_GRAPH = ContentGraph.GRAPH_IRI;
 
     private static final String CONTEXT_RELATIONSHIP_TYPE = ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE;
     /** {@code shapes:ContextRelationship-upstream}/{@code -downstream}'s {@code sh:class} target. */
@@ -125,7 +127,7 @@ public class KognioRdfContextRelationshipRepository implements ContextRelationsh
     private static final String SEPARATE_WAYS = ArkdddVocabulary.SEPARATE_WAYS;
 
     private final DatasetLifecycle lifecycle;
-    private final WriteFunnel funnel;
+    private final VersionedWriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -139,7 +141,7 @@ public class KognioRdfContextRelationshipRepository implements ContextRelationsh
      *                  existence checks for every {@link #createIfAbsent}/{@link #deleteByEdge}
      *                  (must not be {@code null})
      */
-    KognioRdfContextRelationshipRepository(DatasetLifecycle lifecycle, WriteFunnel funnel) {
+    KognioRdfContextRelationshipRepository(DatasetLifecycle lifecycle, VersionedWriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
@@ -155,7 +157,6 @@ public class KognioRdfContextRelationshipRepository implements ContextRelationsh
         IRI subjectIri = rdf.createIRI(subjectIriString);
         IRI upstreamIri = rdf.createIRI(relationship.upstream().value().value());
         IRI downstreamIri = rdf.createIRI(relationship.downstream().value().value());
-        IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
         Graph graph = buildCandidateGraph(subjectIri, upstreamIri, downstreamIri, relationship);
 
         // See the class javadoc's "validation-only asserted context" note for why the referenced
@@ -173,14 +174,14 @@ public class KognioRdfContextRelationshipRepository implements ContextRelationsh
                 + relationshipTypeIriFor(relationship.relationshipType()) + "> } }";
 
         // A relationship carries no business code of its own (unlike BoundedContextCode) - code =
-        // null skips that guard entirely, the same honest shape WriteFunnel#delete already uses for
+        // null skips that guard entirely, the same honest shape VersionedWriteFunnel#delete already uses for
         // a caller with nothing to check there.
-        String resultIri = funnel.createIfAbsent(new DatasetId(projectId.value()), BOUNDED_CONTEXT_GRAPH,
-                subjectIriString, null, graph, assertedContext,
+        String resultIri = funnel.createIfAbsent(new DatasetId(projectId.value()), subjectIriString, null,
+                assertedContext,
                 tx -> tx.select(edgeAsk).map(row -> iriOf(row, "s").getIRIString()).findFirst(),
                 () -> new ResourceAlreadyExistsException(projectId, relationship.id().value()),
                 () -> new ResourceAlreadyExistsException(projectId, relationship.id().value()),
-                tx -> tx.add(graphIri, graph));
+                (tx, current) -> graph);
 
         if (resultIri.equals(subjectIriString)) {
             return relationship;
@@ -216,12 +217,12 @@ public class KognioRdfContextRelationshipRepository implements ContextRelationsh
         // No business code to retain per subject (issue #350's scheme has no reader here - a
         // relationship carries no BoundedContextCode-style label) - the five-parameter overload
         // forwards code = null.
+        // A delete that loses its commit lost it to a concurrent unlink of the same edge.
         for (String subjectIriString : subjectIris) {
-            String subject = SparqlTerms.iriRef(subjectIriString);
-            funnel.delete(dataset, BOUNDED_CONTEXT_GRAPH, subjectIriString,
+            funnel.delete(dataset, subjectIriString, null, EntryDetails.NONE,
                     () -> new ContextRelationshipNotFoundException(projectId, null, null, relationshipType),
-                    tx -> tx.update(
-                            "DELETE WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " ?p ?o } }"));
+                    () -> new ContextRelationshipNotFoundException(projectId, null, null, relationshipType),
+                    tx -> { });
         }
     }
 

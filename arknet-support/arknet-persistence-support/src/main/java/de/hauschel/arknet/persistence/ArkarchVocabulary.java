@@ -24,7 +24,7 @@ package de.hauschel.arknet.persistence;
  *
  * <p><strong>Scope: the whole active module, not just the cross-module subset.</strong> This
  * differs from {@link ArkreqVocabulary}, which still names only the handful of predicates
- * duplicated across two modules, and follows {@link ArkprovVocabulary}/{@link ArkprjVocabulary}
+ * duplicated across two modules, and follows {@link ArkprjVocabulary}
  * instead: those mirror their whole ontology module and are held against it by a bidirectional
  * architecture test ({@code arknet-architecture-tests}). {@link ArkdddVocabulary} joined this
  * "whole module" camp with kogn-io/arknet#148, once its own narrow-scope javadoc turned out to be

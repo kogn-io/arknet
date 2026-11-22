@@ -29,7 +29,7 @@ Traegt es die andere nicht, ist das eine **Luecke**, die `store_check LANGUAGE` 
 Trug es die geschriebene Sprache vorher nicht, wird **uebersetzt**, nicht korrigiert: die vorhandene Variante ist die Quelle der Uebersetzung, nichts ist veraltet -- der zweite Aufruf des eigenen Zwei-Aufrufe-Workflows endet ohne Hinweis, und bei einer ADR ausserhalb `PROPOSED` ist genau dieser Write der einzige, den die Textfelder noch annehmen.
 Diese dritte Bedingung ist nur am Zustand **vor** dem Write entscheidbar -- danach traegt das Feld die Sprache so oder so.
 Darum fragt der In-Adapter den Hinweis vor dem Service-Aufruf ab und haengt ihn nach dessen Rueckkehr an: ein Store-Read mehr, wenn der Write scheitert, und ein Schnappschuss, den ein nebenlaeufiger Schreiber altern lassen kann -- beides traegt ein Hinweis.
-Die Formulierung bleibt bewusst bei "dieser Aufruf hat sie nicht geschrieben": der WriteFunnel zeichnet je Write **eine** Revision pro Ressource auf, nie eine pro Literal, also gibt es keine Revision je Sprachvariante, an der sich "aelter" belegen liesse.
+Die Formulierung bleibt bewusst bei "dieser Aufruf hat sie nicht geschrieben": die Versionierung fuehrt Drafts und Versionen je Ressource, nie je Literal, also gibt es keinen Stand je Sprachvariante, an dem sich "aelter" belegen liesse.
 Die Feldschluessel jedes Adapters stehen in dessen privater `MULTILINGUAL_FIELDS`-Liste, die `arknet-architecture-tests` (`StaleTranslationFieldsMatchShapesTest`) reflektiv gegen die `sh:uniqueLang`-Properties der ausgelieferten Shapes haelt.
 
 `FieldLanguageLookup` ist der Port fuer das eine, was ein In-Adapter selbst nicht weiss -- welche Tags ein Feld schon traegt.

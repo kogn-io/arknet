@@ -5,6 +5,7 @@ package de.hauschel.arknet.uc.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -32,13 +33,13 @@ import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
+import io.kogn.rdf.versioning.PublishState;
+import io.kogn.rdf.versioning.EntryKind;
+import io.kogn.rdf.versioning.HistoryEntry;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.persistence.ArkprocVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
@@ -57,6 +58,8 @@ import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 
 /**
  * Integration test for {@link KognioRdfUseCaseRepository} against an in-memory RDF4J-backed
@@ -81,13 +84,15 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
 class KognioRdfUseCaseRepositoryTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
+
+    private static final DatasetId DATASET_A = new DatasetId(PROJECT_A.value());
     private static final ProjectId PROJECT_B = new ProjectId("b");
 
-    private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
-    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
-    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
-    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
-    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
+    private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/content";
+    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/content";
+    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/content";
+    private static final String ROLE_GRAPH = ContentGraph.GRAPH_IRI;
+    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/content";
 
     private static final UseCaseId ID_1 = new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-1"));
     private static final UseCaseId ID_2 = new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-2"));
@@ -121,7 +126,7 @@ class KognioRdfUseCaseRepositoryTest {
         lifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         repository = KognioRdfUseCaseRepositoryFactory.over(
-                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                lifecycle, DisplayLocale.DEFAULT);
     }
 
     @AfterEach
@@ -210,6 +215,68 @@ class KognioRdfUseCaseRepositoryTest {
                         new Step(1, "Customer selects items", List.of(FR_1_REF)),
                         new Step(2, "Customer confirms and pays", List.of())),
                 List.of("2a. Payment declined -> use case ends in failure"), List.of(), List.of());
+    }
+
+    /**
+     * ADR-64: a step keeps its opaque fragment name when a sibling is removed, an unchanged
+     * extension keeps its name when another is inserted before it, a new child gets a name never
+     * handed out before, and the read order follows {@code arkreq:position}, not the name: the ids
+     * are minted in descending lexical order, against the positions.
+     */
+    @Test
+    void stepsAndExtensionsKeepTheirOpaqueFragmentsAndReadInPositionOrder() {
+        seedReferences(PROJECT_A);
+        UseCaseRepository seeded = new KognioRdfUseCaseRepository(lifecycle, DisplayLocale.DEFAULT,
+                new de.hauschel.arknet.persistence.VersionedWriteFunnel(lifecycle,
+                        KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT), ContentGraph.GRAPH_IRI,
+                        de.hauschel.arknet.persistence.VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT,
+                        java.time.Clock.systemUTC(), List.of("z", "y", "x", "w", "v", "u", "t").iterator()::next));
+        seeded.create(PROJECT_A, flow(List.of("First step", "Second step", "Third step"),
+                List.of("1a. First extension", "2a. Second extension")), null);
+        String subject = ID_1.value().value();
+        assertEquals(java.util.Map.of("1", subject + "#Step-z", "2", subject + "#Step-y", "3", subject + "#Step-x"),
+                childFragmentsByPosition(subject, "mainStep"));
+        assertEquals(java.util.Map.of("1", subject + "#Extension-w", "2", subject + "#Extension-v"),
+                childFragmentsByPosition(subject, "extensionStep"));
+        RevisionToken head = seeded.findCurrentByCode(PROJECT_A, CODE_1, null).orElseThrow().head();
+
+        UseCase changed = flow(List.of("Second step", "Third step", "Fourth step"),
+                List.of("1b. Inserted extension", "1a. First extension", "2a. Second extension"));
+        seeded.compareAndUpdate(PROJECT_A, head, changed, null, null, null, null, null, null,
+                java.util.Map.of(), java.util.Map.of(), null, 0,
+                new de.hauschel.arknet.uc.domain.RemovedPositions(java.util.Set.of(1)));
+
+        assertEquals(java.util.Map.of("1", subject + "#Step-y", "2", subject + "#Step-x", "3", subject + "#Step-u"),
+                childFragmentsByPosition(subject, "mainStep"));
+        assertEquals(java.util.Map.of("1", subject + "#Extension-t", "2", subject + "#Extension-w",
+                "3", subject + "#Extension-v"), childFragmentsByPosition(subject, "extensionStep"));
+        UseCase found = seeded.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
+        assertEquals(List.of("Second step", "Third step", "Fourth step"),
+                found.steps().stream().map(Step::text).toList());
+        assertEquals(List.of("1b. Inserted extension", "1a. First extension", "2a. Second extension"),
+                found.extensions());
+    }
+
+    private static UseCase flow(List<String> steps, List<String> extensions) {
+        List<Step> mainFlow = new java.util.ArrayList<>();
+        for (int i = 0; i < steps.size(); i++) {
+            mainFlow.add(new Step(i + 1, steps.get(i), List.of()));
+        }
+        return new UseCase(ID_1, CODE_1, "Place order", "Customer places an order", null, null, CUSTOMER,
+                List.of(), null, null, mainFlow, extensions, List.of(), List.of());
+    }
+
+    private java.util.Map<String, String> childFragmentsByPosition(String subject, String edgeLocalName) {
+        String query = "SELECT ?c ?pos WHERE { GRAPH <https://w3id.org/arknet/model/content> { <" + subject
+                + "> <https://w3id.org/arknet/requirements#" + edgeLocalName + "> ?c . "
+                + "?c <https://w3id.org/arknet/requirements#position> ?pos } }";
+        java.util.Map<String, String> byPosition = new java.util.HashMap<>();
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.sparqlQuery().select(query).forEach(row -> byPosition.put(
+                    ((io.kogn.rdf.terms.Literal) row.getValue("pos").orElseThrow()).getLexicalForm(),
+                    ((io.kogn.rdf.terms.IRI) row.getValue("c").orElseThrow()).getIRIString()));
+        }
+        return byPosition;
     }
 
     @Test
@@ -562,7 +629,7 @@ class KognioRdfUseCaseRepositoryTest {
     /**
      * Same read, a blank-node holder (kogn-io/arknet#360). {@code UC2} sitting on an anonymous
      * subject still counts, because the query has no {@code FILTER(isIRI(?s))} to drop it -
-     * matching what {@code WriteFunnel#create} does at write time, where the uniqueness probe
+     * matching what {@code VersionedWriteFunnel#create} does at write time, where the uniqueness probe
      * {@code tx.contains(graph, null, dcterms:identifier, code)} binds any subject at all and so
      * refuses {@code uc_add} for {@code UC2}. Counting one number too many merely wastes a number;
      * missing one the writer blocks costs the {@code add} itself, since every retry of the code
@@ -925,15 +992,13 @@ class KognioRdfUseCaseRepositoryTest {
      * {@code uc_update} was wired through {@code compareAndUpdate}, this is no longer a
      * path exercised only directly on the out-port - every {@code UseCaseService#update} call
      * moves the head too, mirroring {@code
-     * KognioRdfRequirementRepositoryTest#createAndCompareAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead}.
+     * KognioRdfRequirementRepositoryTest#createAndCompareAndUpdateEachWriteTheDraft}.
      */
     @Test
-    void createAndCompareAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
+    void createAndCompareAndUpdateEachWriteTheDraft() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
         String subject = ID_1.value().value();
-
-        assertEquals(1, revisionsOf(subject).size(), "create must record exactly one revision");
         RevisionToken headAfterCreate = repository.findCurrentByCode(PROJECT_A, CODE_1, null).orElseThrow().head();
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
@@ -942,20 +1007,9 @@ class KognioRdfUseCaseRepositoryTest {
         repository.compareAndUpdate(PROJECT_A, headAfterCreate, revised, null, null, null, null, null, null,
                 java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE, de.hauschel.arknet.uc.domain.RemovedPositions.NONE);
 
-        List<String> revisions = revisionsOf(subject);
-        assertEquals(2, revisions.size(), "compareAndUpdate must record exactly one more revision");
-        List<String> heads = selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH
-                + "> { <" + subject + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
-        assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
-        assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
-        assertEquals(heads.get(0), repository.findCurrentByCode(PROJECT_A, CODE_1, null).orElseThrow().head().value(),
-                "findCurrentByCode must observe the advanced head");
-    }
-
-    private List<String> revisionsOf(String subjectIri) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
-                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + subjectIri + "> } }");
+        RevisionToken headAfterUpdate = repository.findCurrentByCode(PROJECT_A, CODE_1, null).orElseThrow().head();
+        assertNotEquals(headAfterCreate, headAfterUpdate, "findCurrentByCode must observe the moved token");
+        assertEquals(headsOf(subject), List.of(headAfterUpdate.value()), "the token is the draft's current one");
     }
 
     private List<String> selectIris(String query) {
@@ -1052,15 +1106,13 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * A blank-node {@code usesTerm}/{@code constrainedBy} target is store-first-only (both
-     * shapes carry {@code sh:nodeKind sh:IRI}, but that only guards this adapter's own
-     * writes, not what a store-first write already put there) - {@link
-     * UseCase#usesTerms()}/{@link UseCase#constrainedBy()} can never carry it, so an update that
-     * never reads it back must still not silently drop it from the store, mirroring
-     * {@code KognioRdfRequirementRepositoryTest}'s identical regression test.
+     * A store-first {@code usesTerm}/{@code constrainedBy} edge onto a blank node is never read back
+     * into the domain type, but a replacing update keeps it. The gate validates the whole new slice,
+     * so the edge's {@code sh:nodeKind sh:IRI} violation now rejects the update instead of slipping
+     * past the gate: nothing is written, and both edges stay.
      */
     @Test
-    void updatePreservesABlankNodeUsesTermAndConstrainedByTargetItCannotReadBack() {
+    void updateKeepingABlankNodeUsesTermAndConstrainedByTargetIsRejectedAndTheEdgesStay() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
         seed(PROJECT_A, USE_CASES_GRAPH,
@@ -1075,11 +1127,10 @@ class KognioRdfUseCaseRepositoryTest {
                 current.scope(), current.trigger(), current.primaryRole(), current.supportingRoles(),
                 current.precondition(), current.postcondition(), current.steps(), current.extensions(),
                 current.usesTerms(), current.constrainedBy());
-        replaceViaCompareAndUpdate(PROJECT_A, revised);
+        assertThrows(WriteConstraintViolationException.class, () -> replaceViaCompareAndUpdate(PROJECT_A, revised));
 
-        assertEquals(1, countBlankUsesTermEdges(PROJECT_A), "the blank-node usesTerm edge must survive the update");
-        assertEquals(1, countBlankConstrainedByEdges(PROJECT_A),
-                "the blank-node constrainedBy edge must survive the update");
+        assertEquals(1, countBlankUsesTermEdges(PROJECT_A), "the blank-node usesTerm edge must stay");
+        assertEquals(1, countBlankConstrainedByEdges(PROJECT_A), "the blank-node constrainedBy edge must stay");
     }
 
     private long countBlankUsesTermEdges(ProjectId project) {
@@ -1131,25 +1182,10 @@ class KognioRdfUseCaseRepositoryTest {
 
     // ---- delete (kogn-io/arknet#566) ----------------------------------------------------------
 
-    /** The {@code dcterms:identifier} literals a revision carries in the provenance graph. */
-    private List<String> identifiersOf(String revisionIri) {
-        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> ((io.kogn.rdf.terms.Literal) row.getValue("v").orElseThrow()).getLexicalForm())
-                    .toList();
-        }
-    }
 
-    private List<String> headsOf(String subjectIri) {
-        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIri + "> <" + ArkprovVocabulary.HEAD + "> ?v } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> ((io.kogn.rdf.terms.IRI) row.getValue("v").orElseThrow()).getIRIString())
-                    .toList();
-        }
+    /** The draft's current token as a one-element list, or empty for an empty draft. */
+    private List<Object> headsOf(String subjectIri) {
+        return probe().token(DATASET_A, subjectIri).<Object>map(token -> token).stream().toList();
     }
 
     /** Seeds an incoming edge from a second, otherwise irrelevant subject onto {@link #ID_1}. */
@@ -1218,26 +1254,22 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
-     * the {@code arkprov:head} pointer is removed and the last revision is marked
-     * {@code prov:invalidatedAtTime} rather than erased.
+     * The tombstone contract {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#delete} documents:
+     * the draft is removed and the library history records a tombstone.
      */
     @Test
-    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+    void deleteRemovesTheDraftAndRecordsATombstone() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
         String subject = ID_1.value().value();
-        String lastRevision = headsOf(subject).get(0);
 
         repository.delete(PROJECT_A, CODE_1);
 
-        assertTrue(headsOf(subject).isEmpty(), "the head pointer must be removed");
-        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
-                    "the last revision must be tombstoned, not erased");
-        }
+        assertEquals(PublishState.DELETED, probe().publishState(DATASET_A, subject));
+        List<EntryKind> kinds = probe().history(DATASET_A, subject).stream().map(HistoryEntry::kind).toList();
+        assertEquals(EntryKind.TOMBSTONE, kinds.getLast(), "the delete must record a tombstone");
+        assertTrue(kinds.subList(0, kinds.size() - 1).stream().allMatch(EntryKind.PUBLISH::equals)
+                && kinds.size() > 1, "every write before the delete published a version");
     }
 
     /**
@@ -1247,14 +1279,11 @@ class KognioRdfUseCaseRepositoryTest {
      * case later.
      */
     @Test
-    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+    void deleteKeepsTheBusinessCodeOnTheTombstone() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
-        String lastRevision = headsOf(ID_1.value().value()).get(0);
 
         repository.delete(PROJECT_A, CODE_1);
-
-        assertEquals(List.of("UC1"), identifiersOf(lastRevision));
         assertEquals(List.of(CODE_1), repository.findRetainedCodes(PROJECT_A));
     }
 
@@ -1327,4 +1356,7 @@ class KognioRdfUseCaseRepositoryTest {
         assertTrue(repository.findByCode(PROJECT_A, CODE_1, null).isEmpty());
     }
 
+    private VersioningProbe probe() {
+        return new VersioningProbe(lifecycle, ContentGraph.GRAPH_IRI);
+    }
 }

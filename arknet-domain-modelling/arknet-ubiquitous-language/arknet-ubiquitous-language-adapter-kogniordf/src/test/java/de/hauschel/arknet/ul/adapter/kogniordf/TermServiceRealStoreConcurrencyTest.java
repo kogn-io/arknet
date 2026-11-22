@@ -45,11 +45,12 @@ import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
-import de.hauschel.arknet.persistence.testsupport.PausingOnFirstUpdateTx;
+import de.hauschel.arknet.persistence.testsupport.PausingOnFirstWriteTx;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
@@ -67,7 +68,7 @@ import de.hauschel.arknet.ul.domain.TermLabelMismatchException;
  * and no real transactions at all.
  *
  * <p>Mirrors {@code BoundedContextServiceRealStoreConcurrencyTest} exactly: the shared
- * {@link de.hauschel.arknet.persistence.WriteFunnel} translates a genuine store-level commit conflict (two
+ * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel} translates a genuine store-level commit conflict (two
  * callers' code-uniqueness guards both passing before either commits, under {@code SERIALIZABLE}
  * isolation, kogn-io/rdf-core#18) into the same {@link
  * de.hauschel.arknet.ul.domain.DuplicateTermCodeException} the synchronous guard throws, so
@@ -280,7 +281,7 @@ class TermServiceRealStoreConcurrencyTest {
      * only walks TERM-A's, and if both run before either commits, both see an empty chain and both
      * believe themselves safe. Reproduced by pausing racer-A's transaction right after its
      * in-transaction re-check of TERM-B's chain ({@link KognioRdfTermRepository#assertNoCycle},
-     * called from inside {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate}'s write
+     * called from inside {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#compareAndUpdate}'s write
      * body) but before racer-A writes anything, letting racer-B's whole {@code term_update} run and
      * commit to completion, then releasing racer-A.
      *
@@ -408,7 +409,7 @@ class TermServiceRealStoreConcurrencyTest {
         }, "racer-delete");
         Thread referenceThread = new Thread(() -> {
             awaitLatch(deletePausedAfterReferenceCheck);
-            String insert = "INSERT DATA { GRAPH <https://example.org/req> { <https://example.org/req/1> <"
+            String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <https://example.org/req/1> <"
                     + ArkreqVocabulary.USES_TERM + "> <" + id.value().value() + "> } }";
             try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
                 handle.transactor().inTransaction(tx -> {
@@ -438,7 +439,7 @@ class TermServiceRealStoreConcurrencyTest {
 
     /** {@code true} if any named graph holds an {@code arkreq:usesTerm} triple pointing at {@code id}. */
     private boolean isReferencedViaUsesTerm(TermId id) {
-        String query = "ASK { GRAPH ?g { ?s <" + ArkreqVocabulary.USES_TERM + "> <"
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/content> { ?s <" + ArkreqVocabulary.USES_TERM + "> <"
                 + id.value().value() + "> } }";
         try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
             return handle.sparqlQuery().ask(query);
@@ -457,7 +458,7 @@ class TermServiceRealStoreConcurrencyTest {
         AtomicBoolean armed = new AtomicBoolean(true);
         DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
             if (armed.compareAndSet(true, false)) {
-                return new PausingOnFirstUpdateTx(tx, beforeFirstUpdate);
+                return new PausingOnFirstWriteTx(tx, beforeFirstUpdate);
             }
             return tx;
         });
@@ -466,7 +467,7 @@ class TermServiceRealStoreConcurrencyTest {
 
     /** Whether {@code subject} carries a {@code skos:broader} edge to exactly {@code target}. */
     private boolean subjectHasBroader(TermId subject, TermId target) {
-        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { <"
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/content> { <"
                 + subject.value().value() + "> <" + ArkreqVocabulary.BROADER + "> <" + target.value().value() + "> } }";
         try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
             return handle.sparqlQuery().ask(query);
@@ -474,22 +475,21 @@ class TermServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * A term repository whose first write transaction runs {@code afterSecondSelect} the moment its
-     * delegate's <em>second</em> {@code select()} call has returned - the funnel's own {@code
-     * arkprov:head} read is the first, {@link KognioRdfTermRepository#assertNoCycle}'s in-transaction
-     * re-check of the candidate broader term's chain is the second, so this pauses a caller right
-     * after it has read the other term's (at that point still empty) chain but before it writes
-     * anything. Disarms itself afterwards, exactly like {@link #guardedRepository}, so a retried
+     * A term repository whose transactions run {@code afterChainRead} once, the moment the first
+     * read of a {@code skos:broader} chain inside a transaction has returned - that is
+     * {@link KognioRdfTermRepository#assertNoCycle}'s in-transaction re-check of the candidate
+     * broader term's chain, so this pauses a caller right after it has read the other term's (at
+     * that point still empty) chain but before it writes anything. Fires once only, so a retried
      * attempt on the same repository instance runs unimpeded.
      */
-    private TermRepository pausingAfterSecondSelectRepository(Runnable afterSecondSelect) {
+    private TermRepository pausingAfterSecondSelectRepository(Runnable afterChainRead) {
         AtomicBoolean armed = new AtomicBoolean(true);
-        DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
-            if (armed.compareAndSet(true, false)) {
-                return new PausingOnSecondSelectTx(tx, afterSecondSelect);
-            }
-            return tx;
-        });
+        DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle,
+                tx -> new PausingOnSecondSelectTx(tx, () -> {
+                    if (armed.compareAndSet(true, false)) {
+                        afterChainRead.run();
+                    }
+                }));
         return KognioRdfTermRepositoryFactory.over(guarded);
     }
 
@@ -503,7 +503,8 @@ class TermServiceRealStoreConcurrencyTest {
 
         private final DatasetTx delegate;
         private final Runnable afterSecondSelect;
-        private int selectCount;
+        /** How {@code KognioRdfTermRepository#readBroaderSubjectIri} starts its query. */
+        private static final String CHAIN_READ = "SELECT ?broader WHERE";
 
         PausingOnSecondSelectTx(DatasetTx delegate, Runnable afterSecondSelect) {
             this.delegate = delegate;
@@ -513,8 +514,7 @@ class TermServiceRealStoreConcurrencyTest {
         @Override
         public Stream<BindingSet> select(String query) {
             Stream<BindingSet> result = delegate.select(query);
-            selectCount++;
-            if (selectCount == 2) {
+            if (query.startsWith(CHAIN_READ)) {
                 afterSecondSelect.run();
             }
             return result;
@@ -600,7 +600,7 @@ class TermServiceRealStoreConcurrencyTest {
 
     /** Whether the term carries a {@code skos:prefLabel} literal with exactly this value and language tag. */
     private boolean subjectHasLanguageTaggedPrefLabel(TermId id, String value, String tag) {
-        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \""
                 + value + "\"@" + tag + " } }";
         try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
@@ -610,7 +610,7 @@ class TermServiceRealStoreConcurrencyTest {
 
     /** How many {@code skos:prefLabel} triples the term carries in total, across every language. */
     private long countPrefLabelTriples(TermId id) {
-        String query = "SELECT (COUNT(?o) AS ?n) WHERE { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> "
+        String query = "SELECT (COUNT(?o) AS ?n) WHERE { GRAPH <https://w3id.org/arknet/model/content> "
                 + "{ <" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> ?o } }";
         try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
             return handle.sparqlQuery().select(query)
@@ -623,22 +623,20 @@ class TermServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * A term repository whose first write transaction runs {@code beforeFirstWrite} right before
-     * its first {@code add} - after every guard of that transaction (the funnel's head check,
-     * inside {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate}) has passed and
-     * before anything is written. Disarms itself afterwards, so {@link
-     * KognioRdfTermRepository#update}'s internal retry - a second, later transaction on this very
-     * same repository instance - runs unsynchronised, the same one-shot arming {@link
-     * #guardedService} uses for the create path's second guard.
+     * A term repository that runs {@code beforeFirstWrite} once, right before the first {@code add}
+     * any of its transactions issues - in the write transaction, after every guard of it (the
+     * token check inside {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#compareAndUpdate})
+     * has passed and before anything is written; the read transaction before it adds nothing.
+     * Fires once only, so {@link KognioRdfTermRepository#update}'s internal retry - a later
+     * transaction on this very same repository instance - runs unsynchronised.
      */
     private TermRepository guardedRepository(Runnable beforeFirstWrite) {
         AtomicBoolean armed = new AtomicBoolean(true);
-        DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
+        DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> new PausingOnFirstAddTx(tx, () -> {
             if (armed.compareAndSet(true, false)) {
-                return new PausingOnFirstAddTx(tx, beforeFirstWrite);
+                beforeFirstWrite.run();
             }
-            return tx;
-        });
+        }));
         return KognioRdfTermRepositoryFactory.over(guarded);
     }
 
@@ -764,7 +762,7 @@ class TermServiceRealStoreConcurrencyTest {
     /**
      * Renders everything needed to make the next random sighting of this race evaluable: both
      * racers' results (business code plus resource IRI), each result's current
-     * {@code arkprov:head} read fresh from the store after the race (the concurrency token -
+     * {@code RevisionToken} read fresh from the store after the race (the concurrency token -
      * shows whether the two results really are two distinct, independently committed revisions),
      * the loser's exception if any, the system load at failure time, and the full timestamped
      * timeline of guard/barrier/latch/commit events. Built lazily by an assertion's message
@@ -784,9 +782,9 @@ class TermServiceRealStoreConcurrencyTest {
             report.append("concurrency-race diagnostics").append(System.lineSeparator());
             report.append("  system: ").append(systemDiagnostics()).append(System.lineSeparator());
             report.append("  racer-A (winner) result: ").append(describe(winner)).append(System.lineSeparator());
-            report.append("  racer-A (winner) arkprov:head: ").append(headOf(winner)).append(System.lineSeparator());
+            report.append("  racer-A (winner) draft token: ").append(headOf(winner)).append(System.lineSeparator());
             report.append("  racer-B (loser) result: ").append(describe(loser)).append(System.lineSeparator());
-            report.append("  racer-B (loser) arkprov:head: ").append(headOf(loser)).append(System.lineSeparator());
+            report.append("  racer-B (loser) draft token: ").append(headOf(loser)).append(System.lineSeparator());
             report.append("  racer-B (loser) failure: ").append(failure == null
                     ? "none" : failure.getClass().getName() + ": " + failure.getMessage())
                     .append(System.lineSeparator());
@@ -823,11 +821,9 @@ class TermServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * Reads {@code term}'s current {@code arkprov:head} straight from
-     * {@link #realLifecycle} after the race, outside any transaction - the same triple pattern
-     * {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate} reads inside its
-     * transaction, but there is no accessor for that private read path, so this queries it directly
-     * via {@link io.kogn.rdf.dataset.SparqlQuery}.
+     * Reads {@code term}'s current draft token straight from {@link #realLifecycle} after the race,
+     * in a transaction of its own - the token
+     * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#compareAndUpdate} compares.
      *
      * <p>Never throws: a timeout interrupt landing mid-race can
      * leave the sail in a bad state for a follow-up read, so both the dataset acquisition and the
@@ -844,15 +840,11 @@ class TermServiceRealStoreConcurrencyTest {
             return "skipped (thread interrupted before this read)";
         }
         String subjectIriString = term.id().value().value();
-        String query = "SELECT ?head WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIriString + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
-        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
-            Optional<String> head = handle.sparqlQuery().select(query)
-                    .findFirst()
-                    .flatMap(row -> row.getValue("head"))
-                    .filter(IRI.class::isInstance)
-                    .map(value -> ((IRI) value).getIRIString());
-            return head.orElse("none (no revision recorded through the funnel)");
+        try {
+            return new VersioningProbe(realLifecycle, ContentGraph.GRAPH_IRI)
+                    .token(new DatasetId(WS.value()), subjectIriString)
+                    .map(Object::toString)
+                    .orElse("none (empty draft)");
         } catch (Throwable t) {
             String interruptNote = Thread.currentThread().isInterrupted() ? ", thread interrupted" : "";
             return "unavailable: " + t.getClass().getName() + ": " + t.getMessage() + interruptNote;

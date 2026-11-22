@@ -20,7 +20,6 @@ import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
-import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 
@@ -73,8 +72,8 @@ public final class KognioRdfProjectRepositoryFactory {
     public static ProjectRegistry registryOver(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(displayLocale), WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        return new KognioRdfProjectRegistry(lifecycle, displayLocale, funnel);
+        return new KognioRdfProjectRegistry(lifecycle, displayLocale,
+                new RegistryWrites(lifecycle, buildGate(displayLocale)));
     }
 
     /**

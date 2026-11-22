@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +52,7 @@ import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
  * BoundedContextServiceRealStoreConcurrencyTest
  * #linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead}: no real threads, a {@link
  * GuardedLifecycle} {@code beforeTransaction} hook fires exactly where {@code
- * WriteFunnel#compareAndUpdate}'s own write transaction is about to open - after {@code
+ * VersionedWriteFunnel#compareAndUpdate}'s own write transaction is about to open - after {@code
  * crossReferenceAssertedContext}'s pre-transaction read and the SHACL gate have both already run
  * against the peer as it still existed, and before this class's in-transaction backstop ({@code
  * KognioRdfAdrRepository#rejectIfPeersVanished}) gets a chance to see it gone. The hook deletes the
@@ -61,6 +62,7 @@ import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
 class AdrServiceRealStoreConcurrencyTest {
 
     private static final ProjectId PROJECT = new ProjectId("test-project");
+    private static final int WRITE_TRANSACTION = 3;
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-09-04T00:00:00Z"), ZoneOffset.UTC);
 
     @TempDir
@@ -92,8 +94,11 @@ class AdrServiceRealStoreConcurrencyTest {
         AdrDetail underTest = straightThrough.add(PROJECT, newAdr("Decision under test"), "en");
 
         AtomicBoolean pending = new AtomicBoolean(true);
+        AtomicInteger transactions = new AtomicInteger();
+        // The racing update opens three transactions: the read of state and token, the funnel's
+        // one-off content-graph binding, and the write. The delete commits right before the third.
         AdrService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
-            if (pending.compareAndSet(true, false)) {
+            if (transactions.incrementAndGet() == WRITE_TRANSACTION && pending.compareAndSet(true, false)) {
                 straightThrough.delete(PROJECT, peer.adr().code());
             }
         }));
@@ -123,7 +128,7 @@ class AdrServiceRealStoreConcurrencyTest {
      */
     private static AdrService serviceOver(DatasetLifecycle lifecycle) {
         AdrRepository repository =
-                KognioRdfAdrRepositoryFactory.over(lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                KognioRdfAdrRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         RequirementLookup neverCalledRequirementLookup = (projectId, code) -> {
             throw new AssertionError("not expected to resolve a requirement code in this test");
         };

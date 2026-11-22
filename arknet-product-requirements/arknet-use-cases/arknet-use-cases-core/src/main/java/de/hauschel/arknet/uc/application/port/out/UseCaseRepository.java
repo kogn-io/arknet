@@ -339,7 +339,7 @@ public interface UseCaseRepository {
      * slip through and leave the edge dangling. The identical promise of
      * {@code RequirementRepository#delete} is pinned by a real-store racer,
      * Pinned by {@code RequirementServiceRealStoreConcurrencyTest#deleteRacingAConcurrentlyCommittedAddressesRequirementEdgeLeavesNoDanglingReference}; it exercises the shared
-     * {@code WriteFunnel#delete} body this port's implementation uses too, differing only in which
+     * {@code VersionedWriteFunnel#delete} body this port's implementation uses too, differing only in which
      * predicates the check looks for. Every other edge a use case carries -
      * {@code oslc_rm:satisfies}, {@code arkreq:usesTerm}, {@code oslc_rm:constrainedBy},
      * {@code arkreq:primaryRole}/{@code arkreq:supportingRole}, a step's own

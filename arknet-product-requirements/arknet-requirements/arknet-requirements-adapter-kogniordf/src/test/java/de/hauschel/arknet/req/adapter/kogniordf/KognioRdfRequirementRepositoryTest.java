@@ -5,11 +5,13 @@ package de.hauschel.arknet.req.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,15 +36,17 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
+import io.kogn.rdf.versioning.PublishState;
+import io.kogn.rdf.versioning.EntryKind;
+import io.kogn.rdf.versioning.HistoryEntry;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
@@ -66,6 +70,8 @@ import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.pr.shared.TermRef;
 import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 
 /**
  * Integration test for {@link KognioRdfRequirementRepository} against an in-memory
@@ -74,6 +80,8 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
 class KognioRdfRequirementRepositoryTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
+
+    private static final DatasetId DATASET_A = new DatasetId(PROJECT_A.value());
     private static final ProjectId PROJECT_B = new ProjectId("b");
 
     /**
@@ -95,7 +103,7 @@ class KognioRdfRequirementRepositoryTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         repository = KognioRdfRequirementRepositoryFactory.over(datasetLifecycle, DisplayLocale.DEFAULT);
-        WriteFunnel funnel = KognioRdfRequirementRepositoryFactory.buildFunnel(datasetLifecycle, DisplayLocale.DEFAULT);
+        VersionedWriteFunnel funnel = KognioRdfRequirementRepositoryFactory.buildFunnel(datasetLifecycle, DisplayLocale.DEFAULT);
         constraints = KognioRdfConstraintRepositoryFactory.over(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
@@ -194,7 +202,7 @@ class KognioRdfRequirementRepositoryTest {
     /**
      * The node-kind case of the same read (kogn-io/arknet#360). No {@code FILTER(isIRI(?s))} guards
      * this query, so an {@code FR-2} held by an anonymous subject is counted - deliberately,
-     * because the write path is equally indifferent: {@code WriteFunnel#create} looks for the code
+     * because the write path is equally indifferent: {@code VersionedWriteFunnel#create} looks for the code
      * with {@code tx.contains(graph, null, dcterms:identifier, code)}, a wildcard subject, and would
      * refuse a {@code req_add} for {@code FR-2}. Overlooking such a code would make the retry loop
      * behind the code assignment propose the same rejected number for ever. Put the filter back to
@@ -221,7 +229,7 @@ class KognioRdfRequirementRepositoryTest {
      * situation kogn-io/arknet#360 is about.
      */
     private void givenBareCodedSubject(ProjectId projectId, RequirementId id, String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -257,7 +265,7 @@ class KognioRdfRequirementRepositoryTest {
 
     /** The fixture behind {@link #findAllSkipsAFullyPopulatedBlankNodeSubjectInsteadOfCrashingTheWholeListing}. */
     private void givenPopulatedBlankNodeSubject(ProjectId projectId, String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "[] a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<https://w3id.org/arknet/requirements#status> "
@@ -278,7 +286,7 @@ class KognioRdfRequirementRepositoryTest {
      * a store-first write reaches this shape, and the code on it is taken all the same.
      */
     private void givenBareBlankNodeSubject(ProjectId projectId, String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "[] a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -451,6 +459,72 @@ class KognioRdfRequirementRepositoryTest {
         assertEquals(RequirementStatus.ACCEPTED, found.status());
         assertEquals(List.of(termRef("TERM-1")), found.usesTerms());
         assertEquals(List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), found.acceptanceCriteria());
+    }
+
+    /**
+     * ADR-64: a criterion's opaque fragment name survives the removal of a sibling and the position
+     * shift that follows, a criterion added later gets a name never handed out before - not even
+     * that of the removed one - and the read order follows {@code arkreq:position}, not the name:
+     * the ids are minted in descending lexical order, against the positions.
+     */
+    @Test
+    void anAcceptanceCriterionKeepsItsOpaqueFragmentAndANewOneGetsAFreshNameOrderedByPosition() {
+        RequirementRepository seeded = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT,
+                new VersionedWriteFunnel(lifecycle, KognioRdfRequirementRepositoryFactory.buildGate(DisplayLocale.DEFAULT),
+                        ContentGraph.GRAPH_IRI, VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT,
+                        java.time.Clock.systemUTC(), List.of("z", "y", "x", "w", "v").iterator()::next));
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement created = new Requirement(freshId(), code, "Login", "The system shall authenticate a user.",
+                null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null,
+                List.of(new AcceptanceCriterion(1, "First criterion"), new AcceptanceCriterion(2, "Second criterion"),
+                        new AcceptanceCriterion(3, "Third criterion")), List.of());
+        seeded.create(PROJECT_A, created, null);
+        String subject = created.id().value().value();
+        assertEquals(Map.of(1, subject + "#AC-z", 2, subject + "#AC-y", 3, subject + "#AC-x"),
+                criterionFragmentsByPosition(subject));
+
+        Requirement withoutFirst = withCriteria(created, "Second criterion", "Third criterion", "Fourth criterion");
+        seeded.compareAndUpdate(PROJECT_A, seeded.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head(),
+                withoutFirst, null, null, null, noAcceptanceCriteriaLanguages(withoutFirst),
+                new de.hauschel.arknet.req.domain.RemovedPositions(java.util.Set.of(1)), null);
+
+        assertEquals(Map.of(1, subject + "#AC-y", 2, subject + "#AC-x", 3, subject + "#AC-w"),
+                criterionFragmentsByPosition(subject));
+
+        Requirement withoutLast = withCriteria(created, "Second criterion", "Third criterion", "Fifth criterion");
+        seeded.compareAndUpdate(PROJECT_A, seeded.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head(),
+                withoutLast, null, null, null, noAcceptanceCriteriaLanguages(withoutLast),
+                new de.hauschel.arknet.req.domain.RemovedPositions(java.util.Set.of(3)), null);
+
+        assertEquals(Map.of(1, subject + "#AC-y", 2, subject + "#AC-x", 3, subject + "#AC-v"),
+                criterionFragmentsByPosition(subject));
+        assertEquals(List.of(new AcceptanceCriterion(1, "Second criterion"), new AcceptanceCriterion(2, "Third criterion"),
+                new AcceptanceCriterion(3, "Fifth criterion")),
+                seeded.findByCode(PROJECT_A, code, null).orElseThrow().acceptanceCriteria());
+    }
+
+    private static Requirement withCriteria(Requirement base, String... texts) {
+        List<AcceptanceCriterion> criteria = new ArrayList<>();
+        for (int i = 0; i < texts.length; i++) {
+            criteria.add(new AcceptanceCriterion(i + 1, texts[i]));
+        }
+        return new Requirement(base.id(), base.code(), base.title(), base.description(), base.rationale(),
+                base.type(), base.status(), base.priority(), base.qualityCategory(), base.usesTerms(), criteria,
+                base.constrainedBy());
+    }
+
+    private Map<Integer, String> criterionFragmentsByPosition(String subject) {
+        String query = "SELECT ?c ?position WHERE { GRAPH <https://w3id.org/arknet/model/content> { <" + subject
+                + "> <https://w3id.org/arknet/requirements#acceptanceCriterion> ?c . "
+                + "?c <https://w3id.org/arknet/requirements#position> ?position } }";
+        Map<Integer, String> byPosition = new java.util.TreeMap<>();
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.sparqlQuery().select(query).forEach(row -> byPosition.put(
+                    Integer.parseInt(((io.kogn.rdf.terms.Literal) row.getValue("position").orElseThrow())
+                            .getLexicalForm()),
+                    ((io.kogn.rdf.terms.IRI) row.getValue("c").orElseThrow()).getIRIString()));
+        }
+        return byPosition;
     }
 
     @Test
@@ -786,7 +860,7 @@ class KognioRdfRequirementRepositoryTest {
      */
     private void givenLegacyRequirementWithoutAcceptanceCriterion(ProjectId projectId, RequirementId id,
             String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Login\" ; "
@@ -850,7 +924,7 @@ class KognioRdfRequirementRepositoryTest {
      */
     private void givenRequirementWithAcceptanceCriterionPositionGap(ProjectId projectId, RequirementId id,
             String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Login\" ; "
@@ -882,7 +956,7 @@ class KognioRdfRequirementRepositoryTest {
      */
     private void givenRequirementWithABlankAcceptanceCriterionTextInTheMiddle(ProjectId projectId, RequirementId id,
             String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Login\" ; "
@@ -971,7 +1045,7 @@ class KognioRdfRequirementRepositoryTest {
      * {@code req_add}/{@code req_set_status}, which only ever write one.
      */
     private void givenRequirementWithTwoPriorities(ProjectId projectId, RequirementId id, String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Login\" ; "
@@ -998,7 +1072,7 @@ class KognioRdfRequirementRepositoryTest {
      */
     private void givenRequirementWithAnAdditionalType(
             ProjectId projectId, RequirementId id, String code, String additionalTypeIri) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "a <" + additionalTypeIri + "> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
@@ -1083,7 +1157,7 @@ class KognioRdfRequirementRepositoryTest {
      * {@code req_set_status}.
      */
     private void givenRequirementWithStatus(ProjectId projectId, RequirementId id, String code, String statusIri) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Login\" ; "
@@ -1168,7 +1242,7 @@ class KognioRdfRequirementRepositoryTest {
      */
     private void givenRequirementWithLiteralInsteadOfIri(
             ProjectId projectId, RequirementId id, String code, String property, String literalValue) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Login\" ; "
@@ -1192,7 +1266,7 @@ class KognioRdfRequirementRepositoryTest {
      */
     private void givenRequirementWithIriInsteadOfLiteral(
             ProjectId projectId, RequirementId id, String code, String property, String iriValue) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://purl.org/dc/terms/title> \"Login\" ; "
@@ -1248,6 +1322,23 @@ class KognioRdfRequirementRepositoryTest {
                 resolved);
     }
 
+    /** Every type shares the content graph: an id of a term resolves to no requirement code. */
+    @Test
+    void findByIdsLeavesOutAnIdentityThatNamesNoRequirement() {
+        ResourceId term = ResourceId.of("https://w3id.org/arknet/id/term-1");
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
+                + "<" + term.value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://purl.org/dc/terms/identifier> \"TERM-1\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+
+        assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of(term)));
+    }
+
     @Test
     void findByIdsWithEmptyIdsReturnsAnEmptyListWithoutQuerying() {
         assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of()));
@@ -1291,7 +1382,7 @@ class KognioRdfRequirementRepositoryTest {
      */
     private void givenRequirementWithTwoIdentifiers(ProjectId projectId, RequirementId id, String first,
             String second) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + first + "\" ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + second + "\" } }";
@@ -1516,19 +1607,15 @@ class KognioRdfRequirementRepositoryTest {
     // ---- usesTerm: store-first edges to a non-IRI target the strict read cannot represent ----
 
     /**
-     * Store-first regression test: {@code arkreq:usesTerm} is not range-constrained to
-     * {@code IRI} at the RDF level (the SHACL {@code sh:class skos:Concept} constraint accepts
-     * a blank node just as readily as an IRI), so a store-first edge can legally target a
-     * blank node - {@code [ a skos:Concept ]} written directly into the requirements graph.
-     * {@link de.hauschel.arknet.kernel.ResourceId} cannot represent a blank node, so it is
-     * exactly the kind of edge the preservation query in {@code write()} must still capture
-     * narrowed to this one case. Casting the captured binding to {@link IRI}
-     * would throw a {@link ClassCastException} on a blank node, turning the previously silent
-     * data loss into a crash on every {@link #update} of the affected requirement -
-     * a regression, not a fix.
+     * Store-first regression test: a store-first edge can target a blank node -
+     * {@code [ a skos:Concept ]} written directly into the content graph - which
+     * {@link de.hauschel.arknet.kernel.ResourceId} cannot represent, so the read hides it. A
+     * replacing update keeps such an edge (casting it to {@link IRI} would crash), and since the
+     * gate validates the whole new slice, the edge's {@code sh:nodeKind sh:IRI} violation now
+     * rejects the update instead of slipping past the gate: nothing is written, the edge stays.
      */
     @Test
-    void storeFirstUsesTermEdgeToABlankNodeSurvivesAReplacingUpdateWithoutCrashing() {
+    void storeFirstUsesTermEdgeToABlankNodeRejectsAReplacingUpdateAndStays() {
         RequirementCode code = new RequirementCode("FR-1");
         Requirement created = requirementUsing();
         repository.create(PROJECT_A, created, null);
@@ -1539,11 +1626,10 @@ class KognioRdfRequirementRepositoryTest {
 
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
                 reloaded.description(), null, reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(), reloaded.qualityCategory(), reloaded.usesTerms(), List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
-        replaceViaCompareAndUpdate(PROJECT_A, accepted);
+        assertThrows(WriteConstraintViolationException.class, () -> replaceViaCompareAndUpdate(PROJECT_A, accepted));
 
         assertTrue(usesTermEdgeTargetsAConceptBlankNode(PROJECT_A, reloaded.id()),
-                "blank-node edge must survive the replacing update and still point at its typed node - "
-                        + "not merely at some blank node");
+                "the rejected update must leave the blank-node edge and its typed node in place");
     }
 
     /**
@@ -1586,7 +1672,7 @@ class KognioRdfRequirementRepositoryTest {
      */
     private void givenTerm(ProjectId projectId, String termId) {
         String termIri = "https://w3id.org/arknet/model/term/" + termId;
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + termIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + termId + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Anmeldung\" } }";
@@ -1607,7 +1693,7 @@ class KognioRdfRequirementRepositoryTest {
      */
     private String givenTermWithoutIdentifier(ProjectId projectId) {
         String termIri = "https://w3id.org/arknet/model/term/" + UUID.randomUUID();
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + termIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Anmeldung\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -1625,7 +1711,7 @@ class KognioRdfRequirementRepositoryTest {
      * so it can point at a term the strict lookup would reject by code.
      */
     private void givenUsesTermEdge(ProjectId projectId, RequirementId subjectId, String termIri) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> <"
                 + termIri + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -1643,7 +1729,7 @@ class KognioRdfRequirementRepositoryTest {
      * proving safe.
      */
     private long countUsesTermEdges(ProjectId projectId, RequirementId subjectId, String termIri) {
-        String select = "SELECT ?term WHERE { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String select = "SELECT ?term WHERE { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> <"
                 + termIri + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -1659,7 +1745,7 @@ class KognioRdfRequirementRepositoryTest {
      * resolve a code to an IRI and therefore cannot even address a blank node.
      */
     private void givenUsesTermEdgeToFreshBlankNodeConcept(ProjectId projectId, RequirementId subjectId) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> "
                 + "[ a <http://www.w3.org/2004/02/skos/core#Concept> ] } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -1680,7 +1766,7 @@ class KognioRdfRequirementRepositoryTest {
      * freshly-generated one.
      */
     private boolean usesTermEdgeTargetsAConceptBlankNode(ProjectId projectId, RequirementId subjectId) {
-        String ask = "ASK { GRAPH <https://w3id.org/arknet/model/requirements> { "
+        String ask = "ASK { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> ?term . "
                 + "?term a <http://www.w3.org/2004/02/skos/core#Concept> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -1789,7 +1875,7 @@ class KognioRdfRequirementRepositoryTest {
     // ---- delete (kogn-io/arknet#566) -----------------------------------------------------------
 
     /** The named graph this hexagon owns - where a deleted requirement must leave nothing behind. */
-    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
+    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/content";
 
     @Test
     void deleteRemovesTheRequirementAndItsTriples() {
@@ -1831,22 +1917,21 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
-     * the {@code arkprov:head} pointer is removed and the last revision is marked
-     * {@code prov:invalidatedAtTime} rather than erased.
+     * The tombstone contract {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#delete} documents:
+     * the draft is removed and the library history records a tombstone.
      */
     @Test
-    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+    void deleteRemovesTheDraftAndRecordsATombstone() {
         Requirement stored = requirement("FR-1", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
         repository.create(PROJECT_A, stored, "en");
-        String lastRevision = headsOf(stored.id()).get(0);
 
         repository.delete(PROJECT_A, stored.code());
 
-        assertTrue(headsOf(stored.id()).isEmpty(), "the head pointer must be removed");
-        assertEquals(1, selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t . BIND(<" + lastRevision
-                + "> AS ?v) } }").size(), "the last revision must be tombstoned, not erased");
+        assertEquals(PublishState.DELETED, probe().publishState(DATASET_A, stored.id().value().value()));
+        List<EntryKind> kinds = probe().history(DATASET_A, stored.id().value().value()).stream().map(HistoryEntry::kind).toList();
+        assertEquals(EntryKind.TOMBSTONE, kinds.getLast(), "the delete must record a tombstone");
+        assertTrue(kinds.subList(0, kinds.size() - 1).stream().allMatch(EntryKind.PUBLISH::equals)
+                && kinds.size() > 1, "every write before the delete published a version");
     }
 
     /**
@@ -1856,14 +1941,11 @@ class KognioRdfRequirementRepositoryTest {
      * later.
      */
     @Test
-    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+    void deleteKeepsTheBusinessCodeOnTheTombstone() {
         Requirement stored = requirement("FR-1", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
         repository.create(PROJECT_A, stored, "en");
-        String lastRevision = headsOf(stored.id()).get(0);
 
         repository.delete(PROJECT_A, stored.code());
-
-        assertEquals(List.of("FR-1"), identifiersOf(lastRevision));
         assertEquals(List.of(new RequirementCode("FR-1")), repository.findRetainedCodes(PROJECT_A));
     }
 
@@ -1918,21 +2000,21 @@ class KognioRdfRequirementRepositoryTest {
      */
     @Test
     void deleteRejectsARequirementStillReferencedByAnArchitectureDecision() {
-        assertDeleteRejectedFor("https://w3id.org/arknet/model/architecture-decisions",
+        assertDeleteRejectedFor("https://w3id.org/arknet/model/content",
                 ArkarchVocabulary.ADDRESSES_REQUIREMENT, "addressesRequirement");
     }
 
     /** {@code arkreq:stepRealises}, written by {@code uc_add}/{@code uc_update} for a use-case step. */
     @Test
     void deleteRejectsARequirementStillReferencedByAUseCaseStep() {
-        assertDeleteRejectedFor("https://w3id.org/arknet/model/use-cases",
+        assertDeleteRejectedFor("https://w3id.org/arknet/model/content",
                 ArkreqVocabulary.STEP_REALISES, "stepRealises");
     }
 
     /** {@code oslc_rm:satisfies}, the use case's own edge at the requirement it fulfils. */
     @Test
     void deleteRejectsARequirementStillReferencedByAUseCaseSatisfies() {
-        assertDeleteRejectedFor("https://w3id.org/arknet/model/use-cases",
+        assertDeleteRejectedFor("https://w3id.org/arknet/model/content",
                 ArkreqVocabulary.SATISFIES, "satisfies");
     }
 
@@ -2009,37 +2091,24 @@ class KognioRdfRequirementRepositoryTest {
         }
     }
 
-    /** The {@code dcterms:identifier}s hung on one revision - what the delete's tombstone retains. */
-    private List<String> identifiersOf(String revisionIri) {
-        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
-                    .toList();
-        }
-    }
 
-    // ---- revision trail: one revision per write, head queryable ----------------
+    // ---- draft and token: every write changes the draft ----------------
 
     /**
-     * Revision basis for this bounded context's funnel write paths: {@code create} and
-     * {@code compareAndUpdate} each record exactly one immutable revision, and the head is
-     * queryable per resource. Since {@code compareAndUpdate} was resolved into the funnel,
-     * this is no longer a special path any more than {@code create} is -
-     * {@code RequirementService} routes every state change ({@code req_update}, {@code
-     * req_set_status}, {@code req_link_term}) through it, so the head now moves on every
-     * user-reachable requirement write, not just the initial {@code create}.
+     * {@code create} and {@code compareAndUpdate} each write the draft: {@code RequirementService}
+     * routes every state change ({@code req_update}, {@code req_set_status}, {@code req_link_term})
+     * through {@code compareAndUpdate}, so the draft's token moves on every user-reachable
+     * requirement write, not just the initial {@code create}.
      */
     @Test
-    void createAndCompareAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
+    void createAndCompareAndUpdateEachWriteTheDraft() {
         RequirementId id = freshId();
         RequirementCode code = new RequirementCode("FR-1");
         repository.create(PROJECT_A, new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of()), null);
 
-        assertEquals(1, revisionsOf(id).size(), "create must record exactly one revision");
+        assertTrue(probe().token(DATASET_A, id.value().value()).isPresent(), "create must write the draft");
         RevisionToken headAfterCreate = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
 
         Requirement accepted = new Requirement(id, code, "Login", "The system shall authenticate a user.", null,
@@ -2048,25 +2117,13 @@ class KognioRdfRequirementRepositoryTest {
         repository.compareAndUpdate(
                 PROJECT_A, headAfterCreate, accepted, null, null, null, noAcceptanceCriteriaLanguages(accepted), null, null);
 
-        List<String> revisions = revisionsOf(id);
-        assertEquals(2, revisions.size(), "compareAndUpdate must record exactly one more revision");
-        List<String> heads = headsOf(id);
-        assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
-        assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
-        assertEquals(heads.get(0), repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head().value(),
-                "findCurrentByCode must observe the advanced head");
+        RevisionToken headAfterUpdate = repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
+        assertNotEquals(headAfterCreate, headAfterUpdate, "findCurrentByCode must observe the moved token");
+        assertEquals(probe().token(DATASET_A, id.value().value()).orElseThrow(), headAfterUpdate.value(),
+                "the token handed out is the draft's current one");
     }
 
-    private List<String> revisionsOf(RequirementId id) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
-                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + id.value().value() + "> } }");
-    }
 
-    private List<String> headsOf(RequirementId id) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + id.value().value() + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
-    }
 
     private List<String> selectIris(String query) {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -2074,5 +2131,9 @@ class KognioRdfRequirementRepositoryTest {
                     .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
                     .toList();
         }
+    }
+
+    private VersioningProbe probe() {
+        return new VersioningProbe(lifecycle, ContentGraph.GRAPH_IRI);
     }
 }

@@ -35,7 +35,6 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.RevisionToken;
 import de.hauschel.arknet.prj.domain.Anchor;
@@ -70,8 +69,8 @@ class KognioRdfProjectRegistryTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfProjectRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
-        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        registry = new KognioRdfProjectRegistry(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
+        registry = new KognioRdfProjectRegistry(datasetLifecycle, DisplayLocale.DEFAULT,
+                new RegistryWrites(datasetLifecycle, gate));
     }
 
     @AfterEach
@@ -345,7 +344,7 @@ class KognioRdfProjectRegistryTest {
 
         ProjectRegistry.CurrentProject current = registry.findCurrentById(project.id()).orElseThrow();
         assertEquals(project, current.project());
-        assertTrue(current.head() != null && !current.head().value().isBlank());
+        assertTrue(current.head() != null && !((String) current.head().value()).isBlank());
     }
 
     @Test

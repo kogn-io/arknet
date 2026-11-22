@@ -16,6 +16,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
@@ -24,6 +26,7 @@ import de.hauschel.arknet.adr.application.port.out.RequirementLookup;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
@@ -92,5 +95,26 @@ class KognioRdfRequirementLookupRequirementsSchemaTest {
     void anUnknownRequirementCodeIsRejectedDidactically() {
         assertThrows(UnresolvedReferenceException.class,
                 () -> adrRequirementLookup.resolveByCode(PROJECT, "FR-99"));
+    }
+
+    /**
+     * Every resource type lives in the one content graph, so a code alone does not make a
+     * requirement: the code of a glossary term must not resolve as one, or
+     * {@code addressesRequirement} could point at a term.
+     */
+    @Test
+    void theCodeOfAResourceThatIsNoRequirementIsRejected() {
+        String insert = "INSERT DATA { GRAPH <" + ContentGraph.GRAPH_IRI + "> { "
+                + "<https://w3id.org/arknet/id/term-1> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://purl.org/dc/terms/identifier> \"TERM-1\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+
+        assertThrows(UnresolvedReferenceException.class,
+                () -> adrRequirementLookup.resolveByCode(PROJECT, "TERM-1"));
     }
 }

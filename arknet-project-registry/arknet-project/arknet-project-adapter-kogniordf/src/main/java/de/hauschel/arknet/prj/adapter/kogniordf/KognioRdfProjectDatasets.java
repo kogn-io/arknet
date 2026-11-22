@@ -15,11 +15,12 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDFTerm;
+import io.kogn.rdf.versioning.VersioningGraphs;
+import io.kogn.rdf.versioning.VocabVersioning;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
-import de.hauschel.arknet.persistence.InfrastructureGraphs;
+import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.prj.application.port.out.ProjectDatasets;
 import de.hauschel.arknet.prj.domain.DatasetInUseException;
@@ -35,16 +36,15 @@ import de.hauschel.arknet.prj.domain.DatasetInUseException;
  * adoption.</p>
  *
  * <p><strong>What counts as a model resource.</strong> Every subject carrying an {@code rdf:type}
- * in a named graph other than the two infrastructure graphs every project dataset holds - the
- * self-description ({@link ArkprjVocabulary#IDENTITY_GRAPH}) and the revision trail ({@link
- * ArkprovVocabulary#PROVENANCE_GRAPH}). That is the same split {@code StoreReader} draws for
- * {@code store_overview}, so a project that report shows as empty is one this port reports as
+ * in the project's content graph ({@link ContentGraph}) - the same graph {@code StoreReader} reads
+ * for {@code store_overview}, so a project that report shows as empty is one this port reports as
  * empty. A resource carrying two types is counted under each; the types are shortened to the
  * prefixed names the store report uses.</p>
  *
- * <p><strong>Revisions are counted apart.</strong> The revision trail lives in {@link
- * ArkprovVocabulary#PROVENANCE_GRAPH}, which the model count leaves out, so {@link
- * #revisionCount} answers for it: a dataset without model resources can still hold history.</p>
+ * <p><strong>History is counted apart.</strong> The library versioning keeps publish entries and
+ * tombstones in a history graph of its own, which the model count leaves out, so
+ * {@link #historyEntryCount} answers for it: a dataset without model resources can still hold
+ * history.</p>
  *
  * <p><strong>An open lease is waited for, briefly.</strong> {@link DatasetLifecycle#delete}
  * refuses with an {@link IllegalStateException} while any lease on the dataset is open. arknet
@@ -67,15 +67,12 @@ public final class KognioRdfProjectDatasets implements ProjectDatasets {
     static final Duration DEFAULT_DELETE_PAUSE = Duration.ofMillis(50);
 
     private static final String COUNT_BY_TYPE = "SELECT ?type (COUNT(DISTINCT ?s) AS ?count) WHERE { "
-            + "GRAPH ?g { ?s a ?type } "
-            + "FILTER(" + InfrastructureGraphs.outsideExpression("?g") + ") } GROUP BY ?type";
+            + "GRAPH " + ContentGraph.SPARQL_IRIREF + " { ?s a ?type } } GROUP BY ?type";
 
-    /**
-     * One revision is one {@code arkprov:Revision} subject; the activity and head triples the
-     * funnel writes next to it are bookkeeping of the same write and do not count again.
-     */
-    private static final String COUNT_REVISIONS = "SELECT (COUNT(DISTINCT ?r) AS ?count) WHERE { GRAPH <"
-            + ArkprovVocabulary.PROVENANCE_GRAPH + "> { ?r a <" + ArkprovVocabulary.REVISION_TYPE + "> } }";
+    /** One history entry - a publish or a tombstone - is one subject with a sequence number. */
+    private static final String COUNT_HISTORY_ENTRIES = "SELECT (COUNT(DISTINCT ?e) AS ?count) WHERE { GRAPH <"
+            + VersioningGraphs.HISTORY.getIRIString() + "> { ?e <" + VocabVersioning.SEQUENCE.getIRIString()
+            + "> ?sequence } }";
 
     private final DatasetLifecycle lifecycle;
     private final Prefixes prefixes = Prefixes.defaults();
@@ -120,13 +117,13 @@ public final class KognioRdfProjectDatasets implements ProjectDatasets {
     }
 
     @Override
-    public long revisionCount(final ProjectId projectId) {
+    public long historyEntryCount(final ProjectId projectId) {
         final DatasetId dataset = datasetOf(projectId);
         if (!lifecycle.list().contains(dataset)) {
             return 0L;
         }
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
-            return handle.sparqlQuery().select(COUNT_REVISIONS)
+            return handle.sparqlQuery().select(COUNT_HISTORY_ENTRIES)
                     .map(row -> Long.parseLong(((Literal) row.getValue("count").orElseThrow()).getLexicalForm()))
                     .findFirst()
                     .orElse(0L);

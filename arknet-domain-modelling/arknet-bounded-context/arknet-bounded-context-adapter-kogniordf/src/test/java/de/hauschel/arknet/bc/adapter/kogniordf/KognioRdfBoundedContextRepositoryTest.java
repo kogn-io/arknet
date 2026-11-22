@@ -35,6 +35,9 @@ import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.PublishState;
+import io.kogn.rdf.versioning.EntryKind;
+import io.kogn.rdf.versioning.HistoryEntry;
 
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
@@ -52,13 +55,13 @@ import de.hauschel.arknet.bc.domain.TermRelation;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 
 /**
  * Integration test for {@link KognioRdfBoundedContextRepository} against an in-memory
@@ -67,9 +70,11 @@ import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 class KognioRdfBoundedContextRepositoryTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
+
+    private static final DatasetId DATASET_A = new DatasetId(PROJECT_A.value());
     private static final ProjectId PROJECT_B = new ProjectId("b");
     private static final String BOUNDED_CONTEXT_TYPE = "https://w3id.org/arknet/ddd#BoundedContext";
-    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
+    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/content";
 
     /**
      * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
@@ -89,7 +94,7 @@ class KognioRdfBoundedContextRepositoryTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         repository = KognioRdfBoundedContextRepositoryFactory.over(
-                datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+                datasetLifecycle, DisplayLocale.DEFAULT);
     }
 
     @AfterEach
@@ -173,7 +178,7 @@ class KognioRdfBoundedContextRepositoryTest {
     /**
      * What the missing {@code FILTER(isIRI(?s))} buys (kogn-io/arknet#360): a {@code BC-2} carried
      * by an anonymous subject is counted just like one on an IRI. The write path sets that
-     * standard - {@code WriteFunnel#create} checks the code with
+     * standard - {@code VersionedWriteFunnel#create} checks the code with
      * {@code tx.contains(graph, null, dcterms:identifier, code)} and a wildcard subject, so it
      * would already have refused a {@code bc_add} for {@code BC-2}. Were the counter narrower than
      * the guard, every attempt would compute the same refused number and the bounded context could
@@ -313,8 +318,6 @@ class KognioRdfBoundedContextRepositoryTest {
                 () -> repository.compareAndUpdate(PROJECT_A, head, recodedToCollide, "en", "en", null));
         assertEquals("Inventory", repository.findByCode(PROJECT_A, new BoundedContextCode("BC-2"), null)
                 .orElseThrow().name(), "the rejected write must not have changed anything");
-        assertEquals(1, revisionsOf(id.value().value()).size(),
-                "the rejected write must not have recorded a revision");
     }
 
     /**
@@ -676,14 +679,13 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     /**
-     * Orphan-cleanup regression: an update that changes the subdomain classification
-     * must not leave the superseded {@code arkddd:Subdomain} node's triples behind as disconnected
-     * garbage - {@link KognioRdfBoundedContextRepository#replaceExistingTriples} follows the
-     * {@code arkddd:partOf} edge to delete it, mirroring the use-case adapter's step-following
-     * delete.
+     * The {@code arkddd:Subdomain} node is the fragment {@code #Subdomain} of the bounded context's
+     * IRI (ADR-64): an update that changes the classification keeps the same node, carrying the new
+     * classification only - no superseded node is left behind, and no fresh IRI is minted per
+     * write (issue #584).
      */
     @Test
-    void updateDeletesTheSupersededSubdomainNode() {
+    void updateKeepsTheOneStableSubdomainNodeWithTheNewClassification() {
         BoundedContextId id = freshId();
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
@@ -704,10 +706,14 @@ class KognioRdfBoundedContextRepositoryTest {
                 Subdomain.SUPPORTING_DOMAIN, null, List.of());
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(changed.code()), changed, "en", "en", null);
 
-        String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + originalSubdomainNode + "> ?p ?o } }";
+        assertEquals(id.value().value() + "#Subdomain", originalSubdomainNode);
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertFalse(handle.sparqlQuery().ask(ask),
-                    "the superseded subdomain node must not survive the update as orphaned garbage");
+            assertEquals(List.of(originalSubdomainNode), handle.sparqlQuery().select(subdomainNodeQuery)
+                    .map(row -> ((IRI) row.getValue("subdomainNode").orElseThrow()).getIRIString()).toList(),
+                    "the update keeps the one subdomain node");
+            String types = "SELECT ?type WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + originalSubdomainNode
+                    + "> <https://w3id.org/arknet/ddd#subdomainType> ?type } }";
+            assertEquals(1, handle.sparqlQuery().select(types).count(), "only the new classification remains");
         }
     }
 
@@ -855,21 +861,17 @@ class KognioRdfBoundedContextRepositoryTest {
         repository.create(PROJECT_A, bc, "en");
         String subject = bc.id().value().value();
 
-        List<String> afterCreate = revisionsOf(subject);
+        List<Object> afterCreate = headsOf(subject);
         assertEquals(1, afterCreate.size(), "create must record exactly one revision");
         assertEquals(afterCreate, headsOf(subject), "the head must point at the sole revision");
 
         repository.compareAndUpdate(PROJECT_A, new RevisionToken(afterCreate.get(0)), new BoundedContext(bc.id(),
                 bc.code(), "Renamed", bc.domainVision(), bc.subdomain(), bc.ownedBy(), bc.usesTerms()), "en", "en", null);
-
-        assertEquals(2, revisionsOf(subject).size(), "update must record exactly one more revision");
-        List<String> heads = headsOf(subject);
+        List<Object> heads = headsOf(subject);
         assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
-        String previousHead = afterCreate.get(0);
-        String newHead = heads.get(0);
+        Object previousHead = afterCreate.get(0);
+        Object newHead = heads.get(0);
         assertFalse(newHead.equals(previousHead), "the head must have moved");
-        assertEquals(List.of(previousHead), objectsOf(newHead, ArkprovVocabulary.WAS_REVISION_OF),
-                "the new head must supersede the previous one via prov:wasRevisionOf");
     }
 
     /**
@@ -883,18 +885,12 @@ class KognioRdfBoundedContextRepositoryTest {
         assertThrows(DuplicateBoundedContextCodeException.class, () -> repository.create(PROJECT_A,
                 boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()), "en"));
 
-        String all = "SELECT ?r WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?r a <" + ArkprovVocabulary.REVISION_TYPE + "> } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertEquals(1, handle.sparqlQuery().select(all).count(),
-                    "the rejected write must not have recorded a revision");
-        }
     }
 
     // ---- compare-and-set ------------------------------------------------------------------
 
     /**
-     * The read side of the guard: {@code findCurrentByCode} hands out the very {@code arkprov:head}
+     * The read side of the guard: {@code findCurrentByCode} hands out the very {@code RevisionToken}
      * the last funnel write recorded, so a caller's {@code compareAndUpdate} can be checked against
      * it - and the state it pairs the head with is the same one {@code findByCode} reads.
      */
@@ -941,38 +937,6 @@ class KognioRdfBoundedContextRepositoryTest {
 
         assertEquals("Renamed by the winner",
                 repository.findByCode(PROJECT_A, original.code(), null).orElseThrow().name());
-        assertEquals(2, revisionsOf(id.value().value()).size(),
-                "the rejected write must not have recorded a revision");
-    }
-
-    /**
-     * A bounded context written before the funnel recorded revisions carries no head at all. Its
-     * {@code null} head is a legitimate expectation, not a missing one - so a caller that observed
-     * "no head yet" may still write, and the write records the first revision.
-     */
-    @Test
-    void compareAndUpdateAcceptsANullHeadWhenTheResourceHasNoneYet() {
-        BoundedContextId id = freshId();
-        BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
-                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
-        repository.create(PROJECT_A, original, "en");
-        // Strips the head the create recorded, leaving the state from before the revision trail existed.
-        String dropHead = "DELETE WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + id.value().value() + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            handle.transactor().inTransaction(tx -> {
-                tx.update(dropHead);
-                return null;
-            });
-        }
-        assertNull(currentHeadOf(original.code()), "precondition: the bounded context carries no head");
-
-        BoundedContext changed = new BoundedContext(id, original.code(), "Renamed",
-                original.domainVision(), original.subdomain(), original.ownedBy(), List.of());
-        repository.compareAndUpdate(PROJECT_A, null, changed, "en", "en", null);
-
-        assertEquals("Renamed", repository.findByCode(PROJECT_A, original.code(), null).orElseThrow().name());
-        assertEquals(1, headsOf(id.value().value()).size(), "the write must have recorded a head again");
     }
 
     // ---- batch identity resolution (backs the ResolveBoundedContexts in-port) ---------------
@@ -1057,27 +1021,23 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     /**
-     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
-     * the {@code arkprov:head} pointer is removed and the last revision is marked
-     * {@code prov:invalidatedAtTime} rather than erased.
+     * The tombstone contract {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#delete} documents:
+     * the draft is removed and the library history records a tombstone.
      */
     @Test
-    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+    void deleteRemovesTheDraftAndRecordsATombstone() {
         BoundedContext stored = boundedContext(new BoundedContextCode("BC-1"),
                 Subdomain.CORE_DOMAIN, "orders-team", List.of());
         repository.create(PROJECT_A, stored, "en");
         String subject = stored.id().value().value();
-        String lastRevision = headsOf(subject).get(0);
 
         repository.delete(PROJECT_A, stored.code());
 
-        assertTrue(headsOf(subject).isEmpty(), "the head pointer must be removed");
-        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
-                    "the last revision must be tombstoned, not erased");
-        }
+        assertEquals(PublishState.DELETED, probe().publishState(DATASET_A, subject));
+        List<EntryKind> kinds = probe().history(DATASET_A, subject).stream().map(HistoryEntry::kind).toList();
+        assertEquals(EntryKind.TOMBSTONE, kinds.getLast(), "the delete must record a tombstone");
+        assertTrue(kinds.subList(0, kinds.size() - 1).stream().allMatch(EntryKind.PUBLISH::equals)
+                && kinds.size() > 1, "every write before the delete published a version");
     }
 
     /**
@@ -1087,15 +1047,12 @@ class KognioRdfBoundedContextRepositoryTest {
      * bounded context later.
      */
     @Test
-    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+    void deleteKeepsTheBusinessCodeOnTheTombstone() {
         BoundedContext stored = boundedContext(new BoundedContextCode("BC-1"),
                 Subdomain.CORE_DOMAIN, "orders-team", List.of());
         repository.create(PROJECT_A, stored, "en");
-        String lastRevision = headsOf(stored.id().value().value()).get(0);
 
         repository.delete(PROJECT_A, stored.code());
-
-        assertEquals(List.of("BC-1"), identifiersOf(lastRevision));
         assertEquals(List.of(new BoundedContextCode("BC-1")), repository.findRetainedCodes(PROJECT_A));
     }
 
@@ -1118,14 +1075,14 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void deleteRejectsAContextStillReferencedByAnArchitectureDecision() {
         assertDeleteRejectedFor(ArkarchVocabulary.AFFECTS_CONTEXT,
-                "https://w3id.org/arknet/model/adr", "https://w3id.org/arknet/id/adr-1", "affectsContext");
+                "https://w3id.org/arknet/model/content", "https://w3id.org/arknet/id/adr-1", "affectsContext");
     }
 
     /** The upstream half of a {@code bc_link_context} relationship - its own resource, not a field. */
     @Test
     void deleteRejectsAContextStillReferencedByAContextRelationshipUpstream() {
         assertDeleteRejectedFor(ArkdddVocabulary.UPSTREAM,
-                "https://w3id.org/arknet/model/bounded-context-relationship",
+                "https://w3id.org/arknet/model/content",
                 "https://w3id.org/arknet/id/relationship-1", "upstream");
     }
 
@@ -1133,7 +1090,7 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void deleteRejectsAContextStillReferencedByAContextRelationshipDownstream() {
         assertDeleteRejectedFor(ArkdddVocabulary.DOWNSTREAM,
-                "https://w3id.org/arknet/model/bounded-context-relationship",
+                "https://w3id.org/arknet/model/content",
                 "https://w3id.org/arknet/id/relationship-2", "downstream");
     }
 
@@ -1145,7 +1102,7 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void deleteRejectsAContextStillReferencedByARequirementsScopedTo() {
         assertDeleteRejectedFor(ArkreqVocabulary.SCOPED_TO,
-                "https://w3id.org/arknet/model/requirements", "https://w3id.org/arknet/id/requirement-1",
+                "https://w3id.org/arknet/model/content", "https://w3id.org/arknet/id/requirement-1",
                 "scopedTo");
     }
 
@@ -1153,7 +1110,7 @@ class KognioRdfBoundedContextRepositoryTest {
     @Test
     void deleteRejectsAContextStillReferencedByADomainsHasContext() {
         assertDeleteRejectedFor(ArkdddVocabulary.HAS_CONTEXT,
-                "https://w3id.org/arknet/model/bounded-context-domain", "https://w3id.org/arknet/id/domain-1",
+                "https://w3id.org/arknet/model/content", "https://w3id.org/arknet/id/domain-1",
                 "hasContext");
     }
 
@@ -1224,36 +1181,17 @@ class KognioRdfBoundedContextRepositoryTest {
                 "a rejected delete must leave the bounded context untouched");
     }
 
-    private List<String> identifiersOf(String revisionIri) {
-        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
-                    .toList();
-        }
-    }
 
     /** The head a caller would observe right now - what a well-behaved compare-and-set passes. */
     private RevisionToken currentHeadOf(BoundedContextCode code) {
         return repository.findCurrentByCode(PROJECT_A, code, null).orElseThrow().head();
     }
 
-    private List<String> revisionsOf(String subjectIri) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
-                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + subjectIri + "> } }");
+    /** The draft's current token as a one-element list, or empty for an empty draft. */
+    private List<Object> headsOf(String subjectIri) {
+        return probe().token(DATASET_A, subjectIri).<Object>map(token -> token).stream().toList();
     }
 
-    private List<String> headsOf(String subjectIri) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIri + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
-    }
-
-    private List<String> objectsOf(String subjectIri, String predicateIri) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIri + "> <" + predicateIri + "> ?v } }");
-    }
 
     private List<String> selectIris(String query) {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -1261,5 +1199,9 @@ class KognioRdfBoundedContextRepositoryTest {
                     .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
                     .toList();
         }
+    }
+
+    private VersioningProbe probe() {
+        return new VersioningProbe(lifecycle, ContentGraph.GRAPH_IRI);
     }
 }

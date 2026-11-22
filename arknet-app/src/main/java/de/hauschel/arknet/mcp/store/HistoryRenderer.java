@@ -8,14 +8,14 @@ import java.util.Objects;
 
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.persistence.ResourceRenderer;
-import de.hauschel.arknet.persistence.Revision;
 import de.hauschel.arknet.persistence.StoreReader;
+import de.hauschel.arknet.persistence.VersionEntry;
 
 /**
- * Renders a resource's change history for {@code resource_history} (issue #251): the PROV-O
- * revisions {@link StoreReader#history} read back, oldest first, as compact text - one line per
- * revision, numbered, with its {@code prov:generatedAtTime} and the current
- * {@code arkprov:head} marked.
+ * Renders a resource's history for {@code resource_history}: its publish state and the entries
+ * the library versioning recorded for it ({@link StoreReader#history}), oldest first, as compact
+ * text - one line per entry, numbered, with its creation instant, its kind (a publish or the
+ * tombstone of a delete), the content-addressed version it names and its comment.
  *
  * <p>Pure and domain-agnostic, the same shape as {@link ResourceRenderer}: it renders whatever
  * {@link StoreReader#history} returns and takes no position on whether the resource itself
@@ -37,36 +37,40 @@ public final class HistoryRenderer {
     /**
      * Renders the history view of an existing resource.
      *
-     * @param iri       the resource's IRI
-     * @param revisions the resource's revisions, oldest first (as {@link StoreReader#history}
-     *                  returns them); empty for a resource no write has ever gone through the
-     *                  shared write funnel for
+     * @param iri          the resource's IRI
+     * @param publishState the resource's publish state, as {@link StoreReader#publishState} names it
+     * @param entries      the resource's history entries, oldest first (as
+     *                     {@link StoreReader#history} returns them); empty for a resource never
+     *                     written through the tools
      * @return the history text
      */
-    public String render(String iri, List<Revision> revisions) {
+    public String render(String iri, String publishState, List<VersionEntry> entries) {
         Objects.requireNonNull(iri, "iri");
-        Objects.requireNonNull(revisions, "revisions");
+        Objects.requireNonNull(publishState, "publishState");
+        Objects.requireNonNull(entries, "entries");
 
         StringBuilder out = new StringBuilder();
         out.append(prefixes.toCurie(iri)).append("\n<").append(iri).append(">\n\n");
+        out.append("Publish state: ").append(publishState).append("\n\n");
 
-        if (revisions.isEmpty()) {
+        if (entries.isEmpty()) {
             out.append("# History (0)\n")
-                    .append("- no revision recorded - no write has gone through the shared write funnel"
-                            + " for this resource yet\n");
+                    .append("- never published - every write through the tools publishes a version, so this"
+                            + " resource was only ever written store-first\n");
             return out.toString();
         }
 
-        out.append("# History (").append(revisions.size()).append(")\n");
-        int index = 1;
-        for (Revision revision : revisions) {
-            out.append(index).append(". ").append(revision.generatedAtTime())
-                    .append("  ").append(prefixes.toCurie(revision.iri()));
-            if (revision.current()) {
-                out.append("  (current)");
+        out.append("# History (").append(entries.size()).append(")\n");
+        for (VersionEntry entry : entries) {
+            out.append(entry.sequence()).append(". ").append(entry.created())
+                    .append("  ").append(entry.tombstone() ? "tombstone" : "publish");
+            if (entry.cid() != null) {
+                out.append("  ").append(prefixes.toCurie(entry.cid()));
+            }
+            if (entry.comment() != null) {
+                out.append("  \"").append(entry.comment()).append('"');
             }
             out.append('\n');
-            index++;
         }
         return out.toString();
     }

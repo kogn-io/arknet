@@ -38,6 +38,8 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
+import io.kogn.rdf.versioning.EntryDetails;
+import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.domain.Adr;
@@ -67,15 +69,18 @@ import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ChildFragments;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.ReadTransactions;
+import de.hauschel.arknet.persistence.Slices;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
+import de.hauschel.arknet.adr.application.port.out.RevisionToken;
 
 /**
  * Out-adapter: {@link AdrRepository} backed by the kognio-rdf substrate ({@code io.kogn.rdf},
@@ -90,7 +95,8 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * <p><strong>Consequences and considered options (kogn-io/arknet#357).</strong> Both are lists of
  * own, positioned resources - {@code arkarch:Consequence}/{@code arkarch:ConsideredOption} - mirroring
  * {@code KognioRdfRequirementRepository}'s {@code arkreq:AcceptanceCriterion} handling (issue #266)
- * almost exactly: a fresh opaque IRI minted per child on every write, {@code arknet:position} as the
+ * almost exactly: each child is a fragment of the decision's IRI with a name issued once and kept
+ * across updates (ADR-64, {@link ChildFragments}), {@code arknet:position} as the
  * shared, domain-agnostic ordinal (kogn-io/arknet#357 issue E), and a capture-before-delete/
  * reattach-after-write mechanism for every language variant a child's text carries that this write
  * does not touch. Two differences from that precedent: both lists are optional (never {@code
@@ -133,7 +139,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
     private static final Logger LOG = LoggerFactory.getLogger(KognioRdfAdrRepository.class);
 
     private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
-    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/adr";
+    private static final String ADR_GRAPH = ContentGraph.GRAPH_IRI;
 
     private static final String CODE_PREFIX = "ADR-";
 
@@ -141,6 +147,12 @@ public class KognioRdfAdrRepository implements AdrRepository {
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
     private static final String NAME_PROPERTY = ARKNET_NAMESPACE + "name";
     private static final String POSITION_PROPERTY = ARKNET_NAMESPACE + "position";
+
+    /** The local-name prefix of a consequence's fragment, {@code <decision>#Consequence-<id>}. */
+    private static final String CONSEQUENCE_KIND = "Consequence";
+
+    /** The local-name prefix of a considered option's fragment, {@code <decision>#Option-<id>}. */
+    private static final String OPTION_KIND = "Option";
     private static final String STATUS_PROPERTY = ArkarchVocabulary.ADR_STATUS;
     private static final String CONTEXT_PROPERTY = ArkarchVocabulary.ADR_CONTEXT;
     private static final String DECISION_PROPERTY = ArkarchVocabulary.ADR_DECISION;
@@ -206,9 +218,8 @@ public class KognioRdfAdrRepository implements AdrRepository {
                     .thenComparing(Comparator.naturalOrder());
 
     private final DatasetLifecycle lifecycle;
-    private final ResourceIdFactory resourceIdFactory;
     private final DisplayLocale displayLocale;
-    private final WriteFunnel funnel;
+    private final VersionedWriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -217,18 +228,14 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from - read
      *                          paths only, the write path goes through {@code funnel} (must not be
      *                          {@code null})
-     * @param resourceIdFactory mints the opaque IRI of each derived consequence/considered-option
-     *                          resource (kogn-io/arknet#357; must not be {@code null})
      * @param displayLocale     the display-language preference selecting which candidate of a
      *                          multilingual field the read paths surface (must not be {@code null})
      * @param funnel            the shared write funnel running the SHACL gate, dataset
      *                          acquisition and existence/head checks for every {@link #create}/
      *                          {@link #compareAndUpdate} (must not be {@code null})
      */
-    KognioRdfAdrRepository(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory,
-            DisplayLocale displayLocale, WriteFunnel funnel) {
+    KognioRdfAdrRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, VersionedWriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
-        this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
@@ -247,24 +254,27 @@ public class KognioRdfAdrRepository implements AdrRepository {
         adr.consequences().forEach(c -> consequenceTags.put(c.position(), tag));
         Map<Integer, String> optionTags = new LinkedHashMap<>();
         adr.consideredOptions().forEach(o -> optionTags.put(o.position(), tag));
-        AdrCandidate candidate =
-                buildCandidateGraph(subjectIri, adr, tag, tag, tag, consequenceTags, optionTags);
+        AdrCandidate candidate = buildCandidateGraph(subjectIri, adr, tag, tag, tag, consequenceTags, optionTags,
+                funnel.childFragments(subjectIri, rdf.createGraph())
+                        .name(CONSEQUENCE_KIND, adr.consequences().size(), Map.of()),
+                funnel.childFragments(subjectIri, rdf.createGraph())
+                        .name(OPTION_KIND, adr.consideredOptions().size(), Map.of()));
         Graph graph = candidate.graph();
 
-        funnel.create(new DatasetId(projectId.value()), ADR_GRAPH, subjectIriString,
-                adr.code().value(), graph, crossReferenceAssertedContext(projectId, adr),
+        Graph createContext = crossReferenceAssertedContext(projectId, adr);
+        funnel.create(new DatasetId(projectId.value()), subjectIriString, adr.code().value(), createContext,
                 () -> new ResourceAlreadyExistsException(projectId, adr.id().value()),
                 () -> new DuplicateAdrCodeException(projectId, adr.code()),
-                tx -> {
-                    rejectIfPeersVanished(tx, projectId, graphIri, adr);
-                    replaceTriples(tx, graphIri, subjectIri, subject, graph, false, tag, tag, tag, null,
+                (tx, draft) -> {
+                    rejectIfPeersVanished(tx, projectId, graphIri, adr, createContext);
+                    return replaceTriples(tx, draft, subjectIri, subject, graph, false, tag, tag, tag, null,
                             consequenceTags, optionTags, null, candidate, RemovedPositions.NONE,
                             RemovedPositions.NONE);
                 });
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Adr updated,
             String nameLanguage, String contextLanguage, String decisionLanguage,
             Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
             String defaultLanguage, RemovedPositions removedConsequencePositions,
@@ -288,26 +298,38 @@ public class KognioRdfAdrRepository implements AdrRepository {
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
         IRI graphIri = rdf.createIRI(ADR_GRAPH);
-        AdrCandidate candidate = buildCandidateGraph(
-                subjectIri, updated, nameTag, contextTag, decisionTag, consequenceTags, optionTags);
-        Graph graph = candidate.graph();
-
-        funnel.compareAndUpdate(new DatasetId(projectId.value()), ADR_GRAPH, subjectIriString,
-                expectedHead, graph, crossReferenceAssertedContext(projectId, updated),
+        Graph updateContext = crossReferenceAssertedContext(projectId, updated);
+        funnel.compareAndUpdate(new DatasetId(projectId.value()), subjectIriString,
+                expectedHead == null ? null : (io.kogn.rdf.versioning.RevisionToken) expectedHead.value(),
+                updateContext,
                 () -> new AdrNotFoundException(projectId, updated.code()),
                 () -> new AdrConcurrentlyModifiedException(projectId, updated.code()),
-                tx -> {
-                    rejectIfPeersVanished(tx, projectId, graphIri, updated);
-                    replaceTriples(tx, graphIri, subjectIri, subject, graph, true, nameTag, contextTag,
+                (tx, draft) -> {
+                    rejectIfPeersVanished(tx, projectId, graphIri, updated, updateContext);
+                    // A surviving consequence or option keeps its fragment at its new position; a
+                    // new one gets a fresh opaque name (ADR-64).
+                    ChildFragments fragments = funnel.childFragments(subjectIri, draft);
+                    Map<Integer, IRI> consequenceIris = fragments.name(CONSEQUENCE_KIND,
+                            updated.consequences().size(),
+                            fragments.carried(rdf.createIRI(CONSEQUENCE_PROPERTY), rdf.createIRI(POSITION_PROPERTY),
+                                    removedConsequencePositions::survivingPositionOf));
+                    Map<Integer, IRI> optionIris = fragments.name(OPTION_KIND, updated.consideredOptions().size(),
+                            fragments.carried(rdf.createIRI(CONSIDERED_OPTION_PROPERTY),
+                                    rdf.createIRI(POSITION_PROPERTY),
+                                    removedConsideredOptionPositions::survivingPositionOf));
+                    AdrCandidate candidate = buildCandidateGraph(subjectIri, updated, nameTag, contextTag,
+                            decisionTag, consequenceTags, optionTags, consequenceIris, optionIris);
+                    Graph graph = candidate.graph();
+                    return replaceTriples(tx, draft, subjectIri, subject, graph, true, nameTag, contextTag,
                             decisionTag, defaultTag, consequenceTags, optionTags, defaultTag, candidate,
                             removedConsequencePositions, removedConsideredOptionPositions);
                 });
     }
 
     /**
-     * {@link #buildCandidateGraph}'s result: the graph plus the freshly minted IRI of each
+     * {@link #buildCandidateGraph}'s result: the graph plus the fragment IRI of each
      * consequence/considered-option position - {@link #replaceTriples} needs the mapping to know
-     * which new child subject a preserved other-language variant re-attaches to (mirrors
+     * which child a preserved other-language variant re-attaches to (mirrors
      * {@code KognioRdfRequirementRepository.RequirementCandidate}).
      */
     private record AdrCandidate(
@@ -318,11 +340,13 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * Builds the candidate graph for one decision's triples: type, identifier, status, the three
      * multilingual scalar literals (each written under its own tag), the two optional pre-#357 flat
      * literals (never written by this method - see class javadoc), {@code decisionDate}, every
-     * consequence/considered-option as its own freshly minted resource, and the five reference
+     * consequence/considered-option as the fragment named in {@code consequenceIris}/
+     * {@code optionIris} (ADR-64, see {@link ChildFragments}), and the five reference
      * edges. Shared by {@link #create} and {@link #compareAndUpdate}.
      */
     private AdrCandidate buildCandidateGraph(IRI subjectIri, Adr adr, String nameTag, String contextTag,
-            String decisionTag, Map<Integer, String> consequenceTagByPosition, Map<Integer, String> optionTagByPosition) {
+            String decisionTag, Map<Integer, String> consequenceTagByPosition, Map<Integer, String> optionTagByPosition,
+            Map<Integer, IRI> consequenceIris, Map<Integer, IRI> optionIris) {
         Graph graph = rdf.createGraph();
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(ADR_TYPE));
         graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(adr.code().value()));
@@ -336,7 +360,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
         }
         Map<Integer, IRI> consequenceIriByPosition = new LinkedHashMap<>();
         for (Consequence consequence : adr.consequences()) {
-            IRI consequenceIri = mintChildIri();
+            IRI consequenceIri = consequenceIris.get(consequence.position());
             consequenceIriByPosition.put(consequence.position(), consequenceIri);
             graph.add(subjectIri, rdf.createIRI(CONSEQUENCE_PROPERTY), consequenceIri);
             graph.add(consequenceIri, VocabRdf.TYPE, rdf.createIRI(CONSEQUENCE_TYPE_CLASS));
@@ -349,7 +373,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
         }
         Map<Integer, IRI> optionIriByPosition = new LinkedHashMap<>();
         for (ConsideredOption option : adr.consideredOptions()) {
-            IRI optionIri = mintChildIri();
+            IRI optionIri = optionIris.get(option.position());
             optionIriByPosition.put(option.position(), optionIri);
             graph.add(subjectIri, rdf.createIRI(CONSIDERED_OPTION_PROPERTY), optionIri);
             graph.add(optionIri, VocabRdf.TYPE, rdf.createIRI(CONSIDERED_OPTION_TYPE_CLASS));
@@ -385,11 +409,6 @@ public class KognioRdfAdrRepository implements AdrRepository {
             graph.add(subjectIri, rdf.createIRI(RELATED_TO_PROPERTY), rdf.createIRI(peer.value().value()));
         }
         return new AdrCandidate(graph, consequenceIriByPosition, optionIriByPosition);
-    }
-
-    /** Mints an opaque IRI for a derived consequence/considered-option resource, re-minted on every write. */
-    private IRI mintChildIri() {
-        return rdf.createIRI(resourceIdFactory.newId().value());
     }
 
     /**
@@ -482,10 +501,13 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * late, so {@link AdrPeerVanishedException} is thrown instead - see its own javadoc for why, and
      * for the recovery path (simply retry the call).</p>
      */
-    private void rejectIfPeersVanished(DatasetTx tx, ProjectId projectId, IRI graphIri, Adr adr) {
+    private void rejectIfPeersVanished(DatasetTx tx, ProjectId projectId, IRI graphIri, Adr adr,
+            ReadableGraph resolvedContext) {
         for (AdrId peer : relatedAndSupersedingPeers(adr)) {
             IRI peerIri = rdf.createIRI(peer.value().value());
-            if (!tx.contains(graphIri, peerIri, null, null)) {
+            // A peer the pre-transaction read never found is the gate's to reject, not a vanished one.
+            boolean resolvedBefore = resolvedContext.stream(peerIri, null, null).findAny().isPresent();
+            if (resolvedBefore && !tx.contains(graphIri, peerIri, null, null)) {
                 throw new AdrPeerVanishedException(projectId, peer);
             }
         }
@@ -502,7 +524,11 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * (kogn-io/arknet#357 - the pre-#357 shape their own structured resources replace; see class
      * javadoc). None of the three is a field of {@link Adr} any more, so the candidate graph never
      * carries them forward on its own.</li>
-     * <li>{@code addressesRequirement}/{@code affectsContext} edges whose target is not an IRI.</li>
+     * <li>{@code addressesRequirement}/{@code affectsContext} edges whose target is not an IRI. No
+     * arknet tool writes such an edge; it can only come from an edit made outside arknet. It is
+     * carried into the new slice so the update never drops it silently, and since the gate
+     * validates the whole slice and both shapes carry {@code sh:nodeKind sh:IRI}, the update of a
+     * decision that still has such an edge is rejected.</li>
      * <li>Every other-language variant of {@code name}/{@code context}/{@code decision} not written
      * by this call, and of each consequence/considered-option's own multilingual text, keyed by
      * {@code arknet:position} rather than by the about-to-be-deleted child IRI (mirrors
@@ -519,7 +545,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * edges and deletes the pointed-at child's own triples (the UNION hop, mirrors
      * {@code KognioRdfRequirementRepository}'s {@code acceptanceCriterion} traversal).</p>
      */
-    private void replaceTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
+    private Graph replaceTriples(DatasetTx tx, ReadableGraph draft, IRI subjectIri, String subject, Graph graph,
             boolean exists, String nameTag, String contextTag, String decisionTag, String defaultTag,
             Map<Integer, String> consequenceTagByPosition, Map<Integer, String> optionTagByPosition,
             String childDefaultTag, AdrCandidate candidate, RemovedPositions removedConsequencePositions,
@@ -530,11 +556,6 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 + ">) && !isIRI(?o) ) ) }";
         String selectPreservedLiterals = "SELECT ?p ?o WHERE { GRAPH <" + ADR_GRAPH + "> { " + subject + " ?p ?o } "
                 + "FILTER( ?p IN (<" + CONSEQUENCES_PROPERTY + ">, <" + ALTERNATIVES_PROPERTY + ">) ) }";
-        String deleteExisting = "DELETE { GRAPH <" + ADR_GRAPH + "> { ?s ?p ?o } } WHERE { "
-                + "GRAPH <" + ADR_GRAPH + "> { "
-                + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
-                + "{ " + subject + " <" + CONSEQUENCE_PROPERTY + "> ?s . ?s ?p ?o } UNION "
-                + "{ " + subject + " <" + CONSIDERED_OPTION_PROPERTY + "> ?s . ?s ?p ?o } } }";
 
         List<PreservedEdge> preservedEdges = exists
                 ? tx.select(selectPreservedEdges)
@@ -565,14 +586,12 @@ public class KognioRdfAdrRepository implements AdrRepository {
                         optionTagByPosition, childDefaultTag, removedOptionPositions)
                 : Map.of();
 
-        if (exists) {
-            tx.update(deleteExisting);
-        }
-        tx.add(graphIri, graph);
+        Graph next = Slices.copyOf(graph);
 
         Graph preservedGraph = rdf.createGraph();
         for (PreservedEdge edge : preservedEdges) {
             preservedGraph.add(subjectIri, edge.predicate(), edge.object());
+            Slices.addBlankNodeClosure(preservedGraph, draft, edge.object());
         }
         for (PreservedEdge literal : preservedLiterals) {
             preservedGraph.add(subjectIri, literal.predicate(), literal.object());
@@ -591,7 +610,8 @@ public class KognioRdfAdrRepository implements AdrRepository {
         reattachChildTexts(preservedGraph, preservedOptionNames, candidate.optionIriByPosition(), NAME_PROPERTY);
         reattachChildTexts(preservedGraph, preservedOptionRationales, candidate.optionIriByPosition(),
                 OPTION_RATIONALE_PROPERTY);
-        tx.add(graphIri, preservedGraph);
+        Slices.addAll(next, preservedGraph);
+        return next;
     }
 
     private void reattachChildTexts(Graph target, Map<Integer, List<Literal>> textsByPosition,
@@ -691,7 +711,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
     /**
      * Deletes the decision identified by {@code code}, and every triple it carries in
      * {@link #ADR_GRAPH} (including every consequence/considered-option child's own triples), from
-     * the project. Passes {@code code} through to {@link WriteFunnel#delete}, which keeps it out of
+     * the project. Passes {@code code} through to {@link VersionedWriteFunnel#delete}, which keeps it out of
      * circulation on the tombstoned revision (issue #350) - shared with {@code term_delete}/
      * {@code actor_delete} rather than kept as a local mechanism, see {@link #findRetainedCodes}.
      */
@@ -711,18 +731,13 @@ public class KognioRdfAdrRepository implements AdrRepository {
                     .map(row -> iriOf(row, "s").getIRIString())
                     .orElseThrow(() -> new AdrNotFoundException(projectId, code));
         }
-        String subject = SparqlTerms.iriRef(subjectIriString);
-
-        funnel.delete(dataset, ADR_GRAPH, subjectIriString, code.value(),
+        // The library removes the decision's whole slice, its consequence and option fragments included.
+        funnel.delete(dataset, subjectIriString, code.value(), EntryDetails.NONE,
                 () -> new AdrNotFoundException(projectId, code),
+                () -> new AdrConcurrentlyModifiedException(projectId, code),
                 tx -> {
                     rejectIfStatusForbidsDeletion(tx, code, subjectIriString);
                     rejectIfReferenced(tx, projectId, code, subjectIriString);
-                    tx.update("DELETE { GRAPH <" + ADR_GRAPH + "> { ?s ?p ?o } } WHERE { "
-                            + "GRAPH <" + ADR_GRAPH + "> { "
-                            + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
-                            + "{ " + subject + " <" + CONSEQUENCE_PROPERTY + "> ?s . ?s ?p ?o } UNION "
-                            + "{ " + subject + " <" + CONSIDERED_OPTION_PROPERTY + "> ?s . ?s ?p ?o } } }");
                 });
     }
 
@@ -766,7 +781,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
     }
 
     /**
-     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained (issue
+     * Reads back the codes {@link VersionedWriteFunnel#delete}'s {@code code} parameter retained (issue
      * #350): the shared funnel keeps the number out of circulation, this hexagon only maps its raw
      * strings to {@link AdrCode} and orders them by running number.
      */
@@ -818,12 +833,10 @@ public class KognioRdfAdrRepository implements AdrRepository {
         // default language to the configured preference unchanged.
         DisplayLocale effective = withRequestedOverride(canonicalizeLenient(defaultLanguage));
 
-        String query = "SELECT ?s ?head WHERE { GRAPH <" + ADR_GRAPH + "> { "
+        String query = "SELECT ?s WHERE { GRAPH <" + ADR_GRAPH + "> { "
                 + "?s a <" + ADR_TYPE + "> . "
                 + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
-                + "FILTER(isIRI(?s)) } "
-                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+                + "FILTER(isIRI(?s)) } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Optional<BindingSet> row = handle.sparqlQuery().select(query).findFirst();
@@ -831,6 +844,10 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 return Optional.empty();
             }
             String subjectIriString = iriOf(row.get(), "s").getIRIString();
+            // The token is read first, the state after it: a write landing in between makes the
+            // token older than the state, and the compare-and-set then refuses a stale read.
+            RevisionToken head = new RevisionToken(
+                    ReadTransactions.read(handle, tx -> funnel.currentToken(tx, subjectIriString)));
             // Never applies the legacy-literal fallback (see class javadoc "Legacy fallback never
             // reaches the read-modify-write path") - findCurrentByCode's structured lists stay
             // truthfully empty when nothing structured exists.
@@ -838,10 +855,6 @@ public class KognioRdfAdrRepository implements AdrRepository {
             if (adr == null) {
                 return Optional.empty();
             }
-            String head = row.get().getValue("head")
-                    .filter(IRI.class::isInstance)
-                    .map(value -> ((IRI) value).getIRIString())
-                    .orElse(null);
             String subject = SparqlTerms.iriRef(subjectIriString);
             Set<String> nameTags = allLanguageTags(handle, subject, NAME_PROPERTY);
             Set<String> contextTags = allLanguageTags(handle, subject, CONTEXT_PROPERTY);
@@ -1036,7 +1049,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * highest running number, so which of two identical duplicates survives does not matter.
      *
      * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
-     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * (kogn-io/arknet#360).</strong> {@code VersionedWriteFunnel#create}'s uniqueness check is
      * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
      * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
      * A counter that filtered blank nodes out would therefore be blind to a code the write path

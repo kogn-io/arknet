@@ -20,7 +20,8 @@ import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 
 /**
@@ -88,7 +89,8 @@ public final class KognioRdfTermRepositoryFactory {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
         ShaclWriteGate gate = buildGate(displayLocale);
-        WriteFunnel funnel = new WriteFunnel(lifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(lifecycle, gate, ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfTermRepository(lifecycle, displayLocale, funnel);
     }
 

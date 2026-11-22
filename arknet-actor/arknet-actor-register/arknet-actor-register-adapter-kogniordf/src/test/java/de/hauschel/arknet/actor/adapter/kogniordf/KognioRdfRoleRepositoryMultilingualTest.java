@@ -34,9 +34,9 @@ import de.hauschel.arknet.actor.domain.RoleId;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 
 /**
  * Integration tests for the multilingual {@code arknet:name}/{@code arknet:description} behaviour
@@ -50,7 +50,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  */
 class KognioRdfRoleRepositoryMultilingualTest {
 
-    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
+    private static final String ROLE_GRAPH = ContentGraph.GRAPH_IRI;
     private static final String NAME_PROPERTY = "https://w3id.org/arknet/core#name";
     private static final String DESCRIPTION_PROPERTY = "https://w3id.org/arknet/core#description";
     private static final ProjectId PROJECT_A = new ProjectId("a");
@@ -67,7 +67,8 @@ class KognioRdfRoleRepositoryMultilingualTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
-        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(datasetLifecycle, gate, ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = KognioRdfRoleRepositoryFactory.over(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 

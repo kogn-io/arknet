@@ -24,10 +24,8 @@ package de.hauschel.arknet.persistence;
  * this class needs no matching {@code .ttl} of its own - there is no arknet term here to
  * document.</p>
  *
- * <p>The PROV terms are spelled out here rather than borrowed from {@link ArkprovVocabulary}: that
- * class is the vocabulary of the <em>model's</em> revision trail, written into every project
- * dataset by the write funnel, and an export envelope that never enters a dataset has no business
- * widening its scope. Two IRI constants are the whole overlap.</p>
+ * <p>The PROV terms are spelled out here: an export envelope never enters a dataset, so it shares
+ * no vocabulary class with the model.</p>
  */
 public final class ExportMetadataVocabulary {
 
@@ -37,16 +35,14 @@ public final class ExportMetadataVocabulary {
 
     /**
      * The named graph the export envelope lives in, following the same
-     * {@code https://w3id.org/arknet/model/...} shape as
-     * {@link ArkprovVocabulary#PROVENANCE_GRAPH} and {@link ArkprjVocabulary#IDENTITY_GRAPH},
-     * even though - unlike those two - it is never stored.
+     * {@code https://w3id.org/arknet/model/...} shape as {@link ContentGraph#GRAPH_IRI} and
+     * {@link ArkprjVocabulary#IDENTITY_GRAPH}, even though - unlike those two - it is never stored.
      */
     public static final String EXPORT_METADATA_GRAPH = "https://w3id.org/arknet/model/export-metadata";
 
     /**
-     * Base of the opaque IRI minted for each export activity, mirroring
-     * {@link ArkprovVocabulary#REVISION_IRI_BASE}: every export is its own event, so two dumps
-     * never claim to be the same one.
+     * Base of the opaque IRI minted for each export activity: every export is its own event, so
+     * two dumps never claim to be the same one.
      */
     public static final String EXPORT_IRI_BASE = "https://w3id.org/arknet/export/";
 

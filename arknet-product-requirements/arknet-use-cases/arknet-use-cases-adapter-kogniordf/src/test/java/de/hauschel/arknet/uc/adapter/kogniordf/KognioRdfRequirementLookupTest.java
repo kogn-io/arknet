@@ -39,7 +39,7 @@ class KognioRdfRequirementLookupTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
     private static final ProjectId PROJECT_B = new ProjectId("b");
-    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
+    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/content";
 
     /**
      * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
@@ -107,6 +107,29 @@ class KognioRdfRequirementLookupTest {
     }
 
 
+    /**
+     * All resource types share one content graph, so the code alone does not make a requirement:
+     * a glossary term's code must not resolve as one (it would let {@code satisfies} or
+     * {@code stepRealises} point at a term).
+     */
+    @Test
+    void doesNotResolveTheCodeOfAResourceThatIsNoRequirement() {
+        givenResourceOfType(PROJECT_A, "https://w3id.org/arknet/model/term/TERM-1",
+                "http://www.w3.org/2004/02/skos/core#Concept", "TERM-1");
+
+        assertThrows(UnresolvedReferenceException.class,
+                () -> requirementLookup.resolveByCode(PROJECT_A, "TERM-1"));
+    }
+
+    /** The reverse direction leaves an identity out that names no requirement. */
+    @Test
+    void doesNotResolveTheIdentityOfAResourceThatIsNoRequirementBackToACode() {
+        String term = "https://w3id.org/arknet/model/term/TERM-1";
+        givenResourceOfType(PROJECT_A, term, "http://www.w3.org/2004/02/skos/core#Concept", "TERM-1");
+
+        assertEquals(Map.of(), requirementLookup.resolveCodes(PROJECT_A, ResourceId.of(term)));
+    }
+
     @Test
     void resolvesKnownIdentitiesBackToTheirCodes() {
         String first = givenRequirement(PROJECT_A, "FR-1");
@@ -159,8 +182,13 @@ class KognioRdfRequirementLookupTest {
     }
 
     private void givenRequirementAtIri(ProjectId projectId, String requirementIri, String identifier) {
+        givenResourceOfType(projectId, requirementIri, "https://w3id.org/arknet/requirements#FunctionalRequirement",
+                identifier);
+    }
+
+    private void givenResourceOfType(ProjectId projectId, String iri, String type, String identifier) {
         String insert = "INSERT DATA { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + "<" + requirementIri + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<" + iri + "> a <" + type + "> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + identifier + "\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {

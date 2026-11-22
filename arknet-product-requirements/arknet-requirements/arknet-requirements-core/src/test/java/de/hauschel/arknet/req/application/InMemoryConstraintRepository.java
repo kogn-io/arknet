@@ -34,10 +34,10 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  * exercised end-to-end.</p>
  *
  * <p><strong>Concurrency token.</strong> Mirrors the real {@link
- * de.hauschel.arknet.persistence.WriteFunnel}'s head, minimally: a fresh opaque marker minted on
+ * de.hauschel.arknet.persistence.VersionedWriteFunnel}'s head, minimally: a fresh opaque marker minted on
  * every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link
  * #findCurrentByCode} hands it out alongside the constraint, {@link #compareAndUpdate} rejects a
- * stale one, exactly the CAS contract the real adapter enforces via {@code arkprov:head}.</p>
+ * stale one, exactly the CAS contract the real adapter enforces via {@code RevisionToken}.</p>
  *
  * <p><strong>One value per field, not a per-language set.</strong> This fake stores a single
  * title/statement value per identity, plus the tag each was last written under - enough to exercise

@@ -28,15 +28,14 @@ import de.hauschel.arknet.mcp.report.SpecificationRenderer;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.HandleResolver;
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.persistence.ResourceRenderer;
-import de.hauschel.arknet.persistence.Revision;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.persistence.StoreResource;
 import de.hauschel.arknet.persistence.StoreSnapshot;
 import de.hauschel.arknet.persistence.Triple;
+import de.hauschel.arknet.persistence.VersionEntry;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.domain.Project;
 
@@ -44,10 +43,9 @@ import de.hauschel.arknet.prj.domain.Project;
  * Read-only store tools exposed over MCP: {@code store_overview}, {@code resource_get} and
  * {@code resource_history}. The first two are fed by one generic {@code SELECT ?s ?p ?o}
  * ({@link StoreReader}), so no bounded context needs a read tool of its own and a new one
- * appears without a type-to-tool mapping. {@code resource_history} (issue #251) reads a
- * different, deliberately separate query over {@link ArkprovVocabulary#PROVENANCE_GRAPH} - the
- * one place in this class that shows the change trail rather than the model, exactly the trail
- * {@code store_overview}/{@code resource_get} exclude on purpose (see {@link StoreReader}).
+ * appears without a type-to-tool mapping. {@code resource_history} reads the
+ * library versioning's history of one resource instead - the one place in this class that shows
+ * the published versions rather than the draft model (see {@link StoreReader}).
  *
  * <p><strong>Two audiences, two shapes.</strong> The tool's return value - what the agent
  * reads - stays the domain-agnostic text digest built from that one query. The HTML report -
@@ -288,11 +286,13 @@ public final class StoreReportTools {
     }
 
     @McpTool(name = "resource_history",
-            description = "Change history of ONE resource: every PROV-O revision the shared write funnel"
-                    + " has recorded for it, oldest first, with the current revision marked"
-                    + " '(current)'. The id is a CURIE (e.g. req:FR-1) or a full IRI; as a convenience a bare"
-                    + " business id (e.g. FR-1) is resolved via dcterms:identifier. A resource that was only"
-                    + " ever written store-first, or predates the funnel, has no history - not an error.",
+            description = "History of ONE resource: its publish state and every entry the versioning recorded"
+                    + " for it, oldest first - a publish naming a content-addressed version, or the tombstone"
+                    + " of a delete. Every write publishes a version at once; there is no separate publish"
+                    + " step. A resource written only store-first, bypassing the tools, has an empty history"
+                    + " - not an error. The id is a CURIE (e.g."
+                    + " req:FR-1) or a full IRI; as a convenience a bare business id (e.g. FR-1) is resolved"
+                    + " via dcterms:identifier.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String resourceHistory(
             final McpSyncRequestContext context,
@@ -308,8 +308,8 @@ public final class StoreReportTools {
         if (outgoing.isEmpty() && incoming.isEmpty()) {
             return ResourceRenderer.notFoundMessage(prefixes, iri);
         }
-        final List<Revision> history = storeReader.history(projectId, iri);
-        return historyRenderer.render(iri, history);
+        final List<VersionEntry> history = storeReader.history(projectId, iri);
+        return historyRenderer.render(iri, storeReader.publishState(projectId, iri), history);
     }
 
     /**

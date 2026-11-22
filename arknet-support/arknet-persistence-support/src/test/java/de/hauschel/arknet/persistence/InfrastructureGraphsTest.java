@@ -4,6 +4,7 @@
 package de.hauschel.arknet.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.List;
 
@@ -11,22 +12,20 @@ import org.junit.jupiter.api.Test;
 
 class InfrastructureGraphsTest {
 
-    /** Pins the set itself: a graph added to or dropped from it changes what every reader hides. */
+    /** Pins the set itself: a graph added to or dropped from it changes what the model leaves out. */
     @Test
-    void theInfrastructureGraphsAreTheRevisionTrailAndTheSelfDescription() {
-        assertEquals(List.of(ArkprovVocabulary.PROVENANCE_GRAPH, ArkprjVocabulary.IDENTITY_GRAPH),
-                InfrastructureGraphs.IRIS);
+    void theInfrastructureGraphsAreTheLibraryGraphsTheRetainedCodesAndTheSelfDescription() {
+        assertEquals(List.of(
+                "https://w3id.org/kognio/rdf/versioning/graph/published",
+                "https://w3id.org/kognio/rdf/versioning/graph/content-store",
+                "https://w3id.org/kognio/rdf/versioning/graph/history",
+                "https://w3id.org/kognio/rdf/versioning/graph/config",
+                VersionedWriteFunnel.RETAINED_CODES_GRAPH,
+                ArkprjVocabulary.IDENTITY_GRAPH), InfrastructureGraphs.IRIS);
     }
 
     @Test
-    void theSparqlFormWrapsEveryGraphInAngleBrackets() {
-        assertEquals(List.of("<" + ArkprovVocabulary.PROVENANCE_GRAPH + ">",
-                "<" + ArkprjVocabulary.IDENTITY_GRAPH + ">"), InfrastructureGraphs.SPARQL_IRIREFS);
-    }
-
-    @Test
-    void theOutsideExpressionExcludesEveryGraph() {
-        assertEquals("?g != <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> && ?g != <"
-                + ArkprjVocabulary.IDENTITY_GRAPH + ">", InfrastructureGraphs.outsideExpression("?g"));
+    void theContentGraphIsNoInfrastructureGraph() {
+        assertFalse(InfrastructureGraphs.IRIS.contains(ContentGraph.GRAPH_IRI));
     }
 }

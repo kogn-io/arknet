@@ -60,13 +60,13 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <h2>What the store can and cannot say</h2>
  *
- * <p>The wording deliberately stops at "this call did not write it". The shared write funnel
- * records one PROV-O revision <em>per resource</em> per write, never one per literal, so there is
- * no revision to attribute an individual language variant to and no timestamp to call it older
- * by. What is certain is narrower and enough: a write resolves exactly one language tag per field
+ * <p>The wording deliberately stops at "this call did not write it". The store versions
+ * <em>per resource</em> - one history entry per write that changes it, never one per literal - so
+ * there is no version entry to attribute an individual language variant to and no timestamp to
+ * call it older by. What is certain is narrower and enough: a write resolves exactly one language tag per field
  * ({@link de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}), so any other tag the
  * field carries afterwards was put there by an earlier write. The hint says that and no more -
- * inventing a per-language revision would be a claim the store cannot back.</p>
+ * inventing a per-language version would be a claim the store cannot back.</p>
  *
  * <p>The one write that is not single-language is {@code term_update}'s rename (a {@code label}
  * without a {@code language} renames the term under every tag at once); its caller leaves {@code

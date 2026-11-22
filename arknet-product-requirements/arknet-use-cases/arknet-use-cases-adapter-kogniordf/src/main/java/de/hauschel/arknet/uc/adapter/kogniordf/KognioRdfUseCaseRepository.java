@@ -5,6 +5,7 @@ package de.hauschel.arknet.uc.adapter.kogniordf;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -12,6 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetTx;
@@ -24,24 +26,29 @@ import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.terms.Triple;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
+import io.kogn.rdf.versioning.EntryDetails;
+import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.InvalidLanguageTagException;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ChildFragments;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.ReadTransactions;
+import de.hauschel.arknet.persistence.Slices;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
@@ -65,23 +72,21 @@ import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
  * ({@code io.kogn.rdf}, embeddable RDF store).
  *
  * <p>Maps a {@link UseCase} to an {@code arkreq:UseCase} whose subject IRI is the opaque
- * {@link UseCaseId} (minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never
+ * {@link UseCaseId} (minted once by a {@code ResourceIdFactory}, never
  * derived from the business code), stored in one named graph shared by all use cases of a
  * project. The {@code dcterms:identifier} triple carries the human-readable
  * {@link UseCaseCode} ({@code UC1}) - identity and label are deliberately different triples on
  * the same subject.</p>
  *
- * <p><strong>Steps are opaque value objects.</strong> Flow steps are <em>separate</em>
- * {@code arkreq:Step} resources whose IRI is an opaque one minted from the same kernel scheme
- * as the use case itself - no ordinal or business key is encoded in the step IRI (the ordering
- * is carried by the integer {@code arkreq:position}, never an {@code rdf:List}). A step has no
- * stable domain identity of its own: it is a value object inside the use-case aggregate,
- * reachable only through the {@code arkreq:mainStep}/{@code arkreq:extensionStep} edges (there
- * is no read entry point by step IRI). Because the whole aggregate is written by
- * replace-by-identity, a step's opaque IRI is minted afresh on every write - clean addressing,
- * not stable identity; that is harmless precisely because nothing ever references a step from
- * the outside. Minting the step node is therefore a persistence-serialization concern of this
- * adapter, whereas the use-case root's identity is minted store-neutrally above the store.</p>
+ * <p><strong>Steps are fragments of the use case.</strong> Main-flow steps and extensions are
+ * <em>separate</em> {@code arkreq:Step} resources whose IRI is a fragment of the use case's IRI,
+ * {@code <use case>#Step-<id>} or {@code <use case>#Extension-<id>} (ADR-64). The opaque id is
+ * minted once, when the step is created, and kept across updates; it is no ordinal (the ordering
+ * is carried by the integer {@code arkreq:position}, never an {@code rdf:List}) and never comes
+ * back after a removal (see {@link ChildFragments}). A step is reachable only through the
+ * {@code arkreq:mainStep}/{@code arkreq:extensionStep} edges (there is no read entry point by step
+ * IRI). Naming the step node is a persistence concern of this adapter, whereas the use-case root's
+ * identity is minted store-neutrally above the store.</p>
  *
  * <p>The remaining properties are exactly those of the already-merged requirements/use-case
  * ontology: {@code arkreq:useCaseGoal}, {@code arkreq:designScope}, {@code arkreq:trigger},
@@ -166,7 +171,7 @@ import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
  * minted once, "insert or replace by identity" is no longer one coherent operation. The
  * transactional mechanics of that distinction - the in-transaction {@code contains}/head checks,
  * the SHACL gate, the commit-conflict translation - live in the shared
- * {@link WriteFunnel}, not here: {@link #create} only builds the candidate graph and
+ * {@link VersionedWriteFunnel}, not here: {@link #create} only builds the candidate graph and
  * rejects an existing subject with {@link ResourceAlreadyExistsException} or a colliding business
  * code with {@link DuplicateUseCaseCodeException}; {@link #compareAndUpdate} rejects a missing
  * subject with {@link UseCaseNotFoundException} and a stale {@code expectedHead} with
@@ -179,7 +184,7 @@ import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
  *
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate before the write
  * transaction opens, {@link WriteConstraintViolationException} on a violation, nothing
- * persisted - also live in {@link WriteFunnel}; {@link ShaclWriteGate} itself is no longer named
+ * persisted - also live in {@link VersionedWriteFunnel}; {@link ShaclWriteGate} itself is no longer named
  * here.</p>
  */
 public class KognioRdfUseCaseRepository implements UseCaseRepository {
@@ -187,7 +192,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String OSLC_RM_NAMESPACE = "http://open-services.net/ns/rm#";
 
-    private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
+    private static final String USE_CASES_GRAPH = ContentGraph.GRAPH_IRI;
 
     private static final String USE_CASE_TYPE = ArkreqVocabulary.USE_CASE_TYPE;
     private static final String STEP_TYPE = ArkreqVocabulary.STEP_TYPE;
@@ -207,6 +212,12 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String MAIN_STEP_PROPERTY = ArkreqVocabulary.MAIN_STEP;
     private static final String EXTENSION_STEP_PROPERTY = ArkreqVocabulary.EXTENSION_STEP;
     private static final String POSITION_PROPERTY = ARKREQ_NAMESPACE + "position";
+
+    /** The local-name prefix of a main-flow step's fragment, {@code <use case>#Step-<id>}. */
+    private static final String STEP_KIND = "Step";
+
+    /** The local-name prefix of an extension's fragment, {@code <use case>#Extension-<id>}. */
+    private static final String EXTENSION_KIND = "Extension";
     private static final String STEP_TEXT_PROPERTY = ARKREQ_NAMESPACE + "stepText";
     private static final String STEP_REALISES_PROPERTY = ArkreqVocabulary.STEP_REALISES;
     private static final String SATISFIES_PROPERTY = OSLC_RM_NAMESPACE + "satisfies";
@@ -220,14 +231,13 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * {@code UseCaseService} prepends, with no separator of its own (see {@code CodeCounter}).
      * Used only by {@link #findRetainedCodes} to tell a use case's own retained code apart from a
      * neighbouring bounded context's, since the provenance graph
-     * {@link WriteFunnel#findRetainedCodes} reads from is shared by all of them.
+     * {@link VersionedWriteFunnel#findRetainedCodes} reads from is shared by all of them.
      */
     private static final String CODE_PREFIX = "UC";
 
     private final DatasetLifecycle lifecycle;
-    private final ResourceIdFactory resourceIdFactory;
     private final DisplayLocale displayLocale;
-    private final WriteFunnel funnel;
+    private final VersionedWriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -236,9 +246,6 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from (must
      *                          not be {@code null}); used by the read paths, {@link #write}
      *                          delegates its own acquisition to {@code funnel}
-     * @param resourceIdFactory mints the opaque IRI of each derived step resource (must not be
-     *                          {@code null}); the use-case root's own identity is minted above
-     *                          the store and arrives on the {@link UseCase}
      * @param displayLocale     the display-language preference selecting which {@code
      *                          dcterms:title}/{@code arkreq:useCaseGoal}/{@code arkreq:designScope}/
      *                          {@code arkreq:trigger}/{@code arkreq:useCasePrecondition}/
@@ -250,10 +257,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      *                          acquisition, the in-transaction existence/head checks and the
      *                          commit-conflict translation (must not be {@code null})
      */
-    KognioRdfUseCaseRepository(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory,
-            DisplayLocale displayLocale, WriteFunnel funnel) {
+    KognioRdfUseCaseRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, VersionedWriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
-        this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
@@ -343,48 +348,17 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             graph.add(subjectIri, rdf.createIRI(SUPPORTING_ROLE_PROPERTY), supporting);
         }
 
-        // 3. Main-flow steps (own opaque resources) + the coarse UC->Requirement satisfies edge.
-        //    A step's IRI is minted afresh on every write (class-level note) - newStepIriByPosition
-        //    tracks which freshly-minted IRI ended up at which position, so an update's write body
-        //    below knows which new subject to re-attach a preserved other-language step-text
-        //    variant to (the position is stable across an update; the step's own IRI is not).
+        // 3. The coarse UC->Requirement satisfies edge; the steps themselves are added per write
+        //    (withChildren), since an update names them from the stored draft.
         Map<String, IRI> satisfies = new LinkedHashMap<>();
-        Map<Integer, IRI> newStepIriByPosition = new LinkedHashMap<>();
         for (Step step : useCase.steps()) {
-            IRI stepIri = mintStepIri();
-            newStepIriByPosition.put(step.position(), stepIri);
-            graph.add(subjectIri, rdf.createIRI(MAIN_STEP_PROPERTY), stepIri);
-            graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
-            graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
-                    rdf.createLiteral(Integer.toString(step.position()), VocabXsd.INTEGER));
-            graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY),
-                    literalOf(step.text(), stepTagByPosition.get(step.position())));
             for (RequirementRef ref : step.realises()) {
                 IRI reqIri = requirementIriFor(ref);
-                graph.add(stepIri, rdf.createIRI(STEP_REALISES_PROPERTY), reqIri);
                 satisfies.putIfAbsent(reqIri.getIRIString(), reqIri);
             }
         }
         for (IRI reqIri : satisfies.values()) {
             graph.add(subjectIri, rdf.createIRI(SATISFIES_PROPERTY), reqIri);
-        }
-
-        // 4. Extensions: alternative/exception flows as opaque extensionStep resources - the same
-        //    Step-shaped RDF structure as main-flow steps, tagged per position the same way
-        //    (newExtensionStepIriByPosition mirrors newStepIriByPosition above, for the same
-        //    re-minted-IRI/stable-position reason).
-        Map<Integer, IRI> newExtensionStepIriByPosition = new LinkedHashMap<>();
-        int extensionPosition = 1;
-        for (String extension : useCase.extensions()) {
-            IRI stepIri = mintStepIri();
-            newExtensionStepIriByPosition.put(extensionPosition, stepIri);
-            graph.add(subjectIri, rdf.createIRI(EXTENSION_STEP_PROPERTY), stepIri);
-            graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
-            graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
-                    rdf.createLiteral(Integer.toString(extensionPosition), VocabXsd.INTEGER));
-            graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY),
-                    literalOf(extension, extensionTagByPosition.get(extensionPosition)));
-            extensionPosition++;
         }
 
         // 5. usesTerm/constrainedBy (issue #329): both reference resolved identities the same way
@@ -426,38 +400,46 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             assertedContext.add(constraintIri, VocabRdf.TYPE, rdf.createIRI(CONSTRAINT_TYPE));
         }
 
-        // The step IRIs are opaque and not under the use-case IRI, so the old
-        // "delete everything whose subject STRSTARTS the use-case IRI" no longer reaches
-        // them. Delete the use-case subject's own triples and, following the
-        // mainStep/extensionStep edges, each step resource's triples. Only ever run by the
-        // update branch below - a create() by construction has no prior triples to delete.
-        String deleteExisting = "DELETE { GRAPH <" + USE_CASES_GRAPH + "> { ?s ?p ?o } } WHERE { "
-                + "GRAPH <" + USE_CASES_GRAPH + "> { "
-                + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
-                + "{ " + subject + " (<" + MAIN_STEP_PROPERTY + ">|<" + EXTENSION_STEP_PROPERTY
-                + ">) ?s . ?s ?p ?o } } }";
-        IRI graphIri = rdf.createIRI(USE_CASES_GRAPH);
 
         if (expectAbsent) {
-            funnel.create(new DatasetId(projectId.value()), USE_CASES_GRAPH, subjectIriString,
-                    useCase.code().value(), graph, assertedContext,
+            funnel.create(new DatasetId(projectId.value()), subjectIriString, useCase.code().value(),
+                    assertedContext,
                     () -> new ResourceAlreadyExistsException(projectId, useCase.id().value()),
                     () -> new DuplicateUseCaseCodeException(projectId, useCase.code()),
-                    tx -> tx.add(graphIri, graph));
+                    (tx, current) -> withChildren(graph, subjectIri, useCase, stepTagByPosition,
+                            extensionTagByPosition,
+                            funnel.childFragments(subjectIri, rdf.createGraph())
+                                    .name(STEP_KIND, useCase.steps().size(), Map.of()),
+                            funnel.childFragments(subjectIri, rdf.createGraph())
+                                    .name(EXTENSION_KIND, useCase.extensions().size(), Map.of())));
         } else {
-            funnel.compareAndUpdate(new DatasetId(projectId.value()), USE_CASES_GRAPH, subjectIriString,
-                    expectedHead == null ? null : expectedHead.value(), graph, assertedContext,
+            funnel.compareAndUpdate(new DatasetId(projectId.value()), subjectIriString,
+                    expectedHead == null ? null : (io.kogn.rdf.versioning.RevisionToken) expectedHead.value(),
+                    assertedContext,
                     () -> new UseCaseNotFoundException(projectId, useCase.code()),
                     () -> new UseCaseConcurrentlyModifiedException(projectId, useCase.code()),
-                    tx -> {
+                    (tx, draft) -> {
+                        // A surviving step keeps its fragment at its new position, an extension
+                        // where the write lets its identity be told (see extensionFragments); a new
+                        // child gets a fresh opaque name (ADR-64).
+                        ChildFragments fragments = funnel.childFragments(subjectIri, draft);
+                        Map<Integer, IRI> newStepIriByPosition = fragments.name(STEP_KIND, useCase.steps().size(),
+                                fragments.carried(rdf.createIRI(MAIN_STEP_PROPERTY), rdf.createIRI(POSITION_PROPERTY),
+                                        removedMainStepPositions::survivingPositionOf));
+                        Map<Integer, IRI> newExtensionStepIriByPosition = fragments.name(EXTENSION_KIND,
+                                useCase.extensions().size(),
+                                extensionFragments(fragments, draft, useCase.extensions(), stableExtensionPrefixLength));
+                        Graph candidate = withChildren(graph, subjectIri, useCase, stepTagByPosition,
+                                extensionTagByPosition, newStepIriByPosition, newExtensionStepIriByPosition);
                         // Capture usesTerm/constrainedBy edges deleteExisting is about to wipe but
                         // that UseCase#usesTerms()/#constrainedBy() (and therefore graph, built
                         // from useCase.usesTerms()/constrainedBy() above) could never have carried
                         // in the first place: both shapes carry sh:nodeKind sh:IRI, but that only
                         // guards this adapter's own writes - a store-first edge may
                         // still target a blank node, which ResourceId cannot represent - read()
-                        // below excludes it the same way (FILTER(isIRI(...))). Mirrors
-                        // KognioRdfRequirementRepository#replaceTriplesForUpdate's
+                        // below excludes it the same way (FILTER(isIRI(...))). No arknet tool
+                        // writes such an edge; it can only come from an edit made outside arknet.
+                        // Mirrors KognioRdfRequirementRepository#replaceTriplesForUpdate's
                         // unjoinableUsesTerms/unjoinableConstrainedBy capture exactly.
                         String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
                                 + "GRAPH <" + USE_CASES_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY
@@ -509,40 +491,28 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                                 tx, subject, EXTENSION_STEP_PROPERTY, extensionTagByPosition, defaultTag,
                                 RemovedPositions.NONE, stableExtensionPrefixLength);
 
-                        tx.update(deleteExisting);
-                        tx.add(graphIri, graph);
+                        Graph next = Slices.copyOf(candidate);
 
-                        // Re-attach the unjoinable usesTerm/constrainedBy edges only after the gate
-                        // has already run and the rewritten graph is committed - a blank-node
-                        // target cannot appear in assertedContext (built from useCase.usesTerms()/
-                        // constrainedBy() only, which are always IRIs by construction), so feeding
-                        // it there would fail the shape's sh:class constraint and block every
-                        // future update of this use case. Appending it here instead is safe
-                        // precisely because nothing new is introduced - the edge already existed in
-                        // the store and is carried forward untouched, keeping its identity across
-                        // this delete-and-readd cycle (deleteExisting only removes triples whose
-                        // subject is the use case, never the target node's own triples).
+                        // Carry the unjoinable edges into the new slice, so the update never
+                        // drops them silently; a blank-node target keeps its own triples. The
+                        // gate validates the whole slice against sh:nodeKind sh:IRI, so an update
+                        // of a use case that still has such an edge is rejected.
                         if (!unjoinableUsesTerms.isEmpty() || !unjoinableConstrainedBy.isEmpty()) {
                             Graph preservedEdges = rdf.createGraph();
                             for (RDFTerm termNode : unjoinableUsesTerms) {
                                 preservedEdges.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termNode);
+                                Slices.addBlankNodeClosure(preservedEdges, draft, termNode);
                             }
                             for (RDFTerm constraintNode : unjoinableConstrainedBy) {
                                 preservedEdges.add(subjectIri, rdf.createIRI(CONSTRAINED_BY_PROPERTY), constraintNode);
+                                Slices.addBlankNodeClosure(preservedEdges, draft, constraintNode);
                             }
-                            tx.add(graphIri, preservedEdges);
+                            Slices.addAll(next, preservedEdges);
                         }
 
-                        // Re-attach only after the gate has already run and the rewritten graph is
-                        // committed - the preserved literals are not new assertions, they already
-                        // existed in the store and are carried forward untouched (mirrors the
-                        // requirements adapter's usesTerm/language-variant preservation). A step's
-                        // preserved text variant re-attaches to the FRESHLY minted step IRI at the
-                        // same position (newStepIriByPosition/newExtensionStepIriByPosition) - the
-                        // old step subject no longer exists after deleteExisting, but nothing
-                        // outside this adapter ever referenced it (class-level "opaque value
-                        // object" note), so moving a preserved literal to the new subject at the
-                        // same position is safe.
+                        // The preserved literals already existed and are carried forward into the
+                        // new slice; a step's preserved text variant re-attaches to the step
+                        // fragment at its (surviving) position.
                         if (!preservedTitles.isEmpty() || !preservedGoals.isEmpty() || !preservedScopes.isEmpty()
                                 || !preservedTriggers.isEmpty() || !preservedPreconditions.isEmpty()
                                 || !preservedPostconditions.isEmpty() || !preservedStepTextsByPosition.isEmpty()
@@ -582,10 +552,85 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                                     }
                                 }
                             });
-                            tx.add(graphIri, preserved);
+                            Slices.addAll(next, preserved);
                         }
+                        return next;
                     });
         }
+    }
+
+    /**
+     * Adds the main-flow steps and the extensions to a copy of {@code base}, each as the fragment
+     * named for its position.
+     */
+    private Graph withChildren(Graph base, IRI subjectIri, UseCase useCase, Map<Integer, String> stepTagByPosition,
+            Map<Integer, String> extensionTagByPosition, Map<Integer, IRI> stepIris, Map<Integer, IRI> extensionIris) {
+        Graph graph = Slices.copyOf(base);
+        for (Step step : useCase.steps()) {
+            IRI stepIri = stepIris.get(step.position());
+            graph.add(subjectIri, rdf.createIRI(MAIN_STEP_PROPERTY), stepIri);
+            graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
+            graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
+                    rdf.createLiteral(Integer.toString(step.position()), VocabXsd.INTEGER));
+            graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY),
+                    literalOf(step.text(), stepTagByPosition.get(step.position())));
+            for (RequirementRef ref : step.realises()) {
+                graph.add(stepIri, rdf.createIRI(STEP_REALISES_PROPERTY), requirementIriFor(ref));
+            }
+        }
+        int extensionPosition = 1;
+        for (String extension : useCase.extensions()) {
+            IRI stepIri = extensionIris.get(extensionPosition);
+            graph.add(subjectIri, rdf.createIRI(EXTENSION_STEP_PROPERTY), stepIri);
+            graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
+            graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
+                    rdf.createLiteral(Integer.toString(extensionPosition), VocabXsd.INTEGER));
+            graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY),
+                    literalOf(extension, extensionTagByPosition.get(extensionPosition)));
+            extensionPosition++;
+        }
+        return graph;
+    }
+
+    /**
+     * The extensions that keep their fragment. {@code uc_update} replaces the extension list whole,
+     * so identity is told in two ways: a position within {@code stableExtensionPrefixLength} keeps
+     * the stored extension at that position (see {@link UseCaseRepository#compareAndUpdate}); beyond
+     * it, an extension whose text equals a stored text of a not yet kept extension keeps that
+     * extension's fragment, so inserting or removing one leaves the unchanged others their names.
+     */
+    private Map<Integer, IRI> extensionFragments(ChildFragments fragments, ReadableGraph draft,
+            List<String> extensions, int stableExtensionPrefixLength) {
+        Map<Integer, IRI> stored = fragments.storedByPosition(rdf.createIRI(EXTENSION_STEP_PROPERTY),
+                rdf.createIRI(POSITION_PROPERTY));
+        Map<Integer, IRI> kept = new LinkedHashMap<>();
+        Set<IRI> claimed = new HashSet<>();
+        stored.forEach((position, child) -> {
+            if (position <= stableExtensionPrefixLength && position <= extensions.size()) {
+                kept.put(position, child);
+                claimed.add(child);
+            }
+        });
+        for (int position = 1; position <= extensions.size(); position++) {
+            if (kept.containsKey(position)) {
+                continue;
+            }
+            String text = extensions.get(position - 1);
+            for (IRI child : stored.values()) {
+                if (!claimed.contains(child) && hasText(draft, child, text)) {
+                    kept.put(position, child);
+                    claimed.add(child);
+                    break;
+                }
+            }
+        }
+        return kept;
+    }
+
+    private boolean hasText(ReadableGraph draft, IRI child, String text) {
+        return draft.stream(child, rdf.createIRI(STEP_TEXT_PROPERTY), null)
+                .map(Triple::getObject)
+                .anyMatch(object -> object instanceof Literal literal && literal.getLexicalForm().equals(text));
     }
 
     /**
@@ -667,10 +712,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     /**
      * {@link #otherLanguageLiterals} for {@code arkreq:stepText}, keyed by {@code edgeProperty}
-     * step's {@code arkreq:position} rather than by (about-to-be-deleted) step IRI: a step's own
-     * subject is re-minted on every write (class-level note), so what survives an update is the
-     * position's <em>other-language text</em>, re-attached to whichever new step IRI ends up at
-     * that same position - not the old step IRI itself. Shared by both step flavours this adapter
+     * step's {@code arkreq:position}: what survives an update is the position's
+     * <em>other-language text</em>, re-attached to the step that holds that position after the
+     * write. Shared by both step flavours this adapter
      * writes - {@code edgeProperty} is {@link #MAIN_STEP_PROPERTY} for the main flow or
      * {@link #EXTENSION_STEP_PROPERTY} for extensions - since both are {@code arkreq:Step}-shaped
      * resources reached the same way, differing only in which edge connects them to the use case.
@@ -854,7 +898,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * difference.</p>
      *
      * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
-     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * (kogn-io/arknet#360).</strong> {@code VersionedWriteFunnel#create}'s uniqueness check is
      * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
      * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
      * A counter that filtered blank nodes out would therefore be blind to a code the write path
@@ -882,7 +926,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * {@link #USE_CASES_GRAPH} (including every main-flow/extension step child's own triples), from
      * the project (kogn-io/arknet#566). Resolves the subject by code outside any transaction
      * (mirroring {@link #findByCode}'s own read), then hands the whole check-and-delete to
-     * {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
+     * {@link VersionedWriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
      * write transaction, and only once it finds nothing pointing at the use case does the body
      * remove the subject's and its steps' triples wholesale. Mirrors
      * {@code KognioRdfConstraintRepository#delete}, with {@code adr_delete}'s child-resource
@@ -909,22 +953,15 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     .map(row -> iriOf(row, "s").getIRIString())
                     .orElseThrow(() -> new UseCaseNotFoundException(projectId, code));
         }
-        String subject = SparqlTerms.iriRef(subjectIriString);
-
-        funnel.delete(dataset, USE_CASES_GRAPH, subjectIriString, code.value(),
+        // The library removes the use case's whole slice, its step and extension fragments included.
+        funnel.delete(dataset, subjectIriString, code.value(), EntryDetails.NONE,
                 () -> new UseCaseNotFoundException(projectId, code),
-                tx -> {
-                    rejectIfReferenced(tx, subjectIriString, projectId, code);
-                    tx.update("DELETE { GRAPH <" + USE_CASES_GRAPH + "> { ?s ?p ?o } } WHERE { "
-                            + "GRAPH <" + USE_CASES_GRAPH + "> { "
-                            + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
-                            + "{ " + subject + " (<" + MAIN_STEP_PROPERTY + ">|<" + EXTENSION_STEP_PROPERTY
-                            + ">) ?s . ?s ?p ?o } } }");
-                });
+                () -> new UseCaseConcurrentlyModifiedException(projectId, code),
+                tx -> rejectIfReferenced(tx, subjectIriString, projectId, code));
     }
 
     /**
-     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained
+     * Reads back the codes {@link VersionedWriteFunnel#delete}'s {@code code} parameter retained
      * (kogn-io/arknet#566): the shared funnel keeps the number out of circulation, this hexagon
      * only maps its raw strings to {@link UseCaseCode}. One prefix ({@link #CODE_PREFIX}), unlike
      * the constraint hexagon's three - a use case has a single counter.
@@ -956,9 +993,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
-     * every named graph ({@code GRAPH ?g}) rather than {@link #USE_CASES_GRAPH} alone, so a
-     * store-first edge written into some other graph is caught too. Runs inside the live write
-     * transaction {@link WriteFunnel#delete} hands its {@code body}, so the check and the eventual
+     * the content graph, where every bounded context's edges live (ADR-63). Runs inside the live write
+     * transaction {@link VersionedWriteFunnel#delete} hands its {@code body}, so the check and the eventual
      * delete share one atomic snapshot. Mirrors
      * {@code KognioRdfConstraintRepository#rejectIfReferenced}, with the found shorthands sorted
      * before they reach the message: {@link Map#of} fixes no iteration order, and a caller reading
@@ -972,7 +1008,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         IRI target = rdf.createIRI(subjectIri);
         List<String> referencing = new ArrayList<>();
         REFERENCING_PREDICATES.forEach((predicateIri, shorthand) -> {
-            String query = "ASK { GRAPH ?g { ?s <" + predicateIri + "> ?target } }";
+            String query = "ASK { GRAPH <" + USE_CASES_GRAPH + "> { ?s <" + predicateIri + "> ?target } }";
             if (tx.ask(query, Map.of("target", target))) {
                 referencing.add(shorthand);
             }
@@ -985,7 +1021,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     /**
      * Reads a use case's current state together with its concurrency token (the
-     * {@code arkprov:head} revision IRI recorded by the last funnel write) - the read
+     * {@code RevisionToken} revision IRI recorded by the last funnel write) - the read
      * side of the read-modify-write round trip {@link #compareAndUpdate} guards the write side
      * of. Mirrors {@code KognioRdfRequirementRepository#findCurrentByCode}: reuses the same
      * subject lookup {@link #findByCode} does, then pairs the scalar/head read in one query call
@@ -1085,10 +1121,13 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             return Optional.empty();
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
-        String scalarQuery = "SELECT ?primaryRole ?head "
-                + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { " + scalarWhereClause(subject) + "} "
-                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + subject + " <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+        // The token is read first, the state after it: a write landing in between makes the token
+        // older than the state, and the compare-and-set then refuses instead of accepting a stale
+        // read.
+        RevisionToken head = new RevisionToken(
+                ReadTransactions.read(handle, tx -> funnel.currentToken(tx, subjectIriString)));
+        String scalarQuery = "SELECT ?primaryRole "
+                + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { " + scalarWhereClause(subject) + "} }";
 
         Optional<BindingSet> row = handle.sparqlQuery().select(scalarQuery).findFirst();
         if (row.isEmpty()) {
@@ -1111,10 +1150,6 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         Map<Integer, String> stepTextLanguageByPosition = toStepLanguages(stepAssemblies, locale);
         List<StepAssembly> extensionAssemblies = readExtensionStepAssemblies(handle, subject);
         Map<Integer, String> extensionTextLanguageByPosition = toStepLanguages(extensionAssemblies, locale);
-        RevisionToken head = row.get().getValue("head")
-                .filter(IRI.class::isInstance)
-                .map(value -> new RevisionToken(((IRI) value).getIRIString()))
-                .orElse(null);
         return Optional.of(new UseCaseRepository.CurrentUseCase(useCase.get(), head,
                 title.get().languageTag(), goal.get().languageTag(),
                 scope.map(LocalizedLiteral::languageTag).orElse(null),
@@ -1244,8 +1279,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * {@code usesTerm}'s shape carries {@code sh:nodeKind sh:IRI}, but that only guards this
      * adapter's own writes, so a store-first edge may still target a blank node, which
      * {@link ResourceId} cannot represent; such an edge never appears in
-     * {@link UseCase#usesTerms()} but survives a later update via the unjoinable-edge
-     * preservation in {@link #write}. Mirrors
+     * {@link UseCase#usesTerms()}; {@link #write} carries it into the slice of a later update,
+     * where the gate rejects that update. Mirrors
      * {@code KognioRdfRequirementRepository#readUsesTerms}.
      */
     private List<TermRef> readUsesTerms(DatasetHandle handle, String subject) {
@@ -1328,7 +1363,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     /**
      * Reads every step reached from {@code subject} via {@code edgeProperty}'s position and
      * {@code stepText} candidates, grouped by step IRI then sorted by position - the position, not
-     * the step's own (opaque, re-minted-on-every-write) IRI, is what a caller ({@link #toSteps}/
+     * the step's fragment IRI, is what a caller ({@link #toSteps}/
      * {@link #toExtensionTexts}/{@link #toStepLanguages}) actually keys on. {@code realisesByStep}
      * (keyed by step IRI, as read by {@link #readMainStepRealises}) is merged in verbatim - empty
      * for the extension-step caller, which has no such concept.
@@ -1484,14 +1519,6 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     // ---- helpers -----------------------------------------------------------------------
-
-    /**
-     * Mints an opaque IRI for a derived step resource from the same kernel scheme as the use
-     * case root. A step is a value object with no stable identity - see the class-level note.
-     */
-    private IRI mintStepIri() {
-        return rdf.createIRI(resourceIdFactory.newId().value());
-    }
 
     /**
      * Adds {@code value} as the language-tagged (or untagged, for a {@code null} tag) literal

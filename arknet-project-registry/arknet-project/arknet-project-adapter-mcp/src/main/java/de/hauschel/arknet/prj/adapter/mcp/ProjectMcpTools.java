@@ -492,13 +492,13 @@ public final class ProjectMcpTools {
 
     @McpTool(name = "project_delete", description = "Delete a registered project completely: its "
             + "registry entry, all its anchors and its dataset with the whole model in it - requirements, "
-            + "use cases, glossary, decisions and their revision history. Name the project explicitly by "
+            + "use cases, glossary, decisions and their version history. Name the project explicitly by "
             + "its id or label as project_list shows them; the project the call itself comes from cannot "
             + "be deleted. The id of an unregistered dataset from project_list's second section is "
             + "accepted too and removes just that dataset, e.g. one left behind by a failed deletion. "
-            + "A project or dataset that still holds model resources or revision history is only "
+            + "A project or dataset that still holds model resources or version history is only "
             + "deleted with confirm=true - without it, the call is refused and names how many "
-            + "resources of which type and how many revisions would be lost. This cannot be undone.")
+            + "resources of which type and how many history entries would be lost. This cannot be undone.")
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "The project to delete: its id or its label, exactly as "
@@ -506,7 +506,7 @@ public final class ProjectMcpTools {
                     + "calling project itself.")
             final String project,
             @McpToolParam(description = "Set to true to delete a project or dataset that still holds "
-                    + "model resources or revision history, after a call without it has named what "
+                    + "model resources or version history, after a call without it has named what "
                     + "would be lost. Omitted or false: such a project is not deleted. One without "
                     + "either needs no confirmation.", required = false)
             final Boolean confirm,
@@ -546,13 +546,13 @@ public final class ProjectMcpTools {
     private static String describeRemoved(final DeleteProject.Deletion deletion) {
         final Stream<String> resources = deletion.removedResources().entrySet().stream()
                 .map(entry -> entry.getValue() + " " + entry.getKey());
-        final long removed = deletion.removedRevisions();
-        final Stream<String> revisions = removed > 0
-                ? Stream.of(removed == 1 ? "1 revision" : removed + " revisions")
+        final long removed = deletion.removedHistoryEntries();
+        final Stream<String> history = removed > 0
+                ? Stream.of(removed == 1 ? "1 history entry" : removed + " history entries")
                 : Stream.empty();
-        final String found = Stream.concat(resources, revisions).collect(Collectors.joining(", "));
+        final String found = Stream.concat(resources, history).collect(Collectors.joining(", "));
         return found.isEmpty()
-                ? "It held no model resources and no revisions when counted."
+                ? "It held no model resources and no history entries when counted."
                 : "Removed with it, as counted: " + found + ".";
     }
 

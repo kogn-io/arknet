@@ -38,7 +38,7 @@ import de.hauschel.arknet.actor.domain.RoleCode;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
 
@@ -129,7 +129,7 @@ class RoleServiceRealStoreConcurrencyTest {
         assertNotNull(loserResult.get(), diagnostics);
         assertNotEquals(winnerResult.get().role().code(), loserResult.get().role().code(), diagnostics);
 
-        WriteFunnel funnel = KognioRdfActorRepositoryFactory.buildFunnel(realLifecycle, DisplayLocale.DEFAULT);
+        VersionedWriteFunnel funnel = KognioRdfActorRepositoryFactory.buildFunnel(realLifecycle, DisplayLocale.DEFAULT);
         List<de.hauschel.arknet.actor.domain.Role> stored =
                 KognioRdfRoleRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT, funnel).findAll(WS, LANGUAGE);
         assertEquals(2, stored.size(), diagnostics);
@@ -174,7 +174,7 @@ class RoleServiceRealStoreConcurrencyTest {
     }
 
     private static RoleService serviceOver(DatasetLifecycle lifecycle) {
-        WriteFunnel funnel = KognioRdfActorRepositoryFactory.buildFunnel(lifecycle, DisplayLocale.DEFAULT);
+        VersionedWriteFunnel funnel = KognioRdfActorRepositoryFactory.buildFunnel(lifecycle, DisplayLocale.DEFAULT);
         RoleRepository repository = KognioRdfRoleRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, funnel);
         ActorRepository actorRepository = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, funnel);
         return new RoleService(repository, actorRepository, new UuidResourceIdFactory());

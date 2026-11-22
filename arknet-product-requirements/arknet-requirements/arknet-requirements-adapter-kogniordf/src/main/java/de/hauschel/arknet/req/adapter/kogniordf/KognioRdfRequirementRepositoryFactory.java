@@ -26,10 +26,9 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.Triple;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
-import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.domain.Priority;
@@ -121,55 +120,33 @@ public final class KognioRdfRequirementRepositoryFactory {
      * @return a ready-to-use {@link RequirementRepository}
      */
     public static RequirementRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
-        return over(lifecycle, new UuidResourceIdFactory(), displayLocale);
-    }
-
-    /**
-     * {@link #over(DatasetLifecycle, DisplayLocale)}, with an explicit {@link ResourceIdFactory}
-     * (issue #266) - the seam a test that needs deterministic/inspectable acceptance-criterion IRIs
-     * uses instead of the default {@link UuidResourceIdFactory}.
-     *
-     * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from
-     * @param resourceIdFactory mints the opaque IRI of each derived acceptance-criterion resource;
-     *                          the same kernel-owned scheme the composition root uses everywhere
-     *                          else (e.g. {@code KognioRdfUseCaseRepositoryFactory})
-     * @param displayLocale     the display-language preference for SHACL violation messages
-     * @return a ready-to-use {@link RequirementRepository}
-     */
-    public static RequirementRepository over(
-            DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
-        Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        WriteFunnel funnel = buildFunnel(lifecycle, displayLocale);
-        return over(lifecycle, resourceIdFactory, displayLocale, funnel);
+        return over(lifecycle, displayLocale, buildFunnel(lifecycle, displayLocale));
     }
 
     /**
-     * Assembles a requirement repository over an already-built {@link WriteFunnel} - the seam
+     * Assembles a requirement repository over an already-built {@link VersionedWriteFunnel} - the seam
      * the composition root uses to share one funnel instance between this repository and
      * {@code KognioRdfConstraintRepositoryFactory#over} (issue #223), rather than each building
      * its own, functionally identical one (see {@link #buildFunnel} for why sharing is the
      * point).
      *
-     * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from
-     * @param resourceIdFactory mints the opaque IRI of each derived acceptance-criterion resource
-     *                          (issue #266)
-     * @param displayLocale     the display-language preference for SHACL violation messages
-     * @param funnel            the already-built write funnel to run every write through
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param displayLocale the display-language preference for SHACL violation messages
+     * @param funnel        the already-built write funnel to run every write through
      * @return a ready-to-use {@link RequirementRepository}
      */
-    public static RequirementRepository over(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory,
-            DisplayLocale displayLocale, WriteFunnel funnel) {
+    public static RequirementRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale,
+            VersionedWriteFunnel funnel) {
         Objects.requireNonNull(lifecycle, "lifecycle");
-        Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         Objects.requireNonNull(displayLocale, "displayLocale");
         Objects.requireNonNull(funnel, "funnel");
-        return new KognioRdfRequirementRepository(lifecycle, resourceIdFactory, displayLocale, funnel);
+        return new KognioRdfRequirementRepository(lifecycle, displayLocale, funnel);
     }
 
     /**
-     * Builds the shared {@link WriteFunnel} every write path of the requirements hexagon runs
+     * Builds the shared {@link VersionedWriteFunnel} every write path of the requirements hexagon runs
      * through - both {@link KognioRdfRequirementRepository} and, over the same instance,
      * {@code KognioRdfConstraintRepository} (issue #223): {@code Constraint} shares the
      * requirements SHACL shapes and ontology axioms (both already live in
@@ -180,11 +157,12 @@ public final class KognioRdfRequirementRepositoryFactory {
      * @param displayLocale the display-language preference for SHACL violation messages
      * @return the assembled write funnel
      */
-    public static WriteFunnel buildFunnel(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
+    public static VersionedWriteFunnel buildFunnel(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
         ShaclWriteGate gate = buildGate(displayLocale);
-        return new WriteFunnel(lifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        return new VersionedWriteFunnel(lifecycle, gate, ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
     }
 
     /**

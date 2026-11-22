@@ -23,7 +23,6 @@ import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
-import io.kogn.rdf.dataset.ConcurrencyConflictException;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.terms.Graph;
@@ -35,6 +34,8 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
+import io.kogn.rdf.terms.ReadableGraph;
+import io.kogn.rdf.versioning.EntryDetails;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -42,14 +43,17 @@ import de.hauschel.arknet.kernel.InvalidLanguageTagException;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
+import de.hauschel.arknet.persistence.ReadTransactions;
+import de.hauschel.arknet.persistence.ReadConflictException;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ChildFragments;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.Slices;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RevisionToken;
@@ -77,7 +81,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * ({@code io.kogn.rdf}, embeddable RDF store).
  *
  * <p>Maps a {@link Requirement} to its opaque {@link RequirementId} as the subject IRI (minted
- * once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the
+ * once by a {@code ResourceIdFactory}, never derived from the
  * business code), stored in one named graph shared by all requirements: five mandatory triples
  * (identifier, type, title, description, status) plus one or more mandatory
  * {@code arkreq:acceptanceCriterion} edges ({@code 1..n}, testable "Done when ..." criteria) to
@@ -104,7 +108,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * identity is opaque and minted once, "insert or replace by identity" is no longer one coherent
  * operation. The transactional mechanics - the in-transaction existence checks for identity and
  * business-code collision, the SHACL gate, the commit-conflict translation, and the
- * head comparison - live in the shared {@link de.hauschel.arknet.persistence.WriteFunnel},
+ * head comparison - live in the shared {@link de.hauschel.arknet.persistence.VersionedWriteFunnel},
  * not here: {@link #create} and {@link #compareAndUpdate} only build the
  * candidate graph and, via {@code alreadyExists}/{@code duplicateCode}/{@code notFound}/
  * {@code headMismatch}, supply the exceptions the funnel throws - {@link
@@ -120,7 +124,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance
  * graph against the requirements SHACL shapes before the write transaction opens,
  * {@link WriteConstraintViolationException} on a violation, nothing persisted - live in the
- * shared {@link de.hauschel.arknet.persistence.WriteFunnel}. The gate itself is
+ * shared {@link de.hauschel.arknet.persistence.VersionedWriteFunnel}. The gate itself is
  * technology-neutral - only {@link KognioRdfRequirementRepositoryFactory} names RDF4J.</p>
  *
  * <p><strong>Term references arrive pre-resolved, identity-carrying.</strong>
@@ -139,10 +143,8 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * it. For a ref that {@link #readUsesTerms} produced it may never have held: that read filters
  * for IRI-ness only and states no type condition, so a store-first edge can carry a
  * non-{@code Concept} target into the context, where asserting the type satisfies the gate's
- * {@code sh:class} with the very fact under test. The MCP tools cannot reach the case, and it is
- * no worse than before this change (such an edge survived there too, preserved by the same
- * blank-node preservation mechanism and equally unscrutinised) - but what makes it safe is that
- * it is unreachable, not that anything checked it.</p>
+ * {@code sh:class} with the very fact under test. The MCP tools cannot reach the case - what
+ * makes it safe is that it is unreachable, not that anything checked it.</p>
  *
  * <p><strong>Row multiplication on {@code priority}/{@code qualityCategory}.</strong>
  * Both properties carry no {@code sh:Violation}-severity {@code sh:maxCount} (unlike
@@ -184,16 +186,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final Logger LOG = LoggerFactory.getLogger(KognioRdfRequirementRepository.class);
 
     private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
-    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
+    private static final String REQUIREMENTS_GRAPH = ContentGraph.GRAPH_IRI;
 
     /**
-     * Same literal as {@code KognioRdfConstraintRepository}'s own {@code CONSTRAINTS_GRAPH} -
-     * duplicated rather than shared via a public constant, matching this codebase's existing
-     * convention of small, adapter-private literals (see e.g. {@code REQUIREMENTS_GRAPH} itself,
-     * never exposed outside this package either). Needed here so {@link
-     * #constraintAssertedContext} can read a linked constraint's own triples for the SHACL gate.
+     * The graph {@link #constraintAssertedContext} reads a linked constraint's own triples from for
+     * the SHACL gate - the same content graph, since every resource type lives in it (ADR-63).
      */
-    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
+    private static final String CONSTRAINTS_GRAPH = ContentGraph.GRAPH_IRI;
 
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String USES_TERM_PROPERTY = ArkreqVocabulary.USES_TERM;
@@ -230,6 +229,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      */
     private static final String POSITION_PROPERTY = ARKREQ_NAMESPACE + "position";
 
+    /** The local-name prefix of an acceptance criterion's fragment, {@code <requirement>#AC-<id>}. */
+    private static final String CRITERION_KIND = "AC";
+
     /** {@code arkreq:criterionText} (issue #266) - AcceptanceCriterion's testable "Done when ..." text. */
     private static final String CRITERION_TEXT_PROPERTY = ArkreqVocabulary.CRITERION_TEXT;
 
@@ -265,9 +267,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final int MAX_READ_RETRY_ATTEMPTS = CodeAssignment.DEFAULT_MAX_ATTEMPTS;
 
     private final DatasetLifecycle lifecycle;
-    private final ResourceIdFactory resourceIdFactory;
     private final DisplayLocale displayLocale;
-    private final WriteFunnel funnel;
+    private final VersionedWriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -275,10 +276,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      *
      * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from - used by
      *                          the read paths (must not be {@code null})
-     * @param resourceIdFactory mints the opaque IRI of each derived acceptance-criterion resource
-     *                          (issue #266; must not be {@code null}) - the same kernel-owned
-     *                          scheme {@code KognioRdfUseCaseRepository} uses to mint its own
-     *                          derived step resources
      * @param displayLocale     the display-language preference selecting which {@code
      *                          dcterms:title}/{@code dcterms:description}/
      *                          {@code arkreq:rationale}/each acceptance
@@ -288,10 +285,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      *                      {@link #create} and {@link #compareAndUpdate} (must not be
      *                      {@code null})
      */
-    KognioRdfRequirementRepository(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory,
-            DisplayLocale displayLocale, WriteFunnel funnel) {
+    KognioRdfRequirementRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, VersionedWriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
-        this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
@@ -330,7 +325,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         //    #constraintAssertedContext): its target's own ConstraintShape lives in this same
         //    shapes file, so a bare type assertion is not enough to satisfy it.
         RequirementCandidate candidate = buildCandidateGraph(
-                subjectIri, requirement, termIris, constraintIris, tag, tag, tag, criteriaTags);
+                subjectIri, requirement, termIris, constraintIris, tag, tag, tag, criteriaTags,
+                funnel.childFragments(subjectIri, rdf.createGraph())
+                        .name(CRITERION_KIND, requirement.acceptanceCriteria().size(), Map.of()));
         Graph graph = candidate.graph();
         Graph assertedContext = rdf.createGraph();
         for (IRI termIri : termIris) {
@@ -338,20 +335,18 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         }
         constraintAssertedContext(projectId, constraintIris, assertedContext);
 
-        IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
-
-        funnel.create(new DatasetId(projectId.value()), REQUIREMENTS_GRAPH, subjectIriString,
-                requirement.code().value(), graph, assertedContext,
+        funnel.create(new DatasetId(projectId.value()), subjectIriString, requirement.code().value(),
+                assertedContext,
                 () -> new ResourceAlreadyExistsException(projectId, requirement.id().value()),
                 () -> new DuplicateRequirementCodeException(projectId, requirement.code()),
-                tx -> replaceTriplesForCreate(tx, graphIri, graph));
+                (tx, current) -> graph);
     }
 
     /**
      * Compare-and-set update (degenerated from a full-snapshot comparison to a head
      * comparison decision 4): replaces the requirement's triples only if
-     * its {@code arkprov:head} still equals {@code expectedHead} at the moment the shared
-     * {@link WriteFunnel} checks it inside the write transaction - closing the lost-update window
+     * its {@code RevisionToken} still equals {@code expectedHead} at the moment the shared
+     * {@link VersionedWriteFunnel} checks it inside the write transaction - closing the lost-update window
      * a plain read (via {@link #findCurrentByCode}) followed by an unconditional replace would
      * otherwise leave open between the read and the write.
      */
@@ -382,33 +377,37 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         List<IRI> constraintIris = updated.constrainedBy().stream()
                 .map(this::constraintIriFor)
                 .toList();
-        RequirementCandidate candidate = buildCandidateGraph(
-                subjectIri, updated, termIris, constraintIris, titleTag, descriptionTag, rationaleTag,
-                criteriaTags);
-        Graph graph = candidate.graph();
         Graph assertedContext = rdf.createGraph();
         for (IRI termIri : termIris) {
             assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
         }
         constraintAssertedContext(projectId, constraintIris, assertedContext);
-        IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
-        funnel.compareAndUpdate(new DatasetId(projectId.value()), REQUIREMENTS_GRAPH, subjectIriString,
-                expectedHead == null ? null : expectedHead.value(), graph, assertedContext,
+        funnel.compareAndUpdate(new DatasetId(projectId.value()), subjectIriString, libraryToken(expectedHead),
+                assertedContext,
                 () -> new RequirementNotFoundException(projectId, updated.code()),
                 () -> new RequirementConcurrentlyModifiedException(projectId, updated.code()),
-                tx -> replaceTriplesForUpdate(tx, graphIri, subjectIri, subject, graph, titleTag, descriptionTag,
-                        rationaleTag, updated.rationale() != null, criteriaTags, defaultTag,
-                        candidate.criterionIriByPosition(), removed));
+                (tx, draft) -> {
+                    // A surviving criterion keeps its fragment at its new position; an appended one
+                    // gets a fresh opaque name (ADR-64).
+                    ChildFragments fragments = funnel.childFragments(subjectIri, draft);
+                    Map<Integer, IRI> criterionIris = fragments.name(CRITERION_KIND,
+                            updated.acceptanceCriteria().size(),
+                            fragments.carried(rdf.createIRI(ACCEPTANCE_CRITERION_PROPERTY),
+                                    rdf.createIRI(POSITION_PROPERTY), removed::survivingPositionOf));
+                    RequirementCandidate candidate = buildCandidateGraph(subjectIri, updated, termIris,
+                            constraintIris, titleTag, descriptionTag, rationaleTag, criteriaTags, criterionIris);
+                    return replaceTriplesForUpdate(tx, draft, subjectIri, subject, candidate.graph(), titleTag,
+                            descriptionTag, rationaleTag, updated.rationale() != null, criteriaTags, defaultTag,
+                            candidate.criterionIriByPosition(), removed);
+                });
     }
 
     /**
-     * {@link #buildCandidateGraph}'s result: the candidate {@link Graph} itself, plus the opaque
-     * IRI freshly minted for each acceptance-criterion position (issue #266) - a criterion node is
-     * an aggregate-internal value object re-minted on every write (mirroring
-     * {@code KognioRdfUseCaseRepository}'s {@code Step} nodes), so {@link #replaceTriplesForUpdate}
-     * needs this mapping to know which new subject a preserved other-language criterion-text
-     * variant re-attaches to.
+     * {@link #buildCandidateGraph}'s result: the candidate {@link Graph} itself, plus the fragment
+     * IRI of each acceptance-criterion position - {@link #replaceTriplesForUpdate} needs this
+     * mapping to know which criterion a preserved other-language criterion-text variant
+     * re-attaches to.
      */
     private record RequirementCandidate(Graph graph, Map<Integer, IRI> criterionIriByPosition) {
     }
@@ -416,8 +415,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     /**
      * Builds the candidate graph for one requirement's triples: five mandatory triples
      * (identifier, type, title, description, status), one or more mandatory
-     * {@code arkreq:acceptanceCriterion} edges to freshly minted {@code arkreq:AcceptanceCriterion}
-     * resources (issue #266; own {@code arkreq:position}/{@code arkreq:criterionText} triples each,
+     * {@code arkreq:acceptanceCriterion} edges to the {@code arkreq:AcceptanceCriterion} fragments
+     * named in {@code criterionIris} (issue #266, ADR-64; own {@code arkreq:position}/{@code arkreq:criterionText} triples each,
      * mirroring {@code arkreq:mainStep}/{@code arkreq:Step}), up to three optional triples
      * ({@code rationale}, {@code priority}, {@code qualityCategory}), zero or
      * more
@@ -435,7 +434,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      */
     private RequirementCandidate buildCandidateGraph(IRI subjectIri, Requirement requirement, List<IRI> termIris,
             List<IRI> constraintIris, String titleTag, String descriptionTag, String rationaleTag,
-            Map<Integer, String> criteriaTagByPosition) {
+            Map<Integer, String> criteriaTagByPosition, Map<Integer, IRI> criterionIris) {
         Graph graph = rdf.createGraph();
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(typeIriFor(requirement.type())));
         graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(requirement.code().value()));
@@ -460,7 +459,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         }
         Map<Integer, IRI> criterionIriByPosition = new LinkedHashMap<>();
         for (AcceptanceCriterion criterion : requirement.acceptanceCriteria()) {
-            IRI criterionIri = mintCriterionIri();
+            IRI criterionIri = criterionIris.get(criterion.position());
             criterionIriByPosition.put(criterion.position(), criterionIri);
             graph.add(subjectIri, rdf.createIRI(ACCEPTANCE_CRITERION_PROPERTY), criterionIri);
             graph.add(criterionIri, VocabRdf.TYPE, rdf.createIRI(ACCEPTANCE_CRITERION_TYPE));
@@ -475,26 +474,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         return new RequirementCandidate(graph, criterionIriByPosition);
     }
 
-    /**
-     * Mints an opaque IRI for a derived acceptance-criterion resource (issue #266), from the same
-     * kernel scheme as the requirement root - mirrors
-     * {@code KognioRdfUseCaseRepository#mintStepIri}. A criterion is a value object with no stable
-     * identity of its own: nothing outside this adapter ever references its IRI.
-     */
-    private IRI mintCriterionIri() {
-        return rdf.createIRI(resourceIdFactory.newId().value());
-    }
-
-    /**
-     * Writes {@code graph} for a freshly minted subject inside an already-open write transaction -
-     * the tail of {@link #create}, reached once the funnel's own existence check has decided the
-     * write may proceed. Unlike {@link #replaceTriplesForUpdate}, there is nothing under this
-     * identity yet: no triples to delete, and consequently no {@code arkreq:usesTerm} edge that
-     * could need preserving (that concern is specific to replacing an already-existing subject's
-     * triples - see {@link #replaceTriplesForUpdate}'s javadoc).
-     */
-    private void replaceTriplesForCreate(DatasetTx tx, IRI graphIri, Graph graph) {
-        tx.add(graphIri, graph);
+    /** Unwraps the library token this adapter put into the out-port's opaque holder. */
+    private static io.kogn.rdf.versioning.RevisionToken libraryToken(RevisionToken token) {
+        return token == null ? null : (io.kogn.rdf.versioning.RevisionToken) token.value();
     }
 
     /**
@@ -507,9 +489,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * <p>Reduced complement of what {@link #readUsesTerms} can now read: since reading
      * no longer joins into the terms graph (a usesTerm edge's target IRI <em>is</em> the
      * {@code TermRef}, no re-derivation needed), the only edges {@code Requirement#usesTerms()}
-     * can never carry are ones whose target is not an IRI at all - a store-first edge
-     * may legally point at a blank node ({@code [ a skos:Concept ]}), which {@code ResourceId}
-     * cannot represent. The preservation query below finds exactly those.</p>
+     * can never carry are ones whose target is not an IRI at all - an edit made outside arknet
+     * can point the edge at a blank node ({@code [ a skos:Concept ]}), which {@code ResourceId}
+     * cannot represent. The capture query below finds exactly those and carries them into the new
+     * slice, where the gate's {@code sh:nodeKind sh:IRI} rejects the update.</p>
      *
      * <p><strong>Same preservation, for {@code title}/{@code description}/{@code rationale}'s
      * other language variants.</strong> They may each legally carry several language-tagged
@@ -553,16 +536,12 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * non-{@code null} {@code titleTag}/{@code descriptionTag}, so this sweep is unreachable for
      * a project without one.</p>
      *
-     * <p><strong>Acceptance-criterion resources are followed and re-minted too (issue
-     * #266).</strong> {@code deleteExisting} now also follows every {@code arkreq:acceptanceCriterion}
-     * edge and deletes the pointed-at {@code arkreq:AcceptanceCriterion} resource's own triples -
-     * mirroring {@code KognioRdfUseCaseRepository}'s {@code mainStep}/{@code extensionStep}
-     * traversal for {@code arkreq:Step}: a criterion node has no stable identity of its own (see
-     * {@link #mintCriterionIri}), so leaving its old triples behind would only accumulate orphaned
-     * garbage no future read ever reaches again. {@code criteriaTagByPosition}/
+     * <p><strong>Acceptance criteria (issue #266, ADR-64).</strong> The new slice replaces the
+     * old one whole, criteria included; a surviving criterion keeps its fragment IRI (see
+     * {@link ChildFragments}), so its triples are replaced in place. {@code criteriaTagByPosition}/
      * {@code newCriterionIriByPosition} extend the very same capture-before-delete/reattach-after-
      * write mechanism to each criterion's {@code arkreq:criterionText}, keyed by
-     * {@code arkreq:position} rather than the (about-to-be-deleted) criterion IRI - exactly
+     * {@code arkreq:position} - exactly
      * {@code KognioRdfAdrRepository#otherLanguageChildTexts}'s own reasoning. A position <em>can</em>
      * shift since kogn-io/arknet#513: {@code req_update} may remove an existing criterion, and the
      * survivors after it renumber consecutively from 1 - {@code removedAcceptanceCriterionPositions}
@@ -570,38 +549,27 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@link RemovedPositions#survivingPositionOf}, exactly mirroring
      * {@code KognioRdfAdrRepository}'s own consequence/considered-option removal (issue #483).
      */
-    private void replaceTriplesForUpdate(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
+    private Graph replaceTriplesForUpdate(DatasetTx tx, ReadableGraph draft, IRI subjectIri, String subject,
+            Graph graph,
             String titleTag, String descriptionTag, String rationaleTag, boolean rationaleWritten,
             Map<Integer, String> criteriaTagByPosition, String defaultTag,
             Map<Integer, IRI> newCriterionIriByPosition, RemovedPositions removedAcceptanceCriterionPositions) {
         String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
                 + "FILTER(!isIRI(?term)) }";
-        // constrainedBy's shape carries sh:nodeKind sh:IRI - unlike usesTerm, a non-IRI target is
-        // SHACL-illegal at write time - but that gate only guards this adapter's own writes, never
-        // a store-first edit, so the same non-IRI edge can and does exist here too; the
-        // same preserve-past-the-gate mechanism applies, for the same reason.
+        // Same capture for constrainedBy: no arknet tool writes a non-IRI target, so such an edge
+        // can only come from an edit made outside arknet.
         String selectUnjoinableConstrainedBy = "SELECT ?constraint WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + CONSTRAINED_BY_PROPERTY
                 + "> ?constraint } FILTER(!isIRI(?constraint)) }";
-        // Deletes the requirement subject's own triples AND, following each acceptanceCriterion
-        // edge, every existing AcceptanceCriterion resource's triples (issue #266) - see this
-        // method's class-level note above. Mirrors KognioRdfUseCaseRepository#write's own
-        // deleteExisting for mainStep/extensionStep exactly, one edge instead of two.
-        String deleteExisting = "DELETE { GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s ?p ?o } } WHERE { "
-                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
-                + "{ " + subject + " <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?s . ?s ?p ?o } } }";
 
         // Capture what a replacing write is about to destroy but could never have read (see
         // selectUnjoinableUsesTerms above) before deleteExisting wipes it, inside this same
         // transaction - a separate read beforehand would leave a TOCTOU window the caller's own
         // head comparison deliberately avoids. The binding is read as a bare RDFTerm, not
-        // cast to IRI: arkreq:usesTerm carries no sh:nodeKind constraint, so its target is
-        // RDF-legally allowed to be a blank node, and a store-first edge can and does point at
-        // one - exactly the non-IRI target selectUnjoinableUsesTerms filters for. Casting here
-        // would trade the earlier silent data loss for a crash on every update of the affected
-        // requirement - a regression, not a fix.
+        // cast to IRI: the target selectUnjoinableUsesTerms filters for is exactly the non-IRI
+        // one (a blank node written outside arknet), and casting would crash instead of
+        // reaching the gate.
         List<RDFTerm> unjoinableUsesTerms = tx.select(selectUnjoinableUsesTerms).map(row -> termOf(row, "term"))
                 .toList();
         List<RDFTerm> unjoinableConstrainedBy = tx.select(selectUnjoinableConstrainedBy)
@@ -617,34 +585,26 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 : allLiterals(tx, subject, RATIONALE_PROPERTY);
         Map<Integer, List<Literal>> preservedCriteriaTextsByPosition = otherLanguageAcceptanceCriterionTexts(
                 tx, subject, criteriaTagByPosition, defaultTag, removedAcceptanceCriterionPositions);
-        tx.update(deleteExisting);
-        tx.add(graphIri, graph);
-        // Re-attach the preserved edges only after the gate has already run and the rewritten
-        // graph is committed - never mixed into `graph` before gate.enforce ran on it. A
-        // preserved edge's target is, by construction, not an IRI and therefore cannot appear in
-        // the write's assertedContext (built from the requirement's termIris only, which are
-        // always IRIs); feeding it to the gate would fail the usesTerm shape's sh:class
-        // skos:Concept constraint and block every future update of this requirement. Appending it
-        // here instead is safe precisely because nothing new is introduced - the edge already
-        // existed in the store and is carried forward untouched. A blank-node target keeps its
-        // identity across this delete-and-readd cycle: deleteExisting only removes triples whose
-        // subject is the requirement, never the target node's own triples, and the RDFTerm
-        // captured by the select above is the same object tx.add below writes back - RDF4J
-        // compares blank nodes by id, so this re-attaches to the very node the store already
-        // knows, not a fresh one.
+        Graph next = Slices.copyOf(graph);
+        // Carry the captured edges into the new slice, so the update never drops them silently;
+        // a blank-node target keeps its own triples (Slices#addBlankNodeClosure). The gate
+        // validates the whole slice, and both shapes carry sh:nodeKind sh:IRI, so an update of a
+        // requirement that still has such an edge is rejected and nothing is written.
         if (!unjoinableUsesTerms.isEmpty()) {
             Graph preservedEdges = rdf.createGraph();
             for (RDFTerm termNode : unjoinableUsesTerms) {
                 preservedEdges.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termNode);
+                Slices.addBlankNodeClosure(preservedEdges, draft, termNode);
             }
-            tx.add(graphIri, preservedEdges);
+            Slices.addAll(next, preservedEdges);
         }
         if (!unjoinableConstrainedBy.isEmpty()) {
             Graph preservedEdges = rdf.createGraph();
             for (RDFTerm constraintNode : unjoinableConstrainedBy) {
                 preservedEdges.add(subjectIri, rdf.createIRI(CONSTRAINED_BY_PROPERTY), constraintNode);
+                Slices.addBlankNodeClosure(preservedEdges, draft, constraintNode);
             }
-            tx.add(graphIri, preservedEdges);
+            Slices.addAll(next, preservedEdges);
         }
         if (!preservedTitles.isEmpty() || !preservedDescriptions.isEmpty() || !preservedRationales.isEmpty()
                 || !preservedCriteriaTextsByPosition.isEmpty()) {
@@ -658,10 +618,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             for (Literal rationale : preservedRationales) {
                 preservedLanguageVariants.add(subjectIri, rdf.createIRI(RATIONALE_PROPERTY), rationale);
             }
-            // A preserved criterion-text variant re-attaches to the FRESHLY minted criterion IRI at
-            // the same position (newCriterionIriByPosition) - the old criterion subject no longer
-            // exists after deleteExisting, but nothing outside this adapter ever referenced it
-            // (mirrors KognioRdfUseCaseRepository's identical Step re-attachment).
+            // A preserved criterion-text variant re-attaches to the criterion at its surviving
+            // position (newCriterionIriByPosition) - after a removal that is a different fragment.
             preservedCriteriaTextsByPosition.forEach((position, texts) -> {
                 IRI newCriterionIri = newCriterionIriByPosition.get(position);
                 if (newCriterionIri != null) {
@@ -670,8 +628,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     }
                 }
             });
-            tx.add(graphIri, preservedLanguageVariants);
+            Slices.addAll(next, preservedLanguageVariants);
         }
+        return next;
     }
 
     /**
@@ -726,10 +685,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     /**
      * {@link #otherLanguageLiterals} for {@code arkreq:criterionText}, keyed by acceptance-criterion
-     * {@code arkreq:position} rather than by (about-to-be-deleted) criterion IRI (issue #266) - a
-     * criterion's own subject is re-minted on every write ({@link #mintCriterionIri}), so what
-     * survives an update is the position's <em>other-language text</em>, re-attached to whichever
-     * new criterion IRI ends up at that same position - not the old criterion IRI itself. Mirrors
+     * {@code arkreq:position} (issue #266): what survives an update is the position's
+     * <em>other-language text</em>, re-attached to the criterion that holds that position after the
+     * write. Mirrors
      * {@code KognioRdfAdrRepository#otherLanguageChildTexts} exactly, plus the re-keying a removal
      * needs (kogn-io/arknet#513): the query yields the <em>stored</em> position, the result is
      * keyed by the position the same entry holds after {@code removedAcceptanceCriterionPositions}
@@ -1075,24 +1033,20 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * state is always the correct response, not merely a convenient one.
      *
      * <p><strong>Exhausted retries never leak the raw store exception.</strong> The shared {@link
-     * de.hauschel.arknet.persistence.WriteFunnel} translates every write path's lost
+     * de.hauschel.arknet.persistence.VersionedWriteFunnel} translates every write path's lost
      * {@code ConcurrencyConflictException} into a bounded-context-owned signal before it reaches a
-     * caller - this read path is the adapter's own, funnel-external retry loop, but the same
+     * caller - this read path runs through the shared {@link ReadTransactions}, and the same
      * convention applies: a pathological, sustained storm of concurrent writers that outlasts
      * {@link #MAX_READ_RETRY_ATTEMPTS} surfaces as {@link RequirementReadConflictException}, never
      * as the raw {@code io.kogn.rdf} type, with the last observed conflict preserved as {@linkplain
      * Throwable#getCause() cause}.
      */
     private <T> T readInTransaction(ProjectId projectId, DatasetHandle handle, Function<DatasetTx, T> work) {
-        ConcurrencyConflictException lastConflict = null;
-        for (int attempt = 1; attempt <= MAX_READ_RETRY_ATTEMPTS; attempt++) {
-            try {
-                return handle.transactor().inTransaction(work);
-            } catch (ConcurrencyConflictException e) {
-                lastConflict = e;
-            }
+        try {
+            return ReadTransactions.read(handle, MAX_READ_RETRY_ATTEMPTS, work);
+        } catch (ReadConflictException e) {
+            throw new RequirementReadConflictException(projectId, e.attempts(), e.getCause());
         }
-        throw new RequirementReadConflictException(projectId, MAX_READ_RETRY_ATTEMPTS, lastConflict);
     }
 
     /**
@@ -1161,8 +1115,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * never actually saw. Builds the {@link Requirement} the same way {@link #findByCode} does -
      * both call {@link #requirementOf} on their row, so the two read paths cannot drift apart
      * field-by-field the way two near-identical read paths in this class already did twice before
-     * - plus one {@code OPTIONAL} join into
-     * {@link ArkprovVocabulary#PROVENANCE_GRAPH} for the head, and the {@code
+     * - plus the library token of its draft, read in the same transaction, and the {@code
      * acceptanceCriteriaIsSynthesized} flag {@link #findByCode} has no need for: this method reads
      * {@link #readAcceptanceCriterionAssemblies} itself (rather than delegating to {@link
      * #requirementOf(ProjectId, BindingSet, RequirementCode, DatasetHandle)}) so it can tell, before the
@@ -1189,15 +1142,15 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         // default language to the configured preference unchanged.
         DisplayLocale effective = withRequestedOverride(canonicalizeLenient(defaultLanguage));
 
-        String query = "SELECT ?s ?type ?status ?priority ?qualityCategory ?head "
+        String query = "SELECT ?s ?type ?status ?priority ?qualityCategory "
                 + "WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + requirementByCodeWhereClause(code)
-                + "} "
-                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+                + "} }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            Optional<BindingSet> found = handle.sparqlQuery().select(query).findFirst();
+            // State and token in one read transaction, so the token belongs to exactly this state.
+            return readInTransaction(projectId, handle, tx -> {
+            Optional<BindingSet> found = tx.select(query).findFirst();
             if (found.isEmpty()) {
                 return Optional.empty();
             }
@@ -1205,12 +1158,12 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             String subjectIriString = iriOf(row, "s").getIRIString();
             String subject = SparqlTerms.iriRef(subjectIriString);
             Optional<TitleDescriptionSelection> titleAndDescription =
-                    selectTitleDescription(handle.sparqlQuery()::select, subject, effective);
+                    selectTitleDescription(tx::select, subject, effective);
             if (titleAndDescription.isEmpty()) {
                 return Optional.empty();
             }
             List<AcceptanceCriterionAssembly> criterionAssemblies =
-                    readAcceptanceCriterionAssemblies(handle.sparqlQuery()::select, subject);
+                    readAcceptanceCriterionAssemblies(tx::select, subject);
             List<AcceptanceCriterion> rawCriteria = toAcceptanceCriteria(criterionAssemblies, effective);
             boolean acceptanceCriteriaIsSynthesized =
                     rawCriteria.isEmpty() || !hasConsecutiveAcceptanceCriterionPositions(rawCriteria);
@@ -1225,7 +1178,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             // a skipped requirement - and its tag is null both for an untagged literal and for no
             // literal at all, which the service tells apart by the value itself (issue #321).
             Optional<LocalizedLiteral> rationale =
-                    selectRationale(handle.sparqlQuery()::select, subject, effective);
+                    selectRationale(tx::select, subject, effective);
             Requirement requirement = new Requirement(
                     new RequirementId(ResourceId.of(subjectIriString)),
                     code,
@@ -1236,18 +1189,16 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     statusFromIri(projectId, code, iriOf(row, "status").getIRIString()),
                     priorityOf(row),
                     qualityCategoryOf(row),
-                    readUsesTerms(handle.sparqlQuery()::select, subject),
+                    readUsesTerms(tx::select, subject),
                     acceptanceCriteria,
-                    readConstrainedBy(handle.sparqlQuery()::select, subject));
-            RevisionToken head = row.getValue("head")
-                    .filter(IRI.class::isInstance)
-                    .map(value -> new RevisionToken(((IRI) value).getIRIString()))
-                    .orElse(null);
+                    readConstrainedBy(tx::select, subject));
+            RevisionToken head = new RevisionToken(funnel.currentToken(tx, subjectIriString));
             return Optional.of(new RequirementRepository.CurrentRequirement(
                     requirement, head, acceptanceCriteriaIsSynthesized,
                     selection.title().languageTag(), selection.description().languageTag(),
                     rationale.map(LocalizedLiteral::languageTag).orElse(null),
                     acceptanceCriteriaLanguageByPosition));
+            });
         }
     }
 
@@ -1403,7 +1354,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * list say something untrue about the project.</p>
      *
      * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
-     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * (kogn-io/arknet#360).</strong> {@code VersionedWriteFunnel#create}'s uniqueness check is
      * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
      * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
      * A counter that filtered blank nodes out would therefore be blind to a code the write path
@@ -1531,13 +1482,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      *
      * <p><strong>Why.</strong> One query for the whole batch, not one per id, because the caller
      * (a sibling bounded context's driving adapter, rendering several requirement references at
-     * once) must not pay an N+1 store round-trip. Unlike the sibling ubiquitous-language adapter's
-     * {@code KognioRdfTermRepository#findByIds}, this join carries no type filter: that adapter
-     * joins {@code ?s a <skos:Concept>} because every terms-graph subject carries that one type,
-     * but requirements are typed either {@code arkreq:FunctionalRequirement} or
-     * {@code arkreq:NonFunctionalRequirement}, and a filter here would either need both
-     * alternatives (no benefit - {@code dcterms:identifier} already scopes the join to subjects
-     * that carry a code) or arbitrarily exclude one requirement type.</p>
+     * once) must not pay an N+1 store round-trip. The join carries
+     * {@link #requirementTypeClause}: every resource type shares the one content graph, so an id
+     * of a term or a decision would otherwise resolve to its code as if it were a requirement.</p>
      */
     @Override
     public List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId, List<ResourceId> ids) {
@@ -1556,6 +1503,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
         String query = "SELECT ?s ?identifier WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + "VALUES ?s { " + values + " } "
+                + requirementTypeClause()
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -1576,12 +1524,12 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@link #REQUIREMENTS_GRAPH} (including every acceptance criterion child's own triples), from
      * the project (kogn-io/arknet#566). Resolves the subject by code outside any transaction
      * (mirroring {@link #findByCode}'s own read), then hands the whole check-and-delete to
-     * {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
+     * {@link VersionedWriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
      * write transaction, and only once it finds nothing pointing at the requirement does the body
      * remove the subject's triples wholesale. Mirrors {@code KognioRdfConstraintRepository#delete},
      * with {@code KognioRdfAdrRepository#delete}'s {@code UNION} over the owned child resources.
      *
-     * <p>Passes {@code code} through to {@link WriteFunnel#delete}, which keeps it out of
+     * <p>Passes {@code code} through to {@link VersionedWriteFunnel#delete}, which keeps it out of
      * circulation on the tombstoned revision - the model triple carrying {@code dcterms:identifier}
      * is exactly what this delete removes, so the tombstone is the only place the number survives
      * (see {@link #findRetainedCodes}).</p>
@@ -1610,24 +1558,15 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     .map(row -> iriOf(row, "s").getIRIString())
                     .orElseThrow(() -> new RequirementNotFoundException(projectId, code));
         }
-        String subject = SparqlTerms.iriRef(subjectIriString);
-
-        funnel.delete(dataset, REQUIREMENTS_GRAPH, subjectIriString, code.value(),
+        // The library removes the requirement's whole slice, its #AC-<id> criteria included.
+        funnel.delete(dataset, subjectIriString, code.value(), EntryDetails.NONE,
                 () -> new RequirementNotFoundException(projectId, code),
-                tx -> {
-                    rejectIfReferenced(tx, subjectIriString, projectId, code);
-                    // The requirement's own triples AND, following each acceptanceCriterion edge,
-                    // every AcceptanceCriterion child's triples (issue #266 minted them without an
-                    // identity of their own, so nothing would ever reach them again).
-                    tx.update("DELETE { GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s ?p ?o } } WHERE { "
-                            + "GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                            + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
-                            + "{ " + subject + " <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?s . ?s ?p ?o } } }");
-                });
+                () -> new RequirementConcurrentlyModifiedException(projectId, code),
+                tx -> rejectIfReferenced(tx, subjectIriString, projectId, code));
     }
 
     /**
-     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained
+     * Reads back the codes {@link VersionedWriteFunnel#delete}'s {@code code} parameter retained
      * (kogn-io/arknet#566): the shared funnel keeps the number out of circulation, this hexagon
      * only maps its raw strings to {@link RequirementCode}. Queried once per type prefix - the
      * funnel's {@code findRetainedCodes} takes a single prefix, and a requirement's two counters
@@ -1681,9 +1620,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
-     * every named graph ({@code GRAPH ?g}), since a referencing edge lives in the decisions graph,
-     * the use-cases graph or (for {@code dependsOn}) {@link #REQUIREMENTS_GRAPH} itself. Runs
-     * inside the live write transaction {@link WriteFunnel#delete} hands its {@code body}, so the
+     * the content graph, where every bounded context's edges live (ADR-63) - a published copy or a
+     * history version of a referencing resource is no reference. Runs
+     * inside the live write transaction {@link VersionedWriteFunnel#delete} hands its {@code body}, so the
      * check and the eventual delete share one atomic snapshot. Mirrors
      * {@code KognioRdfConstraintRepository#rejectIfReferenced}.
      *
@@ -1693,7 +1632,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, RequirementCode code) {
         IRI target = rdf.createIRI(subjectIri);
         List<String> referencing = REFERENCING_PREDICATES.entrySet().stream()
-                .filter(entry -> tx.ask("ASK { GRAPH ?g { ?s <" + entry.getKey() + "> ?target } }",
+                .filter(entry -> tx.ask("ASK { GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s <" + entry.getKey() + "> ?target } }",
                         Map.of("target", target)))
                 .map(Map.Entry::getValue)
                 .sorted()
@@ -1709,13 +1648,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * Reads the {@code arkreq:usesTerm} edges of one requirement back as term references, ordered
      * by target IRI (RDF has no intrinsic statement order, and {@link Requirement} compares its
      * {@code usesTerms} list positionally). Excludes any edge whose target is not an IRI -
-     * {@code arkreq:usesTerm} carries no {@code sh:nodeKind} constraint, so a store-first
-     * edge may legally target a blank node, which
+     * {@code arkreq:usesTerm}'s shape carries {@code sh:nodeKind sh:IRI}, but an edit made
+     * outside arknet can still point the edge at a blank node, which
      * {@link de.hauschel.arknet.kernel.ResourceId} cannot represent; such an edge never appears in
      * {@link Requirement#usesTerms()}. Every edge written through {@code req_link_term} targets a
      * resolved subject IRI by construction, so this exclusion cannot bite via the MCP tools; a
-     * store-first blank-node edge instead survives a later update via
-     * {@link #replaceTriplesForUpdate}, which re-attaches it after rewriting the subject's triples.
+     * blank-node edge is instead carried into the slice of a later update by
+     * {@link #replaceTriplesForUpdate}, where the gate rejects that update.
      *
      * <p><strong>History.</strong> The edge's target IRI <em>is</em> the
      * {@link TermRef} now - {@link TermRef#value()} wraps it directly - so this reads only the
@@ -1793,15 +1732,15 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     /**
      * Reads every acceptance criterion's position and {@code criterionText} candidates, grouped by
-     * criterion IRI then sorted by position - the position, not the criterion's own (opaque,
-     * re-minted-on-every-write) IRI, is what a caller ({@link #toAcceptanceCriteria}/
+     * criterion IRI then sorted by position - the position, not the criterion's fragment IRI, is
+     * what a caller ({@link #toAcceptanceCriteria}/
      * {@link #toAcceptanceCriteriaLanguages}) actually keys on. Mirrors
      * {@code KognioRdfUseCaseRepository#readMainStepAssemblies}.
      *
      * <p>{@code FILTER(isIRI(?criterion))} mirrors {@link #readUsesTerms}: {@code
      * arkreq:acceptanceCriterion} carries no {@code sh:nodeKind} constraint, so a store-first
      * edge may legally target a blank node - excluded here rather than crashing on the
-     * {@link IRI} cast, unreachable via the MCP tools since {@link #mintCriterionIri} always mints
+     * {@link IRI} cast, unreachable via the MCP tools since {@link #criterionIri} always mints
      * a proper IRI.</p>
      */
     private List<AcceptanceCriterionAssembly> readAcceptanceCriterionAssemblies(
@@ -2122,7 +2061,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     /**
      * Reads a binding as the bare {@link RDFTerm} it is, without narrowing it to {@link IRI} -
      * unlike {@link #iriOf}, deliberately used where the binding's kind is not known in advance
-     * (e.g. an {@code arkreq:usesTerm} target, which may legally be a blank node).
+     * (e.g. an {@code arkreq:usesTerm} target an edit made outside arknet may have pointed at a
+     * blank node).
      */
     private static RDFTerm termOf(BindingSet row, String name) {
         return row.getValue(name)

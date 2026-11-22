@@ -39,10 +39,11 @@ import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
+import de.hauschel.arknet.adr.application.port.out.RevisionToken;
 
 /**
  * Multilingual behaviour of {@link KognioRdfAdrRepository} (kogn-io/arknet#357): other-language
@@ -57,7 +58,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
     private static final ProjectId PROJECT = new ProjectId("adr-multilingual-test");
     /** Any fixed day - these tests exercise language round-tripping, not the stamped date itself. */
     private static final LocalDate DECIDED_ON = LocalDate.of(2026, 8, 23);
-    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/adr";
+    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/content";
 
     private DatasetLifecycleRdf4j lifecycle;
     private KognioRdfAdrRepository repository;
@@ -69,9 +70,10 @@ class KognioRdfAdrRepositoryMultilingualTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
-        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(datasetLifecycle, gate, ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = new KognioRdfAdrRepository(
-                datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT, funnel);
+                datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
     @AfterEach
@@ -100,7 +102,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         }
     }
 
-    private String currentHeadOf(AdrCode code) {
+    private RevisionToken currentHeadOf(AdrCode code) {
         return repository.findCurrentByCode(PROJECT, code, null).orElseThrow().head();
     }
 
@@ -283,13 +285,11 @@ class KognioRdfAdrRepositoryMultilingualTest {
     }
 
     /**
-     * The UNION-hop: {@code deleteExisting} follows {@code arkarch:consequence}/
-     * {@code arkarch:consideredOption} edges and deletes the pointed-at child's own triples too - a
-     * replacing write must not leave the old, re-minted-away child node's triples behind as orphaned
-     * garbage.
+     * A consequence is the fragment {@code #Consequence-<n>} of the decision's IRI (ADR-64): a
+     * replacing write keeps the child's IRI and replaces its triples, leaving no second node behind.
      */
     @Test
-    void compareAndUpdateDoesNotOrphanTheOldConsequenceChildNode() {
+    void compareAndUpdateKeepsTheConsequenceFragmentAndReplacesItsTriples() {
         AdrId id = freshId();
         Adr original = adr(id, new AdrCode("ADR-1"),
                 List.of(new Consequence(1, "Original wording", ConsequenceType.NEUTRAL)), List.of());
@@ -308,10 +308,15 @@ class KognioRdfAdrRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), corrected,
                 "en", "en", "en", Map.of(1, "en"), Map.of(), null, RemovedPositions.NONE, RemovedPositions.NONE);
 
-        String askOldChildHasTriples = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + oldChildIri + "> ?p ?o } }";
+        assertTrue(oldChildIri.matches(java.util.regex.Pattern.quote(id.value().value())
+                + "#Consequence-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"), oldChildIri);
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
-            assertFalse(handle.sparqlQuery().ask(askOldChildHasTriples),
-                    "the re-minted-away consequence child node must not survive as an orphan");
+            assertEquals(List.of(oldChildIri), handle.sparqlQuery().select(selectChild)
+                    .map(row -> row.getValue("c").orElseThrow().toString()).toList(),
+                    "the update keeps the one consequence fragment");
+            String statements = "SELECT ?o WHERE { GRAPH <" + ADR_GRAPH + "> { <" + oldChildIri + "> <"
+                    + ArkarchVocabulary.CONSEQUENCE_STATEMENT + "> ?o } }";
+            assertEquals(1, handle.sparqlQuery().select(statements).count(), "only the corrected statement remains");
         }
         assertEquals(List.of(new Consequence(1, "Corrected wording", ConsequenceType.POSITIVE)),
                 repository.findByCode(PROJECT, original.code(), null).orElseThrow().consequences());
@@ -353,6 +358,67 @@ class KognioRdfAdrRepositoryMultilingualTest {
         assertEquals("Deutscher Wortlaut", deSelected.consequences().get(0).statement());
         Adr enSelected = repository.findByCode(PROJECT, original.code(), "en").orElseThrow();
         assertEquals("English wording", enSelected.consequences().get(0).statement());
+    }
+
+    /**
+     * ADR-64: a consequence or considered option keeps its opaque fragment name when a sibling is
+     * removed, a child added later gets a name never handed out before, and the read order follows
+     * {@code arknet:position}, not the name: the ids are minted in descending lexical order,
+     * against the positions.
+     */
+    @Test
+    void consequencesAndOptionsKeepTheirOpaqueFragmentsAndReadInPositionOrder() {
+        KognioRdfAdrRepository seeded = new KognioRdfAdrRepository(lifecycle, DisplayLocale.DEFAULT,
+                new VersionedWriteFunnel(lifecycle, KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT),
+                        ContentGraph.GRAPH_IRI, VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT,
+                        java.time.Clock.systemUTC(), List.of("z", "y", "x", "w", "v", "u").iterator()::next));
+        AdrId id = freshId();
+        Adr original = adr(id, new AdrCode("ADR-1"),
+                List.of(new Consequence(1, "First wording", ConsequenceType.NEUTRAL),
+                        new Consequence(2, "Second wording", ConsequenceType.POSITIVE)),
+                List.of(new ConsideredOption(1, "Option A", "Rationale A", OptionOutcome.CHOSEN),
+                        new ConsideredOption(2, "Option B", "Rationale B", OptionOutcome.REJECTED)));
+        seeded.create(PROJECT, original, "en");
+        String subject = id.value().value();
+        assertEquals(Map.of("1", subject + "#Consequence-z", "2", subject + "#Consequence-y"),
+                childFragmentsByPosition(subject, ArkarchVocabulary.CONSEQUENCE));
+        assertEquals(Map.of("1", subject + "#Option-x", "2", subject + "#Option-w"),
+                childFragmentsByPosition(subject, ArkarchVocabulary.CONSIDERED_OPTION));
+        RemovedPositions firstConsequence = new RemovedPositions(Set.of(1));
+        RemovedPositions secondOption = new RemovedPositions(Set.of(2));
+        Adr changed = original
+                .withAppendedConsequences(List.of(new de.hauschel.arknet.adr.domain.NewConsequence(
+                        "Third wording", ConsequenceType.NEGATIVE)))
+                .withAppendedConsideredOptions(List.of(new de.hauschel.arknet.adr.domain.NewConsideredOption(
+                        "Option C", "Rationale C", OptionOutcome.REJECTED)))
+                .withoutConsequences(PROJECT, firstConsequence)
+                .withoutConsideredOptions(PROJECT, secondOption);
+
+        seeded.compareAndUpdate(PROJECT, currentHeadOf(original.code()), changed,
+                "en", "en", "en", Map.of(1, "en", 2, "en"), Map.of(1, "en", 2, "en"), null,
+                firstConsequence, secondOption);
+
+        assertEquals(Map.of("1", subject + "#Consequence-y", "2", subject + "#Consequence-v"),
+                childFragmentsByPosition(subject, ArkarchVocabulary.CONSEQUENCE));
+        assertEquals(Map.of("1", subject + "#Option-x", "2", subject + "#Option-u"),
+                childFragmentsByPosition(subject, ArkarchVocabulary.CONSIDERED_OPTION));
+        Adr found = seeded.findByCode(PROJECT, original.code(), null).orElseThrow();
+        assertEquals(List.of("Second wording", "Third wording"),
+                found.consequences().stream().map(Consequence::statement).toList());
+        assertEquals(List.of("Option A", "Option C"),
+                found.consideredOptions().stream().map(ConsideredOption::name).toList());
+    }
+
+    private Map<String, String> childFragmentsByPosition(String subject, String edge) {
+        String query = "SELECT ?c ?pos WHERE { GRAPH <" + ADR_GRAPH + "> { <" + subject + "> <" + edge
+                + "> ?c . ?c <" + ArkarchVocabulary.POSITION + "> ?pos } }";
+        Map<String, String> byPosition = new java.util.HashMap<>();
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.sparqlQuery().select(query).forEach(row -> byPosition.put(
+                    ((io.kogn.rdf.terms.Literal) row.getValue("pos").orElseThrow()).getLexicalForm(),
+                    ((io.kogn.rdf.terms.IRI) row.getValue("c").orElseThrow()).getIRIString()));
+        }
+        return byPosition;
     }
 
     /**
