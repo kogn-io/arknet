@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import io.kogn.rdf.dataset.BindingSet;
+import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
@@ -20,11 +21,14 @@ import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.versioning.EntryKind;
 import io.kogn.rdf.versioning.HistoryEntry;
 import io.kogn.rdf.versioning.PublishState;
 import io.kogn.rdf.versioning.ResourceVersioning;
 import io.kogn.rdf.versioning.ResourceVersioningNamedGraphs;
+import io.kogn.rdf.versioning.VersioningGraphs;
+import io.kogn.rdf.versioning.VocabVersioning;
 
 import de.hauschel.arknet.kernel.ProjectId;
 
@@ -332,7 +336,9 @@ public final class StoreReader {
     /**
      * Tells whether a resource's draft was ever published and whether it changed since. Every
      * write through the tools publishes, so a resource they wrote reads {@code PUBLISHED_UNCHANGED}
-     * or {@code DELETED}; the other two states remain for a store-first edit.
+     * or {@code DELETED}; the other two states remain for a store-first edit. An IRI on which the
+     * startup migration retained the code of a resource deleted before versioning reads
+     * {@code DELETED} as well, see {@link #findDeleted}.
      *
      * @param projectId the project to read
      * @param iri       the resource's IRI, exactly as {@link HandleResolver} resolves it
@@ -348,8 +354,103 @@ public final class StoreReader {
         }
         IRI subject = new SimpleRdf().createIRI(iri);
         try (DatasetHandle handle = acquire(projectId)) {
-            return ReadTransactions.read(handle, tx -> versioning.publishState(tx, subject)).name();
+            return ReadTransactions.read(handle, tx -> {
+                PublishState state = versioning.publishState(tx, subject);
+                // a deletion before versioning left no history the library could read the state from
+                if (state == PublishState.NEVER_PUBLISHED && retainedBeforeVersioning(tx, iri).isPresent()) {
+                    return PublishState.DELETED;
+                }
+                return state;
+            }).name();
         }
+    }
+
+    /**
+     * Reads what the store still knows of a deleted resource: when its latest history entry is
+     * a tombstone, its deletion instant, comment and the root statements of the last version that
+     * entry names. An IRI without history on which the startup migration retained the code of a
+     * resource deleted before versioning yields a record carrying only that code. A resource that
+     * was never deleted, or recreated since, or never existed yields empty. A blank-node handle
+     * yields empty.
+     *
+     * @param projectId the project to read
+     * @param iri       the resource's IRI, exactly as {@link HandleResolver} resolves it
+     * @return the deleted resource, or empty if the resource is not currently deleted
+     */
+    public Optional<DeletedResource> findDeleted(ProjectId projectId, String iri) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return Optional.empty();
+        }
+        IRI subject = new SimpleRdf().createIRI(iri);
+        try (DatasetHandle handle = acquire(projectId)) {
+            return ReadTransactions.read(handle, tx -> {
+                List<HistoryEntry> entries = versioning.history(tx, subject);
+                if (entries.isEmpty()) {
+                    return retainedBeforeVersioning(tx, iri);
+                }
+                HistoryEntry last = entries.get(entries.size() - 1);
+                if (last.kind() != EntryKind.TOMBSTONE) {
+                    return Optional.<DeletedResource>empty();
+                }
+                List<Triple> statements = last.cid()
+                        .flatMap(cid -> versioning.readVersionByCID(tx, cid).map(graph -> graph.stream()
+                                .filter(triple -> triple.getSubject().equals(cid))
+                                .map(triple -> new Triple(iri, triple.getPredicate().getIRIString(),
+                                        toNode(triple.getObject())))
+                                .toList()))
+                        .orElse(List.of());
+                return Optional.of(DeletedResource.fromTombstone(iri, last.created().toString(),
+                        last.comment().orElse(null), statements));
+            });
+        }
+    }
+
+    /**
+     * Finds the resource a deleted business code belonged to: the code a delete retained sits on
+     * the tombstone entry, which the history graph ties back to the resource's IRI. A code the
+     * startup migration retained for a resource deleted before versioning has no tombstone; it
+     * resolves to the IRI it is recorded on, which {@link #findDeleted} reads as such a deletion.
+     * Empty when no deleted resource retained the code.
+     *
+     * @param projectId the project to read
+     * @param code      the business code, e.g. {@code TERM-12}
+     * @return the IRI of the deleted resource (or of its retained code's record), or empty
+     */
+    public Optional<String> findDeletedByCode(ProjectId projectId, String code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        String query = "SELECT DISTINCT ?holder ?s WHERE { GRAPH <" + VersionedWriteFunnel.RETAINED_CODES_GRAPH
+                + "> { ?holder <" + DCTERMS_IDENTIFIER + "> \"" + SparqlTerms.escape(code) + "\" }"
+                + " OPTIONAL { GRAPH <" + VersioningGraphs.HISTORY.getIRIString() + "> { ?s <"
+                + VocabVersioning.ENTRY.getIRIString() + "> ?holder } } }";
+        try (DatasetHandle handle = acquire(projectId)) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> row.getValue("s").or(() -> row.getValue("holder")).orElse(null))
+                    .filter(IRI.class::isInstance)
+                    .map(term -> ((IRI) term).getIRIString())
+                    .findFirst();
+        }
+    }
+
+    /**
+     * The record of a resource deleted before versioning: {@code iri} carries a retained code and is
+     * no tombstone entry of the history graph, so the startup migration recorded it for a deletion
+     * of which nothing else survives.
+     */
+    private static Optional<DeletedResource> retainedBeforeVersioning(DatasetTx tx, String iri) {
+        SimpleRdf rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI(iri);
+        if (tx.snapshot(VersioningGraphs.HISTORY).stream(null, VocabVersioning.ENTRY, subject).findAny().isPresent()) {
+            return Optional.empty();
+        }
+        return tx.snapshot(rdf.createIRI(VersionedWriteFunnel.RETAINED_CODES_GRAPH))
+                .stream(subject, VocabDct.IDENTIFIER, null)
+                .map(statement -> statement.getObject())
+                .filter(Literal.class::isInstance)
+                .map(code -> DeletedResource.beforeVersioning(iri, ((Literal) code).getLexicalForm()))
+                .findFirst();
     }
 
     private static VersionEntry toVersionEntry(HistoryEntry entry) {

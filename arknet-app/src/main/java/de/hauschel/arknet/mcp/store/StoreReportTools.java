@@ -28,6 +28,7 @@ import de.hauschel.arknet.mcp.report.SpecificationRenderer;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
+import de.hauschel.arknet.persistence.DeletedResource;
 import de.hauschel.arknet.persistence.HandleResolver;
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.persistence.ResourceRenderer;
@@ -227,7 +228,11 @@ public final class StoreReportTools {
 
     @McpTool(name = "resource_get",
             description = "Fetch all statements of ONE resource as compact text: its outgoing statements plus"
-                    + " its incoming statements (neighbours). The id is a CURIE (e.g. req:FR-1) or a full IRI;"
+                    + " its incoming statements (neighbours). A deleted resource - or a retained code like"
+                    + " TERM-12 - answers with its deletion record: when it was deleted and the statements of"
+                    + " its last version; for a deletion from before versioning only that it was deleted and"
+                    + " that its code stays taken, its content is not recorded. The id is a CURIE (e.g."
+                    + " req:FR-1) or a full IRI;"
                     + " as a convenience a bare business id (e.g. FR-1) is resolved via dcterms:identifier.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String resourceGet(
@@ -241,6 +246,12 @@ public final class StoreReportTools {
         final String iri = handleResolver.resolve(projectId, id);
         final List<Triple> outgoing = storeReader.outgoing(projectId, iri);
         final List<Triple> incoming = storeReader.incoming(projectId, iri);
+        if (outgoing.isEmpty()) {
+            final Optional<DeletedResource> deleted = storeReader.findDeleted(projectId, iri);
+            if (deleted.isPresent()) {
+                return resourceRenderer.renderDeleted(deleted.get());
+            }
+        }
         final Map<String, String> incomingHandles = incomingHandles(projectId, incoming);
         return resourceRenderer.render(iri, outgoing, incoming, incomingHandles);
     }
@@ -288,7 +299,9 @@ public final class StoreReportTools {
     @McpTool(name = "resource_history",
             description = "History of ONE resource: its publish state and every entry the versioning recorded"
                     + " for it, oldest first - a publish naming a content-addressed version, or the tombstone"
-                    + " of a delete. Every write publishes a version at once; there is no separate publish"
+                    + " of a delete; a deleted resource (or a retained code like TERM-12) shows what it was and"
+                    + " when it was deleted - for a deletion from before versioning only that it was deleted,"
+                    + " with no entries. Every write publishes a version at once; there is no separate publish"
                     + " step. A resource written only store-first, bypassing the tools, has an empty history"
                     + " - not an error. The id is a CURIE (e.g."
                     + " req:FR-1) or a full IRI; as a convenience a bare business id (e.g. FR-1) is resolved"
@@ -305,11 +318,13 @@ public final class StoreReportTools {
         final String iri = handleResolver.resolve(projectId, id);
         final List<Triple> outgoing = storeReader.outgoing(projectId, iri);
         final List<Triple> incoming = storeReader.incoming(projectId, iri);
-        if (outgoing.isEmpty() && incoming.isEmpty()) {
+        final List<VersionEntry> history = storeReader.history(projectId, iri);
+        final Optional<DeletedResource> deleted =
+                outgoing.isEmpty() ? storeReader.findDeleted(projectId, iri) : Optional.empty();
+        if (outgoing.isEmpty() && incoming.isEmpty() && history.isEmpty() && deleted.isEmpty()) {
             return ResourceRenderer.notFoundMessage(prefixes, iri);
         }
-        final List<VersionEntry> history = storeReader.history(projectId, iri);
-        return historyRenderer.render(iri, storeReader.publishState(projectId, iri), history);
+        return historyRenderer.render(iri, storeReader.publishState(projectId, iri), history, deleted);
     }
 
     /**

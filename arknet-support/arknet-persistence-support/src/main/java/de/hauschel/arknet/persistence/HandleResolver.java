@@ -85,6 +85,13 @@ public final class HandleResolver {
         // Bare business id: resolve via dcterms:identifier; reject ambiguity across contexts.
         final List<String> matches = storeReader.findByIdentifier(projectId, handle);
         if (matches.isEmpty()) {
+            // a deleted resource keeps its code (it stays taken): resolve it to the IRI its
+            // tombstone sits on - or, for a deletion before versioning, the IRI the code is
+            // recorded on - so resource_get/resource_history can say what was deleted
+            final Optional<String> deleted = storeReader.findDeletedByCode(projectId, handle);
+            if (deleted.isPresent()) {
+                return deleted.get();
+            }
             throw new IllegalArgumentException("No resource found for id '" + handle + "'."
                     + " Use a CURIE (req:FR-1) or full IRI, or check the id via store_overview.");
         }

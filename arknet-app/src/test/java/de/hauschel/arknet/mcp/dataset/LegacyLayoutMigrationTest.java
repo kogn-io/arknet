@@ -170,6 +170,36 @@ class LegacyLayoutMigrationTest {
         });
     }
 
+    /**
+     * Issue #596, review round 1 of PR #738: a code the migration retained for a resource deleted
+     * under the earlier layout answers with a deletion record in {@code resource_get} and
+     * {@code resource_history} - deleted, content not recorded - instead of "No resource found".
+     */
+    @Test
+    void aCodeDeletedUnderTheEarlierLayoutAnswersWithADeletionRecord() throws Exception {
+        legacyStore();
+        Path anchor = java.nio.file.Files.createDirectories(storageDir.resolve("anchor"));
+
+        contextRunner.withPropertyValues("arknet.rdf.storage=" + storageDir).run(context -> {
+            assertThat(context).hasNotFailed();
+            context.getBean(ProjectService.class).adopt(PROJECT, "Legacy migration",
+                    new Anchor(anchor.toString(), AnchorType.PATH));
+            StoreReportTools tools = context.getBean(StoreReportTools.class);
+
+            String get = tools.resourceGet(null, "FR-3", anchor.toString());
+            String history = tools.resourceHistory(null, "FR-3", anchor.toString());
+
+            for (String result : List.of(get, history)) {
+                assertThat(result).contains("# DELETED").contains("FR-3 stays taken")
+                        .contains("deleted before versioning").contains("content is not recorded")
+                        .doesNotContain("deleted at ").doesNotContain("# Last version")
+                        .doesNotContain("not found");
+            }
+            assertThatThrownBy(() -> tools.resourceGet(null, "FR-99", anchor.toString()))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("No resource found");
+        });
+    }
+
     /** Issue #675's case: a use case with untagged legacy literals takes an edge-only change. */
     @Test
     void aLegacyUseCaseWithUntaggedLiteralsTakesAnEdgeOnlyChange() {

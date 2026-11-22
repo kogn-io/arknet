@@ -79,6 +79,58 @@ public final class ResourceRenderer {
     }
 
     /**
+     * Renders the view of a deleted resource: that it was deleted, when, and the statements of the
+     * last version the versioning kept, so a reader can tell what a surviving reference to the
+     * resource's code pointed at. Only a tombstone's own record is shown - the resource is gone
+     * from the model and has no neighbours.
+     *
+     * @param deleted what the versioning still records of the resource
+     * @return the deleted-resource text
+     */
+    public String renderDeleted(DeletedResource deleted) {
+        Objects.requireNonNull(deleted, "deleted");
+        return prefixes.toCurie(deleted.iri()) + "\n<" + deleted.iri() + ">\n\n" + renderDeletedBody(deleted);
+    }
+
+    /**
+     * Renders the deletion record without the resource's heading lines, for a caller that has
+     * printed its own (the history view).
+     *
+     * @param deleted what the versioning still records of the resource
+     * @return the deletion record text
+     */
+    public String renderDeletedBody(DeletedResource deleted) {
+        Objects.requireNonNull(deleted, "deleted");
+        StringBuilder out = new StringBuilder();
+        out.append("# DELETED\n");
+        if (deleted.deletedBeforeVersioning()) {
+            out.append("- deleted before versioning: the deletion time is not recorded\n");
+        } else {
+            out.append("- deleted at ").append(deleted.deletedAt());
+            deleted.optionalComment().ifPresent(comment -> out.append(" (\"").append(comment).append("\")"));
+            out.append('\n');
+        }
+        deleted.identifier().ifPresent(code -> out.append("- code ").append(code)
+                .append(" stays taken, it is never assigned to another resource\n"));
+        if (deleted.deletedBeforeVersioning()) {
+            out.append("- the content is not recorded: the storage layout of that time kept only the code,"
+                    + " and the IRI above is the record of that code, not the resource itself\n");
+            return out.toString();
+        }
+        if (deleted.lastStatements().isEmpty()) {
+            out.append("- the content is not recorded: the resource was deleted without ever having been"
+                    + " published\n");
+            return out.toString();
+        }
+        out.append("\n# Last version (").append(deleted.lastStatements().size()).append(")\n");
+        for (Triple triple : deleted.lastStatements()) {
+            out.append(prefixes.toCurie(triple.predicate())).append("  ")
+                    .append(renderObject(triple.object())).append('\n');
+        }
+        return out.toString();
+    }
+
+    /**
      * The "no such resource" notice, shared with {@code impact_analysis} (issue #135) so a
      * syntactically valid but unknown handle is reported identically regardless of which
      * read-path tool resolved it.
