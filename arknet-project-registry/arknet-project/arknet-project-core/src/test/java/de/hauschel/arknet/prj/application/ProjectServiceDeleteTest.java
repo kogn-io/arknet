@@ -467,7 +467,7 @@ class ProjectServiceDeleteTest {
     @Test
     void theRefusalUsesTheSingularForExactlyOneHistoryEntry() {
         Project project = service.register("arknet", pathAnchor("/home/fred/DEV/arknet"), null, null, null, null);
-        projectDatasets.withRevisions(project.id(), 1);
+        projectDatasets.withHistoryEntries(project.id(), 1);
 
         UnconfirmedProjectDeletionException ex = assertThrows(UnconfirmedProjectDeletionException.class,
                 () -> service.delete("arknet", List.of(ELSEWHERE), false));
@@ -478,14 +478,14 @@ class ProjectServiceDeleteTest {
 
     /** History alone is content: a project without a single resource but with history entries is not empty. */
     @Test
-    void aProjectHoldingOnlyRevisionHistoryNeedsConfirmationAndTheRefusalCountsTheRevisions() {
+    void aProjectHoldingOnlyHistoryEntriesNeedsConfirmationAndTheRefusalCountsThem() {
         Project project = service.register("arknet", pathAnchor("/home/fred/DEV/arknet"), null, null, null, null);
-        projectDatasets.withRevisions(project.id(), 7);
+        projectDatasets.withHistoryEntries(project.id(), 7);
 
         UnconfirmedProjectDeletionException ex = assertThrows(UnconfirmedProjectDeletionException.class,
                 () -> service.delete("arknet", List.of(ELSEWHERE), false));
 
-        assertEquals(7L, ex.revisions());
+        assertEquals(7L, ex.historyEntries());
         assertEquals(Map.of(), ex.resourceCounts());
         assertTrue(ex.getMessage().contains("7 history entries"), ex.getMessage());
         assertEquals(Optional.of(project), service.findById(project.id()));
@@ -493,13 +493,13 @@ class ProjectServiceDeleteTest {
     }
 
     @Test
-    void aConfirmedDeletionReportsTheRevisionsThatWentWithIt() {
+    void aConfirmedDeletionReportsTheHistoryEntriesThatWentWithIt() {
         Project project = service.register("arknet", pathAnchor("/home/fred/DEV/arknet"), null, null, null, null);
-        projectDatasets.withRevisions(project.id(), 7);
+        projectDatasets.withHistoryEntries(project.id(), 7);
 
         Deletion deletion = service.delete("arknet", List.of(ELSEWHERE), true);
 
-        assertEquals(7L, deletion.removedRevisions());
+        assertEquals(7L, deletion.removedHistoryEntries());
         assertTrue(projectDatasets.wasDeleted(project.id()));
     }
 

@@ -114,7 +114,7 @@ Wird das Dataset zwischen Nachschlagen und Sperre als Projekt registriert, lehnt
 Die Antwort sagt dann, dass ein nicht registriertes Dataset entfernt wurde und kein Registry-Eintrag existierte; sie traegt keine Projektzeile, weil es kein Projekt zu nennen gibt (`Deletion#project` ist `null`, `Deletion#registered` unterscheidet).
 Haelt das Dataset noch Modellressourcen **oder** Historien-Eintraege der Versionierung, braucht der Aufruf `confirm=true`; ohne ihn lehnt `UnconfirmedProjectDeletionException` ab und nennt je Typ, wie viele Ressourcen, und wie viele Historien-Eintraege verloren gingen.
 "Leer" heisst: keine Modellressource und kein Historien-Eintrag -- reine Historie zaehlt, weil das Loeschen sie vernichtet.
-Gezaehlt wird ueber den eigenen Out-Port `ProjectDatasets` (`KognioRdfProjectDatasets`): `modelResourceCounts` zaehlt jedes typisierte Subjekt im Content-Graph, `revisionCount` die Eintraege (Publishes und Tombstones) der Bibliotheks-Historie.
+Gezaehlt wird ueber den eigenen Out-Port `ProjectDatasets` (`KognioRdfProjectDatasets`): `modelResourceCounts` zaehlt jedes typisierte Subjekt im Content-Graph, `historyEntryCount` die Eintraege (Publishes und Tombstones) der Bibliotheks-Historie.
 `modelResourceCounts` liest denselben Content-Graph wie `StoreReader`, die beiden koennen also nicht auseinanderlaufen.
 Ein Projekt, das nur seine Selbstbeschreibung traegt, ist leer.
 Ein eigener Port statt einer Erweiterung von `DatasetInventory`, weil jener ausdruecklich lesend und auf Identitaeten beschraenkt bleibt.

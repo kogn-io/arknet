@@ -139,8 +139,8 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * @param displayLocale the display-language preference selecting which {@code
      *                      dcterms:description} the read paths surface for a multilingual
      *                      project (must not be {@code null})
-     * @param funnel        the shared write funnel running the SHACL gate, dataset
-     *                      acquisition and existence/head checks for every {@link #register}/
+     * @param funnel        the registry's own {@link RegistryWrites} running the SHACL gate, dataset
+     *                      acquisition and existence/state-token checks for every {@link #register}/
      *                      {@link #compareAndUpdate}/{@link #updateAttributes} (must not be
      *                      {@code null})
      */

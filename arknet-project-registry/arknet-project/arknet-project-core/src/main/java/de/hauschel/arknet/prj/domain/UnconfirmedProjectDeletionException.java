@@ -29,7 +29,7 @@ public class UnconfirmedProjectDeletionException extends RuntimeException {
 
     private final transient ProjectId datasetId;
     private final transient Map<String, Long> resourceCounts;
-    private final long revisions;
+    private final long historyEntries;
 
     /**
      * Creates the exception for a registered project.
@@ -37,12 +37,12 @@ public class UnconfirmedProjectDeletionException extends RuntimeException {
      * @param project        the project that was asked to be deleted
      * @param resourceCounts how many model resources of which type the project's dataset holds,
      *                       possibly empty if only history is held
-     * @param revisions      how many entries the dataset's version history holds (publishes and
+     * @param historyEntries how many entries the dataset's version history holds (publishes and
      *                       tombstones)
      */
     public UnconfirmedProjectDeletionException(Project project, Map<String, Long> resourceCounts,
-            long revisions) {
-        this(Objects.requireNonNull(project, "project").id(), project.label(), resourceCounts, revisions);
+            long historyEntries) {
+        this(Objects.requireNonNull(project, "project").id(), project.label(), resourceCounts, historyEntries);
     }
 
     /**
@@ -51,28 +51,30 @@ public class UnconfirmedProjectDeletionException extends RuntimeException {
      * @param datasetId      the dataset that was asked to be deleted
      * @param resourceCounts how many model resources of which type the dataset holds, possibly
      *                       empty if only history is held
-     * @param revisions      how many entries the dataset's version history holds (publishes and
+     * @param historyEntries how many entries the dataset's version history holds (publishes and
      *                       tombstones)
      */
     public UnconfirmedProjectDeletionException(ProjectId datasetId, Map<String, Long> resourceCounts,
-            long revisions) {
-        this(datasetId, null, resourceCounts, revisions);
+            long historyEntries) {
+        this(datasetId, null, resourceCounts, historyEntries);
     }
 
     private UnconfirmedProjectDeletionException(ProjectId datasetId, String label,
-            Map<String, Long> resourceCounts, long revisions) {
+            Map<String, Long> resourceCounts, long historyEntries) {
         super(message(Objects.requireNonNull(datasetId, "datasetId"), label,
-                Objects.requireNonNull(resourceCounts, "resourceCounts"), revisions));
+                Objects.requireNonNull(resourceCounts, "resourceCounts"), historyEntries));
         this.datasetId = datasetId;
-        this.revisions = revisions;
+        this.historyEntries = historyEntries;
         this.resourceCounts = Collections.unmodifiableMap(new LinkedHashMap<>(resourceCounts));
     }
 
     private static String message(ProjectId datasetId, String label, Map<String, Long> resourceCounts,
-            long revisions) {
+            long historyEntries) {
         String counts = Stream.concat(
                 resourceCounts.entrySet().stream().map(entry -> entry.getValue() + " " + entry.getKey()),
-                revisions > 0 ? Stream.of(revisions == 1 ? "1 history entry" : revisions + " history entries") : Stream.empty())
+                historyEntries > 0
+                        ? Stream.of(historyEntries == 1 ? "1 history entry" : historyEntries + " history entries")
+                        : Stream.empty())
                 .collect(Collectors.joining(", "));
         String subject = label == null
                 ? "The unregistered dataset '" + datasetId.value() + "'"
@@ -88,8 +90,8 @@ public class UnconfirmedProjectDeletionException extends RuntimeException {
     }
 
     /** @return how many entries the dataset's version history holds */
-    public long revisions() {
-        return revisions;
+    public long historyEntries() {
+        return historyEntries;
     }
 
     /** @return how many model resources of which type the project's dataset holds, in the order given */

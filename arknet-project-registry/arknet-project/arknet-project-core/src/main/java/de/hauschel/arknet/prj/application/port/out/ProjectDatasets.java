@@ -32,7 +32,7 @@ public interface ProjectDatasets {
      * <p>A model resource is anything the bounded contexts wrote into the project - requirements,
      * use cases, terms, decisions and their typed parts. The project's own infrastructure is not:
      * its self-description and its version history go with the dataset, but nobody wrote them as
-     * part of the model. The history is counted separately, by {@link #revisionCount}.</p>
+     * part of the model. The history is counted separately, by {@link #historyEntryCount}.</p>
      *
      * @param projectId the project whose dataset is inspected
      * @return the number of resources per type, keyed by a short, human-readable type name and
@@ -48,7 +48,7 @@ public interface ProjectDatasets {
      * @param projectId the project whose dataset is inspected
      * @return the number of history entries, {@code 0} if the dataset holds none or does not exist
      */
-    long revisionCount(ProjectId projectId);
+    long historyEntryCount(ProjectId projectId);
 
     /**
      * Removes a project's dataset with everything in it, including its on-disk storage. A dataset

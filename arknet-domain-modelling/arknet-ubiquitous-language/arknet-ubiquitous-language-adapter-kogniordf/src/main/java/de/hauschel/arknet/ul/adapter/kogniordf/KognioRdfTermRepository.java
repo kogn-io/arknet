@@ -494,9 +494,9 @@ public class KognioRdfTermRepository implements TermRepository {
      * method with every correctable argument ({@code prefLabel}, {@code definition},
      * {@code broader}, {@code related}) {@code null}.
      * Such a call never reaches the funnel: no write, no SHACL gate, no {@code RevisionToken}
-     * comparison. A revision documents a model change; recording one for an
-     * empty patch would grow the immutable provenance trail without cause and would move the head,
-     * handing a concurrent CAS writer a spurious conflict it did not actually have. The
+     * comparison. A write documents a model change; an empty patch has none, so it is kept out of
+     * the funnel's transaction entirely instead of relying on the funnel recording no history
+     * entry for an unchanged slice. The
      * requirements BC guards the same case symmetrically in
      * {@code RequirementService#updateWithOptimisticRetry}, comparing the mutated value against the
      * one just read instead of comparing arguments, since its mutation is a whole-value transform
