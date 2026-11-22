@@ -44,7 +44,7 @@ import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
-import de.hauschel.arknet.persistence.testsupport.PausingOnFirstUpdateTx;
+import de.hauschel.arknet.persistence.testsupport.PausingOnFirstWriteTx;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
@@ -341,7 +341,7 @@ class RequirementServiceRealStoreConcurrencyTest {
      *
      * <p>Built to the shape issue #335's own review asked for on {@code term_delete}
      * ({@code TermServiceRealStoreConcurrencyTest#deleteRacingAConcurrentlyCommittedUsesTermReferenceLeavesNoDanglingReference}),
-     * over the now-shared {@link PausingOnFirstUpdateTx}: the delete's transaction is paused right
+     * over the now-shared {@link PausingOnFirstWriteTx}: the delete's transaction is paused right
      * after {@code rejectIfReferenced}'s {@code ASK} checks have run and found nothing (there is
      * nothing to find yet) and right before the physical {@code DELETE WHERE}. While it is held
      * there, a second writer commits a fresh {@code arkarch:addressesRequirement} edge onto the
@@ -448,7 +448,7 @@ class RequirementServiceRealStoreConcurrencyTest {
         AtomicBoolean armed = new AtomicBoolean(true);
         DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
             if (armed.compareAndSet(true, false)) {
-                return new PausingOnFirstUpdateTx(tx, beforeFirstUpdate);
+                return new PausingOnFirstWriteTx(tx, beforeFirstUpdate);
             }
             return tx;
         });

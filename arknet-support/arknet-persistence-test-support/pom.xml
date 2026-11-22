@@ -28,5 +28,10 @@
             <groupId>io.kogn.rdf</groupId>
             <artifactId>rdf-dataset-hosting</artifactId>
         </dependency>
+        <!-- VersioningProbe reads drafts, tokens and history the way the out-adapters write them. -->
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-versioning</artifactId>
+        </dependency>
     </dependencies>
 </project>

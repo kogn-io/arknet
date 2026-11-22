@@ -482,7 +482,7 @@ public final class VersionedWriteFunnel {
     private <T> T read(DatasetId dataset, Function<DatasetTx, T> work) {
         Objects.requireNonNull(dataset, "dataset");
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
-            return handle.transactor().inTransaction(work);
+            return ReadTransactions.read(handle, work);
         }
     }
 

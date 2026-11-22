@@ -49,11 +49,18 @@ import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import io.kogn.rdf.versioning.EntryKind;
+import io.kogn.rdf.versioning.HistoryEntry;
+import io.kogn.rdf.versioning.PublishState;
+import io.kogn.rdf.versioning.RevisionToken;
+
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -78,8 +85,9 @@ class KognioRdfTermRepositoryTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
     private static final ProjectId PROJECT_B = new ProjectId("b");
+    private static final DatasetId DATASET_A = new DatasetId(PROJECT_A.value());
     private static final String SKOS_CONCEPT = "http://www.w3.org/2004/02/skos/core#Concept";
-    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
+    private static final String TERMS_GRAPH = ContentGraph.GRAPH_IRI;
 
     /**
      * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
@@ -91,6 +99,7 @@ class KognioRdfTermRepositoryTest {
     Path storageRoot;
 
     private DatasetLifecycleRdf4j lifecycle;
+    private VersioningProbe probe;
     private TermRepository repository;
 
     @BeforeEach
@@ -99,6 +108,7 @@ class KognioRdfTermRepositoryTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         repository = KognioRdfTermRepositoryFactory.over(datasetLifecycle);
+        probe = new VersioningProbe(datasetLifecycle, ContentGraph.GRAPH_IRI);
     }
 
     @AfterEach
@@ -297,22 +307,21 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * A rejected translation-scoped write never reaches the funnel at all - no revision is
-     * recorded and the head does not move, exactly like the field-less no-op guarded by
-     * {@link #updateWithNoFieldsIsANoOpThatRecordsNoRevision()}.
+     * A rejected translation-scoped write never reaches the funnel at all - the draft's token does
+     * not move, exactly like the field-less no-op guarded by
+     * {@link #updateWithNoFieldsIsANoOpThatLeavesTheDraftUntouched()}.
      */
     @Test
-    void updateGivenAPrefLabelMismatchRecordsNoRevisionAndDoesNotMoveTheHead() {
+    void updateGivenAPrefLabelMismatchLeavesTheDraftUntouched() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         repository.create(PROJECT_A, new Term(id, code, "Kunde", "Erste Definition.", null), "de");
-        List<String> headAfterCreate = headsOf(id);
+        Optional<RevisionToken> tokenAfterCreate = tokenOf(id);
 
         assertThrows(TermLabelMismatchException.class, () -> repository.update(
                 PROJECT_A, code, "Customer", null, "en", null, null, null));
 
-        assertEquals(1, revisionsOf(id).size(), "a rejected mismatch must record no further revision");
-        assertEquals(headAfterCreate, headsOf(id), "a rejected mismatch must not move the head");
+        assertEquals(tokenAfterCreate, tokenOf(id), "a rejected mismatch must not write the draft");
     }
 
     /**
@@ -467,7 +476,7 @@ class KognioRdfTermRepositoryTest {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         repository.create(PROJECT_A, new Term(id, code, "Kunde", "Neue Fassung.", null), "en");
-        String legacyDefinition = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String legacyDefinition = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#definition> "
                 + "\"Alte Fassung.\"@de-CH } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
@@ -861,7 +870,7 @@ class KognioRdfTermRepositoryTest {
 
     /** Whether {@code subjectIri} carries a {@code skos:prefLabel} literal with exactly this value and tag. */
     private boolean subjectHasLanguageTaggedPrefLabel(ProjectId projectId, TermId id, String value, String tag) {
-        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \""
                 + value + "\"@" + tag + " } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -871,7 +880,7 @@ class KognioRdfTermRepositoryTest {
 
     /** Every {@code skos:definition} value of {@code id}, whatever its language tag. */
     private List<String> definitionsOf(ProjectId projectId, TermId id) {
-        String query = "SELECT ?o WHERE { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String query = "SELECT ?o WHERE { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#definition> ?o } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().select(query)
@@ -882,7 +891,7 @@ class KognioRdfTermRepositoryTest {
 
     /** Whether {@code subjectIri} carries a plain, untagged {@code skos:prefLabel} literal with exactly this value. */
     private boolean subjectHasUntaggedPrefLabel(ProjectId projectId, TermId id, String value) {
-        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> ?label . "
                 + "FILTER(lang(?label) = \"\" && str(?label) = \"" + value + "\") } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -900,7 +909,7 @@ class KognioRdfTermRepositoryTest {
      * write from a raw, un-normalized one.
      */
     private boolean subjectHasPrefLabelWithRawLanguageTag(ProjectId projectId, TermId id, String rawTag) {
-        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> ?o . "
                 + "FILTER(lang(?o) = \"" + rawTag + "\") } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -1307,7 +1316,7 @@ class KognioRdfTermRepositoryTest {
      */
     private void givenMultilingualConcept(
             ProjectId projectId, TermId id, String code, String definition, String prefLabelList) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#definition> \"" + definition + "\" ; "
@@ -1423,7 +1432,7 @@ class KognioRdfTermRepositoryTest {
      */
     private void givenMultilingualConceptWithDefinition(
             ProjectId projectId, TermId id, String code, String prefLabelList, String definitionList) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#definition> " + definitionList + " ; "
@@ -1444,7 +1453,7 @@ class KognioRdfTermRepositoryTest {
      */
     private void givenTermWithTwoDefinitions(
             ProjectId projectId, TermId id, String code, String firstDefinition, String secondDefinition) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Kunde\" ; "
@@ -1546,7 +1555,7 @@ class KognioRdfTermRepositoryTest {
      * constraint on the property at all), but unreachable via {@code term_add}.
      */
     private void givenTermWithTwoIdentifiers(ProjectId projectId, TermId id, String first, String second) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + first + "\" ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + second + "\" ; "
@@ -1561,7 +1570,7 @@ class KognioRdfTermRepositoryTest {
 
     /** Writes a {@code skos:Concept} without any {@code skos:prefLabel} - store-first only. */
     private void givenTermWithoutPrefLabel(ProjectId projectId, TermId id, String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#definition> \"Eine Person, die bestellt.\" } }";
@@ -1643,7 +1652,7 @@ class KognioRdfTermRepositoryTest {
      * {@code findAllCodes} has to survive.
      */
     private void givenBareConcept(ProjectId projectId, TermId id, String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -1661,7 +1670,7 @@ class KognioRdfTermRepositoryTest {
      * a subject shaped like this.
      */
     private void givenBareBlankNodeConcept(ProjectId projectId, String code) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "[] a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -1710,7 +1719,7 @@ class KognioRdfTermRepositoryTest {
      * subject via {@link de.hauschel.arknet.kernel.ResourceIdFactory}.
      */
     private void givenBlankNodeTerm(ProjectId projectId, String code, String prefLabel, String definition) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
                 + "[] a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" ; "
@@ -1723,68 +1732,51 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
-    // ---- revision trail: one revision per write, head queryable ----------------
+    // ---- draft and token: every write changes the draft, nothing publishes ----------------
 
-    /**
-     * Revision basis for this bounded context's funnel write paths: {@code create}
-     * records exactly one immutable revision and the head is queryable per resource.
-     */
+    /** {@code create} writes a draft only: the term carries a token and was never published. */
     @Test
-    void createRecordsExactlyOneRevisionWithAQueryableHead() {
+    void createWritesADraftThatWasNeverPublished() {
         TermId id = freshId();
         repository.create(PROJECT_A, new Term(id, new TermCode("TERM-1"), "Gutschrift",
                 "Eine dem Kundenkonto gutgeschriebene Erstattung.", null), null);
 
-        List<String> revisions = revisionsOf(id);
-        assertEquals(1, revisions.size(), "create must record exactly one revision");
-        assertEquals(revisions, headsOf(id), "the head must point at the sole revision");
+        assertTrue(tokenOf(id).isPresent(), "create must leave a draft");
+        assertEquals(PublishState.NEVER_PUBLISHED, probe.publishState(DATASET_A, id.value().value()));
+        assertTrue(probe.history(DATASET_A, id.value().value()).isEmpty(), "a write is no publish");
     }
 
-    /**
-     * The other half of the same revision guarantee, for the write path that only joined the
-     * funnel later: the patch-{@code update} is no longer a
-     * special path outside the revision trail - it records exactly one further revision and
-     * moves the head, so every user-reachable {@code term_update} is now provenanced and its
-     * head usable as the next writer's concurrency token.
-     */
+    /** The patch-{@code update} writes the draft through the compare-and-set: the token moves. */
     @Test
-    void updateRecordsExactlyOneFurtherRevisionAndAdvancesTheHead() {
+    void updateMovesTheDraftsToken() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Erste Definition.", null), null);
-        List<String> headAfterCreate = headsOf(id);
+        Optional<RevisionToken> tokenAfterCreate = tokenOf(id);
 
         repository.update(PROJECT_A, code, null, "Zweite Definition.", null, null, null, null);
 
-        List<String> revisions = revisionsOf(id);
-        assertEquals(2, revisions.size(), "update must record exactly one more revision");
-        List<String> heads = headsOf(id);
-        assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
-        assertNotEquals(headAfterCreate, heads, "the head must advance to the update's revision");
-        assertTrue(revisions.contains(heads.get(0)), "the head must be one of the term's revisions");
+        assertNotEquals(tokenAfterCreate, tokenOf(id), "the update must have written the draft");
     }
 
     /**
-     * The complement of the previous test: every field {@code update}
-     * takes is {@code required = false} on the {@code term_update} MCP tool, so a caller can
-     * legally invoke it with nothing but the identifying {@code code}. Such a call must be a true
-     * no-op - no write, no revision, no head movement - exactly like the symmetric guard in
-     * {@code RequirementService#updateWithOptimisticRetry}: a revision documents a model change,
-     * and recording one for an empty patch would both grow the immutable
-     * provenance trail without cause and hand a concurrent CAS writer a spurious conflict.
+     * Every field {@code update} takes is {@code required = false} on the {@code term_update} MCP
+     * tool, so a caller can legally invoke it with nothing but the identifying {@code code}. Such a
+     * call must be a true no-op - no write, no token movement - exactly like the symmetric guard
+     * in {@code RequirementService#updateWithOptimisticRetry}: a write for an empty patch would
+     * hand a concurrent compare-and-set writer a spurious conflict.
      */
     @Test
-    void updateWithNoFieldsIsANoOpThatRecordsNoRevision() {
+    void updateWithNoFieldsIsANoOpThatLeavesTheDraftUntouched() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         repository.create(PROJECT_A,
                 new Term(id, code, "Gutschrift", "Erste Definition.", null), null);
-        List<String> headAfterCreate = headsOf(id);
+        Optional<RevisionToken> tokenAfterCreate = tokenOf(id);
 
         Term result = repository.update(PROJECT_A, code, null, null, null, null, null, null);
 
-        assertEquals(1, revisionsOf(id).size(), "a field-less update must record no further revision");
-        assertEquals(headAfterCreate, headsOf(id), "a field-less update must not move the head");
+        assertEquals(tokenAfterCreate, tokenOf(id), "a field-less update must not write the draft");
         assertEquals(new Term(id, code, "Gutschrift", "Erste Definition.", null), result);
     }
 
@@ -1822,9 +1814,6 @@ class KognioRdfTermRepositoryTest {
         assertEquals(expected, result, "the retry must return the state it re-read, not its stale first read");
         assertEquals(Optional.of(expected), repository.findByCode(PROJECT_A, code, null),
                 "both writers' changes must survive - neither patch is silently lost");
-        assertEquals(3, revisionsOf(id).size(),
-                "create, the concurrent update and the retried update - the losing attempt records none");
-        assertTrue(revisionsOf(id).contains(headsOf(id).get(0)), "the head must be one of the term's revisions");
     }
 
     /**
@@ -1951,7 +1940,9 @@ class KognioRdfTermRepositoryTest {
         TermRepository racing = KognioRdfTermRepositoryFactory.over(
                 new SelectRacingLifecycle(lifecycle, () -> {
                     if (pending.compareAndSet(true, false)) {
-                        repository.update(PROJECT_A, code, "Neu", null, null, null, null, null);
+                        // On a thread of its own: the racer may be inside its read transaction.
+                        runOnOtherThread(() -> repository.update(PROJECT_A, code, "Neu", null, null, null, null,
+                                null));
                     }
                 }));
 
@@ -1963,6 +1954,28 @@ class KognioRdfTermRepositoryTest {
                 "the returned term must carry the concurrent writer's fresh prefLabel, not a stale read");
         assertEquals(Optional.of(expected), repository.findByCode(PROJECT_A, code, null),
                 "both writers' changes must survive - neither patch is silently lost");
+    }
+
+    private static void runOnOtherThread(Runnable work) {
+        java.util.concurrent.atomic.AtomicReference<RuntimeException> failure =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        Thread other = new Thread(() -> {
+            try {
+                work.run();
+            } catch (RuntimeException e) {
+                failure.set(e);
+            }
+        }, "concurrent-writer");
+        other.start();
+        try {
+            other.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+        if (failure.get() != null) {
+            throw failure.get();
+        }
     }
 
     /**
@@ -2079,9 +2092,24 @@ class KognioRdfTermRepositoryTest {
             return delegate.datasetExport();
         }
 
+        /**
+         * Runs {@code afterSelect} once more at the end of every transaction's work, before it
+         * commits - a read transaction then holds its state and token while the concurrent writer
+         * commits underneath it.
+         */
         @Override
         public DatasetTransactor transactor() {
-            return delegate.transactor();
+            DatasetTransactor real = delegate.transactor();
+            return new DatasetTransactor() {
+                @Override
+                public <T> T inTransaction(java.util.function.Function<DatasetTx, T> work) {
+                    return real.inTransaction(tx -> {
+                        T result = work.apply(tx);
+                        afterSelect.run();
+                        return result;
+                    });
+                }
+            };
         }
 
         @Override
@@ -2112,41 +2140,32 @@ class KognioRdfTermRepositoryTest {
         assertThrows(TermNotFoundException.class, () -> repository.delete(PROJECT_A, new TermCode("TERM-99")));
     }
 
-    /**
-     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
-     * the {@code arkprov:head} pointer is removed and the last revision is marked
-     * {@code prov:invalidatedAtTime} rather than erased.
-     */
+    /** A delete removes the draft and records a tombstone in the library history. */
     @Test
-    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+    void deleteRecordsATombstone() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Eine Erstattung.", null), null);
-        String lastRevision = headsOf(id).get(0);
 
         repository.delete(PROJECT_A, code);
 
-        assertTrue(headsOf(id).isEmpty(), "the head pointer must be removed");
-        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
-                    "the last revision must be tombstoned, not erased");
-        }
+        assertTrue(tokenOf(id).isEmpty(), "the draft must be gone");
+        assertEquals(PublishState.DELETED, probe.publishState(DATASET_A, id.value().value()));
+        assertEquals(List.of(EntryKind.TOMBSTONE), probe.history(DATASET_A, id.value().value()).stream()
+                .map(HistoryEntry::kind).toList());
     }
 
     /**
      * {@link TermReferencedException} blocks the delete while a requirement's
      * {@code arkreq:usesTerm} still points at the term - {@code rejectIfReferenced} searches across
-     * every named graph, so a reference living outside {@link #TERMS_GRAPH} (as a requirement edge
-     * would) must still be found.
+     * the content graph, where every bounded context's edges live (ADR-63).
      */
     @Test
     void deleteRejectsATermStillReferencedViaUsesTerm() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Eine Erstattung.", null), null);
-        String reference = "INSERT DATA { GRAPH <https://example.org/req> { <https://example.org/req/1> <"
+        String reference = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { <https://example.org/req/1> <"
                 + ArkreqVocabulary.USES_TERM + "> <" + id.value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
@@ -2177,7 +2196,7 @@ class KognioRdfTermRepositoryTest {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Eine Erstattung.", null), null);
-        String reference = "INSERT DATA { GRAPH <https://example.org/adr> { <https://example.org/adr/1> <"
+        String reference = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { <https://example.org/adr/1> <"
                 + ArkarchVocabulary.USES_TERM + "> <" + id.value().value() + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
@@ -2226,21 +2245,17 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * The one thing the funnel's tombstone cannot carry: the business code lives on the model
-     * triple the delete removes, so the adapter hangs it on the tombstoned revision itself (issue
-     * #350) - the only place it can outlive its resource, and what keeps {@code TERM-1} from
-     * naming a second term later.
+     * The business code lives on the model triple the delete removes, so the funnel keeps it on
+     * the tombstone (issue #350) - what keeps {@code TERM-1} from naming a second term later.
      */
     @Test
-    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+    void deleteKeepsTheBusinessCodeOnTheTombstone() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Eine Erstattung.", null), null);
-        String lastRevision = headsOf(id).get(0);
 
         repository.delete(PROJECT_A, code);
 
-        assertEquals(List.of("TERM-1"), identifiersOf(lastRevision));
         assertEquals(List.of(new TermCode("TERM-1")), repository.findRetainedCodes(PROJECT_A));
     }
 
@@ -2260,7 +2275,7 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * The provenance graph is shared by every bounded context, so a neighbour retaining its own
+     * The retained-codes graph is shared by every bounded context, so a neighbour retaining its own
      * code the same way must not be counted as a term code - the deleted resource's type triple is
      * gone, leaving the code prefix as the only discriminator.
      */
@@ -2268,10 +2283,8 @@ class KognioRdfTermRepositoryTest {
     void findRetainedCodesIgnoresAnotherContextsRetainedCode() {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.update("INSERT DATA { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                        + "<https://w3id.org/arknet/revision/foreign> <" + ArkprovVocabulary.INVALIDATED_AT_TIME
-                        + "> \"2026-08-23T10:00:00Z\"^^<http://www.w3.org/2001/XMLSchema#dateTime> ; "
-                        + "<http://purl.org/dc/terms/identifier> \"ADR-9\" } }");
+                tx.update("INSERT DATA { GRAPH <" + VersionedWriteFunnel.RETAINED_CODES_GRAPH + "> { "
+                        + "<urn:uuid:foreign-tombstone> <http://purl.org/dc/terms/identifier> \"ADR-9\" } }");
                 return null;
             });
         }
@@ -2279,33 +2292,8 @@ class KognioRdfTermRepositoryTest {
         assertEquals(List.of(), repository.findRetainedCodes(PROJECT_A));
     }
 
-    private List<String> revisionsOf(TermId id) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
-                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + id.value().value() + "> } }");
+    private Optional<RevisionToken> tokenOf(TermId id) {
+        return probe.token(DATASET_A, id.value().value());
     }
 
-    private List<String> headsOf(TermId id) {
-        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + id.value().value() + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
-    }
-
-    private List<String> selectIris(String query) {
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
-                    .toList();
-        }
-    }
-
-    /** The {@code dcterms:identifier} literals a revision carries in the provenance graph. */
-    private List<String> identifiersOf(String revisionIri) {
-        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
-                    .toList();
-        }
-    }
 }

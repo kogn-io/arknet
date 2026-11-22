@@ -323,7 +323,7 @@ public final class StoreReader {
         }
         IRI subject = new SimpleRdf().createIRI(iri);
         try (DatasetHandle handle = acquire(projectId)) {
-            return handle.transactor().inTransaction(tx -> versioning.history(tx, subject)).stream()
+            return ReadTransactions.read(handle, tx -> versioning.history(tx, subject)).stream()
                     .map(StoreReader::toVersionEntry)
                     .toList();
         }
@@ -346,7 +346,7 @@ public final class StoreReader {
         }
         IRI subject = new SimpleRdf().createIRI(iri);
         try (DatasetHandle handle = acquire(projectId)) {
-            return handle.transactor().inTransaction(tx -> versioning.publishState(tx, subject)).name();
+            return ReadTransactions.read(handle, tx -> versioning.publishState(tx, subject)).name();
         }
     }
 
