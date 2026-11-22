@@ -178,6 +178,12 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private static final String PART_OF_PROPERTY = ArkdddVocabulary.PART_OF_PROPERTY;
     private static final String SUBDOMAIN_TYPE_PROPERTY = ArkdddVocabulary.SUBDOMAIN_TYPE_PROPERTY;
     private static final String SUBDOMAIN_CLASS = ArkdddVocabulary.SUBDOMAIN_CLASS;
+
+    /**
+     * The fragment of a bounded context's {@code arkddd:Subdomain} node, {@code <bounded context>#Subdomain}
+     * (ADR-64): fixed, because a bounded context sits in at most one subdomain.
+     */
+    public static final String SUBDOMAIN_FRAGMENT = "Subdomain";
     private static final String OWNED_BY_PROPERTY = ArkdddVocabulary.OWNED_BY_PROPERTY;
     private static final String UBIQUITOUS_LANGUAGE_TERM_PROPERTY = ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM;
     private static final String DELIMITS_TERM_PROPERTY = ArkdddVocabulary.DELIMITS_TERM;
@@ -1170,7 +1176,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * most one subdomain, so the node keeps one IRI across every write.
      */
     private IRI subdomainIri(IRI boundedContextIri) {
-        return rdf.createIRI(boundedContextIri.getIRIString() + "#Subdomain");
+        return rdf.createIRI(boundedContextIri.getIRIString() + "#" + SUBDOMAIN_FRAGMENT);
     }
 
     // ---- helpers -----------------------------------------------------------------------

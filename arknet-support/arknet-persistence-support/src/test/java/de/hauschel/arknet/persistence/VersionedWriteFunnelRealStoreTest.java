@@ -226,6 +226,73 @@ class VersionedWriteFunnelRealStoreTest {
     }
 
     @Test
+    void anImportInTheCallersTransactionIsGatedAndPublishedOnce() {
+        // when - imported inside a transaction the caller owns
+        tx(t -> {
+            funnel.importPublished(t, SUBJECT, requirement(SUBJECT, CODE, "v1", "crit one"), null, "migrated");
+            return null;
+        });
+
+        // then - validated, one version with the comment, nothing unpublished
+        assertEquals(Set.of("crit one"), texts(validated.get()));
+        assertEquals(PublishState.PUBLISHED_UNCHANGED, funnel.publishState(DATASET, SUBJECT));
+        List<HistoryEntry> history = funnel.history(DATASET, SUBJECT);
+        assertEquals(1, history.size());
+        assertEquals(Optional.of("migrated"), history.get(0).comment());
+    }
+
+    @Test
+    void anImportOverAnExistingDraftAndAnImportTheGateRejectsBothRollBackTheCallersTransaction() {
+        create(SUBJECT, CODE, "v1", "crit one");
+        VersionedWriteFunnel rejecting = new VersionedWriteFunnel(lifecycle, recordingGate(true), CONTENT_GRAPH,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT, clock);
+
+        assertThrows(IllegalStateException.class, () -> tx(t -> {
+            funnel.importPublished(t, SUBJECT, requirement(SUBJECT, CODE, "v2"), null, "migrated");
+            return null;
+        }));
+        assertThrows(WriteConstraintViolationException.class, () -> tx(t -> {
+            rejecting.importPublished(t, OTHER, requirement(OTHER, "FR-2", "x"), null, "migrated");
+            return null;
+        }));
+
+        assertEquals(Set.of("crit one"), texts(draft(SUBJECT)));
+        assertEquals(PublishState.NEVER_PUBLISHED, funnel.publishState(DATASET, OTHER));
+    }
+
+    @Test
+    void anImportPastTheGateSkipsTheGateAndIsStillPublishedOnce() {
+        VersionedWriteFunnel rejecting = new VersionedWriteFunnel(lifecycle, recordingGate(true), CONTENT_GRAPH,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT, clock);
+
+        // when - a slice the gate would reject is imported past it
+        tx(t -> {
+            rejecting.importPublishedPastGate(t, OTHER, requirement(OTHER, "FR-2", "x"), "migrated");
+            return null;
+        });
+
+        // then - stored as given, one published version, nothing unpublished
+        assertEquals(Set.of("x"), titles(published(OTHER)));
+        assertEquals(PublishState.PUBLISHED_UNCHANGED, rejecting.publishState(DATASET, OTHER));
+        assertEquals(1, rejecting.history(DATASET, OTHER).size());
+        // and the next regular write faces the gate again
+        RevisionToken token = currentToken(OTHER);
+        assertThrows(WriteConstraintViolationException.class,
+                () -> rejecting.compareAndUpdate(DATASET, OTHER, token, null, Signals::unexpected,
+                        Signals::unexpected, (tx, current) -> requirement(OTHER, "FR-2", "y")));
+    }
+
+    @Test
+    void aRetainedCodeIsReadBackLikeTheCodeOfATombstone() {
+        tx(t -> {
+            funnel.retainCode(t, NS + "revision/old", "FR-7");
+            return null;
+        });
+
+        assertEquals(List.of("FR-7"), funnel.findRetainedCodes(DATASET, "FR-"));
+    }
+
+    @Test
     void aRejectingGateLeavesTheDraftUntouched() {
         create(SUBJECT, CODE, "v1", "crit one");
         RevisionToken token = currentToken(SUBJECT);

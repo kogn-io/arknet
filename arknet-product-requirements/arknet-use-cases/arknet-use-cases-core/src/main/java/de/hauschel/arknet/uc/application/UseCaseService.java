@@ -46,6 +46,7 @@ import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.ConstraintNotLinkedException;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
+import de.hauschel.arknet.uc.domain.MissingPrimaryRoleException;
 import de.hauschel.arknet.uc.domain.RemovedPositions;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
@@ -460,7 +461,16 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
      * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as
      * a no-op and skips the write entirely.</p>
      *
+     * <p><strong>Legacy primary-role guard.</strong> If the next state still carries
+     * {@link RoleRef#LEGACY_PLACEHOLDER} - the read-time primary role of a use case written before
+     * {@code arkreq:primaryRole} existed - the write is refused with
+     * {@link MissingPrimaryRoleException}, no-op or not: persisting the placeholder would store a
+     * role reference that points at nothing. Only an update that names a real {@code primaryRole}
+     * clears it.</p>
+     *
      * @throws UseCaseNotFoundException              if no use case with {@code code} exists
+     * @throws MissingPrimaryRoleException           if the next state still carries the legacy
+     *                                                placeholder role
      * @throws UseCaseConcurrentlyModifiedException if the write keeps losing the race across
      *                                                every retry attempt
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code titleTouched},
@@ -495,6 +505,11 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
                     repository.findCurrentByCode(projectId, code, readDefaultLanguage)
                             .orElseThrow(() -> new UseCaseNotFoundException(projectId, code));
             UseCase updated = mutation.apply(current.value());
+            // Before any language resolution, so a use case without a primary role on record
+            // surfaces that gap first (mirrors RequirementService's acceptance-criteria guard).
+            if (RoleRef.LEGACY_PLACEHOLDER.equals(updated.primaryRole())) {
+                throw new MissingPrimaryRoleException(projectId, code);
+            }
             // title/goal/scope/trigger/precondition/postcondition/each step's text/each
             // extension's text each get their own language: a field, step or extension this call
             // itself did not name (the boolean/Set parameters above - see update()) round-trips
@@ -550,9 +565,13 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Des
             for (Step updatedStep : updated.steps()) {
                 // Resolved lazily, not via a blind put: a lifecycle call passes no language at
                 // all and must not be asked for one on behalf of a position it merely carries
-                // through.
-                stepTextLanguageByPosition.computeIfAbsent(updatedStep.position(),
-                        position -> LanguageTag.resolveWriteLanguage(language, defaultLanguage));
+                // through. A carried-through step whose stored text has no language tag (a record
+                // from before multilingual fields) is mapped to null and stays untagged; asking
+                // for a write language there failed an edge-only change (issue #675).
+                if (!stepTextLanguageByPosition.containsKey(updatedStep.position())) {
+                    stepTextLanguageByPosition.put(updatedStep.position(),
+                            LanguageTag.resolveWriteLanguage(language, defaultLanguage));
+                }
             }
             Map<Integer, String> extensionTextLanguageByPosition = new LinkedHashMap<>();
             List<String> currentExtensions = current.value().extensions();

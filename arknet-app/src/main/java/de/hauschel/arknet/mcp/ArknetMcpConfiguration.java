@@ -24,6 +24,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.StaleTranslationHint;
 import de.hauschel.arknet.mcp.dataset.DaemonStorageLock;
+import de.hauschel.arknet.mcp.dataset.LegacyLayoutMigration;
 import de.hauschel.arknet.mcp.dataset.LegacyLayoutRefusingDatasetLifecycle;
 import de.hauschel.arknet.mcp.dataset.LockConflictReportingDatasetLifecycle;
 import de.hauschel.arknet.mcp.report.ActorCards;
@@ -306,6 +307,12 @@ public class ArknetMcpConfiguration {
      * dataset still in the storage layout of an earlier version is refused on first use with a
      * message naming it, instead of being read as empty or written into beside its old model.</p>
      *
+     * <p>Before the guard is put in place, {@link LegacyLayoutMigration} moves every project
+     * dataset still in that earlier layout to the content graph, one transaction per dataset, over
+     * the unguarded lifecycle. This bean depends on {@link #daemonStorageLock}, so the migration runs
+     * exclusively, and no tool can reach a dataset before this bean exists; a dataset whose
+     * migration fails stays in its old layout and is refused by the guard.</p>
+     *
      * <p>{@code destroyMethod = "close"} (issue #140): {@link LockConflictReportingDatasetLifecycle}
      * is {@link AutoCloseable}, closing every dataset {@code list()} reports through the neutral
      * port so a daemon shutdown releases them in an orderly way instead of relying on crash
@@ -315,10 +322,13 @@ public class ArknetMcpConfiguration {
     @Bean(destroyMethod = "close")
     @DependsOn("daemonStorageLock")
     DatasetLifecycle datasetLifecycle(
-            @Value("${arknet.rdf.storage:${user.home}/.arknet/rdf}") final Path storageDir) {
-        return new LegacyLayoutRefusingDatasetLifecycle(new LockConflictReportingDatasetLifecycle(
+            @Value("${arknet.rdf.storage:${user.home}/.arknet/rdf}") final Path storageDir,
+            final DisplayLocale displayLocale) {
+        LockConflictReportingDatasetLifecycle store = new LockConflictReportingDatasetLifecycle(
                 KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir), storageDir,
-                KognioRdfRequirementRepositoryFactory.DEFAULT_LOCK_CONFLICT));
+                KognioRdfRequirementRepositoryFactory.DEFAULT_LOCK_CONFLICT);
+        LegacyLayoutMigration.over(store, displayLocale).migrateAll(store);
+        return new LegacyLayoutRefusingDatasetLifecycle(store);
     }
 
     // --- Requirements hexagon --------------------------------------------------

@@ -188,6 +188,16 @@ public final class VersionedWriteFunnel {
     }
 
     /**
+     * The properties whose object this funnel's gate requires to be another resource, see
+     * {@link ShaclWriteGate#objectProperties()}.
+     *
+     * @return the property IRIs
+     */
+    public Set<String> objectProperties() {
+        return gate.objectProperties();
+    }
+
+    /**
      * The naming state of a parent's child resources for one write (ADR-64), minting new names from
      * this funnel's {@link ChildIdSource}.
      *
@@ -410,6 +420,85 @@ public final class VersionedWriteFunnel {
     }
 
     /**
+     * Writes and publishes a resource inside a transaction the caller owns - the write path of a
+     * bulk import such as the startup migration of an earlier storage layout, which must move a
+     * whole dataset in one transaction so an interrupted run leaves either the old or the new state.
+     * The subject must have an empty draft; the slice runs through the same gate, the same
+     * {@link ResourceVersioning#replaceDraft} and the same publish as {@link #create}, with
+     * {@code comment} on the one history entry it adds. Nothing is committed here: a failure
+     * leaves the caller's transaction to roll back.
+     *
+     * @param tx              the caller's open write transaction
+     * @param subjectIri      the subject's IRI, without a {@code #}
+     * @param slice           the complete slice of the subject
+     * @param assertedContext validation-only context triples for the gate, or {@code null}
+     * @param comment         the comment of the history entry
+     * @throws IllegalStateException             if the subject already has a non-empty draft
+     * @throws WriteConstraintViolationException if the slice violates the gate's shapes
+     */
+    public void importPublished(DatasetTx tx, String subjectIri, ReadableGraph slice, ReadableGraph assertedContext,
+            String comment) {
+        Objects.requireNonNull(tx, "tx");
+        Objects.requireNonNull(subjectIri, "subjectIri");
+        Objects.requireNonNull(slice, "slice");
+        Objects.requireNonNull(comment, "comment");
+        IRI subject = rdf.createIRI(subjectIri);
+        replace(tx, subject, emptyDraft(tx, subject), assertedContext, (writeTx, current) -> slice,
+                EntryDetails.NONE.withComment(comment));
+    }
+
+    /**
+     * {@link #importPublished} without the gate, for the one caller that must carry a record over
+     * as it is stored: the startup migration of an earlier storage layout, for a resource whose
+     * stored form an earlier version kept past its own gate and the current gate rejects. The
+     * resource still ends with exactly one published version in the caller's transaction; the next
+     * regular write of it faces the gate again. Every other caller is barred by an architecture
+     * rule ({@code DependencyRulesTest}, rule 15) - this is not a way around the gate for a write.
+     *
+     * @param tx         the caller's open write transaction
+     * @param subjectIri the subject's IRI, without a {@code #}
+     * @param slice      the complete slice of the subject, taken over unvalidated
+     * @param comment    the comment of the history entry
+     * @throws IllegalStateException if the subject already has a non-empty draft
+     */
+    public void importPublishedPastGate(DatasetTx tx, String subjectIri, ReadableGraph slice, String comment) {
+        Objects.requireNonNull(tx, "tx");
+        Objects.requireNonNull(subjectIri, "subjectIri");
+        Objects.requireNonNull(slice, "slice");
+        Objects.requireNonNull(comment, "comment");
+        IRI subject = rdf.createIRI(subjectIri);
+        publish(tx, subject, emptyDraft(tx, subject), slice, EntryDetails.NONE.withComment(comment));
+    }
+
+    private DraftSlice emptyDraft(DatasetTx tx, IRI subject) {
+        DraftSlice draft = openDraft(tx, subject);
+        if (!draft.triples().isEmpty()) {
+            throw new IllegalStateException(subject.getIRIString() + " already has a draft; an import only creates");
+        }
+        return draft;
+    }
+
+    /**
+     * Keeps a business code out of circulation inside a transaction the caller owns, for a resource
+     * deleted before this write path existed and therefore without a tombstone of its own: the code
+     * lands in {@link #RETAINED_CODES_GRAPH} on {@code holderIri}, where {@link #findRetainedCodes}
+     * reads it like the code of a tombstone.
+     *
+     * @param tx        the caller's open write transaction
+     * @param holderIri the IRI the code is recorded on, for instance the deleted resource's last
+     *                  revision in the earlier layout
+     * @param code      the business code
+     */
+    public void retainCode(DatasetTx tx, String holderIri, String code) {
+        Objects.requireNonNull(tx, "tx");
+        Objects.requireNonNull(holderIri, "holderIri");
+        Objects.requireNonNull(code, "code");
+        Graph retained = rdf.createGraph();
+        retained.add(rdf.createIRI(holderIri), VocabDct.IDENTIFIER, rdf.createLiteral(code));
+        tx.add(rdf.createIRI(RETAINED_CODES_GRAPH), retained);
+    }
+
+    /**
      * Reads the subject's current token inside the caller's own read transaction, so the token
      * belongs to exactly the state that transaction reads.
      *
@@ -529,14 +618,24 @@ public final class VersionedWriteFunnel {
 
     private RevisionToken replace(DatasetTx tx, IRI subject, DraftSlice draft, ReadableGraph assertedContext,
             SliceBuilder slice) {
+        return replace(tx, subject, draft, assertedContext, slice, EntryDetails.NONE);
+    }
+
+    private RevisionToken replace(DatasetTx tx, IRI subject, DraftSlice draft, ReadableGraph assertedContext,
+            SliceBuilder slice, EntryDetails details) {
         ReadableGraph next = Objects.requireNonNull(slice.build(tx, draft.triples()), "slice");
         if (assertedContext == null) {
             gate.enforce(next);
         } else {
             gate.enforce(next, assertedContext);
         }
+        return publish(tx, subject, draft, next, details);
+    }
+
+    private RevisionToken publish(DatasetTx tx, IRI subject, DraftSlice draft, ReadableGraph next,
+            EntryDetails details) {
         RevisionToken written = versioning.replaceDraft(tx, subject, next, draft.token());
-        PublishResult published = versioning.publish(tx, List.of(written), EntryDetails.NONE);
+        PublishResult published = versioning.publish(tx, List.of(written), details);
         return published.results().get(subject).token();
     }
 

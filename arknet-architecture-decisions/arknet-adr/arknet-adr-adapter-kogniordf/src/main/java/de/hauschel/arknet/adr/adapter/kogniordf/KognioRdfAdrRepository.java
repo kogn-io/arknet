@@ -149,10 +149,10 @@ public class KognioRdfAdrRepository implements AdrRepository {
     private static final String POSITION_PROPERTY = ARKNET_NAMESPACE + "position";
 
     /** The local-name prefix of a consequence's fragment, {@code <decision>#Consequence-<id>}. */
-    private static final String CONSEQUENCE_KIND = "Consequence";
+    public static final String CONSEQUENCE_KIND = "Consequence";
 
     /** The local-name prefix of a considered option's fragment, {@code <decision>#Option-<id>}. */
-    private static final String OPTION_KIND = "Option";
+    public static final String OPTION_KIND = "Option";
     private static final String STATUS_PROPERTY = ArkarchVocabulary.ADR_STATUS;
     private static final String CONTEXT_PROPERTY = ArkarchVocabulary.ADR_CONTEXT;
     private static final String DECISION_PROPERTY = ArkarchVocabulary.ADR_DECISION;

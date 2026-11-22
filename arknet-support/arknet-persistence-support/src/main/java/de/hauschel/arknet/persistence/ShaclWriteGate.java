@@ -3,9 +3,12 @@
 
 package de.hauschel.arknet.persistence;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import io.kogn.rdf.shacl.ShaclMessage;
@@ -15,6 +18,7 @@ import io.kogn.rdf.shacl.ShaclValidation;
 import io.kogn.rdf.shacl.Severity;
 import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.Graph;
+import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
@@ -65,6 +69,8 @@ import de.hauschel.arknet.kernel.LocalizedLiteral;
  */
 public final class ShaclWriteGate {
 
+    private static final String SHACL = "http://www.w3.org/ns/shacl#";
+
     private final ShaclValidation validation;
     private final ReadableGraph shapes;
     private final ReadableGraph axioms;
@@ -92,6 +98,29 @@ public final class ShaclWriteGate {
         this.axioms = Objects.requireNonNull(axioms, "axioms");
         this.options = Objects.requireNonNull(options, "options");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
+    }
+
+    /**
+     * The properties whose object the shapes require to be another resource: the {@code sh:path}
+     * of every property shape carrying {@code sh:nodeKind sh:IRI} or an {@code sh:class}. Read off
+     * the shapes this gate validates against, so it follows them rather than a list kept by hand.
+     *
+     * @return the property IRIs
+     */
+    public Set<String> objectProperties() {
+        IRI path = rdf.createIRI(SHACL + "path");
+        IRI nodeKind = rdf.createIRI(SHACL + "nodeKind");
+        IRI iriKind = rdf.createIRI(SHACL + "IRI");
+        IRI shaclClass = rdf.createIRI(SHACL + "class");
+        Set<String> properties = new TreeSet<>();
+        shapes.stream(null, path, null).forEach(shape -> {
+            boolean pointsAtResource = shapes.stream(shape.getSubject(), nodeKind, iriKind).findAny().isPresent()
+                    || shapes.stream(shape.getSubject(), shaclClass, null).findAny().isPresent();
+            if (pointsAtResource && shape.getObject() instanceof IRI property) {
+                properties.add(property.getIRIString());
+            }
+        });
+        return Collections.unmodifiableSet(properties);
     }
 
     /**
