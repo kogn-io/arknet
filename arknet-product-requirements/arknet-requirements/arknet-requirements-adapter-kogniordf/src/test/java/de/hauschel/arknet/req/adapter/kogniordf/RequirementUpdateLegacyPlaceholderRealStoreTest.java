@@ -137,7 +137,7 @@ class RequirementUpdateLegacyPlaceholderRealStoreTest {
         return repository.findCurrentByCode(PROJECT, CODE, null).orElseThrow();
     }
 
-    /** A shape-legal requirement without any {@code arkreq:acceptanceCriterion} triple, written store-first. */
+    /** A legacy requirement without any {@code arkreq:acceptanceCriterion} triple - shape-illegal today, so seeded store-first past the write gate. */
     private void givenLegacyRequirementWithoutAcceptanceCriterion() {
         RequirementId id = new RequirementId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID()));
         String insert = "INSERT DATA { GRAPH <" + ContentGraph.GRAPH_IRI + "> { "
