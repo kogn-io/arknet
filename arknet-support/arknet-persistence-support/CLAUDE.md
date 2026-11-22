@@ -41,6 +41,21 @@ Alle Meldungen zu rendern gaebe dem Nutzer dieselbe Beanstandung mehrfach in Spr
 Traegt die verletzte Shape gar keine `sh:message` (in SHACL erlaubt), bleibt die Meldung weg -- genauso still wie frueher ein `null`.
 Kontextunterschiede sind Konstruktor-Parameter (`shapes`/`axioms`/`options`/`displayLocale`), **kein Code im Gate**: req reasont ueber die Axiome (`subClassOf`, volle Shapes), ul uebergibt leere Axiome + `defaults()` (kein Reasoning), uc konstruiert Axiome/Options identisch zu req -- sein echter Unterschied sind **gefilterte** Shapes (`loadUseCaseShapes()` entfernt fremde `sh:targetClass`), und diese Filterung ist Code in der uc-Factory.
 
+**Der versionierte Schreibpfad (ADR-61..64).**
+`VersionedWriteFunnel` ist der Schreibtrichter ueber kognio-rdf `rdf-versioning` (`rdf-cid` als direkte Abhaengigkeit, weil er den inhaltsadressierenden IRI-Generator selbst baut).
+Jede Modellressource ist dort der Draft-Slice ihrer Subjekt-IRI im einen Content-Graph des Projekt-Datasets, dessen IRI der Konstruktor bekommt; geschrieben wird nur ueber `replaceDraft`.
+Er steht neben `WriteFunnel`, kein BC-Adapter ruft ihn auf, und das System-Dataset der Projekt-Registry liegt ausserhalb von Content-Graph und Versionierung.
+Skelett jedes Writes in einer Transaktion: Bindung an den Content-Graph, Draft und Token lesen, Existenz-/Code-/Token-Pruefung, der `SliceBuilder` des Aufrufers baut aus Transaktion und aktuellem Draft den vollstaendigen neuen Slice, das Gate validiert genau diesen Slice, `replaceDraft` schreibt ihn.
+Anders als beim `WriteFunnel` validiert das Gate damit, was geschrieben wird, und nicht einen Kandidaten, den ein Body danach noch mit erhaltenen Sprachvarianten zusammenfuehrt; das Gate selbst braucht dafuer keine Aenderung, ein Slice ist ein gewoehnlicher `ReadableGraph`.
+Ein Slice umfasst die Subjekt-IRI, ihre `#fragment`-IRIs und die daran erreichbaren Blank Nodes; ein Tripel auf einem anderen Subjekt lehnt die Bibliothek mit `IllegalArgumentException` ab, darum brauchen Kinder Fragment-IRIs, bevor ein Adapter umschaltet.
+Nebenlaeufigkeitsschutz ist das `RevisionToken` der Bibliothek: `compareAndUpdate` meldet ein veraltetes Token und einen verlorenen Commit-Konflikt ueber dasselbe `revisionMismatch`-Signal.
+Das Token ist nicht serialisierbar (sein Revisionszaehler ist package-private) und schuetzt darum Lesen und Schreiben innerhalb eines Aufrufs, nicht ueber mehrere MCP-Aufrufe hinweg; `currentToken(tx, iri)` liest es in der Lesetransaktion des Aufrufers, damit es zum gelesenen Stand gehoert.
+`publish` ist der explizite Akt aus ADR-62, fuer mehrere Ressourcen in einer Transaktion; ein unveraenderter Draft erzeugt keinen neuen History-Eintrag.
+`delete` laesst die Bibliothek Draft und veroeffentlichten Slice entfernen und einen Tombstone schreiben und haengt einen uebergebenen Business-Code an dessen Eintrags-IRI in `RETAINED_CODES_GRAPH`, den `findRetainedCodes` mit demselben Vertrag wie beim `WriteFunnel` liest.
+Den Code haelt arknet selbst, weil der Tombstone einer nie veroeffentlichten Ressource keine Version nennt und ihr letzter Inhalt dann nicht mehr lesbar ist.
+Die Code-Pruefung von `create` laeuft im ganzen Content-Graph, also ueber alle Ressourcentypen eines Projekts statt je Komponentengraph.
+Abgesichert durch `VersionedWriteFunnelRealStoreTest` gegen einen echten `NativeStore` unter `@TempDir`, inklusive zweier ueberlappender Updates vom selben Token.
+
 **Der Uniqueness-Guard sieht mehr als ein Lesepfad (kogn-io/arknet#360).**
 `create`s Code-Pruefung ist `tx.contains(graph, null, dcterms:identifier, code)` -- das Subjekt ist ein Wildcard.
 Sie trifft damit auch ein Blank-Node-Subjekt, das einen Code haelt, und lehnt den Write ab, obwohl kein gewoehnlicher Lesepfad dieses Subjekt je zeigt (die BC-Adapter filtern durchweg mit `FILTER(isIRI(?s))`, weil sie die Subject-IRI danach brauchen).
