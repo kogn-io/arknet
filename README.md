@@ -493,18 +493,24 @@ of revisions. At startup, before any tool call reaches a project, the daemon
 migrates each such project dataset to the one content graph, in one transaction
 per dataset: every resource is written through its context's SHACL gate and
 published once, child resources are renamed to fragments of their parent, the
-revision trail is dropped (codes of deleted resources stay reserved), and an edge
-whose object is not an IRI - a blank node, or a literal on a property whose
-shape requires another resource, such as `arkreq:usesTerm "Kunde"@de` - is
-dropped and listed with resource, property and the dropped value. A record that
-earlier versions kept past their own gate but the current gate rejects - a
-requirement without an acceptance criterion, or one whose criterion is a plain
-literal (kept: the literal is the criterion's text) - is carried over unchanged
-and listed; it stays readable, and its next update has to pass the gate (the
-criterion is added by patching the placeholder at position 1). The daemon log
+revision trail is dropped (codes of deleted resources stay reserved), and an
+acceptance criterion stored as a plain literal (v0.3.8 to v0.6.0) becomes a
+regular criterion resource with its text and language tag unchanged, listed with
+its text. An edge is dropped and listed with resource, property and the dropped
+value when its object is a blank node, when it is a literal on a property whose
+shape requires another resource (such as `arkreq:usesTerm "Kunde"@de`), or when
+its property no longer exists: the `arkreq:primaryActor`/`arkreq:supportingActor`
+of a use case written before v0.8.0, listed with the actor's IRI and code; the
+migration does not turn an actor into a role. A record that earlier versions kept
+past their own gate but the current gate rejects - a requirement without an
+acceptance criterion, a use case without a primary role - is carried over
+unchanged and listed. The tools read it with a placeholder for the missing part
+and refuse any change that keeps the placeholder: patch the placeholder
+criterion at position 1 with `req_update`, or name the primary role with
+`uc_update` (`primaryRole`); `uc_delete` works either way. The daemon log
 carries the report under `legacy layout migration`: one summary line per project
 (resources per type, dropped edges, retained codes, records carried past the
-gate) and one line per listed item. A project whose
+gate, reshaped criteria) and one line per listed item. A project whose
 migration fails for a technical reason is rolled back to its old layout, its
 tools refuse it with a message pointing to that log, and the next start retries. The
 registry's system dataset is not versioned and not migrated. Keep a copy of the
