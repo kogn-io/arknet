@@ -49,6 +49,17 @@ import de.hauschel.arknet.uc.application.UseCaseService;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.domain.UseCase;
+import de.hauschel.arknet.analysis.adapter.mcp.StoreCheckMcpTools;
+import de.hauschel.arknet.analysis.adapter.mcp.TraceabilityMcpTools;
+import de.hauschel.arknet.mcp.store.StoreReportTools;
+import de.hauschel.arknet.prj.application.ProjectService;
+import de.hauschel.arknet.prj.domain.Anchor;
+import de.hauschel.arknet.prj.domain.AnchorType;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
+import de.hauschel.arknet.uc.domain.MissingPrimaryRoleException;
+import de.hauschel.arknet.uc.domain.RoleRef;
+import de.hauschel.arknet.uc.domain.Step;
+import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.domain.Term;
@@ -83,6 +94,8 @@ class LegacyLayoutMigrationTest {
     private static final DatasetId DATASET = new DatasetId(PROJECT.value());
     private static final String EN = "en";
     private static final String GERMAN_TITLE = "Kunde gibt eine Bestellung auf";
+    /** The datatype suffix N-Triples gives a plain, untagged literal. */
+    private static final String XSD_STRING = "^^<http://www.w3.org/2001/XMLSchema#string>";
 
     @TempDir
     Path storageDir;
@@ -180,7 +193,7 @@ class LegacyLayoutMigrationTest {
                 assertThat(edge.subject()).isEqualTo(before.requirementIri());
                 assertThat(edge.code()).isEqualTo("FR-1");
                 assertThat(edge.property()).isEqualTo("https://w3id.org/arknet/requirements#usesTerm");
-                assertThat(edge.kind()).isEqualTo(LegacyLayoutMigrationReport.ObjectKind.BLANK_NODE);
+                assertThat(edge.reason()).isEqualTo(LegacyLayoutMigrationReport.DropReason.BLANK_NODE);
             });
             assertThat(report.retainedCodes()).containsExactly("FR-3");
             assertThat(report.resourcesByType()).containsEntry("requirement", 2).containsEntry("use case", 2)
@@ -234,7 +247,11 @@ class LegacyLayoutMigrationTest {
         }
     }
 
-    /** Decision for P1 of round 1: a record the current gate rejects is carried over and listed. */
+    /**
+     * Decision for P1 of round 1: a record the current gate rejects is carried over and listed;
+     * the retired actor edges of a use case are dropped and listed with the actor they named, and
+     * literal acceptance criteria are reshaped into criterion resources and listed with their text.
+     */
     @Test
     void recordsTheCurrentGateRejectsAreCarriedOverListedAndTheRestMigratesNormally() {
         Model before = legacyStoreWithLegacyOnlyForms();
@@ -243,16 +260,32 @@ class LegacyLayoutMigrationTest {
             LegacyLayoutMigrationReport report = migration(raw).migrate(raw, DATASET);
 
             assertThat(report.outcome()).isEqualTo(LegacyLayoutMigrationReport.Outcome.MIGRATED);
-            assertThat(report.resourcesByType()).containsEntry("requirement", 5);
+            assertThat(report.resourcesByType()).containsEntry("requirement", 6).containsEntry("use case", 3);
             assertThat(report.carriedPastGate()).hasSize(2)
                     .anySatisfy(line -> assertThat(line).startsWith("requirement FR-10 (")
                             .contains(LegacyLayoutFixture.WITHOUT_CRITERION).contains("acceptanceCriterion"))
-                    .anySatisfy(line -> assertThat(line).startsWith("requirement FR-11 (")
-                            .contains(LegacyLayoutFixture.LITERAL_CRITERION).contains("acceptanceCriterion"));
-            assertThat(report.summary()).contains("carried over past the current write gate: 2");
-            // the literal criterion of FR-11 sits on an object property too, but is content and stays
+                    .anySatisfy(line -> assertThat(line).startsWith("use case UC9 (")
+                            .contains(LegacyLayoutFixture.ACTOR_USE_CASE).contains("primaryRole"));
+            assertThat(report.summary()).contains("carried over past the current write gate: 2")
+                    .contains("requirements whose literal acceptance criteria became criterion resources: 2");
+            assertThat(report.convertedCriteria()).hasSize(2)
+                    .anySatisfy(line -> assertThat(line).startsWith("FR-11 (")
+                            .contains(LegacyLayoutFixture.LITERAL_CRITERION).contains("2 literal")
+                            .contains("1. \"" + LegacyLayoutFixture.LITERAL_CRITERIA.get(0) + "\"")
+                            .contains("2. \"" + LegacyLayoutFixture.LITERAL_CRITERIA.get(1) + "\""))
+                    .anySatisfy(line -> assertThat(line).startsWith("FR-13 (")
+                            .contains("1. \"" + LegacyLayoutFixture.TAGGED_CRITERION_TEXT + "\"@de"));
             assertThat(report.droppedEdges()).noneSatisfy(edge -> assertThat(edge.property())
                     .isEqualTo("https://w3id.org/arknet/requirements#acceptanceCriterion"));
+            assertThat(report.droppedEdges()).filteredOn(edge -> "UC9".equals(edge.code()))
+                    .extracting(LegacyLayoutMigrationReport.DroppedEdge::property)
+                    .containsExactlyInAnyOrder("https://w3id.org/arknet/requirements#primaryActor",
+                            "https://w3id.org/arknet/requirements#supportingActor");
+            assertThat(report.droppedEdges()).filteredOn(edge -> "UC9".equals(edge.code())).allSatisfy(edge -> {
+                assertThat(edge.reason()).isEqualTo(LegacyLayoutMigrationReport.DropReason.RETIRED_PROPERTY);
+                assertThat(edge.value()).isEqualTo("<" + LegacyLayoutFixture.LEGACY_ACTOR + "> (ACTOR-9)");
+                assertThat(edge.line()).contains("retired property");
+            });
         } finally {
             raw.shutDownAll();
         }
@@ -283,19 +316,65 @@ class LegacyLayoutMigrationTest {
         inDaemon(context -> {
             RequirementService requirements = context.getBean(RequirementService.class);
             Requirement withoutCriterion = requirements.get(PROJECT, new RequirementCode("FR-10"), EN).orElseThrow();
-            Requirement literalCriterion = requirements.get(PROJECT, new RequirementCode("FR-11"), EN).orElseThrow();
             Requirement literalTermEdge = requirements.get(PROJECT, new RequirementCode("FR-12"), EN).orElseThrow();
 
             // the read path shows the earlier adapter's placeholder where no criterion resource exists
             assertThat(withoutCriterion.title()).isEqualTo("Legacy without criterion");
             assertThat(withoutCriterion.acceptanceCriteria()).hasSize(1);
             assertThat(withoutCriterion.acceptanceCriteria().get(0).text()).contains("Altdatensatz");
-            assertThat(literalCriterion.acceptanceCriteria().get(0).text()).contains("Altdatensatz");
             // a literal term edge is not a reference and is not shown as one
             assertThat(literalTermEdge.usesTerms()).isEmpty();
             assertThat(literalTermEdge.acceptanceCriteria().get(0).text()).isEqualTo("It is linked");
             assertThat(requirements.list(PROJECT, EN)).extracting(found -> found.code().value())
-                    .contains("FR-10", "FR-11", "FR-12");
+                    .contains("FR-10", "FR-11", "FR-12", "FR-13");
+
+            // a use case without a primary role shows the placeholder role instead of vanishing
+            UseCaseService useCases = context.getBean(UseCaseService.class);
+            UseCase actorUseCase = useCases.get(PROJECT, new UseCaseCode("UC9"), EN).orElseThrow();
+            assertThat(actorUseCase.title()).isEqualTo("Legacy actor use case");
+            assertThat(actorUseCase.primaryRole()).isEqualTo(RoleRef.LEGACY_PLACEHOLDER);
+            assertThat(actorUseCase.supportingRoles()).isEmpty();
+            assertThat(actorUseCase.steps()).extracting(Step::text).containsExactly("Clerk files the order");
+            assertThat(useCases.list(PROJECT, EN)).extracting(found -> found.code().value()).contains("UC9");
+        });
+    }
+
+    /**
+     * Decision for the literal criterion: it becomes a criterion resource with its text and
+     * language tag unchanged, so the requirement passes the gate and shows its own text.
+     */
+    @Test
+    void aLiteralCriterionBecomesACriterionResourceWithItsTextAndTag() {
+        legacyStoreWithLegacyOnlyForms();
+
+        inDaemon(context -> {
+            RequirementService requirements = context.getBean(RequirementService.class);
+            RequirementCode literal = new RequirementCode("FR-11");
+            RequirementCode tagged = new RequirementCode("FR-13");
+
+            assertThat(requirements.get(PROJECT, literal, EN).orElseThrow().acceptanceCriteria())
+                    .extracting(criterion -> criterion.text())
+                    .containsExactlyElementsOf(LegacyLayoutFixture.LITERAL_CRITERIA);
+            assertThat(requirements.get(PROJECT, tagged, "de").orElseThrow().acceptanceCriteria())
+                    .extracting(criterion -> criterion.text())
+                    .containsExactly(LegacyLayoutFixture.TAGGED_CRITERION_TEXT);
+            assertThat(criterionTexts(context.getBean(DatasetLifecycle.class), LegacyLayoutFixture.LITERAL_CRITERION))
+                    .containsExactlyInAnyOrder("\"" + LegacyLayoutFixture.LITERAL_CRITERIA.get(0) + "\"" + XSD_STRING,
+                            "\"" + LegacyLayoutFixture.LITERAL_CRITERIA.get(1) + "\"" + XSD_STRING);
+            assertThat(criterionTexts(context.getBean(DatasetLifecycle.class),
+                    LegacyLayoutFixture.TAGGED_LITERAL_CRITERION))
+                    .containsExactly("\"" + LegacyLayoutFixture.TAGGED_CRITERION_TEXT + "\"@de");
+
+            // both take a regular update right away, the untagged criteria included
+            Requirement renamed = requirements.update(PROJECT, literal, "Renamed literal criterion", null, null,
+                    null, null, null, null, null, EN, EN);
+            Requirement linked = requirements.linkTerm(PROJECT, tagged, "TERM-1", EN);
+            assertThat(renamed.acceptanceCriteria()).extracting(criterion -> criterion.text())
+                    .containsExactlyElementsOf(LegacyLayoutFixture.LITERAL_CRITERIA);
+            assertThat(linked.usesTerms()).hasSize(1);
+            assertThat(criterionTexts(context.getBean(DatasetLifecycle.class),
+                    LegacyLayoutFixture.TAGGED_LITERAL_CRITERION))
+                    .containsExactly("\"" + LegacyLayoutFixture.TAGGED_CRITERION_TEXT + "\"@de");
         });
     }
 
@@ -306,25 +385,72 @@ class LegacyLayoutMigrationTest {
         inDaemon(context -> {
             RequirementService requirements = context.getBean(RequirementService.class);
             VersionedWriteFunnel funnel = context.getBean("requirementsWriteFunnel", VersionedWriteFunnel.class);
-            for (String code : List.of("FR-10", "FR-11")) {
-                RequirementCode requirement = new RequirementCode(code);
-                assertThatThrownBy(() -> requirements.linkTerm(PROJECT, requirement, "TERM-1", EN))
-                        .as(code)
-                        .isInstanceOf(MissingAcceptanceCriteriaException.class)
-                        .hasMessageContaining(code)
-                        .hasMessageContaining("placeholder");
+            RequirementCode requirement = new RequirementCode("FR-10");
+            assertThatThrownBy(() -> requirements.linkTerm(PROJECT, requirement, "TERM-1", EN))
+                    .isInstanceOf(MissingAcceptanceCriteriaException.class)
+                    .hasMessageContaining("FR-10")
+                    .hasMessageContaining("placeholder");
 
-                Requirement repaired = requirements.update(PROJECT, requirement, null, null, null, null,
-                        List.of(new AcceptanceCriterionTextPatch(1, "An order shows up")), null, null, null, EN,
-                        EN);
+            Requirement repaired = requirements.update(PROJECT, requirement, null, null, null, null,
+                    List.of(new AcceptanceCriterionTextPatch(1, "An order shows up")), null, null, null, EN, EN);
 
-                assertThat(repaired.acceptanceCriteria()).as(code).extracting(criterion -> criterion.text())
-                        .containsExactly("An order shows up");
-                Requirement linked = requirements.linkTerm(PROJECT, requirement, "TERM-1", EN);
-                assertThat(linked.usesTerms()).as(code).hasSize(1);
-                assertThat(funnel.history(DATASET, linked.id().value().value())).as(code).hasSize(3);
-            }
+            assertThat(repaired.acceptanceCriteria()).extracting(criterion -> criterion.text())
+                    .containsExactly("An order shows up");
+            Requirement linked = requirements.linkTerm(PROJECT, requirement, "TERM-1", EN);
+            assertThat(linked.usesTerms()).hasSize(1);
+            assertThat(funnel.history(DATASET, linked.id().value().value())).hasSize(3);
+
+            UseCaseService useCases = context.getBean(UseCaseService.class);
+            UseCaseCode useCase = new UseCaseCode("UC9");
+            assertThatThrownBy(() -> useCases.linkTerm(PROJECT, useCase, "TERM-1", EN))
+                    .isInstanceOf(MissingPrimaryRoleException.class)
+                    .hasMessageContaining("UC9")
+                    .hasMessageContaining("primaryRole");
+            assertThatThrownBy(() -> useCases.update(PROJECT, useCase,
+                    UseCaseCorrection.builder().title("Still without a role").build(), EN))
+                    .isInstanceOf(MissingPrimaryRoleException.class);
+
+            UseCase withRole = useCases.update(PROJECT, useCase,
+                    UseCaseCorrection.builder().primaryRole("ROLE-1").build(), EN);
+
+            assertThat(withRole.primaryRole()).isNotEqualTo(RoleRef.LEGACY_PLACEHOLDER);
+            UseCase linkedUseCase = useCases.linkTerm(PROJECT, useCase, "TERM-1", EN);
+            assertThat(linkedUseCase.usesTerms()).hasSize(1);
+            assertThat(funnel.history(DATASET, linkedUseCase.id().value().value())).hasSize(3);
         });
+    }
+
+    /**
+     * Review round 2: the analysis and report tools read a carried record without throwing and
+     * show it, and a carried use case that was never repaired can still be deleted.
+     */
+    @Test
+    void theAnalysisAndReportToolsReadACarriedRecordAndItCanBeDeleted() throws Exception {
+        legacyStoreWithLegacyOnlyForms();
+        Path anchor = java.nio.file.Files.createDirectories(storageDir.resolve("anchor"));
+        Path reports = storageDir.resolve("reports");
+
+        contextRunner.withPropertyValues("arknet.rdf.storage=" + storageDir, "arknet.report.dir=" + reports)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    context.getBean(ProjectService.class).adopt(PROJECT, "Legacy migration",
+                            new Anchor(anchor.toString(), AnchorType.PATH));
+
+                    String check = context.getBean(StoreCheckMcpTools.class)
+                            .storeCheck(null, null, null, anchor.toString());
+                    String matrix = context.getBean(TraceabilityMcpTools.class)
+                            .traceMatrix(null, null, anchor.toString());
+                    String overview = context.getBean(StoreReportTools.class).storeOverview(null, anchor.toString());
+
+                    assertThat(check).isNotBlank();
+                    assertThat(matrix).contains("FR-10 \"Legacy without criterion\"")
+                            .contains("FR-11 \"Legacy literal criterion\"");
+                    assertThat(overview).contains("FR-10").contains("UC9");
+
+                    UseCaseService useCases = context.getBean(UseCaseService.class);
+                    useCases.delete(PROJECT, new UseCaseCode("UC9"));
+                    assertThat(useCases.get(PROJECT, new UseCaseCode("UC9"), EN)).isEmpty();
+                });
     }
 
     /**
@@ -342,7 +468,7 @@ class LegacyLayoutMigrationTest {
                     .satisfies(edge -> {
                         assertThat(edge.subject()).isEqualTo(LegacyLayoutFixture.LITERAL_TERM_EDGE);
                         assertThat(edge.property()).isEqualTo("https://w3id.org/arknet/requirements#usesTerm");
-                        assertThat(edge.kind()).isEqualTo(LegacyLayoutMigrationReport.ObjectKind.LITERAL);
+                        assertThat(edge.reason()).isEqualTo(LegacyLayoutMigrationReport.DropReason.LITERAL);
                         assertThat(edge.value()).isEqualTo("\"Kunde\"@de");
                         assertThat(edge.line()).contains("FR-12").contains("\"Kunde\"@de").contains("literal");
                     });
@@ -532,6 +658,17 @@ class LegacyLayoutMigrationTest {
                     + "> { ?s a ?type } FILTER(!CONTAINS(STR(?s), \"#\")) }")
                     .map(row -> ((IRI) row.getValue("s").orElseThrow()).getIRIString())
                     .sorted()
+                    .collect(Collectors.toList());
+        }
+    }
+
+    /** The {@code criterionText} literals of {@code requirement}'s criteria, in N-Triples form. */
+    private static List<String> criterionTexts(DatasetLifecycle lifecycle, String requirement) {
+        try (DatasetHandle handle = lifecycle.acquire(DATASET)) {
+            return handle.sparqlQuery().select("SELECT ?text WHERE { GRAPH <" + ContentGraph.GRAPH_IRI + "> { <"
+                    + requirement + "> <https://w3id.org/arknet/requirements#acceptanceCriterion> ?criterion . "
+                    + "?criterion <https://w3id.org/arknet/requirements#criterionText> ?text } }")
+                    .map(row -> row.getValue("text").orElseThrow().ntriplesString())
                     .collect(Collectors.toList());
         }
     }

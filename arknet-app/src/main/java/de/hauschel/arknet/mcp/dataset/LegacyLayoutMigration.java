@@ -39,6 +39,8 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.Triple;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.terms.vocab.VocabXsd;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -52,6 +54,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,20 +74,28 @@ import org.slf4j.LoggerFactory;
  * passes (see below where it does not), and ends with exactly one published version and no open
  * draft.</p>
  *
+ * <p><strong>What is reshaped.</strong> An acceptance criterion an earlier version stored as a
+ * literal (v0.3.8 to v0.6.0) becomes a criterion resource like a regular write creates, with the
+ * literal's text and language tag unchanged, numbered after any criterion resource the requirement
+ * already has, in the lexical order the earlier read path showed them in; the requirement then
+ * passes the gate, and the report lists every reshaped text.</p>
+ *
  * <p><strong>What is not moved.</strong> The revision trail of the provenance graph has no content
  * and is dropped (ADR-61); only the business code a deletion hung on its last revision is kept,
  * through {@link VersionedWriteFunnel#retainCode}, so a code counter never hands it out again. An
- * edge whose object is a blank node, or a literal on a property whose shape requires another
- * resource (except a literal acceptance criterion, see {@link #droppedObjectKind}), is dropped and
- * listed with its value, as is every triple on a blank-node subject and every subject that is
- * neither a resource nor a child of one - nothing is lost without a line in the
- * {@link LegacyLayoutMigrationReport}.</p>
+ * edge whose object is a blank node, a literal on a property whose shape requires another
+ * resource, or an edge on a property the current model no longer has (the actor edges of a use
+ * case written before v0.8.0, see {@link #RETIRED_PROPERTIES}) is dropped and listed with its
+ * value, as is every triple on a blank-node subject and every subject that is neither a resource
+ * nor a child of one - nothing is lost without a line in the {@link LegacyLayoutMigrationReport}.</p>
  *
  * <p><strong>Past the gate.</strong> A resource whose stored form the current gate rejects - a form
  * an earlier version wrote or kept past its own gate, such as a requirement without an acceptance
- * criterion or a criterion stored as a literal - is carried over unchanged through
- * {@link VersionedWriteFunnel#importPublishedPastGate}, still published once, and listed in the report with the violation. It stays readable; its next regular
- * update runs through the gate and has to close the gap.</p>
+ * criterion or a use case without a primary role - is carried over unchanged through
+ * {@link VersionedWriteFunnel#importPublishedPastGate}, still published once, and listed in the
+ * report with the violation. The tools read it with a placeholder for the missing part - a
+ * placeholder criterion, a placeholder primary role - and refuse any write that would keep the
+ * placeholder, so its next regular update has to close the gap.</p>
  *
  * <p><strong>All or nothing.</strong> A dataset is migrated in one transaction: the writes, the
  * retained codes and the clearing of the old graphs commit together, and a technical failure - a
@@ -116,6 +127,19 @@ public final class LegacyLayoutMigration {
             ArkarchVocabulary.CONSIDERED_OPTION, KognioRdfAdrRepository.OPTION_KIND);
 
     private static final String SUBDOMAIN_EDGE = ArkdddVocabulary.PART_OF_PROPERTY;
+
+    /**
+     * Properties an earlier version wrote that the current model no longer has: a use case named
+     * its actors through them until v0.8.0 renamed both to {@code arkreq:primaryRole}/
+     * {@code arkreq:supportingRole} without a data migration. No tool reads them and the next
+     * update of the use case would rewrite them away, so the migration drops them and lists the
+     * actor each named; it does not map an actor to a role, there is no rule to derive one from.
+     * Spelled out here rather than in {@code ArkreqVocabulary}, which names only what the shipped
+     * ontology declares.
+     */
+    static final Set<String> RETIRED_PROPERTIES = Set.of(
+            "https://w3id.org/arknet/requirements#primaryActor",
+            "https://w3id.org/arknet/requirements#supportingActor");
 
     /** The resource types by their report label, each with the classes a resource of it is typed as. */
     static final Map<String, List<String>> RESOURCE_TYPES = orderedTypes();
@@ -232,21 +256,27 @@ public final class LegacyLayoutMigration {
         List<LegacyLayoutMigrationReport.DroppedEdge> droppedEdges = new ArrayList<>();
         Graph kept = rdf.createGraph();
         Map<BlankNodeOrIRI, Integer> blankSubjects = new LinkedHashMap<>();
+        Map<IRI, List<Literal>> literalCriteria = new TreeMap<>(Comparator.comparing(IRI::getIRIString));
         for (Triple triple : legacy) {
             if (triple.getSubject() instanceof BlankNode) {
                 blankSubjects.merge(triple.getSubject(), 1, Integer::sum);
+            } else if (isLiteralCriterion(triple)) {
+                literalCriteria.computeIfAbsent((IRI) triple.getSubject(), subject -> new ArrayList<>())
+                        .add((Literal) triple.getObject());
             } else {
-                Optional<LegacyLayoutMigrationReport.ObjectKind> dropped = droppedObjectKind(triple);
+                Optional<LegacyLayoutMigrationReport.DropReason> dropped = dropReason(triple);
                 if (dropped.isPresent()) {
                     droppedEdges.add(new LegacyLayoutMigrationReport.DroppedEdge(
                             ((IRI) triple.getSubject()).getIRIString(), code(legacy, triple.getSubject()),
-                            triple.getPredicate().getIRIString(), dropped.get(),
-                            triple.getObject().ntriplesString()));
+                            triple.getPredicate().getIRIString(), dropped.get(), droppedValue(legacy, triple)));
                 } else {
                     kept.add(triple);
                 }
             }
         }
+        List<String> convertedCriteria = new ArrayList<>();
+        literalCriteria.forEach((requirement, literals) ->
+                convertedCriteria.add(toCriterionResources(kept, legacy, requirement, literals)));
 
         Map<IRI, String> resourceType = classify(kept);
         Map<IRI, IRI> renamed = new HashMap<>();
@@ -301,30 +331,79 @@ public final class LegacyLayoutMigration {
             tx.clear(rdf.createIRI(graph));
         }
         return new LegacyLayoutMigrationReport(dataset, LegacyLayoutMigrationReport.Outcome.MIGRATED, counts,
-                droppedEdges, droppedSubjects, retainedCodes, carriedPastGate, null);
+                droppedEdges, droppedSubjects, retainedCodes, carriedPastGate, convertedCriteria, null);
     }
 
     /**
-     * Whether an edge is dropped, and for which kind of object: a blank node on any property, the
-     * versioned write path cannot name it; a literal on a property whose shape requires another
-     * resource ({@link #objectProperties}), which no reference can be read from and the gate would
-     * reject on every later write.
-     *
-     * <p>Exception: a literal acceptance criterion, which an earlier version stored as the
-     * criterion's text (2026-07-17 to 2026-08-05). Its shape requires a resource too, but the
-     * literal is the content itself, so it is kept and the requirement is carried past the gate,
-     * to be repaired by an update.</p>
+     * Whether an edge is dropped, and why: a blank node on any property, the versioned write path
+     * cannot name it; a literal on a property whose shape requires another resource
+     * ({@link #objectProperties}, whatever the shape's severity), since no reference can be read
+     * from it; a property of {@link #RETIRED_PROPERTIES}. A literal acceptance criterion never gets
+     * here, it is reshaped (see {@link #toCriterionResources}).
      */
-    private Optional<LegacyLayoutMigrationReport.ObjectKind> droppedObjectKind(Triple triple) {
+    private Optional<LegacyLayoutMigrationReport.DropReason> dropReason(Triple triple) {
         if (triple.getObject() instanceof BlankNode) {
-            return Optional.of(LegacyLayoutMigrationReport.ObjectKind.BLANK_NODE);
+            return Optional.of(LegacyLayoutMigrationReport.DropReason.BLANK_NODE);
         }
         String property = triple.getPredicate().getIRIString();
-        if (triple.getObject() instanceof Literal && objectProperties.contains(property)
-                && !property.equals(ArkreqVocabulary.ACCEPTANCE_CRITERION)) {
-            return Optional.of(LegacyLayoutMigrationReport.ObjectKind.LITERAL);
+        if (RETIRED_PROPERTIES.contains(property)) {
+            return Optional.of(LegacyLayoutMigrationReport.DropReason.RETIRED_PROPERTY);
+        }
+        if (triple.getObject() instanceof Literal && objectProperties.contains(property)) {
+            return Optional.of(LegacyLayoutMigrationReport.DropReason.LITERAL);
         }
         return Optional.empty();
+    }
+
+    private static boolean isLiteralCriterion(Triple triple) {
+        return triple.getObject() instanceof Literal
+                && ArkreqVocabulary.ACCEPTANCE_CRITERION.equals(triple.getPredicate().getIRIString());
+    }
+
+    /** The dropped object in N-Triples form, an IRI followed by the code of what it names. */
+    private static String droppedValue(List<Triple> legacy, Triple triple) {
+        String value = triple.getObject().ntriplesString();
+        if (triple.getObject() instanceof IRI target) {
+            String code = code(legacy, target);
+            return code == null ? value : value + " (" + code + ")";
+        }
+        return value;
+    }
+
+    /**
+     * Turns the literal acceptance criteria of one requirement into criterion resources in
+     * {@code kept}, as the regular write path shapes them: each gets a provisional IRI, which
+     * {@link #nameChildren} then replaces by the regular fragment name, its position after the
+     * highest one the requirement's criterion resources already hold, and the literal unchanged as
+     * its text. The order is the lexical one the earlier read path listed the literals in.
+     *
+     * @return the report line of the requirement
+     */
+    private String toCriterionResources(Graph kept, List<Triple> legacy, IRI requirement, List<Literal> literals) {
+        List<Literal> ordered = literals.stream()
+                .sorted(Comparator.comparing(Literal::getLexicalForm).thenComparing(Literal::ntriplesString))
+                .toList();
+        int position = childrenByPosition(kept, requirement, rdf.createIRI(ArkreqVocabulary.ACCEPTANCE_CRITERION))
+                .stream()
+                .mapToInt(child -> position(kept, child))
+                .filter(stored -> stored != Integer.MAX_VALUE)
+                .max()
+                .orElse(0);
+        List<String> texts = new ArrayList<>();
+        for (Literal literal : ordered) {
+            position++;
+            IRI criterion = rdf.createIRI("urn:uuid:" + UUID.nameUUIDFromBytes(
+                    (requirement.getIRIString() + " " + literal.ntriplesString()).getBytes(StandardCharsets.UTF_8)));
+            kept.add(requirement, rdf.createIRI(ArkreqVocabulary.ACCEPTANCE_CRITERION), criterion);
+            kept.add(criterion, VocabRdf.TYPE, rdf.createIRI(ArkreqVocabulary.ACCEPTANCE_CRITERION_TYPE));
+            kept.add(criterion, rdf.createIRI(ArkreqVocabulary.POSITION),
+                    rdf.createLiteral(Integer.toString(position), VocabXsd.INTEGER));
+            kept.add(criterion, rdf.createIRI(ArkreqVocabulary.CRITERION_TEXT), literal);
+            texts.add(position + ". " + literal.ntriplesString());
+        }
+        String code = code(legacy, requirement);
+        return (code == null ? "" : code + " ") + "(" + requirement.getIRIString() + "): " + ordered.size()
+                + " literal acceptance criteria became criterion resources: " + String.join(", ", texts);
     }
 
     private static String code(List<Triple> legacy, BlankNodeOrIRI subject) {
@@ -520,8 +599,10 @@ public final class LegacyLayoutMigration {
             case MIGRATED -> {
                 LOG.info("legacy layout migration: {}", report.summary());
                 report.droppedEdges().forEach(edge ->
-                        LOG.warn("legacy layout migration: dataset '{}': dropped edge with a non-IRI object {}",
+                        LOG.warn("legacy layout migration: dataset '{}': dropped edge {}",
                                 report.dataset(), edge.line()));
+                report.convertedCriteria().forEach(line ->
+                        LOG.info("legacy layout migration: dataset '{}': {}", report.dataset(), line));
                 report.droppedSubjects().forEach(subject ->
                         LOG.warn("legacy layout migration: dataset '{}': dropped unattached subject {}",
                                 report.dataset(), subject));

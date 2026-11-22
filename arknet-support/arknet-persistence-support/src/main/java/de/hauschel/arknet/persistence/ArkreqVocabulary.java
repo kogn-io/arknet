@@ -124,6 +124,13 @@ public final class ArkreqVocabulary {
     public static final String ACCEPTANCE_CRITERION = NAMESPACE + "acceptanceCriterion";
 
     /**
+     * {@code arkreq:AcceptanceCriterion} - the class of a requirement's positioned criterion
+     * resource. Shared here because the startup migration in {@code arknet-app} turns a criterion
+     * stored as a literal into such a resource.
+     */
+    public static final String ACCEPTANCE_CRITERION_TYPE = NAMESPACE + "AcceptanceCriterion";
+
+    /**
      * {@code arkreq:criterionText} - AcceptanceCriterion -&gt; its testable "Done when ..." text
      * (issue #266). Shared here because {@code arknet-app}'s traceability read path needs it too,
      * to scan a requirement's acceptance-criteria prose for unlinked glossary mentions - the same

@@ -25,6 +25,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.versioning.VersioningGraphs;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -118,36 +119,71 @@ final class LegacyLayoutFixture {
 
     /** A requirement written before {@code arkreq:acceptanceCriterion} existed (before 2026-07-17). */
     static final String WITHOUT_CRITERION = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000010";
-    /** A requirement whose criterion is a literal, as written from 2026-07-17 to 2026-08-05. */
+    /** A requirement whose criteria are plain untagged literals, as v0.3.8 to v0.6.0 wrote them. */
     static final String LITERAL_CRITERION = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000011";
     /** A requirement whose {@code usesTerm} object is a literal, a store-first edit the earlier adapter kept. */
     static final String LITERAL_TERM_EDGE = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000012";
+    /** A requirement with a language-tagged literal criterion, a store-first edit of the literal form. */
+    static final String TAGGED_LITERAL_CRITERION = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000013";
+    /** A use case as v0.3.8 to v0.7.0 wrote it: {@code arkreq:primaryActor}, no {@code arkreq:primaryRole}. */
+    static final String ACTOR_USE_CASE = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000020";
+    /** The actor {@link #ACTOR_USE_CASE} names as its primary and supporting actor. */
+    static final String LEGACY_ACTOR = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000021";
+
+    /** The two literal criteria of FR-11, in the lexical order the earlier read path showed them in. */
+    static final List<String> LITERAL_CRITERIA = List.of("Approved by the owner", "Done when it is shown");
+    /** The literal criterion of FR-13, stored under {@code @de}. */
+    static final String TAGGED_CRITERION_TEXT = "Wird angezeigt";
 
     /**
      * The record forms an earlier version wrote or kept past its own gate and the current gate
-     * rejects, frozen as the triples the earlier requirements adapter stored them - typed resource,
-     * untagged {@code dcterms:title}/{@code dcterms:description}, {@code arkreq:status} - and not
-     * derived from this version's write paths, which never produce them: FR-10 without any
-     * criterion, FR-11 with a literal criterion (both carried past the gate), FR-12 with a proper
-     * criterion resource but a literal {@code usesTerm} object (the edge is dropped, the record
-     * passes the gate).
+     * rejects or the migration has to reshape, frozen as the triples the earlier adapters stored
+     * them and not derived from this version's write paths, which never produce them:
+     * <ul>
+     *   <li>FR-10 without any criterion (carried past the gate);</li>
+     *   <li>FR-11 with two untagged literal criteria, as {@code KognioRdfRequirementRepository}
+     *       wrote them from v0.3.8 to v0.6.0 ({@code rdf.createLiteral(criterion)}), and FR-13 with
+     *       one {@code @de} literal criterion, a store-first edit of that form (both reshaped into
+     *       criterion resources);</li>
+     *   <li>FR-12 with a proper criterion resource but a literal {@code usesTerm} object (the edge
+     *       is dropped, the record passes the gate);</li>
+     *   <li>UC9 as {@code KognioRdfUseCaseRepository} wrote it from v0.3.8 to v0.7.0: untagged
+     *       title, goal and step text, {@code arkreq:primaryActor} and {@code arkreq:supportingActor}
+     *       pointing at an actor of the actor register, no {@code arkreq:primaryRole} (both actor
+     *       edges are dropped, the record is carried past the gate), with ACTOR-9 as v0.7.0's actor
+     *       register stored it.</li>
+     * </ul>
      */
     static String legacyOnlyForms() {
         String req = "https://w3id.org/arknet/requirements#";
         String dct = "http://purl.org/dc/terms/";
+        String integer = "^^<http://www.w3.org/2001/XMLSchema#integer>";
         String head = " a <" + req + "FunctionalRequirement> ; <" + req + "status> <" + req + "Proposed> ; ";
         return "INSERT DATA { GRAPH <" + BASE + "requirements> { "
                 + "<" + WITHOUT_CRITERION + ">" + head + "<" + dct + "identifier> \"FR-10\" ; <" + dct
                 + "title> \"Legacy without criterion\" ; <" + dct + "description> \"Written before criteria.\" . "
                 + "<" + LITERAL_CRITERION + ">" + head + "<" + dct + "identifier> \"FR-11\" ; <" + dct
                 + "title> \"Legacy literal criterion\" ; <" + dct + "description> \"Criterion as a literal.\" ; <"
-                + req + "acceptanceCriterion> \"Done when it is shown\" . "
+                + req + "acceptanceCriterion> \"" + LITERAL_CRITERIA.get(1) + "\" , \"" + LITERAL_CRITERIA.get(0)
+                + "\" . "
                 + "<" + LITERAL_TERM_EDGE + ">" + head + "<" + dct + "identifier> \"FR-12\" ; <" + dct
                 + "title> \"Legacy literal term edge\" ; <" + dct + "description> \"Term edge as a literal.\" ; <"
                 + req + "usesTerm> \"Kunde\"@de ; <" + req + "acceptanceCriterion> <" + LITERAL_TERM_EDGE + "-ac> . "
                 + "<" + LITERAL_TERM_EDGE + "-ac> a <" + req + "AcceptanceCriterion> ; <" + req
-                + "position> \"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; <" + req
-                + "criterionText> \"It is linked\"@en . } }";
+                + "position> \"1\"" + integer + " ; <" + req + "criterionText> \"It is linked\"@en . "
+                + "<" + TAGGED_LITERAL_CRITERION + ">" + head + "<" + dct + "identifier> \"FR-13\" ; <" + dct
+                + "title> \"Legacy tagged literal criterion\" ; <" + dct + "description> \"Tagged literal.\" ; <"
+                + req + "acceptanceCriterion> \"" + TAGGED_CRITERION_TEXT + "\"@de . } "
+                + "GRAPH <" + BASE + "use-cases> { "
+                + "<" + ACTOR_USE_CASE + "> a <" + req + "UseCase> ; <" + dct + "identifier> \"UC9\" ; <" + dct
+                + "title> \"Legacy actor use case\" ; <" + req + "useCaseGoal> \"Clerk files an order\" ; <" + req
+                + "primaryActor> <" + LEGACY_ACTOR + "> ; <" + req + "supportingActor> <" + LEGACY_ACTOR + "> ; <"
+                + req + "mainStep> <" + ACTOR_USE_CASE + "-s1> . "
+                + "<" + ACTOR_USE_CASE + "-s1> a <" + req + "Step> ; <" + req + "position> \"1\"" + integer
+                + " ; <" + req + "stepText> \"Clerk files the order\" . } "
+                + "GRAPH <" + BASE + "actors> { "
+                + "<" + LEGACY_ACTOR + "> a <https://w3id.org/arknet/process#HumanActor> ; <" + dct
+                + "identifier> \"ACTOR-9\" ; <https://w3id.org/arknet/core#name> \"Legacy clerk\" . } }";
     }
 
     /** Records, in the earlier funnel's form, that a resource with {@code code} was deleted. */
