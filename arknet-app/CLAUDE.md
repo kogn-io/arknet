@@ -1,8 +1,8 @@
 # arknet-app
 
 MCP-Server (Streamable HTTP, Spring AI 2.0 `spring-ai-starter-mcp-server-webmvc`) + Composition Root -- Spring Boot, verdrahtet requirements-Hexagon + ubiquitous-language-Hexagon + use-cases-Hexagon + bounded-context-Hexagon + adr-Hexagon + actor-Hexagon + project-Hexagon + model-analysis-Hexagon als `@McpTool`-Beans.
-Die Composition Root verdrahtet die Komponenten und traegt keine Anwendungslogik (ADR-70).
-In diesem Modul liegen der typunabhaengige Lesepfad (`store_overview`, `resource_get`, `resource_history`, `project_export`), das Suchwerkzeug `text_search` und der HTML-Report.
+ADR-70 laesst der Composition Root nur die Verdrahtung der Komponenten, keine Anwendungslogik.
+Abweichend davon liegen in diesem Modul der typunabhaengige Lesepfad (`store_overview`, `resource_get`, `resource_history`, `project_export`), das Suchwerkzeug `text_search` und der HTML-Report.
 `resource_get`, `resource_history` und `text_search` gehoeren in die Komponente fuer generischen Zugriff ausserhalb jedes Bounded Context (ADR-69, kogn-io/arknet#743).
 Fuer `store_overview` und `project_export` ist kein Zielort entschieden.
 Der HTML-Report gehoert in die Modellanalyse (ADR-54, kogn-io/arknet#642).
