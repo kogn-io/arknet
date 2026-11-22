@@ -130,13 +130,13 @@ The three technical-library modules (`arknet-persistence-support`,
 | Architecture & Decisions        | arknet-adr (Maven parent: `arknet-architecture-decisions`) | -core, -adapter-kogniordf, -adapter-mcp |
 | Actor                            | arknet-actor-register (Maven parent: `arknet-actor`) | -core, -adapter-kogniordf, -adapter-mcp |
 | Project Registry                | arknet-project (Maven parent: `arknet-project-registry`) | -core, -adapter-kogniordf, -adapter-mcp |
-| Model Analysis                   | arknet-model-evaluation (Maven parent: `arknet-model-analysis`) | -core, -adapter-kogniordf, -adapter-mcp (an -adapter-html follows with the report, #560 step 2) |
+| Model Analysis                   | arknet-model-evaluation (Maven parent: `arknet-model-analysis`) | -core, -adapter-kogniordf, -adapter-mcp (an -adapter-html follows with the report, #642) |
 
 Outside every Bounded Context:
 
 | Role in the schema                 | Module                          | Note |
 |------------------------------------|---------------------------------|------|
-| Application (composition root)     | arknet-app                      | Spring Boot daemon; still carries the type-independent tools `store_overview`, `resource_get`, `resource_history` and `project_export` and `text_search`, which reads literals without knowing a type; their target is a Component for generic resource access that belongs to no Bounded Context (ADR-69, ADR-70), which does not exist yet. The HTML report still lives here and still composes the in-ports of every context; its target is Model Analysis (ADR-54, #560 step 2) |
+| Application (composition root)     | arknet-app                      | Spring Boot daemon; carries the type-independent tools `resource_get`, `resource_history` and `text_search`, whose target is the Component for generic resource access that belongs to no Bounded Context (ADR-69, ADR-70, #743). It also carries `store_overview` and `project_export`; no target is decided for them. The HTML report lives here and composes the in-ports of every context; its target is Model Analysis (ADR-54, #642) |
 | Shared Kernel                      | arknet-shared-kernel            | ADR-56: ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale, LocalizedLiteral. `DependencyRulesTest` rule 12 lists the admitted terms, so a new type in the package turns a test red |
 | Technical library                  | arknet-persistence-support      | Under the `arknet-support` aggregator. SHACL gate, the versioned write path VersionedWriteFunnel (draft, publish and tombstone over kognio-rdf rdf-versioning, one content graph per project dataset), vocabulary constants and the type-independent read path over a project's dataset (StoreReader, the triple read model, Prefixes, HandleResolver, ResourceRenderer) -- no model term, hence neither Shared Kernel nor vocabulary |
 | Technical library                  | arknet-mcp-support              | Under the `arknet-support` aggregator. Support of the driving MCP adapters and the composition root: ProjectResolver/ResolvedProject, StaleTranslationHint/FieldLanguageLookup, WriteResponse, ToolParameterDescriptions. No core and no vocabulary module depends on it (rule 11) |
@@ -186,7 +186,7 @@ its own core only; no module of a Component depends on a module of another.
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
 | `<bc>-shared` once ownerless identities exist | built for both contexts that need one: `arknet-product-requirements-shared` (RequirementCode, ConstraintCode, TermRef) and `arknet-domain-modelling-shared` (TermCode) |
-| Application outside every Bounded Context     | present (arknet-app); it holds no evaluation; besides the wiring it still carries the type-independent tools and the HTML report, both still to move (ADR-69, ADR-54) |
+| Application outside every Bounded Context     | present (arknet-app); it holds no evaluation; besides the wiring it carries the type-independent tools, of which `resource_get`, `resource_history` and `text_search` move to the Component for generic resource access (ADR-69), and the HTML report, which moves to Model Analysis (ADR-54) |
 | dependency rules as a checker                 | partial: ArchUnit carries the rule that no module of a Component depends on a module of another for Product & Requirements and Domain Modelling, plus that a driving adapter sees only in-ports and domain types, that a `<bc>-shared` hangs on nothing but the Shared Kernel, that no core or vocabulary module reaches into `arknet-mcp-support`, that the Shared Kernel holds exactly the terms ADR-56 admits, and that Model Analysis names no module of the contexts it reads; the other contexts still borrow in-ports (ADR-49) |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |
 
@@ -204,10 +204,14 @@ its own core only; no module of a Component depends on a module of another.
 
 ## 7. What moves this file
 
-- The rest of #560: the HTML report leaves the composition root into an
+- #642: the HTML report leaves the composition root into an
   `-adapter-html` of Model Analysis, with its read model separated from its rendering,
   which is what ends the report's borrowed in-ports into every context (ADR-49,
   ADR-70). Sections 3 to 5 then describe one shape instead of two.
+- #741 and #743: the Component for generic resource access is built outside every
+  Bounded Context, #741 for the generic write engine, #743 for the generic read tools
+  (`resource_get`, `resource_history`, `text_search`), which leave the composition
+  root (ADR-69).
 - #77: the building-block view moves into the store; this file goes away. Before
   that, a successor of ADR-46 (components move from "outside" to "not yet built"),
   see the comment on #77.
