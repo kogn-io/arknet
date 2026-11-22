@@ -72,9 +72,24 @@ public final class KognioRdfBoundedContextRepositoryFactory {
     public static BoundedContextRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        VersionedWriteFunnel funnel = new VersionedWriteFunnel(lifecycle, buildGate(displayLocale), ContentGraph.GRAPH_IRI,
+        return new KognioRdfBoundedContextRepository(lifecycle, displayLocale, buildFunnel(lifecycle, displayLocale));
+    }
+
+    /**
+     * Builds the {@link VersionedWriteFunnel} this context's repository writes through: the
+     * context's SHACL write-gate over the one content graph. Public for the composition root,
+     * which also hands it to the startup migration of an earlier storage layout, so a migrated
+     * bounded-context resource passes exactly the gate a regular write does.
+     *
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param displayLocale the display-language preference for SHACL violation messages
+     * @return the funnel
+     */
+    public static VersionedWriteFunnel buildFunnel(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
+        Objects.requireNonNull(lifecycle, "lifecycle");
+        Objects.requireNonNull(displayLocale, "displayLocale");
+        return new VersionedWriteFunnel(lifecycle, buildGate(displayLocale), ContentGraph.GRAPH_IRI,
                 VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
-        return new KognioRdfBoundedContextRepository(lifecycle, displayLocale, funnel);
     }
 
     /**

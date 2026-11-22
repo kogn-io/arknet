@@ -230,7 +230,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String POSITION_PROPERTY = ARKREQ_NAMESPACE + "position";
 
     /** The local-name prefix of an acceptance criterion's fragment, {@code <requirement>#AC-<id>}. */
-    private static final String CRITERION_KIND = "AC";
+    public static final String CRITERION_KIND = "AC";
 
     /** {@code arkreq:criterionText} (issue #266) - AcceptanceCriterion's testable "Done when ..." text. */
     private static final String CRITERION_TEXT_PROPERTY = ArkreqVocabulary.CRITERION_TEXT;

@@ -214,10 +214,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String POSITION_PROPERTY = ARKREQ_NAMESPACE + "position";
 
     /** The local-name prefix of a main-flow step's fragment, {@code <use case>#Step-<id>}. */
-    private static final String STEP_KIND = "Step";
+    public static final String STEP_KIND = "Step";
 
     /** The local-name prefix of an extension's fragment, {@code <use case>#Extension-<id>}. */
-    private static final String EXTENSION_KIND = "Extension";
+    public static final String EXTENSION_KIND = "Extension";
     private static final String STEP_TEXT_PROPERTY = ARKREQ_NAMESPACE + "stepText";
     private static final String STEP_REALISES_PROPERTY = ArkreqVocabulary.STEP_REALISES;
     private static final String SATISFIES_PROPERTY = OSLC_RM_NAMESPACE + "satisfies";
