@@ -541,10 +541,9 @@ class KognioRdfUseCaseRepositoryTest {
      * Regression test for the {@code primaryRole} blank-node bug:
      * {@code arkreq:primaryRole} carries no {@code sh:nodeKind} constraint, so a store-first
      * use case may legally target a blank node with it. Reading such a use case back
-     * must not throw a {@link ClassCastException} out of {@code readBySubject} - and, because
-     * {@code primaryRole} is a required (non-{@code OPTIONAL}) triple pattern in the scalar
-     * read, the malformed use case is treated as "not found" rather than crashing the rest of
-     * {@link UseCaseRepository#findAll}'s result list.
+     * must not throw a {@link ClassCastException} out of {@code readBySubject}, and the malformed
+     * use case - which has no main flow either - is treated as "not found" rather than crashing
+     * the rest of {@link UseCaseRepository#findAll}'s result list.
      */
     @Test
     void findAllSkipsUseCaseWithBlankNodePrimaryRoleInsteadOfFailingTheWholeList() {
@@ -568,12 +567,43 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
+     * A use case written before v0.8.0 has no {@code arkreq:primaryRole} (its actor sat on
+     * {@code arkreq:primaryActor}): it is read with {@link RoleRef#LEGACY_PLACEHOLDER} instead of
+     * vanishing from {@link UseCaseRepository#findAll}/{@link UseCaseRepository#findByCode}.
+     */
+    @Test
+    void aUseCaseWithoutAPrimaryRoleIsReadWithThePlaceholderRole() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+
+        UseCaseCode legacyCode = new UseCaseCode("UC-LEGACY");
+        seed(PROJECT_A, USE_CASES_GRAPH,
+                "<https://w3id.org/arknet/id/uc-legacy> "
+                        + "a <https://w3id.org/arknet/requirements#UseCase> ; "
+                        + "<http://purl.org/dc/terms/title> \"Legacy use case\" ; "
+                        + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Some goal\" ; "
+                        + "<https://w3id.org/arknet/requirements#mainStep> <https://w3id.org/arknet/id/uc-legacy-s1> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"" + legacyCode.value() + "\" . "
+                        + "<https://w3id.org/arknet/id/uc-legacy-s1> a <https://w3id.org/arknet/requirements#Step> ; "
+                        + "<https://w3id.org/arknet/requirements#position> 1 ; "
+                        + "<https://w3id.org/arknet/requirements#stepText> \"Do it\" .");
+
+        UseCase legacy = repository.findByCode(PROJECT_A, legacyCode, null).orElseThrow();
+
+        assertEquals(RoleRef.LEGACY_PLACEHOLDER, legacy.primaryRole());
+        assertEquals("Legacy use case", legacy.title());
+        assertEquals(2, repository.findAll(PROJECT_A, null).size());
+        assertEquals(RoleRef.LEGACY_PLACEHOLDER,
+                repository.findCurrentByCode(PROJECT_A, legacyCode, null).orElseThrow().value().primaryRole());
+    }
+
+    /**
      * Regression test: {@code arkreq:mainStep} is only
      * {@code sh:Warning} severity at {@code sh:minCount 1} in the SHACL shapes, so
      * {@link ShaclWriteGate#enforce} lets a store-first use case with zero main-step
      * triples through. Reading such a use case back must not let {@link UseCase}'s "at least one
-     * step" invariant throw out of {@code readBySubject} - mirroring the blank-node
-     * {@code primaryRole} guard, the malformed use case is treated as "not found" rather than
+     * step" invariant throw out of {@code readBySubject} - the malformed use case is treated as
+     * "not found" rather than
      * crashing the rest of {@link UseCaseRepository#findAll}'s result list.
      */
     @Test

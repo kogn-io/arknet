@@ -30,6 +30,7 @@ import de.hauschel.arknet.uc.application.port.in.ResolveConstraints.ResolvedCons
 import de.hauschel.arknet.uc.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
+import de.hauschel.arknet.uc.domain.MissingPrimaryRoleException;
 import de.hauschel.arknet.uc.domain.RoleRef;
 import de.hauschel.arknet.uc.domain.ConstraintNotLinkedException;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
@@ -976,6 +977,40 @@ class UseCaseServiceTest {
 
         assertEquals(List.of(new TermRef(TERM_1_ID)), linked.usesTerms());
         assertEquals(written.steps(), linked.steps());
+    }
+
+    /**
+     * A use case written before {@code arkreq:primaryRole} existed is read with
+     * {@link RoleRef#LEGACY_PLACEHOLDER}: every write that would keep the placeholder is refused,
+     * an update naming a real role repairs it.
+     */
+    @Test
+    void aWriteKeepingTheLegacyPlaceholderRoleIsRefusedAndNamingARoleRepairsIt() {
+        UseCase written = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE);
+        InMemoryUseCaseRepository withoutRole = new InMemoryUseCaseRepository();
+        withoutRole.create(WS, new UseCase(written.id(), written.code(), written.title(), written.goal(),
+                written.scope(), written.trigger(), RoleRef.LEGACY_PLACEHOLDER, written.supportingRoles(),
+                written.precondition(), written.postcondition(), written.steps(), written.extensions(),
+                written.usesTerms(), written.constrainedBy()), DEFAULT_LANGUAGE);
+        UseCaseService legacy = new UseCaseService(
+                withoutRole, resourceIdFactory, requirementLookup, roleLookup, termLookup, constraintLookup);
+        UseCaseCode code = written.code();
+
+        MissingPrimaryRoleException linkRefused = assertThrows(MissingPrimaryRoleException.class,
+                () -> legacy.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE));
+        assertThrows(MissingPrimaryRoleException.class, () -> legacy.update(WS, code,
+                UseCaseCorrection.builder().title("Renamed").build(), DEFAULT_LANGUAGE));
+        assertThrows(MissingPrimaryRoleException.class,
+                () -> legacy.update(WS, code, UseCaseCorrection.builder().build(), DEFAULT_LANGUAGE));
+        assertTrue(linkRefused.getMessage().contains(code.value()));
+        assertTrue(linkRefused.getMessage().contains("primaryRole"));
+        assertEquals(RoleRef.LEGACY_PLACEHOLDER, legacy.get(WS, code, null).orElseThrow().primaryRole());
+
+        UseCase repaired = legacy.update(WS, code, UseCaseCorrection.builder().primaryRole("ROLE-2").build(),
+                DEFAULT_LANGUAGE);
+
+        assertEquals(new RoleRef(PAYMENT_PROVIDER_ID), repaired.primaryRole());
+        assertEquals(List.of(new TermRef(TERM_1_ID)), legacy.linkTerm(WS, code, "TERM-1", DEFAULT_LANGUAGE).usesTerms());
     }
 
     @Test

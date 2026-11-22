@@ -30,9 +30,23 @@ import de.hauschel.arknet.kernel.ResourceId;
  * store's own edge: no join is needed to read it back, and it survives relabelling - or even
  * removing the display name of - the role it points at.</p>
  *
+ * <p><strong>The legacy placeholder.</strong> A use case written before v0.8.0 named its actor
+ * through {@code arkreq:primaryActor} and carries no {@code arkreq:primaryRole} at all. The read
+ * path shows such a use case with {@link #LEGACY_PLACEHOLDER} as its primary role instead of
+ * hiding it - the use-cases counterpart of the read-time placeholder a requirement without an
+ * acceptance criterion is shown with - and {@link MissingPrimaryRoleException} keeps every write
+ * from persisting it: the next update has to name a real role.</p>
+ *
  * @param value the role's opaque subject identity, never {@code null}
  */
 public record RoleRef(ResourceId value) {
+
+    /**
+     * The read-time primary role of a use case that has none on record; never a stored role and
+     * never written (see the class note).
+     */
+    public static final RoleRef LEGACY_PLACEHOLDER =
+            new RoleRef(ResourceId.of("https://w3id.org/arknet/legacy#no-primary-role"));
 
     public RoleRef {
         Objects.requireNonNull(value, "value");

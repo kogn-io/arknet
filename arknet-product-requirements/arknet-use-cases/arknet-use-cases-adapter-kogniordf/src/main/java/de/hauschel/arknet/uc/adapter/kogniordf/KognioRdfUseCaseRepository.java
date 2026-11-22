@@ -117,12 +117,15 @@ import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
  * none of the three properties carries an {@code sh:nodeKind} constraint, so a store-first
  * edge may legally target a blank node, which {@link ResourceId} cannot represent. For
  * {@code supportingRole}/{@code stepRealises} such an edge is simply absent from the
- * corresponding list. {@code primaryRole} is a required (non-{@code OPTIONAL}) triple pattern
- * in the scalar read, so filtering it out there instead makes the whole use case unreadable -
- * {@link #readBySubject} returns {@link Optional#empty()}, and {@link #findAll}/
- * {@link #findByCode} treat it as "not found", silently skipping only that one use case rather
- * than failing the whole result. This is unreachable via the MCP tools, which always resolve to
- * a subject IRI before writing.</p>
+ * corresponding list.</p>
+ *
+ * <p><strong>A use case without a primary role.</strong> A use case written before v0.8.0 named
+ * its actor through {@code arkreq:primaryActor} and has no {@code arkreq:primaryRole}; the startup
+ * migration carries it over past the gate. The scalar read takes {@code primaryRole} as
+ * {@code OPTIONAL}, and a use case without an IRI there is read with
+ * {@link RoleRef#LEGACY_PLACEHOLDER} instead of disappearing from {@link #findAll}/
+ * {@link #findByCode} - the counterpart of the requirements adapter's acceptance-criterion
+ * placeholder. {@code UseCaseService} refuses every write that would keep the placeholder.</p>
  *
  * <p><strong>{@code usesTerm}/{@code constrainedBy} (issue #329).</strong> {@link TermRef}/
  * {@link ConstraintRef} carry the referenced term's/constraint's opaque subject identity
@@ -155,7 +158,7 @@ import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
  * {@code sh:Violation}), so {@link ShaclWriteGate#enforce} lets a store-first use case
  * through with no {@code arkreq:mainStep} triples at all - {@link UseCase}'s compact constructor
  * rejects an empty {@code steps} list unconditionally. {@link #readBySubject} skips such a use
- * case the same way it skips a blank-node {@code primaryRole}, rather than letting the
+ * case rather than letting the
  * constructor's exception propagate out of {@link #findAll}/{@link #findByCode} and crash every
  * read for the whole project.</p>
  *
@@ -1067,11 +1070,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * <p>{@code FILTER(isIRI(?primaryRole))} mirrors {@link #readSupportingRoles}/
      * {@link #readMainStepRealises}: {@code arkreq:primaryRole} carries no {@code sh:nodeKind}
      * constraint, so a store-first edge may legally target a blank node, which
-     * {@link ResourceId} cannot represent. Unlike the other two properties, {@code primaryRole}
-     * is part of this required (non-{@code OPTIONAL}) triple pattern, so filtering it out here
-     * makes the whole scalar query yield no row for such a use case - the caller then treats it
-     * as "not found", silently skipping only this one use case rather than crashing the whole
-     * result list.</p>
+     * {@link ResourceId} cannot represent. The pattern is {@code OPTIONAL}: a use case without an
+     * IRI there - one written before {@code arkreq:primaryRole} existed - still yields its row and
+     * is read with {@link RoleRef#LEGACY_PLACEHOLDER} (see {@link #primaryRoleOf}).</p>
      *
      * <p>{@code title}/{@code goal}/{@code scope}/{@code trigger}/{@code precondition}/
      * {@code postcondition} are all read separately, not joined here - each may now legally
@@ -1083,8 +1084,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      */
     private static String scalarWhereClause(String subject) {
         return subject + " a <" + USE_CASE_TYPE + "> . "
-                + subject + " <" + PRIMARY_ROLE_PROPERTY + "> ?primaryRole . "
-                + "FILTER(isIRI(?primaryRole)) ";
+                + "OPTIONAL { " + subject + " <" + PRIMARY_ROLE_PROPERTY + "> ?primaryRole . "
+                + "FILTER(isIRI(?primaryRole)) } ";
     }
 
     private Optional<UseCase> readBySubject(
@@ -1237,7 +1238,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             // arkreq:mainStep is only sh:Warning severity at sh:minCount 1 (not sh:Violation), so
             // ShaclWriteGate#enforce lets a store-first use case through with zero main
             // steps. UseCase's compact constructor rejects an empty steps list unconditionally -
-            // mirror the primaryRole blank-node guard above: skip this one use case instead of
+            // skip this one use case instead of
             // letting the constructor throw out of findByCode/findAll for the whole project.
             return Optional.empty();
         }
@@ -1260,7 +1261,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 goal.get().value(),
                 scope,
                 trigger,
-                new RoleRef(ResourceId.of(iriOf(row, "primaryRole").getIRIString())),
+                primaryRoleOf(row),
                 supportingRoles,
                 precondition,
                 postcondition,
@@ -1534,6 +1535,16 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     /** Builds a language-tagged literal, or a plain untagged one when {@code tag} is {@code null}. */
     private Literal literalOf(String value, String tag) {
         return tag == null ? rdf.createLiteral(value) : rdf.createLiteral(value, tag);
+    }
+
+    /**
+     * The primary role of a scalar row, {@link RoleRef#LEGACY_PLACEHOLDER} where the use case has
+     * none on record.
+     */
+    private static RoleRef primaryRoleOf(BindingSet row) {
+        return row.getValue("primaryRole")
+                .map(role -> new RoleRef(ResourceId.of(((IRI) role).getIRIString())))
+                .orElse(RoleRef.LEGACY_PLACEHOLDER);
     }
 
     private static IRI iriOf(BindingSet row, String name) {
