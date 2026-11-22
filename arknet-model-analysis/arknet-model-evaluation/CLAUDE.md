@@ -69,7 +69,9 @@ Seit kogn-io/arknet#697 traegt jede gescannte Textstelle ihr Feld (lokaler Name 
 Zwei Faelle sind dabei keine Funde, sondern Hinweise, die eine fuenfte Liste (`OrphanCheck.Result#weakMentions`, `WeakMention`) separat zeigt und `total()` nicht zaehlt: ein Begriff, der allein in einem `criterionText` steht (`WeakReason.ONLY_IN_ACCEPTANCE_CRITERION`), und ein Begriff, dessen jeder normative Treffer im selben Satz wie ein Verweis auf eine *andere* Ressource steht -- ihr Business-Code (`dcterms:identifier` eines Requirements, Use Cases, Bounded Contexts oder ADRs, gefunden ueber dieselbe `LabelMentions`-Engine, kein eigener Regex) --, die die Kante zu diesem Begriff bereits traegt (`WeakReason.COVERED_BY_REFERENCE`, die deckenden Handles stehen im Hinweis).
 Ein Satz ist der Text zwischen `.`, `!`, `?`, `;`, `:` oder einem Zeilenumbruch; ein einziger nicht gedeckter normativer Treffer haelt das Paar ein Fund.
 Der Punkt einer Abkuerzung beendet den Satz nicht: `lt. FR-2` oder `vgl. FR-2` deckt.
-Die Abkuerzungen stehen an einer Stelle (`SentenceBoundaries#ABBREVIATIONS`) und gelten fuer jeden Text, gleich unter welchem Sprachtag er gespeichert ist; Gross-/Kleinschreibung zaehlt nicht, ein Wort, das nur auf eine Abkuerzung endet (`es.`), ist keine.
+Die Abkuerzungen stehen in `SentenceBoundaries#ABBREVIATIONS` und gelten fuer jeden Text, gleich unter welchem Sprachtag er gespeichert ist.
+Die Liste gilt ohne Beachtung der Gross-/Kleinschreibung; ein Wort, das nur auf eine Abkuerzung endet (`es.`), ist keine.
+Zwei Abkuerzungen stehen ausserhalb der Liste in eigenen, case-sensitiven Mustern: `s.` nur klein und nie nach einer Zahl (`2 s.` ist eine Einheit), `e. g.` nur mit kleinem `g` (`e. G.` ist die Rechtsform).
 Jeder andere Punkt beendet den Satz, bewusst konservativ.
 Der Definitions-Sweep (`skos:definition` gegen `broader`/`related`) ist von der Verweisregel ausgenommen.
 Jedes andere Feld gilt als normativ -- auch Use-Case-Ziel/Trigger/Vor-/Nachbedingung und ADR-`optionRationale`, die nicht umgestuft werden.

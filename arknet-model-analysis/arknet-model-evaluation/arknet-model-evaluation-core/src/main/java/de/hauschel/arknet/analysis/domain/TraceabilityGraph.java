@@ -934,7 +934,8 @@ public final class TraceabilityGraph {
      *     roles) - weak, {@link WeakReason#COVERED_BY_REFERENCE}: the term belongs to the
      *     referenced resource, not the mentioning one. A sentence is the text between {@code .},
      *     {@code !}, {@code ?}, {@code ;}, {@code :} or a line break; the dots of the abbreviations in
-     *     {@link SentenceBoundaries#ABBREVIATIONS} do not end it. One uncovered normative hit
+     *     {@link SentenceBoundaries#ABBREVIATIONS}, of lower-case {@code s.} not after a number and of
+     *     {@code e. g.} do not end it. One uncovered normative hit
      *     keeps the pair a finding;</li>
      * <li>anything else - strong. The term-to-term sweep has no reference rule.</li>
      * </ul>

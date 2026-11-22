@@ -55,6 +55,12 @@ class SentenceBoundariesTest {
     }
 
     @Test
+    void theGermanLegalFormEGDoesNotCountAsTheAbbreviationEG() {
+        assertThat(SentenceBoundaries.sameSentence("Kunde e. G. FR-2", 0, 5, 12, 16)).isFalse();
+        assertThat(SentenceBoundaries.sameSentence("Kunde e.G. FR-2", 0, 5, 11, 15)).isFalse();
+    }
+
+    @Test
     void aCapitalSDoesNotCountAsTheAbbreviationS() {
         assertThat(SentenceBoundaries.sameSentence("Kunde S. FR-2", 0, 5, 9, 13)).isFalse();
     }
