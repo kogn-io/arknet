@@ -76,13 +76,49 @@ class TraceabilityRendererTest {
         String matrix = renderer.traceMatrix(PROJECT, graph);
 
         assertThat(matrix).contains("# Traceability matrix -- project sample-project -- 2 requirement(s)");
-        assertThat(matrix).contains("FR-1 [FunctionalRequirement] \"Login\"");
-        assertThat(matrix).contains("uses terms  : TERM-1");
-        assertThat(matrix).contains("realised by : UC1");
-        assertThat(matrix).contains("FR-2 [FunctionalRequirement] \"Logout\"");
-        assertThat(matrix).contains("uses terms  : (none)");
-        assertThat(matrix).contains("realised by : (none)");
+        assertThat(matrix).contains("FR-1 \"Login\"\n    uses terms  : TERM-1\n    realised by : UC1\n");
+        assertThat(matrix).contains("FR-2 \"Logout\"\n    uses terms  : (none)\n    realised by : (none)\n");
         assertThat(matrix).endsWith(TraceabilityRenderer.TRACE_MATRIX_SCOPE);
+    }
+
+    @Test
+    void traceMatrixLeavesOutTheTypeTagABusinessCodeAlreadyCarries() {
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
+
+        String matrix = renderer.traceMatrix(PROJECT, graph);
+
+        assertThat(matrix).doesNotContain("[FunctionalRequirement]");
+    }
+
+    @Test
+    void traceMatrixKeepsTheTypeTagForARequirementWithoutBusinessCode() {
+        TraceabilityGraph graph = TraceabilityGraph.of(StoreSnapshot.of(List.of(
+                iri(FR_10, RDF_TYPE, ARKREQ + "NonFunctionalRequirement"),
+                lit(FR_10, TITLE, "Fast"))), DisplayLocale.DEFAULT);
+
+        String matrix = renderer.traceMatrix(PROJECT, graph);
+
+        assertThat(matrix).contains("fr-10 [NonFunctionalRequirement] \"Fast\"\n");
+    }
+
+    @Test
+    void traceMatrixWithoutTermsDropsOnlyTheUsesTermsLines() {
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
+
+        String matrix = renderer.traceMatrix(PROJECT, graph, false);
+
+        assertThat(matrix).contains("# Traceability matrix -- project sample-project -- 2 requirement(s)");
+        assertThat(matrix).contains("FR-1 \"Login\"\n    realised by : UC1\n");
+        assertThat(matrix).contains("FR-2 \"Logout\"\n    realised by : (none)\n");
+        assertThat(matrix).doesNotContain("uses terms").doesNotContain("TERM-1");
+        assertThat(matrix).endsWith(TraceabilityRenderer.TRACE_MATRIX_SCOPE_WITHOUT_TERMS);
+    }
+
+    @Test
+    void traceMatrixWithTermsEqualsTheDefaultCall() {
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
+
+        assertThat(renderer.traceMatrix(PROJECT, graph, true)).isEqualTo(renderer.traceMatrix(PROJECT, graph));
     }
 
     // The orphan check itself moved to OrphanCheckTest (core module) with kogn-io/arknet#473;
