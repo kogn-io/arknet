@@ -34,6 +34,7 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.versioning.EntryDetails;
 import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.dm.shared.TermCode;
@@ -56,7 +57,9 @@ import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.persistence.ResourceRenderer;
+import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.StoreReader;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.domain.Anchor;
@@ -905,6 +908,26 @@ class StoreReportToolsTest {
         assertThat(result).contains("Publish state: DELETED").contains("# DELETED").contains("\"Anmeldung\"")
                 .contains("# History (2)").doesNotContain("not found");
         assertThat(result.lines().filter(line -> line.contains("  tombstone  ")).count()).isEqualTo(1);
+    }
+
+    /**
+     * Issue #596: a resource deleted without ever having been published has a tombstone with no
+     * version behind it - the deletion record says the content is not recorded.
+     */
+    @Test
+    void resourceGetOfAResourceDeletedWithoutAPublishSaysTheContentIsNotRecorded() {
+        String storeFirstIri = "https://w3id.org/arknet/id/store-report-test-store-first-2";
+        seedStoreFirstResource(storeFirstIri);
+        new VersionedWriteFunnel(lifecycle, mock(ShaclWriteGate.class), ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT)
+                .delete(new DatasetId(PROJECT.value()), storeFirstIri, null, EntryDetails.NONE,
+                        IllegalStateException::new, IllegalStateException::new, tx -> { });
+
+        String result = tools.resourceGet(null, storeFirstIri, ANCHOR);
+
+        assertThat(result).contains("# DELETED").contains("deleted at ")
+                .contains("the content is not recorded: the resource was deleted without ever having been published")
+                .doesNotContain("# Last version").doesNotContain("not found");
     }
 
     /** A code that never existed is still reported as unknown, deleted codes do not widen the lookup. */

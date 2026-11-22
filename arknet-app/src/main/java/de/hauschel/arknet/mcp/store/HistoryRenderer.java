@@ -72,6 +72,11 @@ public final class HistoryRenderer {
         out.append("Publish state: ").append(publishState).append("\n\n");
         deleted.ifPresent(record -> out.append(new ResourceRenderer(prefixes).renderDeletedBody(record)).append('\n'));
 
+        if (entries.isEmpty() && deleted.filter(DeletedResource::deletedBeforeVersioning).isPresent()) {
+            out.append("# History (0)\n")
+                    .append("- no entries - the resource was deleted before the store recorded a history\n");
+            return out.toString();
+        }
         if (entries.isEmpty()) {
             out.append("# History (0)\n")
                     .append("- never published - every write through the tools publishes a version, so this"

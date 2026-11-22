@@ -103,11 +103,20 @@ public final class ResourceRenderer {
         Objects.requireNonNull(deleted, "deleted");
         StringBuilder out = new StringBuilder();
         out.append("# DELETED\n");
-        out.append("- deleted at ").append(deleted.deletedAt());
-        deleted.optionalComment().ifPresent(comment -> out.append(" (\"").append(comment).append("\")"));
-        out.append('\n');
+        if (deleted.deletedBeforeVersioning()) {
+            out.append("- deleted before versioning: the deletion time is not recorded\n");
+        } else {
+            out.append("- deleted at ").append(deleted.deletedAt());
+            deleted.optionalComment().ifPresent(comment -> out.append(" (\"").append(comment).append("\")"));
+            out.append('\n');
+        }
         deleted.identifier().ifPresent(code -> out.append("- code ").append(code)
                 .append(" stays taken, it is never assigned to another resource\n"));
+        if (deleted.deletedBeforeVersioning()) {
+            out.append("- the content is not recorded: the storage layout of that time kept only the code,"
+                    + " and the IRI above is the record of that code, not the resource itself\n");
+            return out.toString();
+        }
         if (deleted.lastStatements().isEmpty()) {
             out.append("- the content is not recorded: the resource was deleted without ever having been"
                     + " published\n");

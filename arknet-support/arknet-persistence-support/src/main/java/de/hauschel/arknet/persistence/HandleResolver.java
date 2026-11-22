@@ -86,7 +86,8 @@ public final class HandleResolver {
         final List<String> matches = storeReader.findByIdentifier(projectId, handle);
         if (matches.isEmpty()) {
             // a deleted resource keeps its code (it stays taken): resolve it to the IRI its
-            // tombstone sits on, so resource_get/resource_history can say what was deleted
+            // tombstone sits on - or, for a deletion before versioning, the IRI the code is
+            // recorded on - so resource_get/resource_history can say what was deleted
             final Optional<String> deleted = storeReader.findDeletedByCode(projectId, handle);
             if (deleted.isPresent()) {
                 return deleted.get();
