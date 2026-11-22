@@ -160,6 +160,16 @@ class KognioRdfConstraintLookupTest {
         assertEquals(Map.of(), constraintLookup.resolveCodes(PROJECT_A, ResourceId.of(otherProject)));
     }
 
+    /** The reverse direction leaves an identity out that names a resource of another type. */
+    @Test
+    void doesNotResolveTheIdentityOfAResourceThatIsNoConstraintBackToACode() {
+        String foreign = "https://w3id.org/arknet/model/requirement/FR-1";
+        insert("<" + foreign + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"FR-1\"", PROJECT_A);
+
+        assertEquals(Map.of(), constraintLookup.resolveCodes(PROJECT_A, ResourceId.of(foreign)));
+    }
+
     @Test
     void resolvesNothingForAnEmptyIdList() {
         givenConstraint(PROJECT_A, "TCON-1");

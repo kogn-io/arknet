@@ -1255,6 +1255,23 @@ class KognioRdfRequirementRepositoryTest {
                 resolved);
     }
 
+    /** Every type shares the content graph: an id of a term resolves to no requirement code. */
+    @Test
+    void findByIdsLeavesOutAnIdentityThatNamesNoRequirement() {
+        ResourceId term = ResourceId.of("https://w3id.org/arknet/id/term-1");
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
+                + "<" + term.value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://purl.org/dc/terms/identifier> \"TERM-1\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+
+        assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of(term)));
+    }
+
     @Test
     void findByIdsWithEmptyIdsReturnsAnEmptyListWithoutQuerying() {
         assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of()));

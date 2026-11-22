@@ -1500,13 +1500,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      *
      * <p><strong>Why.</strong> One query for the whole batch, not one per id, because the caller
      * (a sibling bounded context's driving adapter, rendering several requirement references at
-     * once) must not pay an N+1 store round-trip. Unlike the sibling ubiquitous-language adapter's
-     * {@code KognioRdfTermRepository#findByIds}, this join carries no type filter: that adapter
-     * joins {@code ?s a <skos:Concept>} because every terms-graph subject carries that one type,
-     * but requirements are typed either {@code arkreq:FunctionalRequirement} or
-     * {@code arkreq:NonFunctionalRequirement}, and a filter here would either need both
-     * alternatives (no benefit - {@code dcterms:identifier} already scopes the join to subjects
-     * that carry a code) or arbitrarily exclude one requirement type.</p>
+     * once) must not pay an N+1 store round-trip. The join carries
+     * {@link #requirementTypeClause}: every resource type shares the one content graph, so an id
+     * of a term or a decision would otherwise resolve to its code as if it were a requirement.</p>
      */
     @Override
     public List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId, List<ResourceId> ids) {
@@ -1525,6 +1521,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
         String query = "SELECT ?s ?identifier WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + "VALUES ?s { " + values + " } "
+                + requirementTypeClause()
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {

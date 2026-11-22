@@ -124,7 +124,7 @@ public final class KognioRdfConstraintLookup implements ConstraintLookup {
      * {@inheritDoc}
      *
      * <p>The reverse of {@link #resolveByCode}: one {@code VALUES} join into the sibling graph per
-     * call, never one query per id. An id that names nothing there - or names something without a
+     * call, never one query per id. An id that names nothing there - or names a resource that is no constraint, or one without a
      * {@code dcterms:identifier} - is simply absent from the returned map, which is what the port
      * promises instead of an error. Mirrors {@code KognioRdfConstraintRepository#findByIds} in the
      * component that owns the graph; that this component reads the same published language rather
@@ -143,7 +143,9 @@ public final class KognioRdfConstraintLookup implements ConstraintLookup {
                 .collect(Collectors.joining(" "));
         String query = "SELECT ?s ?identifier WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
                 + "VALUES ?s { " + values + " } "
-                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+                + "VALUES ?type { <" + TECHNICAL_CONSTRAINT_TYPE + "> <" + BUSINESS_CONSTRAINT_TYPE
+                + "> <" + REGULATORY_CONSTRAINT_TYPE + "> } "
+                + "?s a ?type ; <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Map<ResourceId, ConstraintCode> byId = new LinkedHashMap<>();

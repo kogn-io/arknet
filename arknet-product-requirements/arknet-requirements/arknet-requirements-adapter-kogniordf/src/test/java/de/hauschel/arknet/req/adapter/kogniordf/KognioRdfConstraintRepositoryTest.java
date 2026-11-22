@@ -345,6 +345,23 @@ class KognioRdfConstraintRepositoryTest {
         assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of()));
     }
 
+    /** Every type shares the content graph: an id of a requirement resolves to no constraint code. */
+    @Test
+    void findByIdsLeavesOutAnIdentityThatNamesNoConstraint() {
+        ResourceId requirement = ResourceId.of("https://w3id.org/arknet/id/fr-1");
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { "
+                + "<" + requirement.value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"FR-1\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+
+        assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of(requirement)));
+    }
+
     @Test
     void findByIdsSilentlyOmitsUnknownIdentities() {
         Constraint known = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",

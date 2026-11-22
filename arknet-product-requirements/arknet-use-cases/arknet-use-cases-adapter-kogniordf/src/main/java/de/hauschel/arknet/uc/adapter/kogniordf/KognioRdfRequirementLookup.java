@@ -18,6 +18,7 @@ import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.vocab.VocabDct;
 
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -39,12 +40,10 @@ import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
  * {@code KognioRdfUseCaseRepository} no longer performs this lookup itself; it just persists the
  * {@link ResourceId} it is handed.</p>
  *
- * <p><strong>No type filter.</strong> Requirements are typed either
- * {@code arkreq:FunctionalRequirement} or {@code arkreq:NonFunctionalRequirement}; a type filter
- * here would either need both alternatives (no benefit - {@code dcterms:identifier} alone already
- * scopes the join to requirements graph subjects that carry a code) or would arbitrarily exclude
- * one requirement type (mirrors the same reasoning already written for
- * {@code KognioRdfRequirementRepository#findByIds}).</p>
+ * <p><strong>Type filter.</strong> Every resource type lives in the one content graph, so the
+ * code alone does not make a requirement: the query joins both requirement types
+ * ({@code arkreq:FunctionalRequirement}, {@code arkreq:NonFunctionalRequirement}), and the code
+ * of a term, a decision or a use case resolves to nothing.</p>
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} + {@code dataset}) -
  * it never imports RDF4J or any other backend-specific type. The backend
@@ -54,6 +53,13 @@ import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
 public final class KognioRdfRequirementLookup implements RequirementLookup {
 
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
+    /**
+     * Both requirement types: every resource type shares the one content graph, so the type
+     * join, not the graph, is what keeps a term, a decision or a use case from resolving here.
+     */
+    private static final String REQUIREMENT_TYPES = "VALUES ?type { <"
+            + ArkreqVocabulary.FUNCTIONAL_REQUIREMENT_TYPE + "> <" + ArkreqVocabulary.NON_FUNCTIONAL_REQUIREMENT_TYPE
+            + "> } ";
     // Mirrors the graph IRI the requirements out-adapter writes into. The bounded contexts share
     // one project dataset; resolving a requirement means reading across into that sibling graph.
     private static final String REQUIREMENTS_GRAPH = ContentGraph.GRAPH_IRI;
@@ -76,7 +82,8 @@ public final class KognioRdfRequirementLookup implements RequirementLookup {
         Objects.requireNonNull(requirementCode, "requirementCode");
 
         String query = "SELECT ?req WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + "?req <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(requirementCode) + "\" } }";
+                + REQUIREMENT_TYPES
+                + "?req a ?type ; <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(requirementCode) + "\" } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             List<IRI> matches = handle.sparqlQuery().select(query)
@@ -125,7 +132,8 @@ public final class KognioRdfRequirementLookup implements RequirementLookup {
                 .collect(Collectors.joining(" "));
         String query = "SELECT ?s ?identifier WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + "VALUES ?s { " + values + " } "
-                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+                + REQUIREMENT_TYPES
+                + "?s a ?type ; <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Map<ResourceId, RequirementCode> byId = new LinkedHashMap<>();

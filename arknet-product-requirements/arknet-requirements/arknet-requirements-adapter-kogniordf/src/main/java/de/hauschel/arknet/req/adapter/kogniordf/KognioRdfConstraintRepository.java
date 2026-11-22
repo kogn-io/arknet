@@ -635,8 +635,8 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
     /**
      * Finds every constraint in a project whose identity is among {@code ids}, in one store
      * round-trip - backs {@link ResolveConstraints}. Mirrors
-     * {@code KognioRdfRequirementRepository#findByIds}: no type filter, since
-     * {@code dcterms:identifier} already scopes the join to subjects that carry a code.
+     * {@code KognioRdfRequirementRepository#findByIds}: the join carries the three constraint types,
+     * since every resource type shares the one content graph and a code alone names no type.
      */
     @Override
     public List<ResolveConstraints.ResolvedConstraint> findByIds(ProjectId projectId, List<ResourceId> ids) {
@@ -652,7 +652,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
 
         String query = "SELECT ?s ?identifier WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
                 + "VALUES ?s { " + values + " } "
-                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+                + constraintWhereClause("?s <" + IDENTIFIER_PROPERTY + "> ?identifier . ") + "} }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Map<String, ResolveConstraints.ResolvedConstraint> bySubject = new LinkedHashMap<>();
