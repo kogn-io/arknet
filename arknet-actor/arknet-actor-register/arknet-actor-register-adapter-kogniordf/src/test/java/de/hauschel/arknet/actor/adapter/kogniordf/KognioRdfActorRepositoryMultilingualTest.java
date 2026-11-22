@@ -43,7 +43,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 
 /**
  * Integration tests for the multilingual {@code arknet:name}/{@code arknet:description} behaviour
@@ -60,7 +60,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  */
 class KognioRdfActorRepositoryMultilingualTest {
 
-    private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
+    private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/content";
     private static final String NAME_PROPERTY = "https://w3id.org/arknet/core#name";
     private static final String DESCRIPTION_PROPERTY = "https://w3id.org/arknet/core#description";
     private static final String HUMAN_ACTOR_TYPE = "https://w3id.org/arknet/process#HumanActor";
@@ -77,7 +77,7 @@ class KognioRdfActorRepositoryMultilingualTest {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
-        WriteFunnel funnel = KognioRdfActorRepositoryFactory.buildFunnel(datasetLifecycle, DisplayLocale.DEFAULT);
+        VersionedWriteFunnel funnel = KognioRdfActorRepositoryFactory.buildFunnel(datasetLifecycle, DisplayLocale.DEFAULT);
         repository = KognioRdfActorRepositoryFactory.over(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 

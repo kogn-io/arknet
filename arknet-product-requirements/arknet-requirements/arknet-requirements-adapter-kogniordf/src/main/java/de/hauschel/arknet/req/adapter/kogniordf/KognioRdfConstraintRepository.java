@@ -27,6 +27,7 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.EntryDetails;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.InvalidLanguageTagException;
@@ -34,10 +35,12 @@ import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.ReadTransactions;
+import de.hauschel.arknet.persistence.Slices;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RevisionToken;
@@ -96,7 +99,7 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  */
 public class KognioRdfConstraintRepository implements ConstraintRepository {
 
-    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
+    private static final String CONSTRAINTS_GRAPH = ContentGraph.GRAPH_IRI;
 
     /**
      * {@code arkreq:constraintStatement} - adapter-local (see class javadoc), not shared via
@@ -112,7 +115,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
 
     private final DatasetLifecycle lifecycle;
     private final DisplayLocale displayLocale;
-    private final WriteFunnel funnel;
+    private final VersionedWriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -127,7 +130,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
      *                      same instance {@link KognioRdfRequirementRepository} uses (must not be
      *                      {@code null})
      */
-    KognioRdfConstraintRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {
+    KognioRdfConstraintRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, VersionedWriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
@@ -145,12 +148,10 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
         IRI subjectIri = rdf.createIRI(subjectIriString);
 
         Graph graph = buildCandidateGraph(subjectIri, constraint, tag, tag);
-        IRI graphIri = rdf.createIRI(CONSTRAINTS_GRAPH);
-        funnel.create(new DatasetId(projectId.value()), CONSTRAINTS_GRAPH, subjectIriString,
-                constraint.code().value(), graph, null,
+        funnel.create(new DatasetId(projectId.value()), subjectIriString, constraint.code().value(), null,
                 () -> new ResourceAlreadyExistsException(projectId, constraint.id().value()),
                 () -> new DuplicateConstraintCodeException(projectId, constraint.code()),
-                tx -> tx.add(graphIri, graph));
+                (tx, current) -> graph);
     }
 
     /**
@@ -177,13 +178,11 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
         String subject = SparqlTerms.iriRef(subjectIriString);
 
         Graph graph = buildCandidateGraph(subjectIri, updated, titleTag, statementTag);
-        IRI graphIri = rdf.createIRI(CONSTRAINTS_GRAPH);
-
-        funnel.compareAndUpdate(new DatasetId(projectId.value()), CONSTRAINTS_GRAPH, subjectIriString,
-                expectedHead == null ? null : expectedHead.value(), graph, null,
+        funnel.compareAndUpdate(new DatasetId(projectId.value()), subjectIriString,
+                expectedHead == null ? null : (io.kogn.rdf.versioning.RevisionToken) expectedHead.value(), null,
                 () -> new ConstraintNotFoundException(projectId, updated.code()),
                 () -> new ConstraintConcurrentlyModifiedException(projectId, updated.code()),
-                tx -> replaceTriplesForUpdate(tx, graphIri, subjectIri, subject, graph, titleTag, statementTag,
+                (tx, draft) -> replaceTriplesForUpdate(tx, subjectIri, subject, graph, titleTag, statementTag,
                         defaultTag));
     }
 
@@ -240,23 +239,16 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
      * matches a non-{@code null} written tag, so the sweep is unreachable for a project without
      * one.</p>
      */
-    private void replaceTriplesForUpdate(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
+    private Graph replaceTriplesForUpdate(DatasetTx tx, IRI subjectIri, String subject, Graph graph,
             String titleTag, String statementTag, String defaultTag) {
-        String deleteExisting = "DELETE { GRAPH <" + CONSTRAINTS_GRAPH + "> { " + subject + " ?p ?o } } WHERE { "
-                + "GRAPH <" + CONSTRAINTS_GRAPH + "> { " + subject + " ?p ?o } }";
-
         // Captured inside this same transaction, never by a separate read beforehand - that would
         // leave a TOCTOU window the caller's own head comparison deliberately avoids.
         List<Literal> preservedTitles = otherLanguageLiterals(tx, subject, TITLE_PROPERTY, titleTag, defaultTag);
         List<Literal> preservedStatements =
                 otherLanguageLiterals(tx, subject, STATEMENT_PROPERTY, statementTag, defaultTag);
-        tx.update(deleteExisting);
-        tx.add(graphIri, graph);
+        Graph next = Slices.copyOf(graph);
         if (!preservedTitles.isEmpty() || !preservedStatements.isEmpty()) {
-            // Re-attached only after the gate has already run on `graph` and the rewritten graph is
-            // committed - never mixed into `graph` beforehand. Safe precisely because nothing new
-            // is introduced: each literal already existed in the store and is carried forward
-            // untouched.
+            // Carried into the new slice, which the gate validates as a whole.
             Graph preservedLanguageVariants = rdf.createGraph();
             for (Literal title : preservedTitles) {
                 preservedLanguageVariants.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), title);
@@ -264,8 +256,9 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
             for (Literal statement : preservedStatements) {
                 preservedLanguageVariants.add(subjectIri, rdf.createIRI(STATEMENT_PROPERTY), statement);
             }
-            tx.add(graphIri, preservedLanguageVariants);
+            Slices.addAll(next, preservedLanguageVariants);
         }
+        return next;
     }
 
     /**
@@ -350,14 +343,10 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
                     .map(row -> iriOf(row, "s").getIRIString())
                     .orElseThrow(() -> new ConstraintNotFoundException(projectId, code));
         }
-        String subject = SparqlTerms.iriRef(subjectIriString);
-
-        funnel.delete(dataset, CONSTRAINTS_GRAPH, subjectIriString, code.value(),
+        funnel.delete(dataset, subjectIriString, code.value(), EntryDetails.NONE,
                 () -> new ConstraintNotFoundException(projectId, code),
-                tx -> {
-                    rejectIfReferenced(tx, subjectIriString, projectId, code);
-                    tx.update("DELETE WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { " + subject + " ?p ?o } }");
-                });
+                () -> new ConstraintConcurrentlyModifiedException(projectId, code),
+                tx -> rejectIfReferenced(tx, subjectIriString, projectId, code));
     }
 
     /**
@@ -396,9 +385,8 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
-     * every named graph ({@code GRAPH ?g}), since a referencing edge may live in either the
-     * requirements graph ({@code req_link_constraint}) or the use-cases BC's own model graph
-     * ({@code uc_link_constraint}), never in {@link #CONSTRAINTS_GRAPH} itself. Runs inside the
+     * the content graph, where a requirement's ({@code req_link_constraint}) and a use case's
+     * ({@code uc_link_constraint}) edges live alike (ADR-63). Runs inside the
      * live write transaction {@link WriteFunnel#delete} hands its {@code body}, so the check and
      * the eventual delete share one atomic snapshot. Mirrors
      * {@code KognioRdfActorRepository#rejectIfReferenced}.
@@ -407,7 +395,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
         IRI target = rdf.createIRI(subjectIri);
         List<String> referencing = new ArrayList<>();
         REFERENCING_PREDICATES.forEach((predicateIri, shorthand) -> {
-            String query = "ASK { GRAPH ?g { ?s <" + predicateIri + "> ?target } }";
+            String query = "ASK { GRAPH <" + CONSTRAINTS_GRAPH + "> { ?s <" + predicateIri + "> ?target } }";
             if (tx.ask(query, Map.of("target", target))) {
                 referencing.add(shorthand);
             }
@@ -474,15 +462,15 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
         // field is written back under.
         DisplayLocale effective = this.displayLocale.withRequestedOverride(canonicalizeLenient(defaultLanguage));
 
-        String query = "SELECT ?s ?type ?head WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
+        String query = "SELECT ?s ?type WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
                 + constraintWhereClause(
                         "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . ")
-                + "FILTER(isIRI(?s)) } "
-                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+                + "FILTER(isIRI(?s)) } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            SparqlQuery sparql = handle.sparqlQuery();
+            // State and token in one read transaction, so the token belongs to exactly this state.
+            return ReadTransactions.read(handle, tx -> {
+            SparqlQuery sparql = tx;
             Optional<BindingSet> found = sparql.select(query).findFirst();
             if (found.isEmpty()) {
                 return Optional.empty();
@@ -502,12 +490,10 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
                     selected.title().value(),
                     selected.statement().value(),
                     typeFromIri(iriOf(row, "type").getIRIString()));
-            RevisionToken head = row.getValue("head")
-                    .filter(IRI.class::isInstance)
-                    .map(value -> new RevisionToken(((IRI) value).getIRIString()))
-                    .orElse(null);
+            RevisionToken head = new RevisionToken(funnel.currentToken(tx, subjectIriString));
             return Optional.of(new CurrentConstraint(constraint, head,
                     selected.title().languageTag(), selected.statement().languageTag()));
+            });
         }
     }
 

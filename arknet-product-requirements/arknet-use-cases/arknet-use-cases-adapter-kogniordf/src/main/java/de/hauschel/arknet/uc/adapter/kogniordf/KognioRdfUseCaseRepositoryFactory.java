@@ -28,7 +28,8 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 
 /**
@@ -97,7 +98,8 @@ public final class KognioRdfUseCaseRepositoryFactory {
         Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         Objects.requireNonNull(displayLocale, "displayLocale");
         ShaclWriteGate gate = buildGate(displayLocale);
-        WriteFunnel funnel = new WriteFunnel(lifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(lifecycle, gate, ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfUseCaseRepository(lifecycle, resourceIdFactory, displayLocale, funnel);
     }
 

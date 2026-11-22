@@ -39,7 +39,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  * (the only case any caller today, {@code linkTerm}, exercises) does not.</p>
  *
  * <p><strong>Concurrency token.</strong> Mirrors the real {@link
- * de.hauschel.arknet.persistence.WriteFunnel}'s head, minimally: a fresh opaque marker minted on
+ * de.hauschel.arknet.persistence.VersionedWriteFunnel}'s head, minimally: a fresh opaque marker minted on
  * every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link
  * #findCurrentByCode} hands it out alongside the bounded context, {@link #compareAndUpdate}
  * rejects a stale one, exactly the CAS contract the real adapter enforces via

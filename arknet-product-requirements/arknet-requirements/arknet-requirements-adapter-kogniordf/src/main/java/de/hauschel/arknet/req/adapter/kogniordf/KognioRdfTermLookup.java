@@ -13,6 +13,7 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.vocab.VocabDct;
 
+import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -47,7 +48,7 @@ public final class KognioRdfTermLookup implements TermLookup {
     // Mirrors the graph IRI the ubiquitous-language out-adapter writes into. The bounded
     // contexts share one project dataset; resolving a term means reading across into that
     // sibling graph.
-    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
+    private static final String TERMS_GRAPH = ContentGraph.GRAPH_IRI;
 
     private final DatasetLifecycle lifecycle;
 

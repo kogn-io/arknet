@@ -7,10 +7,10 @@ import de.hauschel.arknet.actor.domain.Actor;
 
 /**
  * The concurrency token {@link ActorRepository#compareAndUpdate} guards a write with and
- * {@link ActorRepository#findCurrentByCode} hands out: an opaque string representing an actor's
- * last observed write, minted and interpreted only by the out-adapter, or {@code null} if none has
- * been recorded yet. The caller never inspects or constructs the value itself - it only round-trips
- * whatever this port last handed out.
+ * {@link ActorRepository#findCurrentByCode} hands out: an opaque, in-process holder of the
+ * concurrency token the out-adapter read together with the state, minted and interpreted only by
+ * the out-adapter. The caller never inspects or constructs the value itself - it only round-trips
+ * whatever this port last handed out, within the same call: the token cannot be serialized.
  *
  * <p>Lives at the out-port, not in {@code domain}: it carries no actor business meaning (an
  * {@link Actor} does not know its own token) and exists purely to let a caller round-trip a value
@@ -19,5 +19,5 @@ import de.hauschel.arknet.actor.domain.Actor;
  * left open: nothing at the port signature stopped a caller from passing, say, an actor code or
  * another string entirely where a token was expected, and the compiler could not catch it.</p>
  */
-public record RevisionToken(String value) {
+public record RevisionToken(Object value) {
 }

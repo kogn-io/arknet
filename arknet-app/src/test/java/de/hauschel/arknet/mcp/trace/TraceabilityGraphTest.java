@@ -55,7 +55,7 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.persistence.StoreSnapshot;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepositoryFactory;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
@@ -131,12 +131,12 @@ class TraceabilityGraphTest {
         TermRepository terms = KognioRdfTermRepositoryFactory.over(lifecycle);
         UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
                 lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
-        WriteFunnel requirementsFunnel = KognioRdfRequirementRepositoryFactory.buildFunnel(
+        VersionedWriteFunnel requirementsFunnel = KognioRdfRequirementRepositoryFactory.buildFunnel(
                 lifecycle, DisplayLocale.DEFAULT);
         ConstraintRepository constraints = KognioRdfConstraintRepositoryFactory.over(
                 lifecycle, DisplayLocale.DEFAULT, requirementsFunnel);
         ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(lifecycle, DisplayLocale.DEFAULT);
+        VersionedWriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(lifecycle, DisplayLocale.DEFAULT);
         RoleRepository roles = KognioRdfRoleRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, actorFunnel);
 
         // CON-1: bound to FR-1 via constrainedBy. CON-2: never referenced (orphan, issue #223).
@@ -890,7 +890,7 @@ class TraceabilityGraphTest {
             // ROLE-1 is already taken by the base fixture's own role (buildBaseFixture) - this
             // fixture's own role code must not collide with it.
             String roleIri = "https://w3id.org/arknet/id/trace-test-role-filledby";
-            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+            VersionedWriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
                     lifecycle, DisplayLocale.DEFAULT);
             RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
                     lifecycle, DisplayLocale.DEFAULT, actorFunnel);
@@ -915,7 +915,7 @@ class TraceabilityGraphTest {
         void rolesFilledByAnActorContainsBothRolesThatOccupyIt() {
             String roleIri1 = "https://w3id.org/arknet/id/trace-test-role-filledby-1";
             String roleIri2 = "https://w3id.org/arknet/id/trace-test-role-filledby-2";
-            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+            VersionedWriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
                     lifecycle, DisplayLocale.DEFAULT);
             RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
                     lifecycle, DisplayLocale.DEFAULT, actorFunnel);
@@ -1128,7 +1128,7 @@ class TraceabilityGraphTest {
         void unlinkedMentionsFlagsATermSharingItsLabelWithTheUseCasesOwnRole() {
             String roleIri = "https://w3id.org/arknet/id/trace-test-unlinked-role-samename";
             String termIri = "https://w3id.org/arknet/id/trace-test-unlinked-term-samename";
-            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+            VersionedWriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
                     lifecycle, DisplayLocale.DEFAULT);
             RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
                     lifecycle, DisplayLocale.DEFAULT, actorFunnel);
@@ -1167,7 +1167,7 @@ class TraceabilityGraphTest {
         @Test
         void unlinkedMentionsExemptsAUseCasesPrimaryRoleOnlyWhenItIsAlsoRegisteredAsATerm() {
             String roleTermIri = "https://w3id.org/arknet/id/trace-test-unlinked-role-and-term";
-            WriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
+            VersionedWriteFunnel actorFunnel = KognioRdfActorRepositoryFactory.buildFunnel(
                     lifecycle, DisplayLocale.DEFAULT);
             RoleRepository roles = KognioRdfRoleRepositoryFactory.over(
                     lifecycle, DisplayLocale.DEFAULT, actorFunnel);

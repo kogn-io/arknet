@@ -8,7 +8,7 @@ import java.util.Objects;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 
 /**
@@ -16,7 +16,7 @@ import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
  * lifecycle, alongside {@link KognioRdfRequirementRepositoryFactory} in the same package (issue
  * #223) - {@link de.hauschel.arknet.req.domain.Constraint} lives inside the same requirements
  * bounded context, so this factory does not build its own SHACL write-gate/write funnel: it
- * reuses whatever {@link WriteFunnel} the caller already built via
+ * reuses whatever {@link VersionedWriteFunnel} the caller already built via
  * {@link KognioRdfRequirementRepositoryFactory#buildFunnel}, since both {@code requirements-shapes.ttl}
  * and {@code arknet-requirements.ttl} already cover {@code Constraint}'s shapes and the
  * {@code oslc_rm:constrainedBy} edge - including, since issue #313, the {@code sh:uniqueLang}
@@ -29,7 +29,7 @@ public final class KognioRdfConstraintRepositoryFactory {
 
     /**
      * Assembles a constraint repository over an already-created dataset lifecycle and an
-     * already-built {@link WriteFunnel} - the same funnel instance the composition root wires
+     * already-built {@link VersionedWriteFunnel} - the same funnel instance the composition root wires
      * into {@link KognioRdfRequirementRepositoryFactory#over(DatasetLifecycle, DisplayLocale)}'s
      * sibling requirement repository, per this method's own contract that {@code funnel} is
      * shared rather than rebuilt.
@@ -45,7 +45,7 @@ public final class KognioRdfConstraintRepositoryFactory {
      * @return a ready-to-use {@link ConstraintRepository}
      */
     public static ConstraintRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale,
-            WriteFunnel funnel) {
+            VersionedWriteFunnel funnel) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
         Objects.requireNonNull(funnel, "funnel");

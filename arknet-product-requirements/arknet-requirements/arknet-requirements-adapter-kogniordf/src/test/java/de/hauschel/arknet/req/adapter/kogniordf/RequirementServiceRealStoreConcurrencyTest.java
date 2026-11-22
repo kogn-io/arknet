@@ -41,7 +41,6 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
 import de.hauschel.arknet.persistence.testsupport.PausingOnFirstWriteTx;
@@ -62,6 +61,8 @@ import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 
 /**
  * Regression test for the second interleaving of the code-assignment race, reproduced against a
@@ -71,7 +72,7 @@ import de.hauschel.arknet.req.domain.RequirementType;
  * decorator and no real transactions at all.
  *
  * <p>Mirrors {@code BoundedContextServiceRealStoreConcurrencyTest} exactly: the shared
- * {@link de.hauschel.arknet.persistence.WriteFunnel} translates a genuine store-level commit
+ * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel} translates a genuine store-level commit
  * conflict (two callers' code-uniqueness guards both passing before either commits, under {@code
  * SERIALIZABLE} isolation, kogn-io/rdf-core#18) into the same {@link
  * de.hauschel.arknet.req.domain.DuplicateRequirementCodeException} the synchronous guard throws,
@@ -329,7 +330,7 @@ class RequirementServiceRealStoreConcurrencyTest {
      * to hold, and which nothing pinned before: {@code RequirementRepository#delete}'s javadoc
      * demands the reference check and the delete run "under one atomic snapshot, not as a read
      * beforehand", and this is the test that goes red if someone hoists
-     * {@code rejectIfReferenced} out of {@code WriteFunnel#delete}'s write body.
+     * {@code rejectIfReferenced} out of {@code VersionedWriteFunnel#delete}'s write body.
      *
      * <p><strong>Which signal that mutation produces.</strong> Verified by actually making it: the
      * check moved into a transaction of its own ahead of the delete fails this test through the
@@ -352,7 +353,7 @@ class RequirementServiceRealStoreConcurrencyTest {
      *
      * <p><strong>One racer for three ports, on purpose.</strong> {@code uc_delete} and
      * {@code bc_delete} make the identical promise through the identical mechanism - the same
-     * {@code WriteFunnel#delete} body, the same in-transaction {@code ask}, differing only in which
+     * {@code VersionedWriteFunnel#delete} body, the same in-transaction {@code ask}, differing only in which
      * predicates they look for. Their port javadocs point here rather than each paying for another
      * real-store racer in the critical build path; what those two would add is coverage of a
      * predicate list, which {@code ReferenceGuardsCoverEveryOntologyEdgeTest} already holds against
@@ -394,7 +395,7 @@ class RequirementServiceRealStoreConcurrencyTest {
         }, "racer-delete");
         Thread referenceThread = new Thread(() -> {
             awaitLatch(deletePausedAfterReferenceCheck);
-            String insert = "INSERT DATA { GRAPH <https://example.org/decisions> { "
+            String insert = "INSERT DATA { GRAPH <" + ContentGraph.GRAPH_IRI + "> { "
                     + "<https://example.org/decisions/1> <" + ArkarchVocabulary.ADDRESSES_REQUIREMENT + "> <"
                     + stored.id().value().value() + "> } }";
             try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
@@ -465,7 +466,7 @@ class RequirementServiceRealStoreConcurrencyTest {
     /**
      * Reads {@code requirement}'s current {@code arkprov:head} straight from
      * {@link #realLifecycle} after the race, outside any transaction - the same triple pattern
-     * {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate} reads inside its
+     * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#compareAndUpdate} reads inside its
      * transaction, but there is no accessor for that private read path, so this queries it directly
      * via {@link io.kogn.rdf.dataset.SparqlQuery}.
      *
@@ -484,15 +485,11 @@ class RequirementServiceRealStoreConcurrencyTest {
             return "skipped (thread interrupted before this read)";
         }
         String subjectIriString = requirement.id().value().value();
-        String query = "SELECT ?head WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIriString + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
-        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
-            Optional<String> head = handle.sparqlQuery().select(query)
-                    .findFirst()
-                    .flatMap(row -> row.getValue("head"))
-                    .filter(IRI.class::isInstance)
-                    .map(value -> ((IRI) value).getIRIString());
-            return head.orElse("none (no revision recorded through the funnel)");
+        try {
+            return new VersioningProbe(realLifecycle, ContentGraph.GRAPH_IRI)
+                    .token(new DatasetId(WS.value()), subjectIriString)
+                    .map(Object::toString)
+                    .orElse("none (empty draft)");
         } catch (Throwable t) {
             String interruptNote = Thread.currentThread().isInterrupted() ? ", thread interrupted" : "";
             return "unavailable: " + t.getClass().getName() + ": " + t.getMessage() + interruptNote;

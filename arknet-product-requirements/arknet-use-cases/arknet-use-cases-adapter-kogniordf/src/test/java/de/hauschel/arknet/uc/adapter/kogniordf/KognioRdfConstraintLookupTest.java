@@ -36,7 +36,7 @@ class KognioRdfConstraintLookupTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
     private static final ProjectId PROJECT_B = new ProjectId("b");
-    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
+    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/content";
 
     @TempDir
     Path storageRoot;

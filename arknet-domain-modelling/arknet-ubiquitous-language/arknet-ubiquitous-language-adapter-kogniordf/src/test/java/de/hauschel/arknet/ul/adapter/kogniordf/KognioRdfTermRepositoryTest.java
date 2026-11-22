@@ -1616,7 +1616,7 @@ class KognioRdfTermRepositoryTest {
      * The same guarantee against a blank-node holder (kogn-io/arknet#360). {@code skos:Concept}
      * says nothing about node kind, and neither does the counting query: no
      * {@code FILTER(isIRI(?s))}, unlike every read around it. It has to stay absent, because the
-     * writer is just as node-kind-blind - {@code WriteFunnel#create} asks
+     * writer is just as node-kind-blind - {@code VersionedWriteFunnel#create} asks
      * {@code tx.contains(graph, null, dcterms:identifier, code)} with a wildcard subject and would
      * reject a {@code term_add} minting {@code TERM-2}. A counter that skipped the blank node would
      * keep proposing that very number, retry after retry, and {@code term_add} would stay dead for
@@ -1742,8 +1742,8 @@ class KognioRdfTermRepositoryTest {
                 "Eine dem Kundenkonto gutgeschriebene Erstattung.", null), null);
 
         assertTrue(tokenOf(id).isPresent(), "create must leave a draft");
-        assertEquals(PublishState.NEVER_PUBLISHED, probe.publishState(DATASET_A, id.value().value()));
-        assertTrue(probe.history(DATASET_A, id.value().value()).isEmpty(), "a write is no publish");
+        assertEquals(PublishState.NEVER_PUBLISHED, probe().publishState(DATASET_A, id.value().value()));
+        assertTrue(probe().history(DATASET_A, id.value().value()).isEmpty(), "a write is no publish");
     }
 
     /** The patch-{@code update} writes the draft through the compare-and-set: the token moves. */
@@ -2150,8 +2150,8 @@ class KognioRdfTermRepositoryTest {
         repository.delete(PROJECT_A, code);
 
         assertTrue(tokenOf(id).isEmpty(), "the draft must be gone");
-        assertEquals(PublishState.DELETED, probe.publishState(DATASET_A, id.value().value()));
-        assertEquals(List.of(EntryKind.TOMBSTONE), probe.history(DATASET_A, id.value().value()).stream()
+        assertEquals(PublishState.DELETED, probe().publishState(DATASET_A, id.value().value()));
+        assertEquals(List.of(EntryKind.TOMBSTONE), probe().history(DATASET_A, id.value().value()).stream()
                 .map(HistoryEntry::kind).toList());
     }
 
@@ -2293,7 +2293,10 @@ class KognioRdfTermRepositoryTest {
     }
 
     private Optional<RevisionToken> tokenOf(TermId id) {
-        return probe.token(DATASET_A, id.value().value());
+        return probe().token(DATASET_A, id.value().value());
     }
 
+    private VersioningProbe probe() {
+        return new VersioningProbe(lifecycle, ContentGraph.GRAPH_IRI);
+    }
 }

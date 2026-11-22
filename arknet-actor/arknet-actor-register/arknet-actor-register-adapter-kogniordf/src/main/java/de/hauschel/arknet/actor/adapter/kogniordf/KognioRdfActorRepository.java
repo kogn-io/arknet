@@ -30,6 +30,7 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.EntryDetails;
 
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
@@ -50,11 +51,13 @@ import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkprocVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.ReadTransactions;
+import de.hauschel.arknet.persistence.Slices;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 
 /**
  * Out-adapter: {@link ActorRepository} backed by the kognio-rdf substrate ({@code io.kogn.rdf},
@@ -130,7 +133,7 @@ public class KognioRdfActorRepository implements ActorRepository {
     private static final Logger LOG = LoggerFactory.getLogger(KognioRdfActorRepository.class);
 
     private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
-    private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
+    private static final String ACTOR_GRAPH = ContentGraph.GRAPH_IRI;
 
     // Shared via ArkprocVocabulary (kogn-io/arknet#148): this class used to declare its own private
     // copy of these four IRI literals, duplicated with TraceabilityGraph's and
@@ -153,7 +156,7 @@ public class KognioRdfActorRepository implements ActorRepository {
 
     private final DatasetLifecycle lifecycle;
     private final DisplayLocale displayLocale;
-    private final WriteFunnel funnel;
+    private final VersionedWriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -169,7 +172,7 @@ public class KognioRdfActorRepository implements ActorRepository {
      *                      acquisition and existence/head checks for every
      *                      {@link #create}/{@link #compareAndUpdate} (must not be {@code null})
      */
-    KognioRdfActorRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {
+    KognioRdfActorRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, VersionedWriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
@@ -185,14 +188,12 @@ public class KognioRdfActorRepository implements ActorRepository {
         // guaranteed safe to embed here - no separate check needed.
         String subjectIriString = actor.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
-        IRI graphIri = rdf.createIRI(ACTOR_GRAPH);
         Graph graph = buildCandidateGraph(subjectIri, actor, tag, tag);
 
-        funnel.create(new DatasetId(projectId.value()), ACTOR_GRAPH, subjectIriString,
-                actor.code().value(), graph, null,
+        funnel.create(new DatasetId(projectId.value()), subjectIriString, actor.code().value(), null,
                 () -> new ResourceAlreadyExistsException(projectId, actor.id().value()),
                 () -> new DuplicateActorCodeException(projectId, actor.code()),
-                tx -> tx.add(graphIri, graph));
+                (tx, current) -> graph);
     }
 
     /**
@@ -215,13 +216,13 @@ public class KognioRdfActorRepository implements ActorRepository {
         IRI graphIri = rdf.createIRI(ACTOR_GRAPH);
         Graph graph = buildCandidateGraph(subjectIri, updated, nameTag, descriptionTag);
 
-        funnel.compareAndUpdate(new DatasetId(projectId.value()), ACTOR_GRAPH, subjectIriString,
-                expectedHead == null ? null : expectedHead.value(), graph, null,
+        funnel.compareAndUpdate(new DatasetId(projectId.value()), subjectIriString,
+                expectedHead == null ? null : (io.kogn.rdf.versioning.RevisionToken) expectedHead.value(), null,
                 () -> new ActorNotFoundException(projectId, updated.code()),
                 () -> new ActorConcurrentlyModifiedException(projectId, updated.code()),
-                tx -> {
+                (tx, draft) -> {
                     rejectCodeCollision(tx, graphIri, subjectIri, updated.code(), projectId);
-                    replaceTriplesForUpdate(tx, graphIri, subjectIri, subject, graph, nameTag, descriptionTag,
+                    return replaceTriplesForUpdate(tx, subjectIri, subject, graph, nameTag, descriptionTag,
                             defaultTag);
                 });
     }
@@ -277,18 +278,14 @@ public class KognioRdfActorRepository implements ActorRepository {
      * unconditional whole-subject delete and re-attached afterwards, including the issue #258 sweep
      * of a stale untagged sibling of a default-language write.
      */
-    private void replaceTriplesForUpdate(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
+    private Graph replaceTriplesForUpdate(DatasetTx tx, IRI subjectIri, String subject, Graph graph,
             String nameTag, String descriptionTag, String defaultTag) {
-        String deleteExisting = "DELETE { GRAPH <" + ACTOR_GRAPH + "> { " + subject + " ?p ?o } } WHERE { "
-                + "GRAPH <" + ACTOR_GRAPH + "> { " + subject + " ?p ?o } }";
-
         // Captured inside this same transaction, never by a separate read beforehand - that would
         // leave a TOCTOU window the caller's own head comparison deliberately avoids.
         List<Literal> preservedNames = otherLanguageLiterals(tx, subject, NAME_PROPERTY, nameTag, defaultTag);
         List<Literal> preservedDescriptions =
                 otherLanguageLiterals(tx, subject, DESCRIPTION_PROPERTY, descriptionTag, defaultTag);
-        tx.update(deleteExisting);
-        tx.add(graphIri, graph);
+        Graph next = Slices.copyOf(graph);
         if (!preservedNames.isEmpty() || !preservedDescriptions.isEmpty()) {
             Graph preservedLanguageVariants = rdf.createGraph();
             for (Literal name : preservedNames) {
@@ -297,8 +294,9 @@ public class KognioRdfActorRepository implements ActorRepository {
             for (Literal description : preservedDescriptions) {
                 preservedLanguageVariants.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), description);
             }
-            tx.add(graphIri, preservedLanguageVariants);
+            Slices.addAll(next, preservedLanguageVariants);
         }
+        return next;
     }
 
     /**
@@ -357,14 +355,10 @@ public class KognioRdfActorRepository implements ActorRepository {
                     .map(row -> iriOf(row, "s").getIRIString())
                     .orElseThrow(() -> new ActorNotFoundException(projectId, code));
         }
-        String subject = SparqlTerms.iriRef(subjectIriString);
-
-        funnel.delete(dataset, ACTOR_GRAPH, subjectIriString, code.value(),
+        funnel.delete(dataset, subjectIriString, code.value(), EntryDetails.NONE,
                 () -> new ActorNotFoundException(projectId, code),
-                tx -> {
-                    rejectIfReferenced(tx, subjectIriString, projectId, code);
-                    tx.update("DELETE WHERE { GRAPH <" + ACTOR_GRAPH + "> { " + subject + " ?p ?o } }");
-                });
+                () -> new ActorConcurrentlyModifiedException(projectId, code),
+                tx -> rejectIfReferenced(tx, subjectIriString, projectId, code));
     }
 
     /**
@@ -400,7 +394,7 @@ public class KognioRdfActorRepository implements ActorRepository {
         IRI target = rdf.createIRI(subjectIri);
         List<String> referencing = new ArrayList<>();
         REFERENCING_PREDICATES.forEach((predicateIri, shorthand) -> {
-            String query = "ASK { GRAPH ?g { ?s <" + predicateIri + "> ?target } }";
+            String query = "ASK { GRAPH <" + ACTOR_GRAPH + "> { ?s <" + predicateIri + "> ?target } }";
             if (tx.ask(query, Map.of("target", target))) {
                 referencing.add(shorthand);
             }
@@ -460,13 +454,13 @@ public class KognioRdfActorRepository implements ActorRepository {
         Objects.requireNonNull(code, "code");
         DisplayLocale effective = this.displayLocale.withRequestedOverride(canonicalizeLenient(defaultLanguage));
 
-        String query = "SELECT ?s ?type ?head WHERE { GRAPH <" + ACTOR_GRAPH + "> { " + actorByCodeWhereClause(code)
-                + "} "
-                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+        String query = "SELECT ?s ?type WHERE { GRAPH <" + ACTOR_GRAPH + "> { " + actorByCodeWhereClause(code)
+                + "} }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            SparqlQuery sparql = handle.sparqlQuery();
+            // State and token in one read transaction, so the token belongs to exactly this state.
+            return ReadTransactions.read(handle, tx -> {
+            SparqlQuery sparql = tx;
             List<BindingSet> rows = sparql.select(query).toList();
             if (rows.isEmpty()) {
                 return Optional.empty();
@@ -482,12 +476,10 @@ public class KognioRdfActorRepository implements ActorRepository {
             Actor actor = new Actor(new ActorId(ResourceId.of(subjectIriString)), code, type,
                     selected.name().value(),
                     selected.description() == null ? null : selected.description().value());
-            RevisionToken head = rows.get(0).getValue("head")
-                    .filter(IRI.class::isInstance)
-                    .map(value -> new RevisionToken(((IRI) value).getIRIString()))
-                    .orElse(null);
+            RevisionToken head = new RevisionToken(funnel.currentToken(tx, subjectIriString));
             return Optional.of(new CurrentActor(actor, head, selected.name().languageTag(),
                     selected.description() == null ? null : selected.description().languageTag()));
+            });
         }
     }
 

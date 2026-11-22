@@ -17,6 +17,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
+import de.hauschel.arknet.adr.application.port.out.RevisionToken;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrDisplayFallback;
@@ -41,7 +42,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  * {@link DuplicateAdrCodeException}.</p>
  *
  * <p><strong>Concurrency token.</strong> Mirrors the real
- * {@code de.hauschel.arknet.persistence.WriteFunnel}'s head, minimally: a fresh opaque marker minted
+ * {@code de.hauschel.arknet.persistence.VersionedWriteFunnel}'s head, minimally: a fresh opaque marker minted
  * on every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link #findCurrentByCode}
  * hands it out alongside the decision, {@link #compareAndUpdate} rejects a stale one, exactly the
  * CAS contract the real adapter enforces via {@code arkprov:head}.</p>
@@ -66,7 +67,7 @@ class InMemoryAdrRepository implements AdrRepository {
 
 
     private final Map<ProjectId, Map<AdrId, Adr>> byProject = new LinkedHashMap<>();
-    private final Map<AdrId, String> headByIdentity = new LinkedHashMap<>();
+    private final Map<AdrId, RevisionToken> headByIdentity = new LinkedHashMap<>();
     private final Map<ProjectId, List<AdrCode>> retainedByProject = new LinkedHashMap<>();
 
     /**
@@ -123,7 +124,7 @@ class InMemoryAdrRepository implements AdrRepository {
             throw new DuplicateAdrCodeException(projectId, adr.code());
         }
         adrs.put(adr.id(), adr);
-        headByIdentity.put(adr.id(), UUID.randomUUID().toString());
+        headByIdentity.put(adr.id(), new RevisionToken(UUID.randomUUID().toString()));
         if (language != null) {
             nameContextDecisionLanguagesByIdentity.put(adr.id(), new LinkedHashSet<>(Set.of(language)));
         }
@@ -147,7 +148,7 @@ class InMemoryAdrRepository implements AdrRepository {
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Adr updated,
             String nameLanguage, String contextLanguage, String decisionLanguage,
             Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
             String defaultLanguage, RemovedPositions removedConsequencePositions,
@@ -160,7 +161,7 @@ class InMemoryAdrRepository implements AdrRepository {
             throw new AdrConcurrentlyModifiedException(projectId, updated.code());
         }
         adrs.put(updated.id(), updated);
-        headByIdentity.put(updated.id(), UUID.randomUUID().toString());
+        headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));
         Set<String> languages = nameContextDecisionLanguagesByIdentity
                 .computeIfAbsent(updated.id(), key -> new LinkedHashSet<>());
         if (nameLanguage != null) {

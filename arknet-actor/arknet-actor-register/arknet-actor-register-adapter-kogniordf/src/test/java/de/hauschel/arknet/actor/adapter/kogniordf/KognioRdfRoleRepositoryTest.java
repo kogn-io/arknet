@@ -4,6 +4,7 @@
 package de.hauschel.arknet.actor.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -29,6 +30,7 @@ import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.PublishState;
 
 import de.hauschel.arknet.actor.application.RoleService;
 import de.hauschel.arknet.actor.application.port.in.AddRole.NewRole;
@@ -53,12 +55,12 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.persistence.ArkprocVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 
 /**
  * Integration test for {@link KognioRdfRoleRepository} against an in-memory RDF4J-backed
@@ -71,8 +73,10 @@ import de.hauschel.arknet.persistence.WriteFunnel;
 class KognioRdfRoleRepositoryTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
+
+    private static final DatasetId DATASET_A = new DatasetId(PROJECT_A.value());
     private static final ProjectId PROJECT_B = new ProjectId("b");
-    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
+    private static final String ROLE_GRAPH = ContentGraph.GRAPH_IRI;
     private static final String ROLE_TYPE = "https://w3id.org/arknet/process#Role";
     private static final String FILLED_BY_PROPERTY = "https://w3id.org/arknet/process#filledBy";
     private static final String IDENTIFIER_PROPERTY = "http://purl.org/dc/terms/identifier";
@@ -90,7 +94,7 @@ class KognioRdfRoleRepositoryTest {
      * local, so {@link #filledByReadsBackAsCodeAndNameThroughTheServiceReadPath()} can build the
      * sibling actor repository over the very same instance the composition root shares.
      */
-    private WriteFunnel funnel;
+    private VersionedWriteFunnel funnel;
 
     @BeforeEach
     void setUp() {
@@ -98,7 +102,8 @@ class KognioRdfRoleRepositoryTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
-        funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        funnel = new VersionedWriteFunnel(datasetLifecycle, gate, ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = new KognioRdfRoleRepository(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
@@ -154,7 +159,7 @@ class KognioRdfRoleRepositoryTest {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             assertTrue(handle.sparqlQuery().ask("ASK { GRAPH <" + ROLE_GRAPH + "> { <" + subject
                     + "> a <" + ROLE_TYPE + "> } }"));
-            assertFalse(handle.sparqlQuery().ask("ASK { GRAPH <https://w3id.org/arknet/model/actors> { <"
+            assertFalse(handle.sparqlQuery().ask("ASK { GRAPH <https://w3id.org/arknet/model/content> { <"
                     + subject + "> ?p ?o } }"), "a role must live in its own named graph, not the actor one");
         }
     }
@@ -472,13 +477,13 @@ class KognioRdfRoleRepositoryTest {
         repository.create(PROJECT_A, stored, "en");
         String subject = stored.id().value().value();
 
-        List<String> afterCreate = revisionsOf(subject);
+        List<Object> afterCreate = headsOf(subject);
         assertEquals(1, afterCreate.size());
 
         repository.compareAndUpdate(PROJECT_A, new RevisionToken(afterCreate.get(0)),
                 new Role(stored.id(), stored.code(), "Renamed", null, List.of()), "en", "en", null);
 
-        assertEquals(2, revisionsOf(subject).size());
+        assertNotEquals(afterCreate, headsOf(subject), "the update must have moved the draft's token");
     }
 
     @Test
@@ -581,18 +586,14 @@ class KognioRdfRoleRepositoryTest {
     }
 
     @Test
-    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+    void deleteRemovesTheDraftAndRecordsATombstone() {
         Role stored = role(new RoleCode("ROLE-1"), null, List.of());
         repository.create(PROJECT_A, stored, "en");
         String subject = stored.id().value().value();
 
         repository.delete(PROJECT_A, stored.code());
 
-        String head = "ASK { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <" + subject
-                + "> <" + ArkprovVocabulary.HEAD + "> ?v } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertFalse(handle.sparqlQuery().ask(head), "the head pointer must be removed");
-        }
+        assertEquals(PublishState.DELETED, probe().publishState(DATASET_A, subject));
     }
 
     @Test
@@ -633,14 +634,12 @@ class KognioRdfRoleRepositoryTest {
         return repository.findCurrentByCode(PROJECT_A, code, "en").orElseThrow().head();
     }
 
-    private List<String> revisionsOf(String subjectIri) {
-        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
-                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + subjectIri + "> } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
-                    .toList();
-        }
+    /** The draft's current token as a one-element list, or empty for an empty draft. */
+    private List<Object> headsOf(String subjectIri) {
+        return probe().token(DATASET_A, subjectIri).<Object>map(token -> token).stream().toList();
+    }
+
+    private VersioningProbe probe() {
+        return new VersioningProbe(lifecycle, ContentGraph.GRAPH_IRI);
     }
 }

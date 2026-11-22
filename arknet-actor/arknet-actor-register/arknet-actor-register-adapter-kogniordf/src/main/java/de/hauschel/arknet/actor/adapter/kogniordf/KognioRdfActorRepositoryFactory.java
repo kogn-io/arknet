@@ -20,7 +20,8 @@ import io.kogn.rdf.terms.ReadableGraph;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 
 /**
  * Assembles a {@link KognioRdfActorRepository} over a concrete kognio-rdf dataset lifecycle.
@@ -41,7 +42,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * and, since ADR-37/kogn-io/arknet#405, so does the role resource type this same hexagon grew a
  * second aggregate for. {@link #buildFunnel} is therefore public, exactly like
  * {@code KognioRdfRequirementRepositoryFactory#buildFunnel}: built once by the composition root and
- * handed to both {@link #over(DatasetLifecycle, WriteFunnel)} and
+ * handed to both {@link #over(DatasetLifecycle, VersionedWriteFunnel)} and
  * {@code KognioRdfRoleRepositoryFactory#over}, rather than each building its own, functionally
  * identical gate over the same two files.</p>
  */
@@ -85,7 +86,7 @@ public final class KognioRdfActorRepositoryFactory {
     }
 
     /**
-     * Assembles an actor repository over an already-built {@link WriteFunnel} - the seam
+     * Assembles an actor repository over an already-built {@link VersionedWriteFunnel} - the seam
      * {@code KognioRdfRoleRepositoryFactory#over} uses to share this hexagon's funnel rather than
      * building its own, functionally identical one (see {@link #buildFunnel}).
      *
@@ -96,7 +97,7 @@ public final class KognioRdfActorRepositoryFactory {
      * @param funnel        the already-built write funnel to run every write through
      * @return a ready-to-use {@link ActorRepository}
      */
-    public static ActorRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {
+    public static ActorRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale, VersionedWriteFunnel funnel) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
         Objects.requireNonNull(funnel, "funnel");
@@ -104,7 +105,7 @@ public final class KognioRdfActorRepositoryFactory {
     }
 
     /**
-     * Builds the shared {@link WriteFunnel} every write path of the actor hexagon runs through -
+     * Builds the shared {@link VersionedWriteFunnel} every write path of the actor hexagon runs through -
      * both this factory's own repository and, over the same instance,
      * {@code KognioRdfRoleRepositoryFactory}'s (ADR-37/kogn-io/arknet#405): a {@code Role} shares
      * this hexagon's SHACL shapes and ontology axioms (both already live in
@@ -115,10 +116,11 @@ public final class KognioRdfActorRepositoryFactory {
      * @param displayLocale the display-language preference for SHACL violation messages
      * @return the assembled write funnel
      */
-    public static WriteFunnel buildFunnel(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
+    public static VersionedWriteFunnel buildFunnel(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        return new WriteFunnel(lifecycle, buildGate(displayLocale), WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        return new VersionedWriteFunnel(lifecycle, buildGate(displayLocale), ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
     }
 
     /**

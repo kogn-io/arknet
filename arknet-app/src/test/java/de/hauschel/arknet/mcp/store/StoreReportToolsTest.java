@@ -608,7 +608,7 @@ class StoreReportToolsTest {
                 new NewTerm("Anmeldung", "Der Nachweis der eigenen Identitaet.", null, null), "de");
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { <"
+                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <"
                         + deTerm.id().value().value() + "> "
                         + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Login\"@en } }");
                 return null;

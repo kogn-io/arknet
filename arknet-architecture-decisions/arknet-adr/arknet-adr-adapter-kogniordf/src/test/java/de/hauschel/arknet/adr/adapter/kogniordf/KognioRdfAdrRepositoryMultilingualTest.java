@@ -42,7 +42,9 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
+import de.hauschel.arknet.adr.application.port.out.RevisionToken;
 
 /**
  * Multilingual behaviour of {@link KognioRdfAdrRepository} (kogn-io/arknet#357): other-language
@@ -57,7 +59,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
     private static final ProjectId PROJECT = new ProjectId("adr-multilingual-test");
     /** Any fixed day - these tests exercise language round-tripping, not the stamped date itself. */
     private static final LocalDate DECIDED_ON = LocalDate.of(2026, 8, 23);
-    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/adr";
+    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/content";
 
     private DatasetLifecycleRdf4j lifecycle;
     private KognioRdfAdrRepository repository;
@@ -69,7 +71,8 @@ class KognioRdfAdrRepositoryMultilingualTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
-        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(datasetLifecycle, gate, ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = new KognioRdfAdrRepository(
                 datasetLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT, funnel);
     }
@@ -100,7 +103,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         }
     }
 
-    private String currentHeadOf(AdrCode code) {
+    private RevisionToken currentHeadOf(AdrCode code) {
         return repository.findCurrentByCode(PROJECT, code, null).orElseThrow().head();
     }
 

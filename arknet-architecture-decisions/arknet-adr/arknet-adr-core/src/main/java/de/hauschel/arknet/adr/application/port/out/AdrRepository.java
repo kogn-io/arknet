@@ -131,7 +131,7 @@ public interface AdrRepository {
      *                          in {@code arknet-persistence-support}, a module
      *                          {@code arknet-adr-core} must not depend on.
      */
-    void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
+    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Adr updated,
             String nameLanguage, String contextLanguage, String decisionLanguage,
             Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
             String defaultLanguage, RemovedPositions removedConsequencePositions,
@@ -219,7 +219,7 @@ public interface AdrRepository {
      *                                  existing considered option's {@code arknet:name}/
      *                                  {@code arkarch:optionRationale}
      */
-    record CurrentAdr(Adr value, String head, String nameLanguage, String contextLanguage,
+    record CurrentAdr(Adr value, RevisionToken head, String nameLanguage, String contextLanguage,
             String decisionLanguage, Set<String> nameContextDecisionLanguages,
             Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
             Map<Integer, Set<String>> consequenceLanguagesByPosition,

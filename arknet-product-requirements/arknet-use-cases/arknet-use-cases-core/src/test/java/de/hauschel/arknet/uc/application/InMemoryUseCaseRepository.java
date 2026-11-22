@@ -33,7 +33,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * deterministic.</p>
  *
  * <p><strong>Concurrency token.</strong> Mirrors the real {@link
- * de.hauschel.arknet.persistence.WriteFunnel}'s head, minimally: a fresh opaque marker minted on
+ * de.hauschel.arknet.persistence.VersionedWriteFunnel}'s head, minimally: a fresh opaque marker minted on
  * every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link
  * #findCurrentByCode} hands it out alongside the use case, {@link #compareAndUpdate} rejects a
  * stale one, exactly the CAS contract the real adapter enforces via {@code arkprov:head}.</p>

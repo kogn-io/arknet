@@ -61,7 +61,7 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
  * {@code de.hauschel.arknet.kernel} class (rule 6) -- and confirm the rule fails before
  * trusting it. All six were confirmed to fail this way when introduced. Rule 13 is broken the
  * same way, by naming a neighbour's type in a {@code de.hauschel.arknet.analysis} class, and
- * rule 14 by naming {@code WriteFunnel} there. Rule 12 is the one
+ * rule 14 by naming {@code VersionedWriteFunnel} there. Rule 12 is the one
  * rule that does not need the exercise: it turns red on any class in the kernel package whose
  * name is not on its list, which is the whole of what it claims.</p>
  *
@@ -113,7 +113,7 @@ class DependencyRulesTest {
      */
     private static final Set<String> PERSISTENCE_WRITE_TYPES = Set.of(
             "ShaclWriteGate",
-            "WriteFunnel",
+            "VersionedWriteFunnel",
             "VersionedWriteFunnel",
             "WriteConstraintViolationException",
             "UnresolvedReferenceException",

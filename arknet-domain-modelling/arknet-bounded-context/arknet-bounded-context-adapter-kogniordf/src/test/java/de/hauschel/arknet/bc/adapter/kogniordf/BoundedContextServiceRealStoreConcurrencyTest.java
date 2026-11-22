@@ -53,9 +53,10 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 
 /**
  * Regression tests against a real RDF4J-backed store (on-disk {@code NativeStore}): the
@@ -69,7 +70,7 @@ import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
  * genuinely <em>overlap</em>: both pass the in-transaction {@code contains} code-uniqueness guard
  * before either commits (neither sees the other's uncommitted write under {@code SERIALIZABLE}
  * isolation, kogn-io/rdf-core#18), and only the second commit is rejected as a conflict - by the
- * store itself, not by the guard. The shared {@link de.hauschel.arknet.persistence.WriteFunnel}
+ * store itself, not by the guard. The shared {@link de.hauschel.arknet.persistence.VersionedWriteFunnel}
  * translates that commit-time rejection into the same {@link
  * de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException} the synchronous guard
  * throws, so {@code CodeAssignment}'s retry (in {@link BoundedContextService#add}) catches this
@@ -259,9 +260,9 @@ class BoundedContextServiceRealStoreConcurrencyTest {
             report.append("concurrency race diagnostics").append(System.lineSeparator());
             report.append("  system: ").append(systemDiagnostics()).append(System.lineSeparator());
             report.append("  racer-A (winner) result: ").append(describe(winner)).append(System.lineSeparator());
-            report.append("  racer-A (winner) arkprov:head: ").append(headOf(winner)).append(System.lineSeparator());
+            report.append("  racer-A (winner) draft token: ").append(headOf(winner)).append(System.lineSeparator());
             report.append("  racer-B (loser) result: ").append(describe(loser)).append(System.lineSeparator());
-            report.append("  racer-B (loser) arkprov:head: ").append(headOf(loser)).append(System.lineSeparator());
+            report.append("  racer-B (loser) draft token: ").append(headOf(loser)).append(System.lineSeparator());
             report.append("  racer-B (loser) failure: ").append(failure == null
                     ? "none" : failure.getClass().getName() + ": " + failure.getMessage())
                     .append(System.lineSeparator());
@@ -300,7 +301,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
     /**
      * Reads {@code boundedContext}'s current {@code arkprov:head} straight from
      * {@link #realLifecycle} after the race, outside any transaction - the same triple pattern
-     * {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate} reads inside its
+     * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#compareAndUpdate} reads inside its
      * transaction, but there is no accessor for that private read path, so this queries it directly
      * via {@link io.kogn.rdf.dataset.SparqlQuery}.
      *
@@ -319,15 +320,11 @@ class BoundedContextServiceRealStoreConcurrencyTest {
             return "skipped (thread interrupted before this read)";
         }
         String subjectIriString = boundedContext.id().value().value();
-        String query = "SELECT ?head WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIriString + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
-        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
-            Optional<String> head = handle.sparqlQuery().select(query)
-                    .findFirst()
-                    .flatMap(row -> row.getValue("head"))
-                    .filter(IRI.class::isInstance)
-                    .map(value -> ((IRI) value).getIRIString());
-            return head.orElse("none (no revision recorded through the funnel)");
+        try {
+            return new VersioningProbe(realLifecycle, ContentGraph.GRAPH_IRI)
+                    .token(new DatasetId(WS.value()), subjectIriString)
+                    .map(Object::toString)
+                    .orElse("none (empty draft)");
         } catch (Throwable t) {
             String interruptNote = Thread.currentThread().isInterrupted() ? ", thread interrupted" : "";
             return "unavailable: " + t.getClass().getName() + ": " + t.getMessage() + interruptNote;

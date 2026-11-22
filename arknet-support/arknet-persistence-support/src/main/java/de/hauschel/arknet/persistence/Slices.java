@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
 
+import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.BlankNodeOrIRI;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
@@ -36,6 +37,51 @@ public final class Slices {
         Graph copy = new SimpleRdf().createGraph();
         source.stream().forEach(copy::add);
         return copy;
+    }
+
+    /**
+     * Adds every triple of {@code source} to {@code target}.
+     *
+     * @param target the graph to add to
+     * @param source the triples to add
+     */
+    public static void addAll(Graph target, ReadableGraph source) {
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(source, "source");
+        source.stream().forEach(target::add);
+    }
+
+    /**
+     * Carries a blank node of the current draft over into the new slice: every triple of
+     * {@code draft} whose subject is {@code node}, and so on for every blank node those triples
+     * reach. A blank node reachable from the subject is part of its slice, so an edge kept onto
+     * one must keep the node's own triples too, or the write would drop them. An IRI or literal
+     * {@code node} adds nothing.
+     *
+     * @param target the new slice
+     * @param draft  the current draft the node is read from
+     * @param node   the edge target being kept
+     */
+    public static void addBlankNodeClosure(Graph target, ReadableGraph draft, RDFTerm node) {
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(draft, "draft");
+        java.util.Deque<BlankNode> pending = new java.util.ArrayDeque<>();
+        java.util.Set<BlankNode> seen = new java.util.HashSet<>();
+        if (node instanceof BlankNode blankNode) {
+            pending.push(blankNode);
+        }
+        while (!pending.isEmpty()) {
+            BlankNode current = pending.pop();
+            if (!seen.add(current)) {
+                continue;
+            }
+            draft.stream(current, null, null).forEach(triple -> {
+                target.add(triple);
+                if (triple.getObject() instanceof BlankNode next) {
+                    pending.push(next);
+                }
+            });
+        }
     }
 
     /**

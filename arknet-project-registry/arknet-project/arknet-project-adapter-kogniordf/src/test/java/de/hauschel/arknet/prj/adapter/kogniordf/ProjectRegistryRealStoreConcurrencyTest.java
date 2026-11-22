@@ -70,7 +70,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  *
  * <p><strong>What the {@code register} races prove.</strong> Two things the four model contexts' tests cannot cover,
  * because this context differs from them in two ways. First: it guards <em>two</em> uniqueness
- * rules, the label (through {@link de.hauschel.arknet.persistence.WriteFunnel}'s {@code code}
+ * rules, the label (through {@link de.hauschel.arknet.persistence.VersionedWriteFunnel}'s {@code code}
  * parameter) and the anchor ({@link KognioRdfProjectRegistry#checkAnchorUniqueness}
  * decision 4) - so "you lost the commit race" does not by itself say which rule was broken.
  * Second: there is no {@code CodeAssignment} retry to heal the loser (there is no {@code PRJ-N}
@@ -88,7 +88,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * other's uncommitted write, and only the second commit is rejected by the store - the funnel
  * translates that lost {@code SERIALIZABLE} conflict into the identical {@link StaleProjectException}
  * a synchronously stale caller would already get from the head comparison itself (see
- * {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate}'s "two ways to observe a
+ * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#compareAndUpdate}'s "two ways to observe a
  * conflict, one signal" javadoc). The proof is that this second, harder-to-reach interleaving
  * collapses onto the same signal rather than surfacing a raw store exception or, worse, silently
  * losing one writer's change - and that the loser's whole transaction, including its
@@ -168,7 +168,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
      *
      * <p>Before the {@code commitConflict} translator existed, the loser was thrown
      * {@link DuplicateProjectLabelException} for a label no project had ever registered, because
-     * {@code WriteFunnel#create} reported every lost commit as a code collision. Both
+     * {@code VersionedWriteFunnel#create} reported every lost commit as a code collision. Both
      * callers deliberately register a different label here, so nothing but the anchor can be the
      * real cause and a label complaint cannot be right by accident.</p>
      */

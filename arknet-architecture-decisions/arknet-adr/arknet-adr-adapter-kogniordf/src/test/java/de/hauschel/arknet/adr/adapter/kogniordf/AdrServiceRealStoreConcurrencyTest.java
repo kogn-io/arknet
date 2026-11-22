@@ -51,7 +51,7 @@ import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
  * BoundedContextServiceRealStoreConcurrencyTest
  * #linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead}: no real threads, a {@link
  * GuardedLifecycle} {@code beforeTransaction} hook fires exactly where {@code
- * WriteFunnel#compareAndUpdate}'s own write transaction is about to open - after {@code
+ * VersionedWriteFunnel#compareAndUpdate}'s own write transaction is about to open - after {@code
  * crossReferenceAssertedContext}'s pre-transaction read and the SHACL gate have both already run
  * against the peer as it still existed, and before this class's in-transaction backstop ({@code
  * KognioRdfAdrRepository#rejectIfPeersVanished}) gets a chance to see it gone. The hook deletes the

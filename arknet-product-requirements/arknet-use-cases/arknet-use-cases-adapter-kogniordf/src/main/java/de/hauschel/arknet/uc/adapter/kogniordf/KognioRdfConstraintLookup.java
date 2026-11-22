@@ -18,6 +18,7 @@ import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.vocab.VocabDct;
 
+import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
@@ -70,7 +71,7 @@ public final class KognioRdfConstraintLookup implements ConstraintLookup {
     // Mirrors the graph IRI the requirements bounded context's constraint out-adapter
     // (KognioRdfConstraintRepository) writes into. The bounded contexts share one project
     // dataset; resolving a constraint means reading across into that sibling graph.
-    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
+    private static final String CONSTRAINTS_GRAPH = ContentGraph.GRAPH_IRI;
 
     private final DatasetLifecycle lifecycle;
 

@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,12 +28,18 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetShutdownOutcome;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
+import io.kogn.rdf.terms.Graph;
+import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.EntryDetails;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.InfrastructureGraphs;
 import de.hauschel.arknet.prj.domain.DatasetInUseException;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
+import de.hauschel.arknet.kernel.DisplayLocale;
 
 /**
  * Integration test for {@link KognioRdfProjectDatasets} against a persistent RDF4J-backed store -
@@ -42,8 +49,8 @@ import de.hauschel.arknet.prj.domain.DatasetInUseException;
 class KognioRdfProjectDatasetsTest {
 
     private static final ProjectId PROJECT = new ProjectId("arknet-plugin");
-    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
-    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
+    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/content";
+    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/content";
     private static final String ARKREQ = "https://w3id.org/arknet/requirements#";
     private static final String SKOS_CONCEPT = "http://www.w3.org/2004/02/skos/core#Concept";
 
@@ -79,32 +86,43 @@ class KognioRdfProjectDatasetsTest {
     }
 
     /**
-     * Every registered project carries its self-description, and every write leaves a revision -
-     * neither is model content, so a project holding nothing else counts as empty and needs no
-     * confirmation to be deleted.
+     * Every registered project carries its self-description - no model content, so a project
+     * holding nothing else counts as empty and needs no confirmation to be deleted.
      */
     @Test
-    void theSelfDescriptionAndTheRevisionTrailAreNotModelResources() {
+    void theSelfDescriptionIsNoModelResource() {
         insert(ArkprjVocabulary.IDENTITY_GRAPH, "<urn:project> a <" + ArkprjVocabulary.PROJECT_TYPE + "> .");
-        insert(ArkprovVocabulary.PROVENANCE_GRAPH, "<urn:rev:1> a <http://www.w3.org/ns/prov#Entity> .");
 
         assertEquals(Map.of(), datasets.modelResourceCounts(PROJECT));
     }
 
-    /** Writes via the funnel leave one {@code arkprov:Revision} each; activities and heads do not count. */
+    /**
+     * A publish and a tombstone are one history entry each; a deleted resource is no model
+     * resource any more, yet its history still counts.
+     */
     @Test
-    void countsTheRevisionsOfTheProvenanceTrailAndNothingElseInIt() {
-        insert(ArkprovVocabulary.PROVENANCE_GRAPH, "<urn:rev:1> a <" + ArkprovVocabulary.REVISION_TYPE + "> , <"
-                + ArkprovVocabulary.ENTITY_TYPE + "> . "
-                + "<urn:rev:2> a <" + ArkprovVocabulary.REVISION_TYPE + "> , <" + ArkprovVocabulary.ENTITY_TYPE
-                + "> . <urn:act:1> a <" + ArkprovVocabulary.ACTIVITY_TYPE + "> .");
+    void countsTheEntriesOfTheLibraryHistory() {
+        DatasetId dataset = new DatasetId(PROJECT.value());
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(lifecycle, KognioRdfProjectRepositoryFactory
+                .buildGate(DisplayLocale.DEFAULT), ContentGraph.GRAPH_IRI, VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
+        SimpleRdf rdf = new SimpleRdf();
+        funnel.create(dataset, "urn:req:1", "FR-1", null, IllegalStateException::new, IllegalStateException::new,
+                (tx, current) -> {
+                    Graph slice = rdf.createGraph();
+                    slice.add(rdf.createIRI("urn:req:1"), VocabRdf.TYPE, rdf.createIRI(ARKREQ + "FunctionalRequirement"));
+                    return slice;
+                });
+        funnel.publish(dataset, List.of("urn:req:1"), EntryDetails.NONE, IllegalStateException::new,
+                IllegalStateException::new);
+        funnel.delete(dataset, "urn:req:1", "FR-1", EntryDetails.NONE, IllegalStateException::new,
+                IllegalStateException::new, tx -> { });
 
         assertEquals(2L, datasets.revisionCount(PROJECT));
         assertEquals(Map.of(), datasets.modelResourceCounts(PROJECT));
     }
 
     @Test
-    void aDatasetWithoutAProvenanceTrailHoldsNoRevisions() {
+    void aDatasetWithoutHistoryHoldsNoRevisions() {
         insert(REQUIREMENTS_GRAPH, "<urn:req:1> a <" + ARKREQ + "FunctionalRequirement> .");
 
         assertEquals(0L, datasets.revisionCount(PROJECT));

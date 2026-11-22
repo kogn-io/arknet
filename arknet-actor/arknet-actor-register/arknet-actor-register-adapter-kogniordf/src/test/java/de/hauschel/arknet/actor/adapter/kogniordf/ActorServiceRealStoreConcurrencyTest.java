@@ -52,7 +52,7 @@ import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
  * genuinely <em>overlap</em>: both pass the in-transaction {@code contains} code-uniqueness guard
  * before either commits (neither sees the other's uncommitted write under {@code SERIALIZABLE}
  * isolation), and only the second commit is rejected as a conflict - by the store itself, not by
- * the guard. The shared {@link de.hauschel.arknet.persistence.WriteFunnel} translates that
+ * the guard. The shared {@link de.hauschel.arknet.persistence.VersionedWriteFunnel} translates that
  * commit-time rejection into the same
  * {@link de.hauschel.arknet.actor.domain.DuplicateActorCodeException} the synchronous guard throws,
  * so {@code CodeAssignment}'s retry (in {@link ActorService#add}) catches this interleaving exactly

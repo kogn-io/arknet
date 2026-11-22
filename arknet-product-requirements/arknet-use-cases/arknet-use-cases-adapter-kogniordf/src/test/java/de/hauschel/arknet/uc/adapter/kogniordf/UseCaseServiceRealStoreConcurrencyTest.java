@@ -42,7 +42,6 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.pr.shared.ConstraintCode;
 import de.hauschel.arknet.pr.shared.RequirementCode;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
 import de.hauschel.arknet.uc.application.UseCaseService;
@@ -56,6 +55,8 @@ import de.hauschel.arknet.uc.application.port.out.TermLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.testsupport.VersioningProbe;
 
 /**
  * Regression tests against a real RDF4J-backed store (on-disk {@code NativeStore}): the second
@@ -65,7 +66,7 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
  * one's transaction even begins") with a repository decorator and no real transactions at all.
  *
  * <p>Mirrors {@code BoundedContextServiceRealStoreConcurrencyTest} exactly: the shared
- * {@link de.hauschel.arknet.persistence.WriteFunnel} translates a genuine store-level commit conflict
+ * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel} translates a genuine store-level commit conflict
  * (two callers' code-uniqueness guards both passing before either commits, under {@code
  * SERIALIZABLE} isolation, kogn-io/rdf-core#18) into the same {@link
  * de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException} the synchronous guard throws, so
@@ -264,9 +265,9 @@ class UseCaseServiceRealStoreConcurrencyTest {
             report.append("concurrency race diagnostics").append(System.lineSeparator());
             report.append("  system: ").append(systemDiagnostics()).append(System.lineSeparator());
             report.append("  racer-A (winner) result: ").append(describe(winner)).append(System.lineSeparator());
-            report.append("  racer-A (winner) arkprov:head: ").append(headOf(winner)).append(System.lineSeparator());
+            report.append("  racer-A (winner) draft token: ").append(headOf(winner)).append(System.lineSeparator());
             report.append("  racer-B (loser) result: ").append(describe(loser)).append(System.lineSeparator());
-            report.append("  racer-B (loser) arkprov:head: ").append(headOf(loser)).append(System.lineSeparator());
+            report.append("  racer-B (loser) draft token: ").append(headOf(loser)).append(System.lineSeparator());
             report.append("  racer-B (loser) failure: ").append(failure == null
                     ? "none" : failure.getClass().getName() + ": " + failure.getMessage())
                     .append(System.lineSeparator());
@@ -305,7 +306,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
     /**
      * Reads {@code useCase}'s current {@code arkprov:head} straight from
      * {@link #realLifecycle} after the race, outside any transaction - the same triple pattern
-     * {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate} reads inside its
+     * {@link de.hauschel.arknet.persistence.VersionedWriteFunnel#compareAndUpdate} reads inside its
      * transaction, but there is no accessor for that private read path, so this queries it directly
      * via {@link io.kogn.rdf.dataset.SparqlQuery}.
      *
@@ -324,15 +325,11 @@ class UseCaseServiceRealStoreConcurrencyTest {
             return "skipped (thread interrupted before this read)";
         }
         String subjectIriString = useCase.id().value().value();
-        String query = "SELECT ?head WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
-                + subjectIriString + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
-        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
-            Optional<String> head = handle.sparqlQuery().select(query)
-                    .findFirst()
-                    .flatMap(row -> row.getValue("head"))
-                    .filter(IRI.class::isInstance)
-                    .map(value -> ((IRI) value).getIRIString());
-            return head.orElse("none (no revision recorded through the funnel)");
+        try {
+            return new VersioningProbe(realLifecycle, ContentGraph.GRAPH_IRI)
+                    .token(new DatasetId(WS.value()), subjectIriString)
+                    .map(Object::toString)
+                    .orElse("none (empty draft)");
         } catch (Throwable t) {
             String interruptNote = Thread.currentThread().isInterrupted() ? ", thread interrupted" : "";
             return "unavailable: " + t.getClass().getName() + ": " + t.getMessage() + interruptNote;

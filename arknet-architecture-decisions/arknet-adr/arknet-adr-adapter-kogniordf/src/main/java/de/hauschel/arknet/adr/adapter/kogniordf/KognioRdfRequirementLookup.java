@@ -13,6 +13,7 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.vocab.VocabDct;
 
+import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.adr.application.port.out.RequirementLookup;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -50,7 +51,7 @@ public final class KognioRdfRequirementLookup implements RequirementLookup {
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
     // Mirrors the graph IRI the requirements out-adapter writes into. The bounded contexts share one
     // project dataset; resolving a requirement means reading across into that sibling graph.
-    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
+    private static final String REQUIREMENTS_GRAPH = ContentGraph.GRAPH_IRI;
 
     private final DatasetLifecycle lifecycle;
 

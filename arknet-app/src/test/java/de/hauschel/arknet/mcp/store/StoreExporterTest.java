@@ -63,7 +63,7 @@ class StoreExporterTest {
     private static final ProjectId PROJECT = new ProjectId("store-exporter-test");
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-exporter-test-fr-1";
     private static final String FR_2_IRI = "https://w3id.org/arknet/id/store-exporter-test-fr-2";
-    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
+    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/content";
     private static final String DCTERMS_TITLE = "http://purl.org/dc/terms/title";
 
     @TempDir

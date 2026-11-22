@@ -31,6 +31,8 @@ import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.versioning.EntryDetails;
+import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
@@ -54,12 +56,14 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
-import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.ReadTransactions;
+import de.hauschel.arknet.persistence.Slices;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 
 /**
  * Out-adapter: {@link BoundedContextRepository} backed by the kognio-rdf substrate
@@ -170,7 +174,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private static final Logger LOG = LoggerFactory.getLogger(KognioRdfBoundedContextRepository.class);
 
     private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
-    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
+    private static final String BOUNDED_CONTEXT_GRAPH = ContentGraph.GRAPH_IRI;
 
     private static final String BOUNDED_CONTEXT_TYPE = ArkdddVocabulary.BOUNDED_CONTEXT_TYPE;
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
@@ -198,7 +202,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private final DatasetLifecycle lifecycle;
     private final ResourceIdFactory resourceIdFactory;
     private final DisplayLocale displayLocale;
-    private final WriteFunnel funnel;
+    private final VersionedWriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -221,7 +225,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      */
     KognioRdfBoundedContextRepository(
             DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, DisplayLocale displayLocale,
-            WriteFunnel funnel) {
+            VersionedWriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
@@ -238,14 +242,12 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         // guaranteed safe to embed here - no separate check needed.
         String subjectIriString = boundedContext.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
-        IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
         Graph graph = buildCandidateGraph(subjectIri, boundedContext, tag, tag);
 
-        funnel.create(new DatasetId(projectId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
-                boundedContext.code().value(), graph, null,
+        funnel.create(new DatasetId(projectId.value()), subjectIriString, boundedContext.code().value(), null,
                 () -> new ResourceAlreadyExistsException(projectId, boundedContext.id().value()),
                 () -> new DuplicateBoundedContextCodeException(projectId, boundedContext.code()),
-                tx -> writeNewTriples(tx, graphIri, graph));
+                (tx, current) -> graph);
     }
 
     /**
@@ -283,13 +285,13 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
         Graph graph = buildCandidateGraph(subjectIri, updated, nameTag, domainVisionTag);
 
-        funnel.compareAndUpdate(new DatasetId(projectId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
-                expectedHead == null ? null : expectedHead.value(), graph, null,
+        funnel.compareAndUpdate(new DatasetId(projectId.value()), subjectIriString,
+                expectedHead == null ? null : (io.kogn.rdf.versioning.RevisionToken) expectedHead.value(), null,
                 () -> new BoundedContextNotFoundException(projectId, updated.code()),
                 () -> new BoundedContextConcurrentlyModifiedException(projectId, updated.code()),
-                tx -> {
+                (tx, draft) -> {
                     rejectCodeCollision(tx, graphIri, subjectIri, updated.code(), projectId);
-                    replaceExistingTriples(tx, graphIri, subjectIri, subject, graph, nameTag, domainVisionTag,
+                    return replaceExistingTriples(tx, draft, subjectIri, subject, graph, nameTag, domainVisionTag,
                             defaultTag);
                 });
     }
@@ -343,7 +345,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         graph.add(subjectIri, rdf.createIRI(DOMAIN_VISION_PROPERTY),
                 literalOf(boundedContext.domainVision(), domainVisionTag));
         if (boundedContext.subdomain() != null) {
-            IRI subdomainIri = mintSubdomainIri();
+            IRI subdomainIri = subdomainIri(subjectIri);
             graph.add(subdomainIri, VocabRdf.TYPE, rdf.createIRI(SUBDOMAIN_CLASS));
             graph.add(subdomainIri, rdf.createIRI(SUBDOMAIN_TYPE_PROPERTY),
                     rdf.createIRI(subdomainIriFor(boundedContext.subdomain())));
@@ -370,10 +372,6 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * could need preserving (that concern is specific to replacing an already-existing subject's
      * triples - see {@link #replaceExistingTriples}'s javadoc).
      */
-    private void writeNewTriples(DatasetTx tx, IRI graphIri, Graph graph) {
-        tx.add(graphIri, graph);
-    }
-
     /**
      * Replaces {@code subject}'s triples with {@code graph} inside an already-open write
      * transaction - the tail of {@link #compareAndUpdate}, reached once the funnel's own head
@@ -404,7 +402,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * subject, so a subject-only delete would leave the superseded node's triples behind as
      * disconnected, ever-accumulating garbage on every update that touches the classification.</p>
      */
-    private void replaceExistingTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
+    private Graph replaceExistingTriples(DatasetTx tx, ReadableGraph draft, IRI subjectIri, String subject,
+            Graph graph,
             String nameTag, String domainVisionTag, String defaultTag) {
         String selectUnjoinableTerms = "SELECT ?term WHERE { "
                 + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " <"
@@ -412,10 +411,6 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         String selectAggregates = "SELECT ?aggregate WHERE { "
                 + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " <"
                 + HAS_AGGREGATE_PROPERTY + "> ?aggregate } }";
-        String deleteExisting = "DELETE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { ?s ?p ?o } } WHERE { "
-                + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
-                + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
-                + "{ " + subject + " <" + PART_OF_PROPERTY + "> ?s . ?s ?p ?o } } }";
 
         List<RDFTerm> unjoinableTerms = tx.select(selectUnjoinableTerms).map(row -> termOf(row, "term")).toList();
         List<RDFTerm> aggregates = tx.select(selectAggregates).map(row -> termOf(row, "aggregate")).toList();
@@ -424,16 +419,17 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         List<Literal> preservedNames = otherLanguageLiterals(tx, subject, NAME_PROPERTY, nameTag, defaultTag);
         List<Literal> preservedDomainVisions =
                 otherLanguageLiterals(tx, subject, DOMAIN_VISION_PROPERTY, domainVisionTag, defaultTag);
-        tx.update(deleteExisting);
-        tx.add(graphIri, graph);
+        Graph next = Slices.copyOf(graph);
         if (!unjoinableTerms.isEmpty() || !aggregates.isEmpty()
                 || !preservedNames.isEmpty() || !preservedDomainVisions.isEmpty()) {
             Graph preservedEdges = rdf.createGraph();
             for (RDFTerm termNode : unjoinableTerms) {
                 preservedEdges.add(subjectIri, rdf.createIRI(UBIQUITOUS_LANGUAGE_TERM_PROPERTY), termNode);
+                Slices.addBlankNodeClosure(preservedEdges, draft, termNode);
             }
             for (RDFTerm aggregateNode : aggregates) {
                 preservedEdges.add(subjectIri, rdf.createIRI(HAS_AGGREGATE_PROPERTY), aggregateNode);
+                Slices.addBlankNodeClosure(preservedEdges, draft, aggregateNode);
             }
             for (Literal name : preservedNames) {
                 preservedEdges.add(subjectIri, rdf.createIRI(NAME_PROPERTY), name);
@@ -441,8 +437,9 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
             for (Literal domainVision : preservedDomainVisions) {
                 preservedEdges.add(subjectIri, rdf.createIRI(DOMAIN_VISION_PROPERTY), domainVision);
             }
-            tx.add(graphIri, preservedEdges);
+            Slices.addAll(next, preservedEdges);
         }
+        return next;
     }
 
     /**
@@ -526,21 +523,21 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         // trip sees (issue #456), mirroring KognioRdfConstraintRepository#findCurrentByCode.
         DisplayLocale effective = this.displayLocale.withRequestedOverride(canonicalizeLenient(defaultLanguage));
 
-        String query = "SELECT ?s ?subdomain ?ownedBy ?head WHERE { GRAPH <"
+        String query = "SELECT ?s ?subdomain ?ownedBy WHERE { GRAPH <"
                 + BOUNDED_CONTEXT_GRAPH + "> { "
                 + boundedContextByCodeWhereClause(code)
-                + "} "
-                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+                + "} }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            List<BindingSet> rows = handle.sparqlQuery().select(query).toList();
+            // State and token in one read transaction, so the token belongs to exactly this state.
+            return ReadTransactions.read(handle, tx -> {
+            List<BindingSet> rows = tx.select(query).toList();
             if (rows.isEmpty()) {
                 return Optional.empty();
             }
             String subjectIriString = iriOf(rows.get(0), "s").getIRIString();
             String subject = SparqlTerms.iriRef(subjectIriString);
-            SparqlQuery sparql = handle.sparqlQuery();
+            SparqlQuery sparql = tx;
             Optional<NameVisionSelection> selection = selectNameVision(sparql::select, subject, effective);
             if (selection.isEmpty()) {
                 return Optional.empty();
@@ -554,12 +551,10 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                     reduced.subdomain(), reduced.ownedBy(),
                     usesTerms,
                     readDelimitedTerms(sparql::select, subject, usesTerms));
-            RevisionToken head = rows.get(0).getValue("head")
-                    .filter(IRI.class::isInstance)
-                    .map(value -> new RevisionToken(((IRI) value).getIRIString()))
-                    .orElse(null);
+            RevisionToken head = new RevisionToken(funnel.currentToken(tx, subjectIriString));
             return Optional.of(new BoundedContextRepository.CurrentBoundedContext(boundedContext, head,
                     selected.name().languageTag(), selected.domainVision().languageTag()));
+            });
         }
     }
 
@@ -862,17 +857,11 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                     .map(row -> iriOf(row, "s").getIRIString())
                     .orElseThrow(() -> new BoundedContextNotFoundException(projectId, code));
         }
-        String subject = SparqlTerms.iriRef(subjectIriString);
-
-        funnel.delete(dataset, BOUNDED_CONTEXT_GRAPH, subjectIriString, code.value(),
+        // The library removes the bounded context's whole slice, its #Subdomain fragment included.
+        funnel.delete(dataset, subjectIriString, code.value(), EntryDetails.NONE,
                 () -> new BoundedContextNotFoundException(projectId, code),
-                tx -> {
-                    rejectIfReferenced(tx, subjectIriString, projectId, code);
-                    tx.update("DELETE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { ?s ?p ?o } } WHERE { "
-                            + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
-                            + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
-                            + "{ " + subject + " <" + PART_OF_PROPERTY + "> ?s . ?s ?p ?o } } }");
-                });
+                () -> new BoundedContextConcurrentlyModifiedException(projectId, code),
+                tx -> rejectIfReferenced(tx, subjectIriString, projectId, code));
     }
 
     /**
@@ -915,8 +904,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still
      * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
-     * every named graph ({@code GRAPH ?g}), since every one of those edges is written by another
-     * hexagon into its own graph, never into {@link #BOUNDED_CONTEXT_GRAPH}. Runs inside the live
+     * the content graph, where every one of those edges lives, whichever hexagon wrote it (ADR-63).
+     * Runs inside the live
      * write transaction {@link WriteFunnel#delete} hands its {@code body}, so the check and the
      * eventual delete share one atomic snapshot. Mirrors
      * {@code KognioRdfConstraintRepository#rejectIfReferenced}.
@@ -928,7 +917,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
             BoundedContextCode code) {
         IRI target = rdf.createIRI(subjectIri);
         List<String> referencing = REFERENCING_PREDICATES.entrySet().stream()
-                .filter(entry -> tx.ask("ASK { GRAPH ?g { ?s <" + entry.getKey() + "> ?target } }",
+                .filter(entry -> tx.ask("ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { ?s <" + entry.getKey() + "> ?target } }",
                         Map.of("target", target)))
                 .map(Map.Entry::getValue)
                 .sorted()
@@ -1187,13 +1176,12 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     }
 
     /**
-     * Mints an opaque IRI for the derived {@code arkddd:Subdomain} node from the same kernel
-     * scheme as the bounded context root, mirroring
-     * {@code KognioRdfUseCaseRepository#mintStepIri}: the node is a value object with no stable
-     * identity of its own.
+     * The IRI of the bounded context's {@code arkddd:Subdomain} node: the fragment
+     * {@code <bounded context>#Subdomain} of its own IRI (ADR-64) - a bounded context sits in at
+     * most one subdomain, so the node keeps one IRI across every write.
      */
-    private IRI mintSubdomainIri() {
-        return rdf.createIRI(resourceIdFactory.newId().value());
+    private IRI subdomainIri(IRI boundedContextIri) {
+        return rdf.createIRI(boundedContextIri.getIRIString() + "#Subdomain");
     }
 
     // ---- helpers -----------------------------------------------------------------------

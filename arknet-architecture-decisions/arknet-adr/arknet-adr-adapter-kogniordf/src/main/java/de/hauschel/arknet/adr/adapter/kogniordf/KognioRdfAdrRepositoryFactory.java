@@ -22,7 +22,8 @@ import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 
 /**
  * Assembles a {@link KognioRdfAdrRepository} over a concrete kognio-rdf dataset lifecycle.
@@ -83,8 +84,8 @@ public final class KognioRdfAdrRepositoryFactory {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(displayLocale),
-                WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(lifecycle, buildGate(displayLocale), ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfAdrRepository(lifecycle, resourceIdFactory, displayLocale, funnel);
     }
 

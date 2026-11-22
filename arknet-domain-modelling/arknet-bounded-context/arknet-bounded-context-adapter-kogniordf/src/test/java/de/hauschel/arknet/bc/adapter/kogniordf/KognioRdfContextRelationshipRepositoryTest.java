@@ -40,7 +40,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 
 /**
  * Integration test for {@link KognioRdfContextRelationshipRepository} against an in-memory
@@ -55,7 +55,7 @@ class KognioRdfContextRelationshipRepositoryTest {
 
     private static final ProjectId WORKSPACE_A = new ProjectId("a");
     private static final String CONTEXT_RELATIONSHIP_TYPE = "https://w3id.org/arknet/ddd#ContextRelationship";
-    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
+    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/content";
 
     @TempDir
     Path storageRoot;

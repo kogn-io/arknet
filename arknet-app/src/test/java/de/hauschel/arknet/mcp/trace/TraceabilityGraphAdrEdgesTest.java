@@ -81,7 +81,7 @@ class TraceabilityGraphAdrEdgesTest {
     private static final String ADR_4_IRI = "https://w3id.org/arknet/id/trace-adr-adr-4";
     private static final String ADR_5_IRI = "https://w3id.org/arknet/id/trace-adr-adr-5";
     private static final String ADR_6_IRI = "https://w3id.org/arknet/id/trace-adr-adr-6";
-    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/adr";
+    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/content";
 
     @TempDir
     Path storageDir;

@@ -22,9 +22,9 @@ import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.persistence.ArkprocVocabulary;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.uc.application.port.out.RoleLookup;
+import de.hauschel.arknet.persistence.ContentGraph;
 
 /**
  * Integration test for {@link KognioRdfRoleLookup} against an in-memory RDF4J-backed
@@ -40,8 +40,8 @@ class KognioRdfRoleLookupTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
     private static final ProjectId PROJECT_B = new ProjectId("b");
-    private static final String ROLE_GRAPH = ArkprocVocabulary.ROLES_GRAPH;
-    private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
+    private static final String ROLE_GRAPH = ContentGraph.GRAPH_IRI;
+    private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/content";
 
     /**
      * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},

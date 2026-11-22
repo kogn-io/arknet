@@ -51,7 +51,7 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 class KognioRdfBoundedContextRepositoryMultilingualTest {
 
     private static final String BOUNDED_CONTEXT_TYPE = "https://w3id.org/arknet/ddd#BoundedContext";
-    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
+    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/content";
     private static final String NAME_PROPERTY = "https://w3id.org/arknet/core#name";
     private static final String DOMAIN_VISION_PROPERTY = "https://w3id.org/arknet/ddd#domainVision";
     private static final String IDENTIFIER_PROPERTY = "http://purl.org/dc/terms/identifier";

@@ -30,7 +30,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * {@code project}'s own dataset ({@code new DatasetId(project.id().value())}), named graph
  * {@link ArkprjVocabulary#IDENTITY_GRAPH}.
  *
- * <p><strong>With the SHACL gate, without the shared {@link WriteFunnel}.</strong> Both halves of
+ * <p><strong>With the SHACL gate, without the shared {@code RegistryWrites}.</strong> Both halves of
  * that sentence are deliberate:</p>
  *
  * <ul>
@@ -39,7 +39,7 @@ import de.hauschel.arknet.prj.domain.Project;
  *       the candidate graph before opening the transaction, exactly like every funnelled write
  *       does, and throws the identical {@link WriteConstraintViolationException} on a
  *       violation.</li>
- *   <li><strong>Without the funnel.</strong> {@link WriteFunnel} exists to guard the distinction
+ *   <li><strong>Without the funnel.</strong> {@code RegistryWrites} exists to guard the distinction
  *       between "insert" and "replace" - {@code create} rejects an existing identity,
  *       {@code compareAndUpdate} rejects a stale one. {@link #describe} has no such distinction to
  *       guard: it is an idempotent replace-by-identity with no create/update branch, because this

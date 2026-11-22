@@ -23,7 +23,8 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
-import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 
 /**
  * Assembles a {@link KognioRdfBoundedContextRepository} over a concrete kognio-rdf dataset
@@ -78,8 +79,8 @@ public final class KognioRdfBoundedContextRepositoryFactory {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(displayLocale),
-                WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        VersionedWriteFunnel funnel = new VersionedWriteFunnel(lifecycle, buildGate(displayLocale), ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfBoundedContextRepository(lifecycle, resourceIdFactory, displayLocale, funnel);
     }
 
