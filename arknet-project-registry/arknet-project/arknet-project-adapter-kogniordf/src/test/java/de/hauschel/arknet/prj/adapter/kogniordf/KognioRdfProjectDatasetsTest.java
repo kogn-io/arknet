@@ -135,7 +135,7 @@ class KognioRdfProjectDatasetsTest {
         assertFalse(lifecycle.list().contains(new DatasetId(PROJECT.value())));
     }
 
-    /** The filter comes from the shared infrastructure-graph set, so every graph in it is skipped. */
+    /** The count reads the content graph alone, so no graph of the infrastructure list contributes. */
     @Test
     void noInfrastructureGraphContributesToTheModelCount() {
         for (final String graph : InfrastructureGraphs.IRIS) {

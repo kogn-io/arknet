@@ -12,17 +12,22 @@ import io.kogn.rdf.versioning.VersioningGraphs;
 /**
  * The named graphs a project dataset holds besides its {@link ContentGraph content graph}: the
  * library versioning's own graphs (published view, history, content store, configuration), the
- * retained codes of deleted resources ({@link VersionedWriteFunnel#RETAINED_CODES_GRAPH}) and the
- * project's self-description ({@link ArkprjVocabulary#IDENTITY_GRAPH}). Nobody wrote them as part
- * of the model; every read path that shows the model reads the content graph alone, and this list
- * names what it leaves out.
+ * retained codes of deleted resources ({@link VersionedWriteFunnel#RETAINED_CODES_GRAPH}), the
+ * issued child fragments ({@link ChildFragments#ISSUED_FRAGMENTS_GRAPH}) and the project's
+ * self-description ({@link ArkprjVocabulary#IDENTITY_GRAPH}). Nobody wrote them as part of the
+ * model.
+ *
+ * <p>No read path filters by this list: every read of the model names the content graph alone,
+ * which is what leaves these graphs out. The list documents what a dataset holds besides the
+ * model, and tests use it to check that none of these graphs reaches a model read.</p>
  */
 public final class InfrastructureGraphs {
 
     /** The infrastructure graphs as absolute IRI strings, without angle brackets. */
     public static final List<String> IRIS = Stream.concat(
             VersioningGraphs.ALL.stream().map(IRI::getIRIString),
-            Stream.of(VersionedWriteFunnel.RETAINED_CODES_GRAPH, ArkprjVocabulary.IDENTITY_GRAPH))
+            Stream.of(VersionedWriteFunnel.RETAINED_CODES_GRAPH, ChildFragments.ISSUED_FRAGMENTS_GRAPH,
+                    ArkprjVocabulary.IDENTITY_GRAPH))
             .toList();
 
     private InfrastructureGraphs() {

@@ -43,8 +43,8 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p><strong>Only the content graph is read.</strong> Every model resource of a project lives in
  * its one content graph, the draft view of the library versioning (ADR-61, ADR-63). Every other
  * graph of the dataset is machinery, not model, and stays invisible here: the published view and
- * the history the library keeps, the retained codes of deleted resources and the project's
- * self-description (see {@link InfrastructureGraphs}). Naming the content graph in every query is
+ * the history the library keeps, the retained codes of deleted resources, the issued child
+ * fragments and the project's self-description (listed in {@link InfrastructureGraphs}). Naming the content graph in every query is
  * what keeps a published copy of a resource from showing up twice.</p>
  *
  * <p><strong>{@link #history} is the one deliberate exception</strong>: it reads the library's

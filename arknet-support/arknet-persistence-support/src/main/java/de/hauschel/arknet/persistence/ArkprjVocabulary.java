@@ -31,8 +31,8 @@ package de.hauschel.arknet.persistence;
  * invisible by construction - the self-description sits inside the very dataset
  * {@code store_overview}/{@code resource_get} read. It is infrastructure, not model: without the
  * exclusion, every project's store report would open with its own routing record. {@code StoreReader}
- * reads the {@link ContentGraph content graph} alone, and {@link InfrastructureGraphs} names this
- * graph among the ones it leaves out.</p>
+ * reads the {@link ContentGraph content graph} alone, which leaves this graph out;
+ * {@link InfrastructureGraphs} lists it among the graphs that are no model.</p>
  *
  * <p>The reserved dataset id itself is deliberately <em>not</em> here but in the project core
  * ({@code ProjectId}): that a value is reserved is a domain invariant the core enforces when it
