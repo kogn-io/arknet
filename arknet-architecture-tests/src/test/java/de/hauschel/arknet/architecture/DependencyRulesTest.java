@@ -6,6 +6,7 @@ package de.hauschel.arknet.architecture;
 import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import java.util.Set;
@@ -61,7 +62,8 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
  * {@code de.hauschel.arknet.kernel} class (rule 6) -- and confirm the rule fails before
  * trusting it. All six were confirmed to fail this way when introduced. Rule 13 is broken the
  * same way, by naming a neighbour's type in a {@code de.hauschel.arknet.analysis} class, and
- * rule 14 by naming {@code VersionedWriteFunnel} there. Rule 12 is the one
+ * rule 14 by naming {@code VersionedWriteFunnel} there, rule 15 by calling
+ * {@code importPublishedPastGate} from any class but the startup migration. Rule 12 is the one
  * rule that does not need the exercise: it turns red on any class in the kernel package whose
  * name is not on its list, which is the whole of what it claims.</p>
  *
@@ -484,6 +486,26 @@ class DependencyRulesTest {
                     .because("a context that owns no resource and never writes has no business "
                             + "with the write gate, the write funnel or the SPARQL term "
                             + "serialisation it gets on its classpath along with the read path");
+
+    /**
+     * Rule 15 -- the import past the SHACL gate is reachable from the startup migration only.
+     *
+     * <p>{@code VersionedWriteFunnel#importPublishedPastGate} publishes a slice without validating
+     * it, so the migration of an earlier storage layout can carry over a record an earlier version
+     * kept past its own gate. It is public because the funnel and the migration live in different
+     * modules; this rule is what keeps it from becoming a way around the gate for any other
+     * write.</p>
+     */
+    @ArchTest
+    static final ArchRule only_the_startup_migration_imports_past_the_gate =
+            methods()
+                    .that().haveName("importPublishedPastGate")
+                    .and().areDeclaredInClassesThat()
+                    .haveFullyQualifiedName("de.hauschel.arknet.persistence.VersionedWriteFunnel")
+                    .should().onlyBeCalled().byClassesThat()
+                    .haveFullyQualifiedName("de.hauschel.arknet.mcp.dataset.LegacyLayoutMigration")
+                    .because("every regular write faces the SHACL gate; only the one-time migration "
+                            + "of an earlier storage layout may carry a stored record over as it is");
 
     private static DescribedPredicate<JavaClass> theWriteHalfOfThePersistenceSupport() {
         return new DescribedPredicate<>("the write half of arknet-persistence-support") {

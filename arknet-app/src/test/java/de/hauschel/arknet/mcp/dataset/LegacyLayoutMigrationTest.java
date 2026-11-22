@@ -4,6 +4,7 @@
 package de.hauschel.arknet.mcp.dataset;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.hauschel.arknet.actor.application.ActorService;
 import de.hauschel.arknet.actor.application.RoleService;
@@ -30,14 +31,17 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.ArknetMcpConfiguration;
 import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
+import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.ConstraintService;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddConstraint.NewConstraint;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
+import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintType;
+import de.hauschel.arknet.req.domain.MissingAcceptanceCriteriaException;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
@@ -204,27 +208,147 @@ class LegacyLayoutMigrationTest {
     }
 
     @Test
-    void aResourceFailingTheGateRollsTheWholeDatasetBack() {
+    void aTechnicalFailureRollsTheWholeDatasetBack() {
         Model before = legacyStore();
         DatasetLifecycle raw = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
         try {
-            update(raw, DATASET, "DELETE WHERE { GRAPH <" + LegacyLayoutFixture.BASE + "requirements> { <"
-                    + before.requirementIri() + "> <http://purl.org/dc/terms/title> ?title } }");
+            // an intermediate build's draft next to the old graphs: the import only creates
+            update(raw, DATASET, "INSERT DATA { GRAPH <" + ContentGraph.GRAPH_IRI + "> { <"
+                    + before.requirementIri() + "> <http://purl.org/dc/terms/title> \"Draft\" } }");
             long legacy = tripleCount(raw, DATASET);
 
             LegacyLayoutMigrationReport report = migration(raw).migrate(raw, DATASET);
 
             assertThat(report.outcome()).isEqualTo(LegacyLayoutMigrationReport.Outcome.FAILED);
-            assertThat(report.failure()).contains("FR-1").contains(before.requirementIri());
+            assertThat(report.failure()).contains(before.requirementIri());
             assertThat(tripleCount(raw, DATASET)).isEqualTo(legacy);
             try (DatasetHandle handle = raw.acquire(DATASET)) {
                 assertThat(LegacyLayoutRefusingDatasetLifecycle.holdsLegacyLayout(handle.sparqlQuery())).isTrue();
-                assertThat(handle.sparqlQuery().ask("ASK { GRAPH <" + ContentGraph.GRAPH_IRI + "> { ?s ?p ?o } }"))
-                        .isFalse();
             }
         } finally {
             raw.shutDownAll();
         }
+    }
+
+    /** Decision for P1 of round 1: a record the current gate rejects is carried over and listed. */
+    @Test
+    void recordsTheCurrentGateRejectsAreCarriedOverListedAndTheRestMigratesNormally() {
+        Model before = legacyStoreWithLegacyOnlyForms();
+        DatasetLifecycle raw = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+        try {
+            LegacyLayoutMigrationReport report = migration(raw).migrate(raw, DATASET);
+
+            assertThat(report.outcome()).isEqualTo(LegacyLayoutMigrationReport.Outcome.MIGRATED);
+            assertThat(report.resourcesByType()).containsEntry("requirement", 5);
+            assertThat(report.carriedPastGate()).hasSize(3)
+                    .anySatisfy(line -> assertThat(line).startsWith("requirement FR-10 (")
+                            .contains(LegacyLayoutFixture.WITHOUT_CRITERION).contains("acceptanceCriterion"))
+                    .anySatisfy(line -> assertThat(line).startsWith("requirement FR-11 (")
+                            .contains(LegacyLayoutFixture.LITERAL_CRITERION).contains("acceptanceCriterion"))
+                    .anySatisfy(line -> assertThat(line).startsWith("requirement FR-12 (")
+                            .contains(LegacyLayoutFixture.LITERAL_TERM_EDGE).contains("usesTerm"));
+            assertThat(report.summary()).contains("carried over past the current write gate: 3");
+        } finally {
+            raw.shutDownAll();
+        }
+
+        inDaemon(context -> {
+            try (DatasetHandle handle = context.getBean(DatasetLifecycle.class).acquire(DATASET)) {
+                assertThat(LegacyLayoutRefusingDatasetLifecycle.holdsLegacyLayout(handle.sparqlQuery())).isFalse();
+            }
+            Map<String, Object> after = readAll(context);
+            before.byCode().forEach((code, resource) -> {
+                if (!code.equals("UC2")) {
+                    assertThat(after.get(code)).as(code).isEqualTo(resource);
+                }
+            });
+            VersionedWriteFunnel funnel = context.getBean("requirementsWriteFunnel", VersionedWriteFunnel.class);
+            for (String resource : resourceIris(context.getBean(DatasetLifecycle.class))) {
+                assertThat(funnel.history(DATASET, resource)).as(resource).hasSize(1);
+                assertThat(funnel.publishState(DATASET, resource)).as(resource)
+                        .isEqualTo(PublishState.PUBLISHED_UNCHANGED);
+            }
+        });
+    }
+
+    @Test
+    void aRecordCarriedPastTheGateIsReadableThroughGetAndList() {
+        legacyStoreWithLegacyOnlyForms();
+
+        inDaemon(context -> {
+            RequirementService requirements = context.getBean(RequirementService.class);
+            Requirement withoutCriterion = requirements.get(PROJECT, new RequirementCode("FR-10"), EN).orElseThrow();
+            Requirement literalCriterion = requirements.get(PROJECT, new RequirementCode("FR-11"), EN).orElseThrow();
+            Requirement literalTermEdge = requirements.get(PROJECT, new RequirementCode("FR-12"), EN).orElseThrow();
+
+            // the read path shows the earlier adapter's placeholder where no criterion resource exists
+            assertThat(withoutCriterion.title()).isEqualTo("Legacy without criterion");
+            assertThat(withoutCriterion.acceptanceCriteria()).hasSize(1);
+            assertThat(withoutCriterion.acceptanceCriteria().get(0).text()).contains("Altdatensatz");
+            assertThat(literalCriterion.acceptanceCriteria().get(0).text()).contains("Altdatensatz");
+            // a literal term edge is not a reference and is not shown as one
+            assertThat(literalTermEdge.usesTerms()).isEmpty();
+            assertThat(literalTermEdge.acceptanceCriteria().get(0).text()).isEqualTo("It is linked");
+            assertThat(requirements.list(PROJECT, EN)).extracting(found -> found.code().value())
+                    .contains("FR-10", "FR-11", "FR-12");
+        });
+    }
+
+    @Test
+    void anUpdateClosingTheGapRepairsACarriedRecordAndOneLeavingItOpenIsRejected() {
+        legacyStoreWithLegacyOnlyForms();
+
+        inDaemon(context -> {
+            RequirementService requirements = context.getBean(RequirementService.class);
+            VersionedWriteFunnel funnel = context.getBean("requirementsWriteFunnel", VersionedWriteFunnel.class);
+            for (String code : List.of("FR-10", "FR-11")) {
+                RequirementCode requirement = new RequirementCode(code);
+                assertThatThrownBy(() -> requirements.linkTerm(PROJECT, requirement, "TERM-1", EN))
+                        .as(code)
+                        .isInstanceOf(MissingAcceptanceCriteriaException.class)
+                        .hasMessageContaining(code)
+                        .hasMessageContaining("placeholder");
+
+                Requirement repaired = requirements.update(PROJECT, requirement, null, null, null, null,
+                        List.of(new AcceptanceCriterionTextPatch(1, "An order shows up")), null, null, null, EN,
+                        EN);
+
+                assertThat(repaired.acceptanceCriteria()).as(code).extracting(criterion -> criterion.text())
+                        .containsExactly("An order shows up");
+                Requirement linked = requirements.linkTerm(PROJECT, requirement, "TERM-1", EN);
+                assertThat(linked.usesTerms()).as(code).hasSize(1);
+                assertThat(funnel.history(DATASET, linked.id().value().value())).as(code).hasSize(3);
+            }
+        });
+    }
+
+    /**
+     * The real behaviour for a carried literal term edge, pinned: readable, but no tool can repair
+     * it - every write of the requirement carries the edge through, as the earlier adapter did for
+     * a reference it cannot represent, and the gate rejects it. Whether a tool should clear such an
+     * edge is an open decision, not part of the migration.
+     */
+    @Test
+    void aCarriedLiteralTermEdgeStaysReadableButNoToolWriteGetsPastTheGate() {
+        legacyStoreWithLegacyOnlyForms();
+
+        inDaemon(context -> {
+            RequirementService requirements = context.getBean(RequirementService.class);
+            RequirementCode code = new RequirementCode("FR-12");
+
+            assertThatThrownBy(() -> requirements.linkTerm(PROJECT, code, "TERM-2", EN))
+                    .isInstanceOf(WriteConstraintViolationException.class)
+                    .hasMessageContaining("arkreq:usesTerm must reference a glossary term");
+            assertThatThrownBy(() -> requirements.update(PROJECT, code, "Renamed legacy requirement", null, null,
+                    null, null, null, null, null, EN, EN))
+                    .isInstanceOf(WriteConstraintViolationException.class)
+                    .hasMessageContaining("arkreq:usesTerm must reference a glossary term");
+            // clearing the term list is a no-op: the record shows no term, so there is nothing to clear
+            requirements.update(PROJECT, code, null, null, null, null, null, null, null, List.of(), EN, EN);
+            VersionedWriteFunnel funnel = context.getBean("requirementsWriteFunnel", VersionedWriteFunnel.class);
+            assertThat(funnel.history(DATASET, LegacyLayoutFixture.LITERAL_TERM_EDGE)).hasSize(1);
+            assertThat(requirements.get(PROJECT, code, EN).orElseThrow().usesTerms()).isEmpty();
+        });
     }
 
     @Test
@@ -332,6 +456,18 @@ class LegacyLayoutMigrationTest {
             raw.shutDownAll();
         }
         return model[0];
+    }
+
+    /** {@link #legacyStore()} plus the frozen legacy-only forms of {@link LegacyLayoutFixture#legacyOnlyForms()}. */
+    private Model legacyStoreWithLegacyOnlyForms() {
+        Model model = legacyStore();
+        DatasetLifecycle raw = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+        try {
+            update(raw, DATASET, LegacyLayoutFixture.legacyOnlyForms());
+        } finally {
+            raw.shutDownAll();
+        }
+        return model;
     }
 
     private static Map<String, Object> readAll(ApplicationContext context) {

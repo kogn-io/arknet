@@ -132,7 +132,10 @@ public final class LegacyLayoutRefusingDatasetLifecycle implements DatasetLifecy
                 + " to the one versioned content graph at startup, but the migration of this dataset failed and was"
                 + " rolled back, so the old layout is unchanged; this version refuses to read or write it, so the"
                 + " project is neither shown as empty nor overwritten. The daemon log names the reason under"
-                + " 'legacy layout migration'. Keep a copy of the storage directory, fix the named cause or keep"
-                + " running the arknet version that wrote it, and restart the daemon to retry the migration.";
+                + " 'legacy layout migration'. A record the current write gate rejects is not such a reason - it is"
+                + " carried over and listed - so the failure is a technical one. If its cause has passed (a full"
+                + " disk, a locked file), restart the daemon to retry the migration; otherwise keep a copy of the"
+                + " storage directory, keep running the arknet version that wrote it for this project, and report"
+                + " the log line as an arknet issue.";
     }
 }

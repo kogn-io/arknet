@@ -67,8 +67,9 @@ import org.slf4j.LoggerFactory;
  * naming a regular write uses, a subdomain node the fixed {@code <bounded context>#Subdomain}; every
  * edge pointing at an old child IRI, from any resource, is rewritten to the new one, and the
  * position triples keep the order. Each resource is then written and published through the
- * {@link VersionedWriteFunnel} of its bounded context, so it passes that context's SHACL gate and
- * ends with exactly one published version and no open draft.</p>
+ * {@link VersionedWriteFunnel} of its bounded context, through that context's SHACL gate where it
+ * passes (see below where it does not), and ends with exactly one published version and no open
+ * draft.</p>
  *
  * <p><strong>What is not moved.</strong> The revision trail of the provenance graph has no content
  * and is dropped (ADR-61); only the business code a deletion hung on its last revision is kept,
@@ -77,10 +78,17 @@ import org.slf4j.LoggerFactory;
  * subject and every subject that is neither a resource nor a child of one - nothing is lost
  * without a line in the {@link LegacyLayoutMigrationReport}.</p>
  *
+ * <p><strong>Past the gate.</strong> A resource whose stored form the current gate rejects - a form
+ * an earlier version wrote or kept past its own gate, such as a requirement without an acceptance
+ * criterion, a criterion stored as a literal, or a reference edge whose object is a literal - is
+ * carried over unchanged through {@link VersionedWriteFunnel#importPublishedPastGate}, still
+ * published once, and listed in the report with the violation. It stays readable; its next regular
+ * update runs through the gate and has to close the gap.</p>
+ *
  * <p><strong>All or nothing.</strong> A dataset is migrated in one transaction: the writes, the
- * retained codes and the clearing of the old graphs commit together, and any failure - a resource
- * the gate rejects, a literal the store cannot read - rolls all of it back. The dataset then keeps
- * its earlier layout untouched, and {@link LegacyLayoutRefusingDatasetLifecycle} keeps refusing it.
+ * retained codes and the clearing of the old graphs commit together, and a technical failure - a
+ * literal the store cannot read, a store error - rolls all of it back. The dataset then keeps its
+ * earlier layout untouched, and {@link LegacyLayoutRefusingDatasetLifecycle} keeps refusing it.
  * A dataset without old graphs is left alone, so a second start does nothing. The reserved system
  * dataset of the project registry is outside the versioning and is never migrated.</p>
  */
@@ -259,17 +267,20 @@ public final class LegacyLayoutMigration {
             sliceSubjectsOf.put(resource, subjects);
         });
         Map<String, Integer> counts = new TreeMap<>();
+        List<String> carriedPastGate = new ArrayList<>();
         for (IRI resource : childrenOf.keySet()) {
             Set<IRI> sliceSubjects = sliceSubjectsOf.get(resource);
             Graph slice = rdf.createGraph();
             sliceSubjects.forEach(subject -> rewritten.stream(subject, null, null).forEach(slice::add));
             String type = resourceType.get(resource);
+            VersionedWriteFunnel funnel = funnelByType.get(type);
             try {
-                funnelByType.get(type).importPublished(tx, resource.getIRIString(), slice,
+                funnel.importPublished(tx, resource.getIRIString(), slice,
                         assertedContext(slice, sliceSubjects, rewritten, sliceSubjectsOf), MIGRATION_COMMENT);
             } catch (WriteConstraintViolationException e) {
-                throw new MigrationAbortedException(type + " " + describeResource(rewritten, resource)
-                        + " fails the write gate of this version: " + e.getMessage(), e);
+                // the gate validates before anything is written, so the same slice can follow unvalidated
+                funnel.importPublishedPastGate(tx, resource.getIRIString(), slice, MIGRATION_COMMENT);
+                carriedPastGate.add(type + " " + describeResource(rewritten, resource) + ": " + e.getMessage());
             }
             counts.merge(type, 1, Integer::sum);
         }
@@ -279,7 +290,7 @@ public final class LegacyLayoutMigration {
             tx.clear(rdf.createIRI(graph));
         }
         return new LegacyLayoutMigrationReport(dataset, LegacyLayoutMigrationReport.Outcome.MIGRATED, counts,
-                droppedEdges, droppedSubjects, retainedCodes, null);
+                droppedEdges, droppedSubjects, retainedCodes, carriedPastGate, null);
     }
 
     private Map<IRI, String> classify(ReadableGraph graph) {
@@ -454,9 +465,6 @@ public final class LegacyLayoutMigration {
     }
 
     private static String describe(RuntimeException e) {
-        if (e instanceof MigrationAbortedException) {
-            return e.getMessage();
-        }
         return e.getClass().getSimpleName() + ": " + e.getMessage();
     }
 
@@ -472,6 +480,10 @@ public final class LegacyLayoutMigration {
                 report.droppedSubjects().forEach(subject ->
                         LOG.warn("legacy layout migration: dataset '{}': dropped unattached subject {}",
                                 report.dataset(), subject));
+                report.carriedPastGate().forEach(resource ->
+                        LOG.warn("legacy layout migration: dataset '{}': carried over unvalidated, the current"
+                                + " write gate rejects it and its next update must close the gap: {}",
+                                report.dataset(), resource));
                 report.retainedCodes().forEach(code ->
                         LOG.info("legacy layout migration: dataset '{}': retained code of deleted resource {}",
                                 report.dataset(), code));
@@ -496,14 +508,5 @@ public final class LegacyLayoutMigration {
                 ArkprocVocabulary.LEGAL_ACTOR_TYPE, ArkprocVocabulary.GROUP_ACTOR_TYPE, ArkprocVocabulary.ACTOR_TYPE));
         types.put("role", List.of(ArkprocVocabulary.ROLE_TYPE));
         return Collections.unmodifiableMap(types);
-    }
-
-    /** A resource the migration cannot carry over; rolls the dataset's transaction back. */
-    private static final class MigrationAbortedException extends RuntimeException {
-        private static final long serialVersionUID = 1L;
-
-        MigrationAbortedException(String message, Throwable cause) {
-            super(message, cause);
-        }
     }
 }

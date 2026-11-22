@@ -433,12 +433,39 @@ public final class VersionedWriteFunnel {
         Objects.requireNonNull(slice, "slice");
         Objects.requireNonNull(comment, "comment");
         IRI subject = rdf.createIRI(subjectIri);
+        replace(tx, subject, emptyDraft(tx, subject), assertedContext, (writeTx, current) -> slice,
+                EntryDetails.NONE.withComment(comment));
+    }
+
+    /**
+     * {@link #importPublished} without the gate, for the one caller that must carry a record over
+     * as it is stored: the startup migration of an earlier storage layout, for a resource whose
+     * stored form an earlier version kept past its own gate and the current gate rejects. The
+     * resource still ends with exactly one published version in the caller's transaction; the next
+     * regular write of it faces the gate again. Every other caller is barred by an architecture
+     * rule ({@code DependencyRulesTest}, rule 15) - this is not a way around the gate for a write.
+     *
+     * @param tx         the caller's open write transaction
+     * @param subjectIri the subject's IRI, without a {@code #}
+     * @param slice      the complete slice of the subject, taken over unvalidated
+     * @param comment    the comment of the history entry
+     * @throws IllegalStateException if the subject already has a non-empty draft
+     */
+    public void importPublishedPastGate(DatasetTx tx, String subjectIri, ReadableGraph slice, String comment) {
+        Objects.requireNonNull(tx, "tx");
+        Objects.requireNonNull(subjectIri, "subjectIri");
+        Objects.requireNonNull(slice, "slice");
+        Objects.requireNonNull(comment, "comment");
+        IRI subject = rdf.createIRI(subjectIri);
+        publish(tx, subject, emptyDraft(tx, subject), slice, EntryDetails.NONE.withComment(comment));
+    }
+
+    private DraftSlice emptyDraft(DatasetTx tx, IRI subject) {
         DraftSlice draft = openDraft(tx, subject);
         if (!draft.triples().isEmpty()) {
-            throw new IllegalStateException(subjectIri + " already has a draft; an import only creates");
+            throw new IllegalStateException(subject.getIRIString() + " already has a draft; an import only creates");
         }
-        replace(tx, subject, draft, assertedContext, (writeTx, current) -> slice,
-                EntryDetails.NONE.withComment(comment));
+        return draft;
     }
 
     /**
@@ -592,6 +619,11 @@ public final class VersionedWriteFunnel {
         } else {
             gate.enforce(next, assertedContext);
         }
+        return publish(tx, subject, draft, next, details);
+    }
+
+    private RevisionToken publish(DatasetTx tx, IRI subject, DraftSlice draft, ReadableGraph next,
+            EntryDetails details) {
         RevisionToken written = versioning.replaceDraft(tx, subject, next, draft.token());
         PublishResult published = versioning.publish(tx, List.of(written), details);
         return published.results().get(subject).token();

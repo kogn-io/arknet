@@ -261,6 +261,28 @@ class VersionedWriteFunnelRealStoreTest {
     }
 
     @Test
+    void anImportPastTheGateSkipsTheGateAndIsStillPublishedOnce() {
+        VersionedWriteFunnel rejecting = new VersionedWriteFunnel(lifecycle, recordingGate(true), CONTENT_GRAPH,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT, clock);
+
+        // when - a slice the gate would reject is imported past it
+        tx(t -> {
+            rejecting.importPublishedPastGate(t, OTHER, requirement(OTHER, "FR-2", "x"), "migrated");
+            return null;
+        });
+
+        // then - stored as given, one published version, nothing unpublished
+        assertEquals(Set.of("x"), titles(published(OTHER)));
+        assertEquals(PublishState.PUBLISHED_UNCHANGED, rejecting.publishState(DATASET, OTHER));
+        assertEquals(1, rejecting.history(DATASET, OTHER).size());
+        // and the next regular write faces the gate again
+        RevisionToken token = currentToken(OTHER);
+        assertThrows(WriteConstraintViolationException.class,
+                () -> rejecting.compareAndUpdate(DATASET, OTHER, token, null, Signals::unexpected,
+                        Signals::unexpected, (tx, current) -> requirement(OTHER, "FR-2", "y")));
+    }
+
+    @Test
     void aRetainedCodeIsReadBackLikeTheCodeOfATombstone() {
         tx(t -> {
             funnel.retainCode(t, NS + "revision/old", "FR-7");

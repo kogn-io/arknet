@@ -33,9 +33,11 @@ import java.util.UUID;
  * Turns a dataset written by this version back into the storage layout of the earlier one, the
  * input of the migration tests.
  *
- * <p>The earlier write paths built the same triples per resource as the versioned one - only the
- * graph and the child IRIs differ (compare the adapters on the commit before the funnel switch).
- * So the fixture is written through this version's services and then rewritten: every resource
+ * <p>The write paths just before the funnel switch built the same triples per resource as the
+ * versioned one - only the graph and the child IRIs differ (compare the adapters on the commit
+ * before the funnel switch). That covers what those paths produce, not every form an older version
+ * wrote or a store-first edit left behind; those are frozen as hand-written triples in
+ * {@link #legacyOnlyForms()}. The rest is written through this version's services and then rewritten: every resource
  * moves into the named graph of its component, every child fragment {@code <resource>#<kind>-<id>}
  * becomes an opaque {@code urn:uuid:} IRI of its own, the library's version graphs and the
  * retained codes are dropped, and a provenance graph with one revision and head per resource is
@@ -112,6 +114,39 @@ final class LegacyLayoutFixture {
             provenance.add(rdf.createIRI(resource), rdf.createIRI(ARKPROV + "head"), revision);
         });
         tx.add(rdf.createIRI(PROVENANCE), provenance);
+    }
+
+    /** A requirement written before {@code arkreq:acceptanceCriterion} existed (before 2026-07-17). */
+    static final String WITHOUT_CRITERION = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000010";
+    /** A requirement whose criterion is a literal, as written from 2026-07-17 to 2026-08-05. */
+    static final String LITERAL_CRITERION = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000011";
+    /** A requirement whose {@code usesTerm} object is a literal, a store-first edit kept past the gate. */
+    static final String LITERAL_TERM_EDGE = LEGACY_CHILD_BASE + "6f0c1d2e-0000-4000-8000-000000000012";
+
+    /**
+     * The record forms an earlier version wrote or kept past its own gate and the current gate
+     * rejects, frozen as the triples the earlier requirements adapter stored them - typed resource,
+     * untagged {@code dcterms:title}/{@code dcterms:description}, {@code arkreq:status} - and not
+     * derived from this version's write paths, which never produce them: FR-10 without any
+     * criterion, FR-11 with a literal criterion, FR-12 with a proper criterion resource but a
+     * literal {@code usesTerm} object.
+     */
+    static String legacyOnlyForms() {
+        String req = "https://w3id.org/arknet/requirements#";
+        String dct = "http://purl.org/dc/terms/";
+        String head = " a <" + req + "FunctionalRequirement> ; <" + req + "status> <" + req + "Proposed> ; ";
+        return "INSERT DATA { GRAPH <" + BASE + "requirements> { "
+                + "<" + WITHOUT_CRITERION + ">" + head + "<" + dct + "identifier> \"FR-10\" ; <" + dct
+                + "title> \"Legacy without criterion\" ; <" + dct + "description> \"Written before criteria.\" . "
+                + "<" + LITERAL_CRITERION + ">" + head + "<" + dct + "identifier> \"FR-11\" ; <" + dct
+                + "title> \"Legacy literal criterion\" ; <" + dct + "description> \"Criterion as a literal.\" ; <"
+                + req + "acceptanceCriterion> \"Done when it is shown\" . "
+                + "<" + LITERAL_TERM_EDGE + ">" + head + "<" + dct + "identifier> \"FR-12\" ; <" + dct
+                + "title> \"Legacy literal term edge\" ; <" + dct + "description> \"Term edge as a literal.\" ; <"
+                + req + "usesTerm> \"TERM-1\" ; <" + req + "acceptanceCriterion> <" + LITERAL_TERM_EDGE + "-ac> . "
+                + "<" + LITERAL_TERM_EDGE + "-ac> a <" + req + "AcceptanceCriterion> ; <" + req
+                + "position> \"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; <" + req
+                + "criterionText> \"It is linked\"@en . } }";
     }
 
     /** Records, in the earlier funnel's form, that a resource with {@code code} was deleted. */

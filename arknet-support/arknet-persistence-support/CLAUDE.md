@@ -44,6 +44,7 @@ Ein Write, der nichts aendert, erzeugt keinen History-Eintrag, jeder andere gena
 `delete` laesst die Bibliothek Draft und veroeffentlichten Slice entfernen und einen Tombstone schreiben und haengt einen uebergebenen Business-Code an dessen Eintrags-IRI in `RETAINED_CODES_GRAPH`, den `findRetainedCodes` nach Code-Praefix gefiltert liest; die Praefixe der Ressourcentypen ueberlappen nicht, weil Codes im ganzen Content-Graph eindeutig sind.
 Den Code haelt arknet selbst, weil er auf dem Modell-Tripel lebt, das der Delete entfernt.
 `importPublished` schreibt und veroeffentlicht eine Ressource in einer Transaktion des Aufrufers, ueber dasselbe Gate, `replaceDraft` und `publish` wie `create`, und `retainCode` haelt einen Code ohne Tombstone fest; beides braucht die Startup-Migration in `arknet-app`, die ein ganzes Dataset in einer Transaktion umzieht.
+`importPublishedPastGate` tut dasselbe ohne Gate, fuer Altformen, die das heutige Gate ablehnt; aufrufen darf es allein `LegacyLayoutMigration` (ArchUnit-Regel 15 in `arknet-architecture-tests`).
 Die Code-Pruefung von `create` laeuft im ganzen Content-Graph, also ueber alle Ressourcentypen eines Projekts statt je Komponentengraph.
 Abgesichert durch `VersionedWriteFunnelRealStoreTest` gegen einen echten `NativeStore` unter `@TempDir`, inklusive ueberlappender Updates vom selben Token, ueberlappender Creates mit demselben Code und der ersten Writes auf einem frischen Dataset.
 

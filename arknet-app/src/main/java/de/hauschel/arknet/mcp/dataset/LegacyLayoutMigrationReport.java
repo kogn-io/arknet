@@ -20,11 +20,16 @@ import java.util.stream.Collectors;
  *                         known type nor a child of one, with the number of its triples dropped
  * @param retainedCodes    the codes of resources deleted under the earlier layout, kept out of
  *                         circulation
+ * @param carriedPastGate  every resource whose stored form the current SHACL gate rejects and that
+ *                         was therefore carried over unchanged, unvalidated, as
+ *                         {@code <type> <code> (<iri>): <violation>}; it stays readable, and its
+ *                         next regular update has to pass the gate
  * @param failure          why the migration failed, {@code null} unless {@code outcome} is
  *                         {@link Outcome#FAILED}
  */
 public record LegacyLayoutMigrationReport(String dataset, Outcome outcome, Map<String, Integer> resourcesByType,
-        List<String> droppedEdges, List<String> droppedSubjects, List<String> retainedCodes, String failure) {
+        List<String> droppedEdges, List<String> droppedSubjects, List<String> retainedCodes,
+        List<String> carriedPastGate, String failure) {
 
     /** Whether a dataset needed a migration and how it went. */
     public enum Outcome {
@@ -46,16 +51,17 @@ public record LegacyLayoutMigrationReport(String dataset, Outcome outcome, Map<S
         droppedEdges = List.copyOf(droppedEdges);
         droppedSubjects = List.copyOf(droppedSubjects);
         retainedCodes = List.copyOf(retainedCodes);
+        carriedPastGate = List.copyOf(carriedPastGate);
     }
 
     static LegacyLayoutMigrationReport notNeeded(String dataset) {
         return new LegacyLayoutMigrationReport(dataset, Outcome.NOT_NEEDED, Map.of(), List.of(), List.of(), List.of(),
-                null);
+                List.of(), null);
     }
 
     static LegacyLayoutMigrationReport failed(String dataset, String failure) {
         return new LegacyLayoutMigrationReport(dataset, Outcome.FAILED, Map.of(), List.of(), List.of(), List.of(),
-                Objects.requireNonNull(failure, "failure"));
+                List.of(), Objects.requireNonNull(failure, "failure"));
     }
 
     /**
@@ -78,6 +84,7 @@ public record LegacyLayoutMigrationReport(String dataset, Outcome outcome, Map<S
         return "dataset '" + dataset + "': migrated to the content graph, each resource published once ["
                 + counts + "]; dropped blank-node edges: " + droppedEdges.size()
                 + "; dropped unattached subjects: " + droppedSubjects.size()
-                + "; retained codes of deleted resources: " + retainedCodes.size();
+                + "; retained codes of deleted resources: " + retainedCodes.size()
+                + "; carried over past the current write gate: " + carriedPastGate.size();
     }
 }
