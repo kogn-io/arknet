@@ -8,7 +8,7 @@ package de.hauschel.arknet.persistence;
  * the single source both the project out-adapter serialises from and every reader that has to
  * recognise project triples without depending on that adapter.
  *
- * <p>Same role and same reasoning as {@link ArkprovVocabulary}: these are RDF serialisation
+ * <p>These are RDF serialisation
  * constants, not domain vocabulary. The project core never sees an IRI (its identity is opaque),
  * so they live here next to {@link SparqlTerms} rather than in the shared kernel, and as bare
  * strings they keep this module RDF4J-free. The ontology side is
@@ -31,8 +31,8 @@ package de.hauschel.arknet.persistence;
  * invisible by construction - the self-description sits inside the very dataset
  * {@code store_overview}/{@code resource_get} read. It is infrastructure, not model: without the
  * exclusion, every project's store report would open with its own routing record. {@code StoreReader}
- * excludes it through the same shared filter that already excludes
- * {@link ArkprovVocabulary#PROVENANCE_GRAPH}.</p>
+ * reads the {@link ContentGraph content graph} alone, and {@link InfrastructureGraphs} names this
+ * graph among the ones it leaves out.</p>
  *
  * <p>The reserved dataset id itself is deliberately <em>not</em> here but in the project core
  * ({@code ProjectId}): that a value is reserved is a domain invariant the core enforces when it

@@ -72,9 +72,10 @@ import io.kogn.rdf.versioning.RevisionToken;
  * (ADR-62). {@link #delete} removes the draft and the published slice and records a tombstone; a
  * business code handed in is kept on that tombstone in {@link #RETAINED_CODES_GRAPH}, so
  * {@link #findRetainedCodes} can keep it out of circulation even when the resource was never
- * published and the tombstone names no version.</p>
+ * published and the tombstone names no version. Both report a lost commit through a signal of
+ * the caller, like every other write.</p>
  *
- * <p>Context differences are parameters, as in {@link WriteFunnel}: signals arrive as
+ * <p>Context differences are parameters: signals arrive as
  * {@link Supplier}s, the slice as a {@link SliceBuilder}. One instance per bounded context, built by
  * that context's repository factory with that context's gate; all instances of a dataset must name
  * the same content graph, or the library rejects the second with a
@@ -289,7 +290,8 @@ public final class VersionedWriteFunnel {
     /**
      * Runs a guarded update: the subject must have a non-empty draft and {@code expected} must
      * still be its current token. A stale token and a lost commit race both throw
-     * {@code revisionMismatch}; in neither case is anything written.
+     * {@code revisionMismatch}; in neither case is anything written. A publish that created an
+     * entry counts as a write for the token: a token read before it is stale afterwards.
      *
      * @param dataset          the dataset (project) to write into
      * @param subjectIri       the subject's opaque IRI, without a {@code #}
@@ -335,15 +337,18 @@ public final class VersionedWriteFunnel {
      * @param code       the business code to keep out of circulation, or {@code null}
      * @param details    creator and comment of the tombstone
      * @param notFound   the signal for a subject with an empty draft
+     * @param lostCommit the signal for a delete that lost the store's commit-time conflict to a
+     *                   concurrent write
      * @param guard      checks run before the deletion, given the transaction
      * @return the tombstone entry's IRI
      */
     public String delete(DatasetId dataset, String subjectIri, String code, EntryDetails details,
-            Supplier<RuntimeException> notFound, Consumer<DatasetTx> guard) {
+            Supplier<RuntimeException> notFound, Supplier<RuntimeException> lostCommit, Consumer<DatasetTx> guard) {
         Objects.requireNonNull(dataset, "dataset");
         Objects.requireNonNull(subjectIri, "subjectIri");
         Objects.requireNonNull(details, "details");
         Objects.requireNonNull(notFound, "notFound");
+        Objects.requireNonNull(lostCommit, "lostCommit");
         Objects.requireNonNull(guard, "guard");
 
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
@@ -362,6 +367,11 @@ public final class VersionedWriteFunnel {
                 }
                 return tombstone.entryIRI().getIRIString();
             });
+        } catch (RuntimeException e) {
+            if (isWriteConflict.test(e)) {
+                throw translateConflict(conflict -> lostCommit.get(), e);
+            }
+            throw e;
         }
     }
 
@@ -389,14 +399,17 @@ public final class VersionedWriteFunnel {
      * @param subjectIris the subjects to publish, each at most once
      * @param details     creator and comment of the entries created
      * @param notFound    the signal for a subject with an empty draft, given its IRI
+     * @param lostCommit  the signal for a publish that lost the store's commit-time conflict to a
+     *                    concurrent write; nothing is published then
      * @return per subject the entry naming its current version
      */
     public PublishResult publish(DatasetId dataset, Collection<String> subjectIris, EntryDetails details,
-            Function<String, RuntimeException> notFound) {
+            Function<String, RuntimeException> notFound, Supplier<RuntimeException> lostCommit) {
         Objects.requireNonNull(dataset, "dataset");
         Objects.requireNonNull(subjectIris, "subjectIris");
         Objects.requireNonNull(details, "details");
         Objects.requireNonNull(notFound, "notFound");
+        Objects.requireNonNull(lostCommit, "lostCommit");
 
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             return handle.transactor().inTransaction(tx -> {
@@ -411,6 +424,11 @@ public final class VersionedWriteFunnel {
                 }
                 return versioning.publish(tx, tokens, details);
             });
+        } catch (RuntimeException e) {
+            if (isWriteConflict.test(e)) {
+                throw translateConflict(conflict -> lostCommit.get(), e);
+            }
+            throw e;
         }
     }
 
@@ -437,8 +455,10 @@ public final class VersionedWriteFunnel {
     }
 
     /**
-     * Reads back the business codes {@link #delete} kept, filtered on a prefix - the same contract
-     * as {@link WriteFunnel#findRetainedCodes}.
+     * Reads back the business codes {@link #delete} kept, filtered on a prefix. Codes are unique
+     * across the whole content graph, so a prefix that is itself the start of another type's
+     * prefix would read that type's codes too; the code prefixes of arknet's resource types do
+     * not overlap.
      *
      * @param dataset    the dataset (project)
      * @param codePrefix the prefix the codes start with, for instance {@code "FR-"}

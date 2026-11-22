@@ -73,14 +73,9 @@ public final class Prefixes {
      * arknet core, skos, dcterms, rdf, rdfs, xsd), plus one revision-instance binding
      * ({@code rev:}).
      *
-     * <p>Still no {@code arkprov:}/{@code prov:} predicate bindings: {@code StoreReader}
-     * excludes the provenance graph's predicates/head pointer from every model read path,
-     * so none of them ever reaches a renderer or the prefix legend - a binding for
-     * something unreachable is a promise the read path does not keep. The one exception is
-     * {@code rev:}, bound to {@code ArkprovVocabulary#REVISION_IRI_BASE}: {@code
-     * resource_history} (issue #251) is the one read path that deliberately does surface a
-     * revision's own IRI, so it needs this binding to shorten one for display, the same way
-     * every other reachable IRI is shortened.</p>
+     * <p>No binding for the library versioning's vocabulary: {@code StoreReader} reads the
+     * content graph alone, so none of its terms ever reaches a renderer or the prefix legend - a
+     * binding for something unreachable is a promise the read path does not keep.</p>
      *
      * @return the default resolver
      */
@@ -89,7 +84,6 @@ public final class Prefixes {
                 new Prefix("req", MODEL_INSTANCE_BASE + "requirement/"),
                 new Prefix("term", MODEL_INSTANCE_BASE + "term/"),
                 new Prefix("act", MODEL_INSTANCE_BASE + "actor/"),
-                new Prefix("rev", ArkprovVocabulary.REVISION_IRI_BASE),
                 new Prefix("arknet", "https://w3id.org/arknet/core#"),
                 new Prefix("arkreq", "https://w3id.org/arknet/requirements#"),
                 new Prefix("arkproc", "https://w3id.org/arknet/process#"),

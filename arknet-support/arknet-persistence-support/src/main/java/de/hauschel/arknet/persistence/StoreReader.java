@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
@@ -21,12 +20,17 @@ import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.versioning.EntryKind;
+import io.kogn.rdf.versioning.HistoryEntry;
+import io.kogn.rdf.versioning.PublishState;
+import io.kogn.rdf.versioning.ResourceVersioning;
+import io.kogn.rdf.versioning.ResourceVersioningNamedGraphs;
 
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
- * The single generic read path into a project dataset: one {@code SELECT ?s ?p ?o} over
- * the kognio-rdf substrate, spanning the default and all named graphs.
+ * The single generic read path into a project dataset: one {@code SELECT ?s ?p ?o} over the
+ * project's {@link ContentGraph content graph} on the kognio-rdf substrate.
  *
  * <p>Domain-agnostic by construction - it never mentions a requirement, term or any type,
  * so it feeds the store report for every bounded context alike. It is also the only class on
@@ -36,59 +40,24 @@ import de.hauschel.arknet.kernel.ProjectId;
  * stay free of backend types. This class depends solely on the technology-neutral kognio-rdf
  * ports, never on RDF4J.</p>
  *
- * <p><strong>The infrastructure graphs are invisible here.</strong> Two named graphs inside a
- * project's dataset carry no model at all, and all three read methods exclude both through the
- * same filter, so this read path shows the model and never the machinery underneath it - an
- * infrastructure-graph exclusion, not domain knowledge:</p>
+ * <p><strong>Only the content graph is read.</strong> Every model resource of a project lives in
+ * its one content graph, the draft view of the library versioning (ADR-61, ADR-63). Every other
+ * graph of the dataset is machinery, not model, and stays invisible here: the published view and
+ * the history the library keeps, the retained codes of deleted resources and the project's
+ * self-description (see {@link InfrastructureGraphs}). Naming the content graph in every query is
+ * what keeps a published copy of a resource from showing up twice.</p>
  *
- * <ul>
- *   <li>{@link ArkprovVocabulary#PROVENANCE_GRAPH} - every guarded write records a PROV-O
- *       revision there, so an unfiltered view would grow with the change history
- *       rather than with the model.</li>
- *   <li>{@link ArkprjVocabulary#IDENTITY_GRAPH} - the project's self-description:
- *       the anchors and label by which a client's call is routed to this dataset.
- *       Without the exclusion, every store report would open with its own routing record. The
- *       registry itself needs no exclusion, because it lives in a reserved dataset no ordinary
- *       call ever addresses; only the self-description sits inside the dataset being read.</li>
- * </ul>
- *
- * <p><strong>Why the head pointer is excluded too</strong>, even though it is bounded (exactly
- * one {@code arkprov:head} per resource) and a usable concurrency
- * token now that every user-reachable write path moves it through {@code WriteFunnel
- * #compareAndUpdate}: showing it here would mix the model with its change history the moment a
- * client read it as a version or change signal. That trail belongs to {@link #history}
- * (issue #251), not to this read path - {@code store_overview}/{@code resource_get} stay blind
- * to {@link ArkprovVocabulary#PROVENANCE_GRAPH} on purpose, showing the model and never its
- * provenance.</p>
- *
- * <p><strong>{@link #history} is the one deliberate exception</strong> (issue #251): unlike
- * {@link #readSnapshot}/{@link #outgoing}/{@link #incoming}, it reads exactly
- * {@link ArkprovVocabulary#PROVENANCE_GRAPH} on purpose - showing the trail, not the model, is
- * its whole job. It marks a revision "current" by reading the resource's actual
- * {@code arkprov:head} triple rather than assuming the newest timestamp is current, so it never
- * asserts more than the store itself does about which revision a write path last moved the head
- * to. That head test is folded into the very same {@code SELECT} that lists the revisions (one
- * {@code EXISTS} per row) rather than run as a separate query beforehand: each {@code select()}
- * call opens and closes its own {@code RepositoryConnection}
- * ({@code io.kogn.rdf.rdf4j.dataset.SparqlQueryRdf4j}), so two sequential queries share no
- * snapshot - a write moving the head between them would make the second query's row list disagree
- * with the first query's now-stale head, mismarking the true current revision as historical (or
- * vice versa). A single query cannot straddle such a write.</p>
+ * <p><strong>{@link #history} is the one deliberate exception</strong>: it reads the library's
+ * history of one resource - the publish entries and tombstones, never a draft.</p>
  */
 public final class StoreReader {
 
     private static final String DCTERMS_IDENTIFIER = "http://purl.org/dc/terms/identifier";
 
-    /**
-     * The named graphs this read path hides, as SPARQL {@code IRIREF}s - taken from
-     * {@link InfrastructureGraphs}, see the class javadoc for why each one is infrastructure
-     * rather than model. Adding a graph there is all it takes to hide it from {@link #readSnapshot},
-     * {@link #outgoing} and {@link #incoming} at once, which is the point of the list: the three
-     * cannot drift apart.
-     */
-    private static final List<String> HIDDEN_GRAPHS = InfrastructureGraphs.SPARQL_IRIREFS;
 
     private final DatasetLifecycle lifecycle;
+    private final ResourceVersioning versioning =
+            new ResourceVersioningNamedGraphs(new SimpleRdf().createIRI(ContentGraph.GRAPH_IRI));
 
     /**
      * @param lifecycle the shared kognio-rdf dataset lifecycle (must not be {@code null})
@@ -105,7 +74,7 @@ public final class StoreReader {
      */
     public StoreSnapshot readSnapshot(ProjectId projectId) {
         Objects.requireNonNull(projectId, "projectId");
-        String query = "SELECT DISTINCT ?s ?p ?o WHERE { " + excludingInfrastructure("?s ?p ?o") + " }";
+        String query = "SELECT DISTINCT ?s ?p ?o WHERE { " + inContentGraph("?s ?p ?o") + " }";
         try (DatasetHandle handle = acquire(projectId)) {
             List<Triple> triples = handle.sparqlQuery().select(query)
                     .map(StoreReader::toTriple)
@@ -138,7 +107,7 @@ public final class StoreReader {
         }
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?p ?o WHERE { "
-                + excludingInfrastructure(iriRef + " ?p ?o") + " }";
+                + inContentGraph(iriRef + " ?p ?o") + " }";
         try (DatasetHandle handle = acquire(projectId)) {
             return handle.sparqlQuery().select(query)
                     .map(row -> outgoingTriple(iri, row))
@@ -169,7 +138,7 @@ public final class StoreReader {
         }
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?s ?p WHERE { "
-                + excludingInfrastructure("?s ?p " + iriRef) + " }";
+                + inContentGraph("?s ?p " + iriRef) + " }";
         try (DatasetHandle handle = acquire(projectId)) {
             return handle.sparqlQuery().select(query)
                     .map(row -> incomingTriple(iri, row))
@@ -210,11 +179,9 @@ public final class StoreReader {
      * this, such a subject was silently dropped: {@code DigestRenderer} still printed its
      * identifier as a drill-down handle, but resolving that handle here found nothing.
      *
-     * <p>Deliberately not run through {@link #excludingInfrastructure} like the other three read
-     * methods: neither the shared write funnel nor the project self-description currently write
-     * {@code dcterms:identifier} into a {@link #HIDDEN_GRAPHS} graph, so the gap is harmless today
-     * - but it is real, and this method would start returning ids that live in a hidden graph the
-     * moment something starts writing one there.
+     * <p>Scoped to the content graph like every other read here: the retained code of a deleted
+     * resource and a published copy both carry the identifier too, and neither is a resource
+     * to resolve.</p>
      *
      * @param projectId the project to read
      * @param identifier  the {@code dcterms:identifier} lexical value
@@ -225,7 +192,8 @@ public final class StoreReader {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(identifier, "identifier");
         String literal = "\"" + SparqlTerms.escape(identifier) + "\"";
-        String query = "SELECT DISTINCT ?s WHERE { ?s <" + DCTERMS_IDENTIFIER + "> " + literal + " }";
+        String query = "SELECT DISTINCT ?s WHERE { " + inContentGraph("?s <" + DCTERMS_IDENTIFIER + "> " + literal)
+                + " }";
         try (DatasetHandle handle = acquire(projectId)) {
             return handle.sparqlQuery().select(query)
                     .map(row -> row.getValue("s").orElse(null))
@@ -266,7 +234,7 @@ public final class StoreReader {
             throw new IllegalArgumentException("needle must not be blank");
         }
         String pattern = "?s ?p ?o . FILTER(isLiteral(?o) && CONTAINS(LCASE(STR(?o)), LCASE(?q)))";
-        String query = "SELECT DISTINCT ?s ?p ?o WHERE { " + excludingInfrastructure(pattern) + " }";
+        String query = "SELECT DISTINCT ?s ?p ?o WHERE { " + inContentGraph(pattern) + " }";
         Map<String, RDFTerm> bindings = Map.of("q", new SimpleRdf().createLiteral(needle));
         try (DatasetHandle handle = acquire(projectId)) {
             return handle.sparqlQuery().select(query, bindings)
@@ -299,12 +267,9 @@ public final class StoreReader {
      * not want; the extra keys are inert, because a caller asks only for the fields it wrote and
      * never writes a neighbour through this tool.</p>
      *
-     * <p><strong>No infrastructure-graph exclusion</strong>, for the same reason
-     * {@link #findByIdentifier} has none: the identifier match may also hit a tombstoned revision
-     * in {@link ArkprovVocabulary#PROVENANCE_GRAPH}, which retains a deleted resource's code, but
-     * a revision carries no language-tagged literal of its own, and what its {@code
-     * prov:specializationOf} hop contributes lands under that predicate's name, which no caller
-     * asks for.</p>
+     * <p><strong>One graph.</strong> A project dataset is read in its content graph, the
+     * reserved system dataset in its registry graph - a published copy of a resource can carry an
+     * older set of languages than its draft, and the draft is what a write just changed.</p>
      *
      * @param dataset    the dataset holding the resource
      * @param identifier the resource's {@code dcterms:identifier} lexical value (e.g. {@code FR-1},
@@ -316,12 +281,15 @@ public final class StoreReader {
         Objects.requireNonNull(dataset, "dataset");
         Objects.requireNonNull(identifier, "identifier");
         String literal = "\"" + SparqlTerms.escape(identifier) + "\"";
-        String query = "SELECT DISTINCT ?p ?lang WHERE { "
+        String graph = ProjectId.RESERVED_SYSTEM_DATASET.equals(dataset.value())
+                ? ArkprjVocabulary.REGISTRY_GRAPH
+                : ContentGraph.GRAPH_IRI;
+        String query = "SELECT DISTINCT ?p ?lang WHERE { GRAPH <" + graph + "> { "
                 + "?s <" + DCTERMS_IDENTIFIER + "> " + literal + " . "
                 + "{ ?s ?p ?o . BIND(lang(?o) AS ?lang) FILTER(BOUND(?lang) && ?lang != \"\") } "
                 + "UNION "
                 + "{ ?s ?p ?child . ?child ?cp ?o . BIND(lang(?o) AS ?lang) "
-                + "FILTER(BOUND(?lang) && ?lang != \"\") } }";
+                + "FILTER(BOUND(?lang) && ?lang != \"\") } } }";
         Map<String, Set<String>> byField = new LinkedHashMap<>();
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             handle.sparqlQuery().select(query).forEach(row -> {
@@ -337,59 +305,55 @@ public final class StoreReader {
     }
 
     /**
-     * Reads a resource's change history (issue #251): every {@code arkprov:Revision} the shared
-     * write funnel has recorded for it, oldest first, with the one matching
-     * the resource's current {@code arkprov:head} marked {@link Revision#current}.
-     *
-     * <p>A resource the funnel has never written through - written entirely store-first,
-     * or predating the funnel - has recorded no revision and yields an empty list,
-     * not an error; distinguishing that from "no such resource" is the caller's job (as
-     * {@code resource_get} already does for {@link #outgoing}/{@link #incoming} being empty).
-     * A blank-node handle (see {@link #isBlankNodeReference(String)}) also yields an empty list,
-     * checked explicitly up front rather than left to fall out of the query: the funnel only
-     * ever records a revision under a subject's own opaque IRI, never a blank node, so no
-     * revision can name one via {@code prov:specializationOf} - but a blank-node label is not a
-     * forbidden {@code IRIREF} character (see {@link SparqlTerms#isValidIriReference}), so
-     * without this guard the query below would silently run against the literal string
-     * {@code "<_:label>"} instead of being rejected or handled like {@link #outgoing}/
-     * {@link #incoming} do.</p>
+     * Reads a resource's history: the library's publish entries and tombstones for it, oldest
+     * first. A resource that was never published - written only as a draft - has no entry yet,
+     * and an empty list is not an error; telling that apart from "no such resource" is the
+     * caller's job. A blank-node handle (see {@link #isBlankNodeReference(String)}) yields an empty
+     * list: only a subject's own IRI is versioned.
      *
      * @param projectId the project to read
      * @param iri       the resource's IRI, exactly as {@link HandleResolver} resolves it
-     * @return the revisions, oldest first
+     * @return the history entries, oldest first
      */
-    public List<Revision> history(ProjectId projectId, String iri) {
+    public List<VersionEntry> history(ProjectId projectId, String iri) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(iri, "iri");
         if (isBlankNodeReference(iri)) {
             return List.of();
         }
-        String iriRef = SparqlTerms.iriRef(iri);
-        String query = "SELECT ?revision ?time (EXISTS { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + iriRef + " <" + ArkprovVocabulary.HEAD + "> ?revision } } AS ?isCurrent) WHERE { "
-                + "GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?revision <" + ArkprovVocabulary.SPECIALIZATION_OF + "> " + iriRef + " . "
-                + "?revision <" + ArkprovVocabulary.GENERATED_AT_TIME + "> ?time . "
-                + "} } ORDER BY ?time";
+        IRI subject = new SimpleRdf().createIRI(iri);
         try (DatasetHandle handle = acquire(projectId)) {
-            return handle.sparqlQuery().select(query)
-                    .map(StoreReader::toRevision)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
+            return handle.transactor().inTransaction(tx -> versioning.history(tx, subject)).stream()
+                    .map(StoreReader::toVersionEntry)
                     .toList();
         }
     }
 
-    private static Optional<Revision> toRevision(BindingSet row) {
-        RDFTerm revision = row.getValue("revision").orElse(null);
-        RDFTerm time = row.getValue("time").orElse(null);
-        RDFTerm isCurrent = row.getValue("isCurrent").orElse(null);
-        if (!(revision instanceof IRI revisionIri) || !(time instanceof Literal timeLiteral)
-                || !(isCurrent instanceof Literal currentLiteral)) {
-            return Optional.empty();
+    /**
+     * Tells whether a resource's draft was ever published and whether it changed since.
+     *
+     * @param projectId the project to read
+     * @param iri       the resource's IRI, exactly as {@link HandleResolver} resolves it
+     * @return the publish state's name ({@code NEVER_PUBLISHED}, {@code PUBLISHED_UNCHANGED},
+     *         {@code PUBLISHED_WITH_UNPUBLISHED_CHANGES} or {@code DELETED}); {@code NEVER_PUBLISHED}
+     *         for a blank-node handle
+     */
+    public String publishState(ProjectId projectId, String iri) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return PublishState.NEVER_PUBLISHED.name();
         }
-        return Optional.of(new Revision(revisionIri.getIRIString(), timeLiteral.getLexicalForm(),
-                Boolean.parseBoolean(currentLiteral.getLexicalForm())));
+        IRI subject = new SimpleRdf().createIRI(iri);
+        try (DatasetHandle handle = acquire(projectId)) {
+            return handle.transactor().inTransaction(tx -> versioning.publishState(tx, subject)).name();
+        }
+    }
+
+    private static VersionEntry toVersionEntry(HistoryEntry entry) {
+        return new VersionEntry(entry.iri().getIRIString(), entry.sequence(),
+                entry.kind() == EntryKind.TOMBSTONE, entry.created().toString(),
+                entry.cid().map(IRI::getIRIString).orElse(null), entry.comment().orElse(null));
     }
 
     /** Acquires the project's dataset - the one line every read method here shares. */
@@ -398,28 +362,14 @@ public final class StoreReader {
     }
 
     /**
-     * Wraps a triple pattern into the infrastructure-graph exclusion every read path here shares -
-     * one helper rather than three hand-written filters, so the exclusion cannot drift apart
-     * between snapshot and neighbour lists.
+     * Wraps a triple pattern into the content graph - the one helper every model read here shares,
+     * so no read can forget to name its graph.
      *
-     * <p>Two branches, because the plain pattern may already span every context on some backends
-     * (see the {@code DISTINCT} note in {@code StoreReaderTest}): the {@code GRAPH} branch is
-     * guarded by graph IRI, the plain branch by "this triple lives <em>only</em> in hidden
-     * graphs". A triple that also exists in a <em>named</em> model graph therefore survives via
-     * the {@code GRAPH} branch, and {@code DISTINCT} collapses the overlap - a triple living only
-     * in the default graph plus a hidden graph would not survive either branch, but every BC
-     * adapter writes named graphs, so that case is constructed rather than reachable today.</p>
-     *
-     * @param pattern a triple pattern; must bind neither {@code ?g} nor anything named like it
-     * @return the pattern as a {@code UNION} group excluding every {@link #HIDDEN_GRAPHS} entry
+     * @param pattern a triple pattern
+     * @return the pattern inside {@code GRAPH <content graph>}
      */
-    private static String excludingInfrastructure(String pattern) {
-        String notInAnyHiddenGraph = HIDDEN_GRAPHS.stream()
-                .map(graph -> "FILTER NOT EXISTS { GRAPH " + graph + " { " + pattern + " } } ")
-                .collect(Collectors.joining());
-        String outsideEveryHiddenGraph = InfrastructureGraphs.outsideExpression("?g");
-        return "{ " + pattern + " " + notInAnyHiddenGraph + "} "
-                + "UNION { GRAPH ?g { " + pattern + " } FILTER(" + outsideEveryHiddenGraph + ") }";
+    private static String inContentGraph(String pattern) {
+        return "GRAPH " + ContentGraph.SPARQL_IRIREF + " { " + pattern + " }";
     }
 
     private static Optional<Triple> toTriple(BindingSet row) {

@@ -33,7 +33,7 @@ package de.hauschel.arknet.persistence;
  * same IRI literal appeared in {@code KognioRdfAdrRepository}, {@code
  * KognioRdfBoundedContextLookup} and {@code KognioRdfContextRelationshipRepositoryFactory} -
  * silent drift the narrow-scope class existed to prevent, on the very predicate it claimed was
- * safe. This class now follows {@link ArkprovVocabulary}/{@link ArkprjVocabulary}/
+ * safe. This class now follows {@link ArkprjVocabulary}/
  * {@link ArkarchVocabulary} instead: it mirrors the whole active {@code arknet-ddd.ttl} module
  * (BoundedContext plus the Domain/Subdomain classification it is placed within, plus the
  * ContextRelationship mapping layer), held against that ontology by a bidirectional architecture

@@ -30,7 +30,7 @@ package de.hauschel.arknet.persistence;
  *
  * <p><strong>Scope: the whole active module.</strong> This class mirrors the whole active
  * {@code arknet-actor.ttl} module (the Actor taxonomy plus the Role resource and its occupancy
- * edge), the same pattern {@link ArkprovVocabulary}/{@link ArkprjVocabulary}/
+ * edge), the same pattern {@link ArkprjVocabulary}/
  * {@link ArkarchVocabulary} follow and {@link ArkdddVocabulary} adopted alongside them
  * (kogn-io/arknet#148) - held against that ontology by a bidirectional architecture test
  * ({@code arknet-architecture-tests}), which is what the mirror makes possible in the first
@@ -89,15 +89,6 @@ public final class ArkprocVocabulary {
      * edge; only evaluating views display the occupancy.
      */
     public static final String FILLED_BY = NAMESPACE + "filledBy";
-
-    /**
-     * The named graph every {@link #ROLE_TYPE} instance is written into - separate from the
-     * actor out-adapter's own actor graph, since {@code KognioRdfRoleRepository} shares that
-     * adapter's gate and funnel but not its graph (ADR-37 Part B). Read across into by
-     * {@code arknet-use-cases}' {@code KognioRdfRoleLookup}/{@code KognioRdfUseCaseRepository} to
-     * resolve/type-check a use case's {@code primaryRole}/{@code supportingRole} targets.
-     */
-    public static final String ROLES_GRAPH = "https://w3id.org/arknet/model/roles";
 
     private ArkprocVocabulary() {
     }

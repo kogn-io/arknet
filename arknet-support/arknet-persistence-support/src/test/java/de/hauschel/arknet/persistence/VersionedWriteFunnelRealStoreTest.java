@@ -34,6 +34,7 @@ import io.kogn.rdf.cid.sexpr.ContentAddressedIRIGeneratorSexpr;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.shacl.ShaclMessage;
@@ -59,6 +60,8 @@ import io.kogn.rdf.versioning.ResourceVersioningNamedGraphs;
 import io.kogn.rdf.versioning.RevisionToken;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
+import de.hauschel.arknet.persistence.testsupport.PausingOnFirstWriteTx;
 
 /**
  * {@link VersionedWriteFunnel} against a real on-disk {@code NativeStore}: draft, publish, history,
@@ -110,9 +113,11 @@ class VersionedWriteFunnelRealStoreTest {
         assertTrue(funnel.history(DATASET, SUBJECT).isEmpty());
 
         // when - published by alice, then republished unchanged by bob
-        PublishResult first = funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(alice), NotFound::of);
+        PublishResult first = funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(alice),
+                NotFound::of, Signals::unexpected);
         clock.advance(Duration.ofMinutes(5));
-        PublishResult unchanged = funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(bob), NotFound::of);
+        PublishResult unchanged = funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(bob),
+                NotFound::of, Signals::unexpected);
 
         // then - one entry only, the repeated publish names it
         assertEquals(PublishState.PUBLISHED_UNCHANGED, funnel.publishState(DATASET, SUBJECT));
@@ -123,7 +128,7 @@ class VersionedWriteFunnelRealStoreTest {
         update(SUBJECT, "v1", "crit one CHANGED", "crit two");
         assertEquals(PublishState.PUBLISHED_WITH_UNPUBLISHED_CHANGES, funnel.publishState(DATASET, SUBJECT));
         funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE.withCreator(bob).withComment("changed ac-1"),
-                NotFound::of);
+                NotFound::of, Signals::unexpected);
 
         // then
         List<HistoryEntry> history = funnel.history(DATASET, SUBJECT);
@@ -260,11 +265,11 @@ class VersionedWriteFunnelRealStoreTest {
     @Test
     void deleteRecordsATombstoneNamingTheLastVersionAndRetainsTheCode() {
         create(SUBJECT, CODE, "v1", "crit one");
-        funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE, NotFound::of);
+        funnel.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE, NotFound::of, Signals::unexpected);
         HistoryEntry published = funnel.history(DATASET, SUBJECT).get(0);
 
         String tombstoneIri = funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE.withCreator(alice),
-                Signals::unexpected, tx -> { });
+                Signals::unexpected, Signals::unexpected, tx -> { });
 
         assertEquals(PublishState.DELETED, funnel.publishState(DATASET, SUBJECT));
         List<HistoryEntry> history = funnel.history(DATASET, SUBJECT);
@@ -278,7 +283,7 @@ class VersionedWriteFunnelRealStoreTest {
         assertEquals(List.of(CODE), funnel.findRetainedCodes(DATASET, "FR-"));
         assertEquals(List.of(), funnel.findRetainedCodes(DATASET, "NFR-"));
         assertThrows(NotFound.class, () -> funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE,
-                NotFound::new, tx -> { }));
+                NotFound::new, Signals::unexpected, tx -> { }));
     }
 
     /**
@@ -289,7 +294,8 @@ class VersionedWriteFunnelRealStoreTest {
     void deletingANeverPublishedDraftLeavesATombstoneWithoutContentButKeepsTheCode() {
         create(SUBJECT, CODE, "v1", "crit one");
 
-        funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE, Signals::unexpected, tx -> { });
+        funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE, Signals::unexpected, Signals::unexpected,
+                tx -> { });
 
         HistoryEntry tombstone = funnel.history(DATASET, SUBJECT).get(0);
         assertEquals(EntryKind.TOMBSTONE, tombstone.kind());
@@ -302,7 +308,7 @@ class VersionedWriteFunnelRealStoreTest {
         create(SUBJECT, CODE, "v1", "crit one");
 
         assertThrows(Referenced.class, () -> funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE,
-                Signals::unexpected, tx -> {
+                Signals::unexpected, Signals::unexpected, tx -> {
                     throw new Referenced();
                 }));
 
@@ -316,7 +322,8 @@ class VersionedWriteFunnelRealStoreTest {
         create(SUBJECT, CODE, "a", "x");
         create(OTHER, "FR-2", "b", "y");
 
-        PublishResult result = funnel.publish(DATASET, List.of(SUBJECT, OTHER), EntryDetails.NONE, NotFound::of);
+        PublishResult result = funnel.publish(DATASET, List.of(SUBJECT, OTHER), EntryDetails.NONE, NotFound::of,
+                Signals::unexpected);
 
         assertEquals(2, result.results().size());
         update(SUBJECT, "a2", "x");
@@ -335,7 +342,7 @@ class VersionedWriteFunnelRealStoreTest {
         create(SUBJECT, CODE, "a", "x");
 
         NotFound thrown = assertThrows(NotFound.class, () -> funnel.publish(DATASET, List.of(SUBJECT, OTHER),
-                EntryDetails.NONE, NotFound::of));
+                EntryDetails.NONE, NotFound::of, Signals::unexpected));
 
         assertEquals(OTHER, thrown.getMessage());
         assertEquals(PublishState.NEVER_PUBLISHED, funnel.publishState(DATASET, SUBJECT));
@@ -345,10 +352,11 @@ class VersionedWriteFunnelRealStoreTest {
     @Test
     void publishOfADeletedSubjectIsNotFound() {
         create(SUBJECT, CODE, "a", "x");
-        funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE, Signals::unexpected, tx -> { });
+        funnel.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE, Signals::unexpected, Signals::unexpected,
+                tx -> { });
 
         NotFound thrown = assertThrows(NotFound.class, () -> funnel.publish(DATASET, List.of(SUBJECT),
-                EntryDetails.NONE, NotFound::of));
+                EntryDetails.NONE, NotFound::of, Signals::unexpected));
 
         assertEquals(SUBJECT, thrown.getMessage());
         assertEquals(1, funnel.history(DATASET, SUBJECT).size(), "only the tombstone");
@@ -357,7 +365,8 @@ class VersionedWriteFunnelRealStoreTest {
     @Test
     void aDeletedSubjectCanBeCreatedAgain() {
         create(OTHER, "FR-2", "b", "y");
-        funnel.delete(DATASET, OTHER, "FR-2", EntryDetails.NONE, Signals::unexpected, tx -> { });
+        funnel.delete(DATASET, OTHER, "FR-2", EntryDetails.NONE, Signals::unexpected, Signals::unexpected,
+                tx -> { });
 
         create(OTHER, "FR-3", "c", "z");
 
@@ -428,6 +437,79 @@ class VersionedWriteFunnelRealStoreTest {
         assertEquals(List.of(Optional.empty(), Optional.empty()), outcomes);
         assertEquals(Set.of("racer-A"), titles(draft(SUBJECT)));
         assertEquals(Set.of("racer-B"), titles(draft(OTHER)));
+    }
+
+    /**
+     * Both first binders read the unbound dataset before either writes, so one loses the commit;
+     * its one retry reads the winner's binding back and both creates succeed. Without the retry
+     * the loser's create would end in the raw store conflict.
+     */
+    @Test
+    void aBindingLostToAConcurrentBinderIsReadBackOnTheRetry() throws InterruptedException {
+        CyclicBarrier bothBindersRead = new CyclicBarrier(2);
+        VersionedWriteFunnel racing = new VersionedWriteFunnel(pausingFirstTransactionOfEachThread(bothBindersRead),
+                recordingGate(false), CONTENT_GRAPH, VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT, clock);
+
+        List<Optional<RuntimeException>> outcomes = runTwo(
+                () -> racing.create(DATASET, SUBJECT, CODE, null, Signals::unexpected, DuplicateCode::new,
+                        (tx, current) -> requirement(SUBJECT, CODE, "racer-A")),
+                () -> racing.create(DATASET, OTHER, "FR-2", null, Signals::unexpected, DuplicateCode::new,
+                        (tx, current) -> requirement(OTHER, "FR-2", "racer-B")));
+
+        assertEquals(List.of(Optional.empty(), Optional.empty()), outcomes);
+        assertEquals(Set.of("racer-A"), titles(draft(SUBJECT)));
+        assertEquals(Set.of("racer-B"), titles(draft(OTHER)));
+    }
+
+    /** Two deletes of the same subject both pass their checks; the loser gets the caller's signal. */
+    @Test
+    void aDeleteThatLosesTheCommitThrowsTheLostCommitSignal() throws InterruptedException {
+        create(SUBJECT, CODE, "v1", "crit one");
+        CyclicBarrier bothChecked = new CyclicBarrier(2);
+        VersionedWriteFunnel racing = new VersionedWriteFunnel(pausingFirstTransactionOfEachThread(bothChecked),
+                recordingGate(false), CONTENT_GRAPH, VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT, clock);
+
+        List<Optional<RuntimeException>> outcomes = runTwo(
+                () -> racing.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE, Signals::unexpected,
+                        RevisionMismatch::new, tx -> { }),
+                () -> racing.delete(DATASET, SUBJECT, CODE, EntryDetails.NONE, Signals::unexpected,
+                        RevisionMismatch::new, tx -> { }));
+
+        assertTrue(exactlyOneLoser(outcomes) instanceof RevisionMismatch);
+        assertEquals(PublishState.DELETED, funnel.publishState(DATASET, SUBJECT));
+    }
+
+    /** Two publishes of the same changed draft both read it; the loser gets the caller's signal. */
+    @Test
+    void aPublishThatLosesTheCommitThrowsTheLostCommitSignal() throws InterruptedException {
+        create(SUBJECT, CODE, "v1", "crit one");
+        CyclicBarrier bothRead = new CyclicBarrier(2);
+        VersionedWriteFunnel racing = new VersionedWriteFunnel(pausingFirstTransactionOfEachThread(bothRead),
+                recordingGate(false), CONTENT_GRAPH, VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT, clock);
+
+        List<Optional<RuntimeException>> outcomes = runTwo(
+                () -> racing.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE, NotFound::of,
+                        RevisionMismatch::new),
+                () -> racing.publish(DATASET, List.of(SUBJECT), EntryDetails.NONE, NotFound::of,
+                        RevisionMismatch::new));
+
+        assertTrue(exactlyOneLoser(outcomes) instanceof RevisionMismatch);
+        assertEquals(1, funnel.history(DATASET, SUBJECT).size());
+    }
+
+    /**
+     * Holds the first transaction each racing thread opens at its first write, until both threads
+     * got there - so both have read the store and neither has written yet.
+     */
+    private DatasetLifecycle pausingFirstTransactionOfEachThread(CyclicBarrier barrier) {
+        ThreadLocal<Boolean> firstOfThread = ThreadLocal.withInitial(() -> Boolean.TRUE);
+        return new GuardedLifecycle(lifecycle, tx -> {
+            if (!firstOfThread.get()) {
+                return tx;
+            }
+            firstOfThread.set(Boolean.FALSE);
+            return new PausingOnFirstWriteTx(tx, () -> await(barrier));
+        });
     }
 
     private Optional<String> findByCode(DatasetTx tx) {
