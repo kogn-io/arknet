@@ -487,6 +487,21 @@ Default location `~/.arknet/rdf`, configurable via `arknet.rdf.storage`.
 `uc_*`, `bc_*`, `adr_*`) -- not by text-editing a `.ttl`. SHACL validation applies uniformly at
 the store's write gate: an invalid write is rejected and nothing is persisted.
 
+**Upgrading from the per-component layout:** a store written before the
+versioned write path kept one named graph per component and a provenance graph
+of revisions. At startup, before any tool call reaches a project, the daemon
+migrates each such project dataset to the one content graph, in one transaction
+per dataset: every resource is written through its context's SHACL gate and
+published once, child resources are renamed to fragments of their parent, the
+revision trail is dropped (codes of deleted resources stay reserved), and an edge
+to a blank node, which no arknet write path creates, is dropped. The daemon log
+carries the report under `legacy layout migration`: one summary line per project
+(resources per type, dropped edges, retained codes) and one line per dropped
+item. A project whose migration fails is rolled back to its old layout, its tools
+refuse it with a message pointing to that log, and the next start retries. The
+registry's system dataset is not versioned and not migrated. Keep a copy of the
+storage directory before the first start of a version that migrates.
+
 The formerly tolerated file-based `arknet_*` tools
 (`arknet_load`/`arknet_validate`/`arknet_query`/`arknet_generate` from a `.ttl`)
 have been removed -- store-first is the only model lifecycle, no parallel file

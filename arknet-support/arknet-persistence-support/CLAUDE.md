@@ -43,6 +43,7 @@ Jeder Write veroeffentlicht: `replace` schreibt den Draft und publiziert ihn in 
 Ein Write, der nichts aendert, erzeugt keinen History-Eintrag, jeder andere genau einen; einen eigenen Publish-Aufruf gibt es nicht.
 `delete` laesst die Bibliothek Draft und veroeffentlichten Slice entfernen und einen Tombstone schreiben und haengt einen uebergebenen Business-Code an dessen Eintrags-IRI in `RETAINED_CODES_GRAPH`, den `findRetainedCodes` nach Code-Praefix gefiltert liest; die Praefixe der Ressourcentypen ueberlappen nicht, weil Codes im ganzen Content-Graph eindeutig sind.
 Den Code haelt arknet selbst, weil er auf dem Modell-Tripel lebt, das der Delete entfernt.
+`importPublished` schreibt und veroeffentlicht eine Ressource in einer Transaktion des Aufrufers, ueber dasselbe Gate, `replaceDraft` und `publish` wie `create`, und `retainCode` haelt einen Code ohne Tombstone fest; beides braucht die Startup-Migration in `arknet-app`, die ein ganzes Dataset in einer Transaktion umzieht.
 Die Code-Pruefung von `create` laeuft im ganzen Content-Graph, also ueber alle Ressourcentypen eines Projekts statt je Komponentengraph.
 Abgesichert durch `VersionedWriteFunnelRealStoreTest` gegen einen echten `NativeStore` unter `@TempDir`, inklusive ueberlappender Updates vom selben Token, ueberlappender Creates mit demselben Code und der ersten Writes auf einem frischen Dataset.
 
