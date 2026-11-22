@@ -881,6 +881,41 @@ class StoreReportToolsTest {
         }
     }
 
+    /** Issue #596: a deleted resource answers with what it was, not with "not found" - by code and by IRI. */
+    @Test
+    void resourceGetOfADeletedResourceSaysItWasDeletedAndWhatItWas() {
+        KognioRdfTermRepositoryFactory.over(lifecycle).delete(PROJECT, new TermCode("TERM-1"));
+
+        for (String handle : List.of("TERM-1", TERM_1_IRI)) {
+            String result = tools.resourceGet(null, handle, ANCHOR);
+
+            assertThat(result).as(handle).contains("# DELETED").contains("deleted at ")
+                    .contains("TERM-1 stays taken").contains("# Last version")
+                    .contains("\"Anmeldung\"").doesNotContain("not found");
+        }
+    }
+
+    /** Issue #596: the history of a deleted resource keeps the tombstone and names what was deleted. */
+    @Test
+    void resourceHistoryOfADeletedResourceShowsTheTombstoneAndTheDeletionRecord() {
+        KognioRdfTermRepositoryFactory.over(lifecycle).delete(PROJECT, new TermCode("TERM-1"));
+
+        String result = tools.resourceHistory(null, "TERM-1", ANCHOR);
+
+        assertThat(result).contains("Publish state: DELETED").contains("# DELETED").contains("\"Anmeldung\"")
+                .contains("# History (2)").doesNotContain("not found");
+        assertThat(result.lines().filter(line -> line.contains("  tombstone  ")).count()).isEqualTo(1);
+    }
+
+    /** A code that never existed is still reported as unknown, deleted codes do not widen the lookup. */
+    @Test
+    void anUnknownCodeIsStillRejectedAfterADelete() {
+        KognioRdfTermRepositoryFactory.over(lifecycle).delete(PROJECT, new TermCode("TERM-1"));
+
+        assertThatThrownBy(() -> tools.resourceGet(null, "TERM-99", ANCHOR))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("No resource found");
+    }
+
     /** A syntactically valid but unknown IRI is reported identically to {@code resource_get}. */
     @Test
     void resourceHistoryReportsNotFoundForAWellFormedButUnknownIri() {

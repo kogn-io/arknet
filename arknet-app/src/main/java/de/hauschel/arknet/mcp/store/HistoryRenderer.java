@@ -5,7 +5,9 @@ package de.hauschel.arknet.mcp.store;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
+import de.hauschel.arknet.persistence.DeletedResource;
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.persistence.ResourceRenderer;
 import de.hauschel.arknet.persistence.StoreReader;
@@ -45,13 +47,30 @@ public final class HistoryRenderer {
      * @return the history text
      */
     public String render(String iri, String publishState, List<VersionEntry> entries) {
+        return render(iri, publishState, entries, Optional.empty());
+    }
+
+    /**
+     * Renders the history view; for a deleted resource the deletion record - what it was, when it
+     * went - precedes the entries, so the history of a gone resource answers "what was deleted".
+     *
+     * @param iri          the resource's IRI
+     * @param publishState the resource's publish state, as {@link StoreReader#publishState} names it
+     * @param entries      the resource's history entries, oldest first
+     * @param deleted      the deletion record if the resource is currently deleted
+     * @return the history text
+     */
+    public String render(String iri, String publishState, List<VersionEntry> entries,
+            Optional<DeletedResource> deleted) {
         Objects.requireNonNull(iri, "iri");
         Objects.requireNonNull(publishState, "publishState");
         Objects.requireNonNull(entries, "entries");
+        Objects.requireNonNull(deleted, "deleted");
 
         StringBuilder out = new StringBuilder();
         out.append(prefixes.toCurie(iri)).append("\n<").append(iri).append(">\n\n");
         out.append("Publish state: ").append(publishState).append("\n\n");
+        deleted.ifPresent(record -> out.append(new ResourceRenderer(prefixes).renderDeletedBody(record)).append('\n'));
 
         if (entries.isEmpty()) {
             out.append("# History (0)\n")

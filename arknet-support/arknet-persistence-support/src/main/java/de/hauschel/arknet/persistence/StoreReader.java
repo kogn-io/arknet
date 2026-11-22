@@ -25,6 +25,8 @@ import io.kogn.rdf.versioning.HistoryEntry;
 import io.kogn.rdf.versioning.PublishState;
 import io.kogn.rdf.versioning.ResourceVersioning;
 import io.kogn.rdf.versioning.ResourceVersioningNamedGraphs;
+import io.kogn.rdf.versioning.VersioningGraphs;
+import io.kogn.rdf.versioning.VocabVersioning;
 
 import de.hauschel.arknet.kernel.ProjectId;
 
@@ -349,6 +351,71 @@ public final class StoreReader {
         IRI subject = new SimpleRdf().createIRI(iri);
         try (DatasetHandle handle = acquire(projectId)) {
             return ReadTransactions.read(handle, tx -> versioning.publishState(tx, subject)).name();
+        }
+    }
+
+    /**
+     * Reads what the versioning still knows of a deleted resource: when its latest history entry is
+     * a tombstone, its deletion instant, comment and the root statements of the last version that
+     * entry names. A resource that was never deleted, or recreated since, or never existed yields
+     * empty. A blank-node handle yields empty.
+     *
+     * @param projectId the project to read
+     * @param iri       the resource's IRI, exactly as {@link HandleResolver} resolves it
+     * @return the deleted resource, or empty if the resource is not currently deleted
+     */
+    public Optional<DeletedResource> findDeleted(ProjectId projectId, String iri) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return Optional.empty();
+        }
+        IRI subject = new SimpleRdf().createIRI(iri);
+        try (DatasetHandle handle = acquire(projectId)) {
+            return ReadTransactions.read(handle, tx -> {
+                List<HistoryEntry> entries = versioning.history(tx, subject);
+                if (entries.isEmpty()) {
+                    return Optional.<DeletedResource>empty();
+                }
+                HistoryEntry last = entries.get(entries.size() - 1);
+                if (last.kind() != EntryKind.TOMBSTONE) {
+                    return Optional.<DeletedResource>empty();
+                }
+                List<Triple> statements = last.cid()
+                        .flatMap(cid -> versioning.readVersionByCID(tx, cid).map(graph -> graph.stream()
+                                .filter(triple -> triple.getSubject().equals(cid))
+                                .map(triple -> new Triple(iri, triple.getPredicate().getIRIString(),
+                                        toNode(triple.getObject())))
+                                .toList()))
+                        .orElse(List.of());
+                return Optional.of(new DeletedResource(iri, last.created().toString(), last.comment().orElse(null),
+                        statements));
+            });
+        }
+    }
+
+    /**
+     * Finds the resource a deleted business code belonged to: the code a delete retained sits on
+     * the tombstone entry, which the history graph ties back to the resource's IRI. Empty when no
+     * deleted resource retained the code.
+     *
+     * @param projectId the project to read
+     * @param code      the business code, e.g. {@code TERM-12}
+     * @return the IRI of the deleted resource, or empty
+     */
+    public Optional<String> findDeletedByCode(ProjectId projectId, String code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        String query = "SELECT DISTINCT ?s WHERE { GRAPH <" + VersionedWriteFunnel.RETAINED_CODES_GRAPH
+                + "> { ?entry <" + DCTERMS_IDENTIFIER + "> \"" + SparqlTerms.escape(code) + "\" } GRAPH <"
+                + VersioningGraphs.HISTORY.getIRIString() + "> { ?s <" + VocabVersioning.ENTRY.getIRIString()
+                + "> ?entry } }";
+        try (DatasetHandle handle = acquire(projectId)) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> row.getValue("s").orElse(null))
+                    .filter(IRI.class::isInstance)
+                    .map(term -> ((IRI) term).getIRIString())
+                    .findFirst();
         }
     }
 

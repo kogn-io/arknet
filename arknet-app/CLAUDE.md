@@ -88,6 +88,8 @@ Der generische Store-Lesepfad selbst (`StoreReader`, das typunabhaengige Lesemod
 Die Registry selbst braucht keinen Ausschluss: sie liegt in einem reservierten Dataset, das kein gewoehnlicher Aufruf adressiert.
 `store_overview`/`resource_get` zeigen damit den Draft-Stand des Modells, nie seine Versionen.
 `resource_history` ist das eigene Tool fuer die Versionen: `StoreReader#history` liest die Bibliotheks-Historie einer Ressource (Publish-Eintraege und Tombstones, aeltest zuerst, als `VersionEntry` mit Zeitpunkt, Art, content-adressierter Versions-IRI und Kommentar), `StoreReader#publishState` den Publish-Zustand (`NEVER_PUBLISHED`, `PUBLISHED_UNCHANGED`, `PUBLISHED_WITH_UNPUBLISHED_CHANGES`, `DELETED`), und `HistoryRenderer` rendert beides.
+Eine geloeschte Ressource (juengster Eintrag ein Tombstone) sieht `resource_get` wie `resource_history` ueber `StoreReader#findDeleted`: Loeschzeitpunkt, Kommentar und die Wurzel-Aussagen der letzten veroeffentlichten Version (`DeletedResource`, gerendert von `ResourceRenderer#renderDeleted`), statt "not found".
+Der Business-Code einer geloeschten Ressource bleibt vergeben und loest ueber `HandleResolver` (`StoreReader#findDeletedByCode`) auf die IRI des Tombstones auf; eine nie veroeffentlichte Ressource hat keinen Inhalt hinter dem Tombstone, der Record sagt das.
 Jeder Write ueber die Tools veroeffentlicht sofort (`VersionedWriteFunnel`), ein Publish-Tool gibt es nicht; `NEVER_PUBLISHED` und `PUBLISHED_WITH_UNPUBLISHED_CHANGES` zeigt darum nur eine store-first geschriebene Ressource.
 Eine nie ueber die Tools geschriebene Ressource hat eine leere Historie, und das ist kein Fehler.
 `Prefixes.defaults()` traegt keine Bindung fuer das Vokabular der Versionierung, weil kein Lesepfad es zeigt.
