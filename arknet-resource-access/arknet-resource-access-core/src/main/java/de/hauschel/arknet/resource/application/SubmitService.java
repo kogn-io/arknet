@@ -18,6 +18,7 @@ import de.hauschel.arknet.resource.application.port.in.SubmitDocument;
 import de.hauschel.arknet.resource.application.port.in.SubmitResult;
 import de.hauschel.arknet.resource.application.port.in.SubmittedChange;
 import de.hauschel.arknet.resource.application.port.out.ResourceRepository;
+import de.hauschel.arknet.resource.domain.PrefixBindings;
 import de.hauschel.arknet.resource.domain.ResourceSchema;
 import de.hauschel.arknet.resource.domain.SubmitConflictException;
 import de.hauschel.arknet.resource.domain.SubmitRejectedException;
@@ -33,8 +34,10 @@ import de.hauschel.arknet.resource.domain.SubmittedDocument;
  * again against the new state, a bounded number of times - the same way a typed create retries on a
  * taken code.</p>
  *
- * <p>Every rejection names the full IRI of the field or resource it concerns; the shapes of a
- * resource type tell what a valid resource holds.</p>
+ * <p>Every rejection names the full IRI of the field or resource it concerns, declares the full
+ * namespace behind every prefix its text uses, and points to {@code describe}, which tells what a
+ * valid resource of a type holds (ADR-59, consequence 5). A document that is no valid Turtle gets
+ * every known prefix declared, since a missing declaration is its most likely cause.</p>
  */
 public final class SubmitService implements SubmitDocument {
 
@@ -45,6 +48,7 @@ public final class SubmitService implements SubmitDocument {
     private final ResourceRepository repository;
     private final GraphImport parser;
     private final ResourceIdFactory ids;
+    private final PrefixBindings prefixes;
 
     /**
      * Creates the engine.
@@ -53,20 +57,30 @@ public final class SubmitService implements SubmitDocument {
      * @param repository the store
      * @param parser     reads Turtle
      * @param ids        mints the IRIs of created resources
+     * @param prefixes   the prefixes the shipped files bind, declared in rejections
      */
     public SubmitService(final ResourceSchema schema, final ResourceRepository repository, final GraphImport parser,
-            final ResourceIdFactory ids) {
+            final ResourceIdFactory ids, final PrefixBindings prefixes) {
         this.schema = Objects.requireNonNull(schema, "schema");
         this.repository = Objects.requireNonNull(repository, "repository");
         this.parser = Objects.requireNonNull(parser, "parser");
         this.ids = Objects.requireNonNull(ids, "ids");
+        this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
     }
 
     @Override
     public SubmitResult submit(final ProjectId projectId, final String document) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(document, "document");
-        SubmittedDocument parsed = SubmittedDocument.of(parse(document), schema);
+        Graph graph = parse(document);
+        try {
+            return apply(projectId, SubmittedDocument.of(graph, schema));
+        } catch (SubmitRejectedException e) {
+            throw explained(e.getMessage(), prefixes.usedIn(e.getMessage()));
+        }
+    }
+
+    private SubmitResult apply(final ProjectId projectId, final SubmittedDocument parsed) {
         SubmitConflictException lost = null;
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             try {
@@ -86,8 +100,20 @@ public final class SubmitService implements SubmitDocument {
         try {
             return parser.readTurtle(new ByteArrayInputStream(document.getBytes(StandardCharsets.UTF_8)));
         } catch (RuntimeException e) {
-            throw new SubmitRejectedException("the document is not valid Turtle; declare every prefix it uses: "
-                    + e.getMessage());
+            throw explained("the document is not valid Turtle; declare every prefix it uses: " + e.getMessage(),
+                    prefixes);
         }
+    }
+
+    private static SubmitRejectedException explained(final String reason, final PrefixBindings used) {
+        StringBuilder message = new StringBuilder(reason).append("\nNothing was written.");
+        if (!used.isEmpty()) {
+            message.append("\nThe prefixes for the namespaces this text names:\n").append(used.declarations());
+        } else {
+            message.append('\n');
+        }
+        message.append("Call describe without a type for every resource type and the activities a document"
+                + " consists of, and describe with a type for its fields, edges, rules and a runnable example.");
+        return new SubmitRejectedException(message.toString());
     }
 }

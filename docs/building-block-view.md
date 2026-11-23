@@ -220,8 +220,8 @@ its own core only; no module of a Component depends on a module of another.
   which is what ends the report's borrowed in-ports into every context (ADR-49,
   ADR-70). Sections 3 to 5 then describe one shape instead of two.
 - #741 and #743: the Component for generic resource access is built outside every
-  Bounded Context. Its `submit` engine (core and kognio-rdf out-adapter) exists; #741 still
-  adds `describe`, the MCP tools and their wiring, #743 the generic read tools
+  Bounded Context. Its `submit` engine and `describe` (core and kognio-rdf out-adapter) and
+  the MCP tools for both exist; #741 still adds their wiring, #743 the generic read tools
   (`resource_get`, `resource_history`, `text_search`), which leave the composition
   root (ADR-69).
 - #77: the building-block view moves into the store; this file goes away. Before

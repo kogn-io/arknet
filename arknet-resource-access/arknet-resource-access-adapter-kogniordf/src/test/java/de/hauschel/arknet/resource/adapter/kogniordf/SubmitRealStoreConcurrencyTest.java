@@ -114,7 +114,8 @@ class SubmitRealStoreConcurrencyTest {
 
     private static SubmitService service(final ResourceRepository store) {
         return new SubmitService(KognioRdfResourceRepositoryFactory.schema(), store,
-                KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory());
+                KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
+                KognioRdfResourceRepositoryFactory.prefixes());
     }
 
     /** Pauses the first read of one resource until a concurrent writer has deleted it. */

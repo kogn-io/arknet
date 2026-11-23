@@ -29,12 +29,17 @@ Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context; von den Klassen
   Ein besessenes Feld ohne `sh:class` fuer seine Kinder bricht den Aufbau des Schemas ab: erst die Klasse macht ein Kind zum Fokusknoten seiner Node-Shape, und die Engine typisiert jedes neue Kind mit ihr (ein anders getyptes Kind lehnt sie ab).
   `domain.SubmittedDocument` liest die Aktivitaeten eines geparsten Dokuments und lehnt ab, was ohne Store entscheidbar ist: jedes Tripel, das zu keiner Aktivitaet gehoert, einen Blank Node als Gegenstand zweier Creates, einen Zyklus aus Blank Nodes ausserhalb der neuen Ressourcen.
   `application.SubmitService` implementiert den In-Port `SubmitDocument`; `DocumentApplication` baut je beruehrter Ressource den Slice nach dem Dokument und nennt die Writes auf dem Batch.
+  `application.DescribeService` implementiert den In-Port `DescribeResourceType` (Records `ResourceCatalog`, `ResourceTypeSummary`, `ResourceTypeDescription`, `FieldDescription`).
+  `domain.PrefixBindings` haelt die Praefixe der ausgelieferten Dateien mit ihren Namespaces; der Adapter liest sie aus den `@prefix`-Zeilen, im Code steht keiner.
 - `arknet-resource-access-adapter-kogniordf`: Out-Adapter gegen den kognio-rdf-Store.
   `KognioRdfResourceRepositoryFactory` ist die einzige Klasse mit RDF4J: sie laedt die fuenf Shape-Dateien der Modellressourcen und die Modell-Ontologien per Dateiname vom Classpath (ohne `project-shapes.ttl`, das System-Dataset schreibt die Komponente nicht), baut daraus ein Gate und den Funnel und liefert Schema und Turtle-Parser fuer den Kern.
+  Sie baut ausserdem `DescribeService` (`describer`), dem sie zu den Modell-Ontologien `arknet-resource.ttl` gibt, und liest die Praefixe (`prefixes`) per Rio aus denselben Dateien: zuerst die Ontologien, ein Praefix oder Namespace, der schon gebunden ist, bleibt bei seiner ersten Lesart.
   `KognioRdfResourceRepositoryFactoryTest` gleicht die Dateiliste gegen das ab, was `arknet-ontology` ausliefert.
   `KognioRdfResourceRepository` setzt `ResourceRepository` auf `VersionedWriteFunnel#writeAll` um.
-- `arknet-resource-access-adapter-mcp`: treibender Adapter mit den MCP-Werkzeugen; sieht vom Core nur `..application.port.in..` und keine RDF-Technologie.
-  `McpAdapterModule` ist die einzige Klasse: sie gibt `ResourceAccessNamesNoModelNamespaceTest` eine Klasse im Modul, damit der Namespace-Scan es nachweislich erfasst, und entfaellt mit dem ersten Werkzeug.
+- `arknet-resource-access-adapter-mcp`: treibender Adapter mit den MCP-Werkzeugen; sieht vom Core nur `..application.port.in..` und keine RDF-Technologie, haengt an `arknet-mcp-support` fuer die Anker-Aufloesung.
+  `ResourceAccessMcpTools` traegt `describe` und `submit` und rendert, was die In-Ports liefern.
+  Registriert wird die Klasse nur, wenn die Property `arknet.resource-access.enabled` (`ResourceAccessMcpTools.ENABLED_PROPERTY`) `true` ist; ohne sie bleiben die typgenauen Werkzeuge die einzige Schreiboberflaeche.
+  Die Bedingung sitzt an der Bean in der Composition Root, nicht im Modul: ausser `arknet-app` traegt kein Modul eine Spring-Konfiguration.
 
 ## submit
 
@@ -45,11 +50,24 @@ Eine neue Ressource steht im Dokument als Blank Node, die Engine vergibt IRI und
 Ein besessenes Kind ist das Fragment `<Ressource>#<Art>-<Id>` und behaelt seinen Namen ueber jeden Write, der es behaelt; Positionen werden bei jedem Write auf das Feld lueckenlos ab 1 vergeben, die eines entfernten Kindes zaehlen im Stand vor dem Dokument.
 Ein Update nennt keinen erwarteten Stand, wie die typgenauen Werkzeuge: ein verlorener Commit laesst die Engine das ganze Dokument gegen den neuen Stand noch einmal anwenden, hoechstens `SubmitService.MAX_ATTEMPTS`-mal.
 Aktivitaeten werden nicht als eigene Ressourcen gespeichert; die Spur ist der History-Eintrag der Bibliothek je geaenderter Ressource.
+Jede Ablehnung nennt die volle IRI dessen, was sie betrifft, deklariert jeden Praefix, den ihr Text schreibt, und jeden Namespace, den sie nennt, als `@prefix`-Zeile und verweist auf `describe` (ADR-59, Folge 5); ein Dokument, das kein gueltiges Turtle ist, bekommt alle bekannten Praefixe.
 
 Ein Gate prueft alle Ressourcentypen: die Shapes aller fuenf Dateien, die Modell-Ontologien als Axiome in den Daten, Subklassen-Reasoning an.
 Die typgenauen Adapter setzen einen referenzierten Nachbarn nur mit seinem Typ in den Asserted Context und filtern fremde Shapes aus ihrem Gate; ein Gate ueber alles kann das nicht, der Typ allein aktivierte die Node-Shape des Nachbarn und scheiterte an dessen Pflichtfeldern.
 Die Engine setzt darum die Slices aller ueber Verweise erreichbaren Ressourcen nach dem Dokument in den Asserted Context, transitiv; ein Verweis auf eine Ressource, die es danach nicht gibt, findet keinen Typ und verletzt das `sh:class` seiner Shape.
 Diese Nachbarn liest sie ueber den Batch in der Schreibtransaktion; `SubmitRealStoreConcurrencyTest` haelt fest, dass ein paralleler Loescher des Gelesenen die Engine ihren Commit kostet und der zweite Lauf den Verweis ablehnt.
+
+## describe
+
+`describe` liest einen Ressourcentyp allein aus Shapes und Ontologie (ADR-59, ADR-69).
+Die Felder eines Typs sind die Property-Shapes aller Node-Shapes, die den Typ oder eine seiner Oberklassen (`rdfs:subClassOf` der Ontologie) als `sh:targetClass` nennen; mehrere Shapes auf einem Pfad verschmelzen zu einem Feld.
+Pflicht ist ein Feld mit `sh:minCount` in einer Shape der Schwere Violation, empfohlen eines mit `sh:minCount` nur unter `sh:Warning`; `sh:maxCount` zaehlt nur aus Violation-Shapes.
+Die Art eines Felds folgt aus den Shapes: besessen (Regeldaten `arkres:childKind`), Auswahl (`sh:in`), Kante (`sh:class`, `sh:or` ueber Klassen, `sh:nodeKind sh:IRI`), Text (`sh:uniqueLang` oder `rdf:langString`), sonst Wert.
+`dcterms:identifier` eines Typs mit Code-Praefix gilt als von der Engine vergeben.
+Labels und Kommentare kommen aus der Ontologie, Regelsaetze aus `sh:message` der Shapes, jeweils in der Anzeigesprache ueber die `DisplayLocale`-Kette; das MCP-Werkzeug nimmt ohne `displayLocale` die Standardsprache des Projekts.
+Ohne Typ liefert `describe` alle Ressourcentypen, das Aktivitaetsvokabular aus `arknet-resource.ttl` (ohne die Regeldaten) und die Praefix-Deklarationen.
+Das Beispiel eines Typs legt eine Ressource mit allen Pflichtfeldern und je einem Kind in jedem besessenen Feld an; eine Pflichtkante auf einen Ressourcentyp bekommt eine eigene Ressource im selben Dokument, damit das Beispiel gegen ein leeres Projekt laeuft.
+`DescribeRealStoreTest` reicht das Beispiel jedes Typs gegen einen echten Store ein.
 
 ## Pruefung
 
