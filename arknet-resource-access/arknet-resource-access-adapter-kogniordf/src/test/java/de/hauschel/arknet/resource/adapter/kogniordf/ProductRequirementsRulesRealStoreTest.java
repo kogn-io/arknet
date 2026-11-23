@@ -259,14 +259,26 @@ class ProductRequirementsRulesRealStoreTest {
         assertNothingStored("FR-1");
     }
 
-    @Test
-    void anUntaggedAndATaggedCriterionWithTheSameStringAreRejected() {
+    static Stream<Arguments> collidingCriteria() {
+        return Stream.of(
+                Arguments.of("en and en", "\"Works fine.\"@en", "\"Works fine.\"@en"),
+                Arguments.of("en and de", "\"Works fine.\"@en", "\"Works fine.\"@de"),
+                Arguments.of("en and untagged", "\"Works fine.\"@en", "\"Works fine.\""),
+                Arguments.of("untagged and untagged", "\"Works fine.\"", "\"Works fine.\""),
+                Arguments.of("de and de, the first also in en", "\"Other text.\"@en ; arkreq:criterionText"
+                        + " \"Works fine.\"@de", "\"Works fine.\"@de"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("collidingCriteria")
+    void twoCriteriaSharingAStringUnderAnyTagsAreRejected(final String tags, final String first,
+            final String second) {
         // when
         SubmitRejectedException rejected = rejected("[] a arkres:Create ; arkres:object _:fr .\n"
                 + "_:fr a arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ;"
                 + " dcterms:description \"Writes it.\"@en ;"
-                + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"Works fine.\"@en ] ,"
-                + " [ arkreq:position 2 ; arkreq:criterionText \"Works fine.\" ] .\n");
+                + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText " + first + " ] ,"
+                + " [ arkreq:position 2 ; arkreq:criterionText " + second + " ] .\n");
 
         // then
         assertTrue(rejected.getMessage().contains("must not carry the same arkreq:criterionText"),
@@ -275,15 +287,15 @@ class ProductRequirementsRulesRealStoreTest {
     }
 
     @Test
-    void twoCriteriaWithTheSameStringUnderDifferentLanguageTagsAreAccepted() {
+    void twoCriteriaWithDifferentTextsAreAcceptedInSeveralLanguages() {
         assertDoesNotThrow(() -> submit.submit(SubmitRealStoreTest.PROJECT, PREFIXES
                 + "[] a arkres:Create ; arkres:object _:fr .\n"
                 + "_:fr a arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ;"
                 + " dcterms:description \"Writes it.\"@en ;"
                 + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"Works fine.\"@en ;"
                 + " arkreq:criterionText \"Funktioniert.\"@de ] ,"
-                + " [ arkreq:position 2 ; arkreq:criterionText \"Funktioniert.\"@en ;"
-                + " arkreq:criterionText \"Works fine.\"@de ] .\n"));
+                + " [ arkreq:position 2 ; arkreq:criterionText \"Reads back.\"@en ;"
+                + " arkreq:criterionText \"Liest zurueck.\"@de ] .\n"));
     }
 
     @Test

@@ -140,11 +140,10 @@ rshapes:Requirement-constrainedBy
     sh:message  "oslc_rm:constrainedBy must reference a constraint (arkreq:Constraint, IRI) -- create it first with constraint_add."@en , "oslc_rm:constrainedBy muss auf eine Randbedingung (arkreq:Constraint, IRI) verweisen -- lege sie zuerst mit constraint_add an."@de ;
     sh:severity sh:Violation .
 
-# Two criteria of one requirement must not carry the same text. The core compares the texts it
-# resolves per criterion through the language fallback, so two criteria collide when their
-# strings are equal and their tags are equal or one of them is untagged (an untagged literal is
-# what the fallback reaches for in any language). Known gap: two criteria that each exist only
-# in a different language with the same string are not caught here.
+# Two criteria of one requirement must not share a text. The core compares the texts it resolves
+# per criterion through the language fallback, so which pair of literals collides depends on the
+# reader's language. Stricter on purpose: no two criteria may share a literal with the same
+# string, whatever the tags.
 # SPARQL-based because SHACL has no "distinct across the values of a path through a second node".
 rshapes:Requirement-acceptanceCriterion-textsDiffer
     a sh:SPARQLConstraint ;
@@ -159,8 +158,7 @@ rshapes:Requirement-acceptanceCriterion-textsDiffer
             FILTER (?first != ?second)
             ?first  arkreq:criterionText ?firstText .
             ?second arkreq:criterionText ?secondText .
-            FILTER (str(?firstText) = str(?secondText)
-                    && (lang(?firstText) = lang(?secondText) || lang(?firstText) = "" || lang(?secondText) = ""))
+            FILTER (str(?firstText) = str(?secondText))
         }
         """ .
 
