@@ -505,15 +505,13 @@ final class DocumentApplication {
     }
 
     /**
-     * A stored edge counts if the resource holding it, or holding the child that does, is neither the
-     * deleted resource nor deleted itself, and still carries the edge after the document.
+     * A stored edge counts if the resource holding it, or holding the child that does, is not the
+     * deleted resource and still carries the edge after the document; a resource the document
+     * deletes carries nothing after it.
      */
     private boolean leftAfter(final Triple edge, final IRI holder, final IRI target) {
         IRI resource = resourceOf(holder);
-        if (resource.equals(target) || deleted.contains(resource)) {
-            return false;
-        }
-        return stateAfter(resource).contains(edge);
+        return !resource.equals(target) && stateAfter(resource).contains(edge);
     }
 
     /** Names the holder of an edge in a slice the document writes: the node, or its resource. */
