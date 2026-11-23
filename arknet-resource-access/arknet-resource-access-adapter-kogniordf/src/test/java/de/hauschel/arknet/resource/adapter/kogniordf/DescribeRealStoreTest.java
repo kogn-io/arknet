@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -30,6 +31,7 @@ import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.resource.application.SubmitService;
+import de.hauschel.arknet.resource.application.port.in.ChangeExample;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
 import de.hauschel.arknet.resource.application.port.in.FieldDescription;
 import de.hauschel.arknet.resource.application.port.in.FieldDescription.Kind;
@@ -38,6 +40,7 @@ import de.hauschel.arknet.resource.application.port.in.ResourceCatalog;
 import de.hauschel.arknet.resource.application.port.in.ResourceTypeDescription;
 import de.hauschel.arknet.resource.application.port.in.SubmitResult;
 import de.hauschel.arknet.resource.application.port.in.SubmittedChange;
+import de.hauschel.arknet.resource.domain.SubmitRejectedException;
 
 /**
  * Describes the shipped resource types and runs every example against a real store.
@@ -59,7 +62,7 @@ class DescribeRealStoreTest {
         submit = new SubmitService(KognioRdfResourceRepositoryFactory.schema(),
                 KognioRdfResourceRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT),
                 KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
-                KognioRdfResourceRepositoryFactory.prefixes());
+                KognioRdfResourceRepositoryFactory.prefixes(), KognioRdfResourceRepositoryFactory.handles(lifecycle));
     }
 
     @AfterEach
@@ -102,6 +105,69 @@ class DescribeRealStoreTest {
                 .anyMatch(change -> change.code() != null
                         && change.code().startsWith(description.summary().codePrefix().orElse("-"))),
                 description.example());
+    }
+
+    @ParameterizedTest
+    @MethodSource("resourceTypes")
+    void theChangeExamplesOfEveryTypeRunInOrderAfterItsCreate(final String type) {
+        // given
+        ResourceTypeDescription description = DESCRIBER.describe(type, "en");
+        Optional<String> codePrefix = description.summary().codePrefix();
+        SubmittedChange created = submit.submit(SubmitRealStoreTest.PROJECT, description.example()).changes().stream()
+                .filter(change -> codePrefix.map(prefix -> change.code() != null && change.code().startsWith(prefix))
+                        .orElse(change.code() == null))
+                .findFirst().orElseThrow();
+
+        // when
+        List<SubmitResult> results = description.changeExamples().stream()
+                .map(change -> submit.submit(SubmitRealStoreTest.PROJECT,
+                        change.document().replace(ChangeExample.PLACEHOLDER,
+                                "<" + (created.code() != null ? created.code() : created.iri()) + ">")))
+                .toList();
+
+        // then
+        List<String> activities = description.changeExamples().stream().map(ChangeExample::activity).toList();
+        assertEquals("arkres:Update", activities.get(0), description.changeExamples().toString());
+        assertEquals("arkres:Delete", activities.get(activities.size() - 1));
+        assertEquals(description.fields().stream().anyMatch(field -> field.kind() == Kind.CHILDREN),
+                activities.containsAll(List.of("arkres:AddTo", "arkres:RemoveFrom")), activities.toString());
+        results.subList(0, results.size() - 1).forEach(result -> assertEquals(
+                List.of(new SubmittedChange(SubmittedChange.Kind.UPDATED, created.iri(), created.code())),
+                result.changes().stream().filter(change -> change.iri().equals(created.iri())).toList()));
+        assertEquals(List.of(new SubmittedChange(SubmittedChange.Kind.DELETED, created.iri(), created.code())),
+                results.get(results.size() - 1).changes());
+    }
+
+    @Test
+    void theChangeExamplesNameTheResourceByAPlaceholder() {
+        // when
+        ResourceTypeDescription description = DESCRIBER.describe("arkreq:FunctionalRequirement", "en");
+
+        // then
+        assertEquals(List.of("arkres:Update", "arkres:AddTo", "arkres:RemoveFrom", "arkres:Delete"),
+                description.changeExamples().stream().map(ChangeExample::activity).toList());
+        assertTrue(description.changeExamples().stream()
+                .allMatch(change -> change.document().contains("arkres:object " + ChangeExample.PLACEHOLDER)
+                        && !change.document().contains("<FR-1>")
+                        && change.document().contains("by <FR-12> (its code) or <IRI>, in angle brackets")
+                        && change.document().contains("@prefix arkres: <https://w3id.org/arknet/resource#> .")),
+                description.changeExamples().toString());
+    }
+
+    @ParameterizedTest
+    @MethodSource("resourceTypes")
+    void aChangeExampleSubmittedWithItsPlaceholderIsRejected(final String type) {
+        // given
+        ResourceTypeDescription description = DESCRIBER.describe(type, "en");
+        submit.submit(SubmitRealStoreTest.PROJECT, description.example());
+        ChangeExample delete = description.changeExamples().get(description.changeExamples().size() - 1);
+
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class,
+                () -> submit.submit(SubmitRealStoreTest.PROJECT, delete.document()));
+
+        // then
+        assertTrue(rejected.getMessage().contains("CODE-OR-IRI-RETURNED-BY-SUBMIT"), rejected.getMessage());
     }
 
     @Test

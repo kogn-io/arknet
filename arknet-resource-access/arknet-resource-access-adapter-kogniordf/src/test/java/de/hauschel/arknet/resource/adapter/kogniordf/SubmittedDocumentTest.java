@@ -104,7 +104,9 @@ class SubmittedDocumentTest {
         SubmitService service = new SubmitService(SCHEMA, (projectId, writes) -> {
             throw new AssertionError("an unparseable document reaches the store");
         }, KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
-                KognioRdfResourceRepositoryFactory.prefixes());
+                KognioRdfResourceRepositoryFactory.prefixes(), (projectId, handle) -> {
+                    throw new AssertionError("an unparseable document names no handle");
+                });
 
         SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class,
                 () -> service.submit(SubmitRealStoreTest.PROJECT, "[] a undeclared:Create ."));

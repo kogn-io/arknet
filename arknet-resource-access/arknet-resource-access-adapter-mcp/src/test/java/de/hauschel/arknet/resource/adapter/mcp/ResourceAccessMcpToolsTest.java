@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
+import de.hauschel.arknet.resource.application.port.in.ChangeExample;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
 import de.hauschel.arknet.resource.application.port.in.FieldDescription;
 import de.hauschel.arknet.resource.application.port.in.FieldDescription.Kind;
@@ -60,6 +61,7 @@ class ResourceAccessMcpToolsTest {
             requestedLocales.add(displayLocale);
             return new ResourceTypeDescription(TYPE, List.of(TITLE, PARTS), List.of("Spans two fields."),
                     "@prefix m: <https://example.org/m#> .\n[] a arkres:Create .\n",
+                    List.of(new ChangeExample("arkres:Delete", "[] a arkres:Delete ; arkres:object <T-1> .\n")),
                     "@prefix m: <https://example.org/m#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n");
         }
     };
@@ -105,6 +107,9 @@ class ResourceAccessMcpToolsTest {
                 answer);
         assertTrue(answer.contains("Rules across fields:\n- Spans two fields."), answer);
         assertTrue(answer.contains("[] a arkres:Create .\n"), answer);
+        assertTrue(answer.contains("Then arkres:Delete (runs after the documents above, after replacing "
+                + ChangeExample.PLACEHOLDER + " with <CODE> or <IRI>, in angle brackets, as the create returned it):\n"
+                + "[] a arkres:Delete ; arkres:object <T-1> .\n"), answer);
         assertTrue(answer.endsWith("Prefixes behind every name above:\n@prefix m: <https://example.org/m#> .\n"
                 + "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"), answer);
     }

@@ -29,10 +29,14 @@ import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.HandleResolver;
+import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
+import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.resource.application.DescribeService;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
+import de.hauschel.arknet.resource.application.port.out.HandleLookup;
 import de.hauschel.arknet.resource.application.port.out.ResourceRepository;
 import de.hauschel.arknet.resource.domain.PrefixBindings;
 import de.hauschel.arknet.resource.domain.ResourceSchema;
@@ -79,6 +83,18 @@ public final class KognioRdfResourceRepositoryFactory {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
         return new KognioRdfResourceRepository(buildFunnel(lifecycle, displayLocale));
+    }
+
+    /**
+     * The handle lookup over the same dataset lifecycle: a bare code resolves the way
+     * {@code resource_get} resolves it.
+     *
+     * @param lifecycle the dataset lifecycle every project dataset is acquired from
+     * @return the lookup
+     */
+    public static HandleLookup handles(final DatasetLifecycle lifecycle) {
+        Objects.requireNonNull(lifecycle, "lifecycle");
+        return new KognioRdfHandleLookup(new HandleResolver(new StoreReader(lifecycle), Prefixes.defaults()));
     }
 
     /**
