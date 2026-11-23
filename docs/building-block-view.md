@@ -115,6 +115,12 @@ tools read (`StoreReader`, `StoreSnapshot`, `StoreResource`, `Triple`, `RdfNode`
 by which any published language is read, and both the component and the
 application's type-independent read path speak it.
 
+`arknet-resource-access` is the Component for generic resource access and belongs to no
+Bounded Context (ADR-69); its parent hangs directly off the root. It reads every resource
+type at runtime from the ontology and the shapes and names no namespace of a context in its
+code; its own vocabulary is `arkres:` (`ArkresVocabulary` in its core, `arknet-resource.ttl`).
+Its core works on triples, so ADR-8 and ADR-45 do not bind it (ADR-69, consequence 4).
+
 The three technical-library modules (`arknet-persistence-support`,
 `arknet-mcp-support`, `arknet-persistence-test-support`) sit under the aggregator
 `arknet-support`.
@@ -131,6 +137,7 @@ The three technical-library modules (`arknet-persistence-support`,
 | Actor                            | arknet-actor-register (Maven parent: `arknet-actor`) | -core, -adapter-kogniordf, -adapter-mcp |
 | Project Registry                | arknet-project (Maven parent: `arknet-project-registry`) | -core, -adapter-kogniordf, -adapter-mcp |
 | Model Analysis                   | arknet-model-evaluation (Maven parent: `arknet-model-analysis`) | -core, -adapter-kogniordf, -adapter-mcp (an -adapter-html follows with the report, #642) |
+| (none, ADR-69)                   | arknet-resource-access (Maven parent: itself, directly under the root) | -core, -adapter-kogniordf, -adapter-mcp |
 
 Outside every Bounded Context:
 
@@ -169,6 +176,10 @@ As built (from the POMs):
     in-port, served by `TermLookup#codesById` over the glossary's Published Language
   - adr-mcp -> requirements-core, ubiquitous-language-core, bounded-context-core
   - actor-mcp, project-mcp, ubiquitous-language-mcp, model-analysis-mcp: none
+- The modules of `arknet-resource-access` depend on their own core and on no module of a
+  Bounded Context; it reads their resource types at runtime from ontology and shapes (ADR-69,
+  consequence 8). Only the composition root may depend on it (`DependencyRulesTest`
+  rule 17).
 
 Target (ADR-49): one mechanism for every edge, inside and across context boundaries.
 The core defines its own out-port for whatever it needs from a neighbour; the
@@ -187,7 +198,7 @@ its own core only; no module of a Component depends on a module of another.
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
 | `<bc>-shared` once ownerless identities exist | built for both contexts that need one: `arknet-product-requirements-shared` (RequirementCode, ConstraintCode, TermRef) and `arknet-domain-modelling-shared` (TermCode) |
 | Application outside every Bounded Context     | present (arknet-app); it holds no evaluation; besides the wiring it carries the type-independent tools, of which `resource_get`, `resource_history` and `text_search` move to the Component for generic resource access (ADR-69), and the HTML report, which moves to Model Analysis (ADR-54) |
-| dependency rules as a checker                 | partial: ArchUnit carries the rule that no module of a Component depends on a module of another for Product & Requirements and Domain Modelling, plus that a driving adapter sees only in-ports and domain types, that a `<bc>-shared` hangs on nothing but the Shared Kernel, that no core or vocabulary module reaches into `arknet-mcp-support`, that the Shared Kernel holds exactly the terms ADR-56 admits, and that Model Analysis names no module of the contexts it reads; the other contexts still borrow in-ports (ADR-49) |
+| dependency rules as a checker                 | partial: ArchUnit carries the rule that no module of a Component depends on a module of another for Product & Requirements and Domain Modelling, plus that a driving adapter sees only in-ports and domain types, that a `<bc>-shared` hangs on nothing but the Shared Kernel, that no core or vocabulary module reaches into `arknet-mcp-support`, that the Shared Kernel holds exactly the terms ADR-56 admits, and that Model Analysis names no module of the contexts it reads; the other contexts still borrow in-ports (ADR-49); generic resource access names no module of a context, only the composition root names it, and its core stays free of RDF4J and Spring, with a scan of its class files for any namespace of the model |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |
 
 ## 6. Cross-cutting concepts (pointers only)

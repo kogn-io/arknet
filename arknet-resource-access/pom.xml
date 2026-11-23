@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- No bounded-context parent above this one: the component belongs to no bounded context
+         (ADR-69), so it hangs directly off the root, next to the context parents. -->
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-resource-access</artifactId>
+    <packaging>pom</packaging>
+    <description>Resource Access component (no bounded context): generic access to the resources of every bounded context, reading each resource type at runtime from the ontology and the shapes and naming no class or property of any bounded context in its code.</description>
+
+    <modules>
+        <module>arknet-resource-access-core</module>
+        <module>arknet-resource-access-adapter-kogniordf</module>
+        <module>arknet-resource-access-adapter-mcp</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-resource-access-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-resource-access-adapter-mcp</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

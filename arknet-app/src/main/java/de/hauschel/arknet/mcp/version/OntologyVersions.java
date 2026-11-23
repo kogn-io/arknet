@@ -41,7 +41,7 @@ import java.util.regex.Pattern;
  * instead of silently emptying an export envelope.</p>
  *
  * <p><strong>Degrades, never throws.</strong> A resource that is missing, unreadable or does not
- * match the expected header is left out of the map. An envelope that lists six of seven modules
+ * match the expected header is left out of the map. An envelope that lists all modules but one
  * is worth more than an export that fails because a file moved.</p>
  */
 public final class OntologyVersions {
@@ -58,7 +58,8 @@ public final class OntologyVersions {
             "/arknet-requirements.ttl",
             "/arknet-architecture.ttl",
             "/arknet-provenance.ttl",
-            "/arknet-project.ttl");
+            "/arknet-project.ttl",
+            "/arknet-resource.ttl");
 
     /**
      * The ontology's own subject line: an arknet IRI alone on its line, which in every shipped

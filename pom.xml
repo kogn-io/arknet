@@ -90,6 +90,9 @@
         <module>arknet-project-registry</module>
         <module>arknet-model-analysis</module>
 
+        <!-- Component outside every bounded context: generic resource access (ADR-69). -->
+        <module>arknet-resource-access</module>
+
         <!-- Application, Shared Kernel, Ontology. -->
         <module>arknet-app</module>
         <module>arknet-shared-kernel</module>

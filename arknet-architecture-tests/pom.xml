@@ -168,6 +168,28 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Rules 16 to 18 and ResourceAccessNamesNoModelNamespaceTest: all three modules of the
+             component for generic resource access (ADR-69). Without them ArchUnit sees no class
+             in de.hauschel.arknet.resource, and the rules fail on an empty that() clause. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-resource-access-core</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-resource-access-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-resource-access-adapter-mcp</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Regel 4: die In-Adapter (MCP), die trotz der Borrowed-In-Port-Erlaubnis
              keine RDF-Technologie sehen duerfen. -->
         <dependency>
