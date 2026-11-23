@@ -11,8 +11,9 @@ name: Release (manual, version-gated Docker image)
 # fixed, reproducible daemon. Independent of the Maven `<revision>` property (stays
 # SNAPSHOT decoration -- no Maven artifact is deployed) and independent of the
 # plugin-marketplace release, which lives in its own repository now. The last step
-# of the separate bump-revision job does bump `<revision>` to the next minor SNAPSHOT on `main`, purely to
-# keep that decoration from lagging the tag -- it is unrelated to the Docker image.
+# of the separate bump-revision job does bump `<revision>` to the next minor
+# SNAPSHOT on `main`, purely to keep that decoration from lagging the tag -- it is
+# unrelated to the Docker image.
 #
 # Uses the built-in GITHUB_TOKEN (contents: write, packages: write below) for the
 # image push, the tag push and the GitHub release object -- no dedicated release

@@ -46,7 +46,7 @@ jobs:
       - name: Collect ontology and shape files
         run: |
           mapfile -t FILES < <(find . -path '*/src/main/resources/*' -name '*.ttl' \
-            -not -path '*/target/*' -not -path '*/src/test/*' | sort)
+            -not -path '*/target/*' | sort)
           if [ "${#FILES[@]}" -eq 0 ]; then
             echo "::error::No .ttl files found under */src/main/resources/."
             exit 1
