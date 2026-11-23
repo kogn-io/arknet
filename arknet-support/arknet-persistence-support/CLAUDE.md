@@ -43,11 +43,16 @@ Jeder Write veroeffentlicht: `replace` schreibt den Draft und publiziert ihn in 
 Ein Write, der nichts aendert, erzeugt keinen History-Eintrag, jeder andere genau einen; einen eigenen Publish-Aufruf gibt es nicht.
 `delete` laesst die Bibliothek Draft und veroeffentlichten Slice entfernen und einen Tombstone schreiben und haengt einen uebergebenen Business-Code an dessen Eintrags-IRI in `RETAINED_CODES_GRAPH`, den `findRetainedCodes` nach Code-Praefix gefiltert liest; die Praefixe der Ressourcentypen ueberlappen nicht, weil Codes im ganzen Content-Graph eindeutig sind.
 Den Code haelt arknet selbst, weil er auf dem Modell-Tripel lebt, das der Delete entfernt.
+`writeAll` schreibt mehrere Ressourcen in einer Transaktion, ganz oder gar nicht: der Aufrufer nennt auf dem uebergebenen `Batch` Creates, Updates und Deletes in beliebiger Mischung, jede mit denselben Pruefungen und demselben Gate wie ihr Einzel-Gegenstueck, sofort im Draft der Transaktion, sodass ein spaeterer Write sieht, was ein frueherer hinterliess (auch einen schon vergebenen Code).
+Danach veroeffentlicht ein einziger `publish` alle geschriebenen Drafts mit den `EntryDetails` des Batches, die auch jeder Tombstone traegt: je geaenderter Ressource genau ein History-Eintrag, eine unveraenderte bekommt keinen.
+Jede Ausnahme -- Signal, Gate-Verletzung, Tripel ausserhalb des Slice -- rollt die ganze Transaktion zurueck.
+Ein Update im Batch traegt kein Token, weil Lesen und Schreiben in derselben Transaktion liegen; einen verlorenen Commit uebersetzt der `commitConflict` des Aufrufers.
+Ein Subjekt darf je Batch nur einmal vorkommen (sonst `IllegalArgumentException`), und ein Batch, der ueber seine Transaktion hinaus gehalten wird, wirft bei jedem Aufruf `IllegalStateException`.
 `importPublished` schreibt und veroeffentlicht eine Ressource in einer Transaktion des Aufrufers, ueber dasselbe Gate, `replaceDraft` und `publish` wie `create`, und `retainCode` haelt einen Code ohne Tombstone fest; beides braucht die Startup-Migration in `arknet-app`, die ein ganzes Dataset in einer Transaktion umzieht.
 `importPublishedPastGate` tut dasselbe ohne Gate, fuer Altformen, die das heutige Gate ablehnt; aufrufen darf es allein `LegacyLayoutMigration` (ArchUnit-Regel 15 in `arknet-architecture-tests`).
 `ShaclWriteGate#objectProperties` (durchgereicht als `VersionedWriteFunnel#objectProperties`) nennt die Properties, deren Shape eine Ressource als Objekt verlangt (`sh:nodeKind sh:IRI` oder `sh:class`); die Migration verwirft daran Literal-Objekte.
 Die Code-Pruefung von `create` laeuft im ganzen Content-Graph, also ueber alle Ressourcentypen eines Projekts statt je Komponentengraph.
-Abgesichert durch `VersionedWriteFunnelRealStoreTest` gegen einen echten `NativeStore` unter `@TempDir`, inklusive ueberlappender Updates vom selben Token, ueberlappender Creates mit demselben Code und der ersten Writes auf einem frischen Dataset.
+Abgesichert durch `VersionedWriteFunnelRealStoreTest` gegen einen echten `NativeStore` unter `@TempDir`, inklusive ueberlappender Updates vom selben Token, ueberlappender Creates mit demselben Code, der ersten Writes auf einem frischen Dataset und eines Batches, dessen letzte Ressource das Gate ablehnt und der darum nichts aendert.
 
 **Der Uniqueness-Guard sieht mehr als ein Lesepfad (kogn-io/arknet#360).**
 `create`s Code-Pruefung ist `tx.contains(content graph, null, dcterms:identifier, code)` -- das Subjekt ist ein Wildcard.

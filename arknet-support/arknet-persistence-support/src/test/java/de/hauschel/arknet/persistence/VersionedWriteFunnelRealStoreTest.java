@@ -75,7 +75,12 @@ class VersionedWriteFunnelRealStoreTest {
     private static final String CONTENT_GRAPH = NS + "graph/content";
     private static final String SUBJECT = NS + "req/1";
     private static final String OTHER = NS + "req/2";
+    private static final String THIRD = NS + "req/3";
+    private static final String FOURTH = NS + "req/4";
     private static final String CODE = "FR-1";
+    private static final String OTHER_CODE = "FR-2";
+    private static final String THIRD_CODE = "FR-3";
+    private static final String INVALID = "INVALID";
     private static final Instant START = Instant.parse("2026-11-17T10:00:00Z");
 
     private final RDF rdf = new SimpleRdf();
@@ -540,6 +545,199 @@ class VersionedWriteFunnelRealStoreTest {
     }
 
     /**
+     * One batch creates, updates and deletes in one transaction: every resource it changes gets
+     * exactly one history entry carrying the batch's details, the published view equals the draft,
+     * and the result names each new token and tombstone.
+     */
+    @Test
+    void aBatchWritesCreateUpdateAndDeleteInOneTransactionAndPublishesOneVersionPerResource() {
+        // given
+        create(SUBJECT, CODE, "v1", "crit one");
+        create(THIRD, THIRD_CODE, "c", "z");
+        clock.advance(Duration.ofMinutes(5));
+
+        // when
+        VersionedWriteFunnel.BatchResult result = funnel.writeAll(DATASET,
+                EntryDetails.NONE.withCreator(alice).withComment("batch"), conflict -> new RevisionMismatch(),
+                batch -> {
+                    batch.create(OTHER, OTHER_CODE, null, Signals::unexpected, Signals::unexpected,
+                            (tx, current) -> requirement(OTHER, OTHER_CODE, "b", "y"));
+                    batch.update(SUBJECT, null, Signals::unexpected,
+                            (tx, current) -> requirement(SUBJECT, CODE, "v2", "crit one"));
+                    batch.delete(THIRD, THIRD_CODE, Signals::unexpected, tx -> { });
+                });
+
+        // then - the created and the updated resource: one new published version each
+        for (String subject : List.of(OTHER, SUBJECT)) {
+            assertEquals(PublishState.PUBLISHED_UNCHANGED, funnel.publishState(DATASET, subject));
+            HistoryEntry last = funnel.history(DATASET, subject).getLast();
+            assertEquals(EntryKind.PUBLISH, last.kind());
+            assertEquals(START.plus(Duration.ofMinutes(5)), last.created());
+            assertEquals(Optional.of(alice), last.creator());
+            assertEquals(Optional.of("batch"), last.comment());
+            assertEquals(currentToken(subject), result.tokens().get(subject));
+        }
+        assertEquals(1, funnel.history(DATASET, OTHER).size());
+        assertEquals(2, funnel.history(DATASET, SUBJECT).size());
+        assertEquals(Set.of("v2"), titles(published(SUBJECT)));
+        assertEquals(Set.of("b"), titles(published(OTHER)));
+
+        // then - the deleted resource: one tombstone with the batch's details, its code retained
+        assertEquals(PublishState.DELETED, funnel.publishState(DATASET, THIRD));
+        List<HistoryEntry> deleted = funnel.history(DATASET, THIRD);
+        assertEquals(2, deleted.size());
+        assertEquals(EntryKind.TOMBSTONE, deleted.get(1).kind());
+        assertEquals(Optional.of("batch"), deleted.get(1).comment());
+        assertEquals(Map.of(THIRD, deleted.get(1).iri().getIRIString()), result.tombstones());
+        assertEquals(List.of(THIRD_CODE), funnel.findRetainedCodes(DATASET, "FR-3"));
+        assertEquals(Set.of(OTHER, SUBJECT), result.tokens().keySet());
+    }
+
+    /**
+     * An update in a batch that changes nothing adds no history entry, like the single update; its
+     * token is still reported.
+     */
+    @Test
+    void anUnchangedUpdateInABatchAddsNoVersion() {
+        create(SUBJECT, CODE, "v1", "crit one");
+
+        VersionedWriteFunnel.BatchResult result = funnel.writeAll(DATASET, EntryDetails.NONE,
+                conflict -> new RevisionMismatch(), batch -> batch.update(SUBJECT, null, Signals::unexpected,
+                        (tx, current) -> requirement(SUBJECT, CODE, "v1", "crit one")));
+
+        assertEquals(1, funnel.history(DATASET, SUBJECT).size());
+        assertEquals(currentToken(SUBJECT), result.tokens().get(SUBJECT));
+    }
+
+    /**
+     * All or nothing: the gate rejects the last resource of a batch, and neither the create nor the
+     * delete before it reaches the store - no draft, no version, no tombstone, no retained code.
+     */
+    @Test
+    void aBatchWhoseLastResourceTheGateRejectsChangesNothing() {
+        // given
+        VersionedWriteFunnel gated = new VersionedWriteFunnel(lifecycle, rejectingTitle(INVALID), CONTENT_GRAPH,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT, clock);
+        create(SUBJECT, CODE, "v1", "crit one");
+        create(THIRD, THIRD_CODE, "c", "z");
+        RevisionToken subjectToken = currentToken(SUBJECT);
+        RevisionToken thirdToken = currentToken(THIRD);
+
+        // when
+        assertThrows(WriteConstraintViolationException.class, () -> gated.writeAll(DATASET, EntryDetails.NONE,
+                conflict -> new RevisionMismatch(), batch -> {
+                    batch.create(OTHER, OTHER_CODE, null, Signals::unexpected, Signals::unexpected,
+                            (tx, current) -> requirement(OTHER, OTHER_CODE, "b", "y"));
+                    batch.delete(THIRD, THIRD_CODE, Signals::unexpected, tx -> { });
+                    batch.update(SUBJECT, null, Signals::unexpected,
+                            (tx, current) -> requirement(SUBJECT, CODE, INVALID, "crit one"));
+                }));
+
+        // then
+        assertUntouchedAfterFailedBatch(subjectToken, thirdToken);
+    }
+
+    /**
+     * A caller's signal inside a batch rolls back the writes before it as well; the code check of a
+     * create sees the codes an earlier create of the same batch took.
+     */
+    @Test
+    void aSignalInsideABatchChangesNothing_andACodeTakenEarlierInTheBatchIsADuplicate() {
+        create(SUBJECT, CODE, "v1", "crit one");
+        create(THIRD, THIRD_CODE, "c", "z");
+        RevisionToken subjectToken = currentToken(SUBJECT);
+        RevisionToken thirdToken = currentToken(THIRD);
+
+        assertThrows(DuplicateCode.class, () -> funnel.writeAll(DATASET, EntryDetails.NONE,
+                conflict -> new RevisionMismatch(), batch -> {
+                    batch.delete(THIRD, THIRD_CODE, Signals::unexpected, tx -> { });
+                    batch.create(OTHER, OTHER_CODE, null, Signals::unexpected, Signals::unexpected,
+                            (tx, current) -> requirement(OTHER, OTHER_CODE, "b", "y"));
+                    batch.create(FOURTH, OTHER_CODE, null, Signals::unexpected, DuplicateCode::new,
+                            (tx, current) -> requirement(FOURTH, OTHER_CODE, "d", "w"));
+                }));
+        assertUntouchedAfterFailedBatch(subjectToken, thirdToken);
+
+        assertThrows(NotFound.class, () -> funnel.writeAll(DATASET, EntryDetails.NONE,
+                conflict -> new RevisionMismatch(), batch -> {
+                    batch.create(OTHER, OTHER_CODE, null, Signals::unexpected, Signals::unexpected,
+                            (tx, current) -> requirement(OTHER, OTHER_CODE, "b", "y"));
+                    batch.update(FOURTH, null, NotFound::new,
+                            (tx, current) -> requirement(FOURTH, "FR-4", "d"));
+                }));
+        assertUntouchedAfterFailedBatch(subjectToken, thirdToken);
+    }
+
+    /** A batch names each subject at most once; a second write of the same subject fails the batch. */
+    @Test
+    void aBatchRejectsTheSameSubjectTwiceAndChangesNothing() {
+        create(SUBJECT, CODE, "v1", "crit one");
+        create(THIRD, THIRD_CODE, "c", "z");
+        RevisionToken subjectToken = currentToken(SUBJECT);
+        RevisionToken thirdToken = currentToken(THIRD);
+
+        assertThrows(IllegalArgumentException.class, () -> funnel.writeAll(DATASET, EntryDetails.NONE,
+                conflict -> new RevisionMismatch(), batch -> {
+                    batch.create(OTHER, OTHER_CODE, null, Signals::unexpected, Signals::unexpected,
+                            (tx, current) -> requirement(OTHER, OTHER_CODE, "b", "y"));
+                    batch.delete(OTHER, OTHER_CODE, Signals::unexpected, tx -> { });
+                }));
+
+        assertUntouchedAfterFailedBatch(subjectToken, thirdToken);
+    }
+
+    /** A batch is bound to its transaction; kept past {@code writeAll}, it refuses every write. */
+    @Test
+    void aBatchKeptPastItsTransactionRefusesToWrite() {
+        AtomicReference<VersionedWriteFunnel.Batch> escaped = new AtomicReference<>();
+        funnel.writeAll(DATASET, EntryDetails.NONE, conflict -> new RevisionMismatch(), escaped::set);
+
+        VersionedWriteFunnel.Batch batch = escaped.get();
+        assertThrows(IllegalStateException.class, () -> batch.create(OTHER, OTHER_CODE, null,
+                Signals::unexpected, Signals::unexpected, (tx, current) -> requirement(OTHER, OTHER_CODE, "b")));
+        assertThrows(IllegalStateException.class, () -> batch.update(OTHER, null, Signals::unexpected,
+                (tx, current) -> requirement(OTHER, OTHER_CODE, "b")));
+        assertThrows(IllegalStateException.class, () -> batch.delete(OTHER, null, Signals::unexpected, tx -> { }));
+        assertThrows(IllegalStateException.class, batch::tx);
+        assertTrue(draft(OTHER).isEmpty());
+    }
+
+    /**
+     * Two batches update the same subject from the same read; under {@code SERIALIZABLE} only one
+     * commit lands, and the loser surfaces through the batch's conflict translator.
+     */
+    @Test
+    void twoOverlappingBatches_oneCommitsTheOtherIsTranslated() throws InterruptedException {
+        create(SUBJECT, CODE, "v1", "crit one");
+        CyclicBarrier bothRead = new CyclicBarrier(2);
+
+        List<Optional<RuntimeException>> outcomes = runTwo(() -> racingBatch("A", bothRead),
+                () -> racingBatch("B", bothRead));
+
+        assertTrue(exactlyOneLoser(outcomes) instanceof RevisionMismatch);
+        assertEquals(2, funnel.history(DATASET, SUBJECT).size());
+    }
+
+    private void racingBatch(String name, CyclicBarrier barrier) {
+        funnel.writeAll(DATASET, EntryDetails.NONE, conflict -> new RevisionMismatch(),
+                batch -> batch.update(SUBJECT, null, Signals::unexpected,
+                        (tx, current) -> awaitThen(barrier, requirement(SUBJECT, CODE, name))));
+    }
+
+    private void assertUntouchedAfterFailedBatch(RevisionToken subjectToken, RevisionToken thirdToken) {
+        assertTrue(draft(OTHER).isEmpty(), "the create rolled back");
+        assertTrue(funnel.history(DATASET, OTHER).isEmpty());
+        assertTrue(draft(FOURTH).isEmpty());
+        assertEquals(PublishState.PUBLISHED_UNCHANGED, funnel.publishState(DATASET, THIRD), "the delete rolled back");
+        assertEquals(1, funnel.history(DATASET, THIRD).size());
+        assertEquals(thirdToken, currentToken(THIRD));
+        assertTrue(funnel.findRetainedCodes(DATASET, "FR-").isEmpty());
+        assertEquals(Set.of("v1"), titles(draft(SUBJECT)), "the update rolled back");
+        assertEquals(1, funnel.history(DATASET, SUBJECT).size());
+        assertEquals(subjectToken, currentToken(SUBJECT));
+    }
+
+    /**
      * Holds the first transaction each racing thread opens at its first write, until both threads
      * got there - so both have read the store and neither has written yet.
      */
@@ -693,6 +891,20 @@ class VersionedWriteFunnelRealStoreTest {
         ShaclValidation validation = (data, shapes, options) -> {
             validated.set(data);
             if (!reject) {
+                return new ShaclReport(true, List.of());
+            }
+            return new ShaclReport(false, List.of(new ShaclResult(rdf.createIRI(SUBJECT), NS + "title",
+                    Severity.VIOLATION, rdf.createIRI("http://www.w3.org/ns/shacl#Violation"),
+                    List.of(ShaclMessage.untagged("rejected")))));
+        };
+        return new ShaclWriteGate(validation, rdf.createGraph(), rdf.createGraph(), ValidationOptions.defaults(),
+                DisplayLocale.DEFAULT);
+    }
+
+    /** A gate rejecting exactly the slices that carry {@code rejectedTitle} as a title. */
+    private ShaclWriteGate rejectingTitle(String rejectedTitle) {
+        ShaclValidation validation = (data, shapes, options) -> {
+            if (!titles(data).contains(rejectedTitle)) {
                 return new ShaclReport(true, List.of());
             }
             return new ShaclReport(false, List.of(new ShaclResult(rdf.createIRI(SUBJECT), NS + "title",

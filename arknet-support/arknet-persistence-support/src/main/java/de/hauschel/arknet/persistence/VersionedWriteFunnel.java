@@ -4,7 +4,10 @@
 package de.hauschel.arknet.persistence;
 
 import java.time.Clock;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -14,6 +17,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 
 import io.kogn.rdf.cid.sexpr.ContentAddressedIRIGeneratorSexpr;
 import io.kogn.rdf.dataset.BindingSet;
@@ -59,6 +63,10 @@ import io.kogn.rdf.versioning.RevisionToken;
  * library with an {@link IllegalArgumentException} and nothing is written. The fragment names of
  * new children come from {@link #childFragments}, minted from the funnel's {@link ChildIdSource};
  * the funnel keeps no record of them beside the slice.</p>
+ *
+ * <p><strong>Several resources at once.</strong> {@link #writeAll} runs the same checks, gate and
+ * draft write for any mix of creates, updates and deletes inside one transaction and publishes all
+ * of them with one publish at the end - all or nothing, one history entry per changed resource.</p>
  *
  * <p><strong>Concurrency.</strong> The library's {@link RevisionToken} is the concurrency token:
  * {@link #compareAndUpdate} takes the token the caller read and reports a stale one through the
@@ -420,6 +428,222 @@ public final class VersionedWriteFunnel {
     }
 
     /**
+     * Writes several resources - created, updated and deleted in any mix - in one transaction, all
+     * or nothing. {@code writes} names them one by one on the {@link Batch} it is handed; each
+     * write runs the guards and the gate of its single-resource counterpart at once, so a later
+     * write reads what an earlier one left in the transaction. Once {@code writes} returns, one
+     * publish turns every created or updated draft into a version, carrying {@code details} like
+     * every tombstone of the batch: each resource the batch changes gets exactly one history entry,
+     * one that changes nothing gets none. Any exception - a caller's signal, a gate violation, a
+     * triple outside a slice - rolls the whole transaction back, so the store keeps no part of the
+     * batch.
+     *
+     * <p>An update in a batch carries no token: its read and its write share the batch's
+     * transaction, and a concurrent writer that changes the same state makes one of the two commits
+     * fail, which {@code commitConflict} translates. Each subject may appear at most once per
+     * batch.</p>
+     *
+     * @param dataset        the dataset (project) to write into
+     * @param details        creator and comment of every history entry the batch adds
+     * @param commitConflict translates a lost commit race into the signal to throw; a {@code null}
+     *                       result leaves the conflict untranslated
+     * @param writes         names the writes on the batch; must not keep the batch past its return
+     * @return the token of each created or updated resource and the tombstone entry of each deleted
+     *         one
+     */
+    public BatchResult writeAll(DatasetId dataset, EntryDetails details,
+            UnaryOperator<RuntimeException> commitConflict, Consumer<Batch> writes) {
+        Objects.requireNonNull(dataset, "dataset");
+        Objects.requireNonNull(details, "details");
+        Objects.requireNonNull(commitConflict, "commitConflict");
+        Objects.requireNonNull(writes, "writes");
+
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            ensureBound(dataset, handle);
+            try {
+                return handle.transactor().inTransaction(tx -> {
+                    versioning.bindContentGraph(tx);
+                    Batch batch = new Batch(tx, details);
+                    try {
+                        writes.accept(batch);
+                        return batch.publishAll();
+                    } finally {
+                        batch.close();
+                    }
+                });
+            } catch (RuntimeException e) {
+                if (isWriteConflict.test(e)) {
+                    throw translateConflict(commitConflict, e);
+                }
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * The writes of one {@link #writeAll} call, bound to its transaction. Every method runs its
+     * checks and writes the draft at once; the publish follows when the batch is complete. Used
+     * after its transaction ended, every method throws {@link IllegalStateException}.
+     */
+    public final class Batch {
+
+        private final DatasetTx tx;
+        private final EntryDetails details;
+        private final Set<IRI> subjects = new HashSet<>();
+        private final Map<IRI, RevisionToken> drafts = new LinkedHashMap<>();
+        private final Map<String, String> tombstones = new LinkedHashMap<>();
+        private boolean open = true;
+
+        private Batch(DatasetTx tx, EntryDetails details) {
+            this.tx = tx;
+            this.details = details;
+        }
+
+        /**
+         * The batch's transaction, for the reads a caller needs before naming a write (an asserted
+         * context, a reference check); never for writes to the content graph.
+         *
+         * @return the live transaction
+         */
+        public DatasetTx tx() {
+            requireOpen();
+            return tx;
+        }
+
+        /**
+         * Creates a resource, guarded like {@link VersionedWriteFunnel#create}: the subject must have
+         * an empty draft and a given code must be free in the content graph, codes taken earlier in
+         * this batch included.
+         *
+         * @param subjectIri      the subject's opaque IRI, without a {@code #}
+         * @param code            the business code to check, or {@code null} for a resource without one
+         * @param assertedContext validation-only context triples for the gate, or {@code null}
+         * @param alreadyExists   the signal for a subject whose draft is not empty
+         * @param duplicateCode   the signal for a code already held in the content graph
+         * @param slice           builds the new slice
+         */
+        public void create(String subjectIri, String code, ReadableGraph assertedContext,
+                Supplier<RuntimeException> alreadyExists, Supplier<RuntimeException> duplicateCode,
+                SliceBuilder slice) {
+            Objects.requireNonNull(alreadyExists, "alreadyExists");
+            Objects.requireNonNull(duplicateCode, "duplicateCode");
+            Objects.requireNonNull(slice, "slice");
+            IRI subject = claim(subjectIri);
+            DraftSlice draft = versioning.readDraft(tx, subject);
+            if (!draft.triples().isEmpty()) {
+                throw alreadyExists.get();
+            }
+            if (code != null && codeTaken(tx, code)) {
+                throw duplicateCode.get();
+            }
+            stage(subject, draft, assertedContext, slice);
+        }
+
+        /**
+         * Updates a resource: the subject must have a non-empty draft, which {@code slice} sees.
+         *
+         * @param subjectIri      the subject's opaque IRI, without a {@code #}
+         * @param assertedContext validation-only context triples for the gate, or {@code null}
+         * @param notFound        the signal for a subject with an empty draft
+         * @param slice           builds the new slice from the current draft
+         */
+        public void update(String subjectIri, ReadableGraph assertedContext, Supplier<RuntimeException> notFound,
+                SliceBuilder slice) {
+            Objects.requireNonNull(notFound, "notFound");
+            Objects.requireNonNull(slice, "slice");
+            IRI subject = claim(subjectIri);
+            DraftSlice draft = versioning.readDraft(tx, subject);
+            if (draft.triples().isEmpty()) {
+                throw notFound.get();
+            }
+            stage(subject, draft, assertedContext, slice);
+        }
+
+        /**
+         * Deletes a resource like {@link VersionedWriteFunnel#delete}: the subject must have a
+         * non-empty draft, {@code guard} runs next, then draft and published slice go and a tombstone
+         * carrying the batch's details is recorded; a non-{@code null} {@code code} is kept on it in
+         * {@link #RETAINED_CODES_GRAPH}.
+         *
+         * @param subjectIri the subject's opaque IRI, without a {@code #}
+         * @param code       the business code to keep out of circulation, or {@code null}
+         * @param notFound   the signal for a subject with an empty draft
+         * @param guard      checks run before the deletion, given the transaction
+         */
+        public void delete(String subjectIri, String code, Supplier<RuntimeException> notFound,
+                Consumer<DatasetTx> guard) {
+            Objects.requireNonNull(notFound, "notFound");
+            Objects.requireNonNull(guard, "guard");
+            IRI subject = claim(subjectIri);
+            DraftSlice draft = versioning.readDraft(tx, subject);
+            if (draft.triples().isEmpty()) {
+                throw notFound.get();
+            }
+            guard.accept(tx);
+            DeleteResult tombstone = versioning.delete(tx, subject, draft.token(), details);
+            if (code != null) {
+                retainCode(tx, tombstone.entryIRI().getIRIString(), code);
+            }
+            tombstones.put(subjectIri, tombstone.entryIRI().getIRIString());
+        }
+
+        private IRI claim(String subjectIri) {
+            requireOpen();
+            Objects.requireNonNull(subjectIri, "subjectIri");
+            IRI subject = rdf.createIRI(subjectIri);
+            if (!subjects.add(subject)) {
+                throw new IllegalArgumentException(subjectIri + " is written twice in one batch");
+            }
+            return subject;
+        }
+
+        private void stage(IRI subject, DraftSlice draft, ReadableGraph assertedContext, SliceBuilder slice) {
+            ReadableGraph next = validated(tx, draft, assertedContext, slice);
+            drafts.put(subject, versioning.replaceDraft(tx, subject, next, draft.token()));
+        }
+
+        private BatchResult publishAll() {
+            if (drafts.isEmpty()) {
+                return new BatchResult(Map.of(), tombstones);
+            }
+            PublishResult published = versioning.publish(tx, drafts.values(), details);
+            return new BatchResult(drafts.keySet().stream().collect(Collectors.toMap(IRI::getIRIString,
+                    subject -> published.results().get(subject).token())), tombstones);
+        }
+
+        private void requireOpen() {
+            if (!open) {
+                throw new IllegalStateException("the batch's transaction has ended");
+            }
+        }
+
+        private void close() {
+            open = false;
+        }
+    }
+
+    /**
+     * What a {@link #writeAll} committed.
+     *
+     * @param tokens     the token for the next write of each created or updated resource, by
+     *                   subject IRI
+     * @param tombstones the tombstone entry IRI of each deleted resource, by subject IRI
+     */
+    public record BatchResult(Map<String, RevisionToken> tokens, Map<String, String> tombstones) {
+
+        /**
+         * Copies both maps.
+         *
+         * @param tokens     the tokens by subject IRI
+         * @param tombstones the tombstone entry IRIs by subject IRI
+         */
+        public BatchResult {
+            tokens = Map.copyOf(tokens);
+            tombstones = Map.copyOf(tombstones);
+        }
+    }
+
+    /**
      * Writes and publishes a resource inside a transaction the caller owns - the write path of a
      * bulk import such as the startup migration of an earlier storage layout, which must move a
      * whole dataset in one transaction so an interrupted run leaves either the old or the new state.
@@ -623,13 +847,18 @@ public final class VersionedWriteFunnel {
 
     private RevisionToken replace(DatasetTx tx, IRI subject, DraftSlice draft, ReadableGraph assertedContext,
             SliceBuilder slice, EntryDetails details) {
+        return publish(tx, subject, draft, validated(tx, draft, assertedContext, slice), details);
+    }
+
+    private ReadableGraph validated(DatasetTx tx, DraftSlice draft, ReadableGraph assertedContext,
+            SliceBuilder slice) {
         ReadableGraph next = Objects.requireNonNull(slice.build(tx, draft.triples()), "slice");
         if (assertedContext == null) {
             gate.enforce(next);
         } else {
             gate.enforce(next, assertedContext);
         }
-        return publish(tx, subject, draft, next, details);
+        return next;
     }
 
     private RevisionToken publish(DatasetTx tx, IRI subject, DraftSlice draft, ReadableGraph next,
