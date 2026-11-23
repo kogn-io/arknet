@@ -7,6 +7,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -373,6 +374,7 @@ public final class DescribeService implements DescribeResourceType {
         private final DisplayLocale locale;
         private final Map<IRI, String> created = new LinkedHashMap<>();
         private final StringBuilder text = new StringBuilder();
+        private int nodes;
 
         private ExampleWriter(final String language, final DisplayLocale locale) {
             this.language = language;
@@ -384,14 +386,25 @@ public final class DescribeService implements DescribeResourceType {
             if (existing != null) {
                 return existing;
             }
-            String node = "_:" + localName(type).toLowerCase(Locale.ROOT) + created.size();
-            created.put(type, node);
+            return createNew(type);
+        }
+
+        /**
+         * Writes one more resource of {@code type}. Two required references of one resource to the
+         * same type get two resources, so a rule that keeps them apart (a relationship between two
+         * different contexts) holds in the example.
+         */
+        private String createNew(final IRI type) {
+            String node = "_:" + localName(type).toLowerCase(Locale.ROOT) + nodes;
+            nodes++;
+            created.putIfAbsent(type, node);
+            Set<String> referenced = new HashSet<>();
             List<String> lines = new ArrayList<>();
             for (FieldDescription field : fields(type, locale)) {
                 if (field.assigned() || field.presence() != Presence.REQUIRED && field.kind() != Kind.CHILDREN) {
                     continue;
                 }
-                value(field).ifPresent(value -> lines.add(field.name() + " " + value));
+                value(field, referenced).ifPresent(value -> lines.add(field.name() + " " + value));
             }
             StringBuilder resource = new StringBuilder()
                     .append("[] a ").append(prefixes.abbreviate(ArkresVocabulary.CREATE)).append(" ; ")
@@ -402,25 +415,37 @@ public final class DescribeService implements DescribeResourceType {
             return node;
         }
 
-        private Optional<String> value(final FieldDescription field) {
+        private Optional<String> value(final FieldDescription field, final Set<String> referenced) {
             return switch (field.kind()) {
                 case TEXT -> Optional.of("\"" + EXAMPLE_TEXT + "\"@" + language);
                 case VALUE -> Optional.of(literal(field.datatype()));
                 case CHOICE -> field.allowedValues().stream().findFirst();
-                case REFERENCE -> reference(field);
+                case REFERENCE -> reference(field, referenced);
                 case CHILDREN -> field.children().map(children -> child(children, 1));
             };
         }
 
-        private Optional<String> reference(final FieldDescription field) {
-            return field.valueTypes().stream()
+        private Optional<String> reference(final FieldDescription field, final Set<String> referenced) {
+            Optional<IRI> target = field.valueTypes().stream()
                     .map(prefixes::expand)
                     .flatMap(Optional::stream)
                     .filter(schema.resourceTypes()::contains)
                     .findFirst()
-                    .filter(target -> created.containsKey(RDF_FACTORY.createIRI(target))
-                            || created.size() < MAX_RESOURCES)
-                    .map(target -> create(RDF_FACTORY.createIRI(target)));
+                    .map(RDF_FACTORY::createIRI);
+            if (target.isEmpty()) {
+                return Optional.empty();
+            }
+            String existing = created.get(target.get());
+            if (existing != null && !referenced.contains(existing)) {
+                referenced.add(existing);
+                return Optional.of(existing);
+            }
+            if (nodes >= MAX_RESOURCES) {
+                return Optional.empty();
+            }
+            String node = createNew(target.get());
+            referenced.add(node);
+            return Optional.of(node);
         }
 
         private String child(final OwnedChildren children, final int position) {
@@ -430,7 +455,7 @@ public final class DescribeService implements DescribeResourceType {
                 if (field.name().equals(children.orderedBy()) || field.presence() != Presence.REQUIRED) {
                     continue;
                 }
-                value(field).ifPresent(value -> lines.add(field.name() + " " + value));
+                value(field, new HashSet<>()).ifPresent(value -> lines.add(field.name() + " " + value));
             }
             return "[ " + String.join(" ; ", lines) + " ]";
         }

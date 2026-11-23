@@ -230,13 +230,13 @@ class KognioRdfTermRepositoryTest {
     void updateChangingOnlyDefinitionPreservesEveryPrefLabelLanguageVariant() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "Erste Definition.", "\"Kunde\"@de, \"Customer\"@en");
+        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "Erste Definition.", "\"Kunde\"@de, \"Kunde\"@en");
 
         repository.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null, null);
 
         assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"),
                 "the German prefLabel variant must survive an update that never touches prefLabel");
-        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Customer", "en"),
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "en"),
                 "the English prefLabel variant must survive an update that never touches prefLabel");
         assertEquals("Ueberarbeitete Definition.", repository.findByCode(PROJECT_A, code, null).orElseThrow().definition());
     }
@@ -1329,22 +1329,23 @@ class KognioRdfTermRepositoryTest {
      * calling project's own default language. One and the same store state therefore answered
      * {@code term_update} with the English label and a directly following {@code term_get} with
      * the German one. The reply now resolves an untouched field exactly the way
-     * {@link TermRepository#findByCode} does for the same project.
+     * {@link TermRepository#findByCode} does for the same project. Since a term carries one word
+     * under every tag (kogn-io/arknet#742, {@code ulshapes:Term-prefLabel-oneWord}), the field that
+     * still differs by language is the definition, so the untouched field here is the definition.
      */
     @Test
-    void updateRendersAnUntouchedPrefLabelLikeFindByCodeDoes() {
+    void updateRendersAnUntouchedDefinitionLikeFindByCodeDoes() {
         TermCode code = new TermCode("TERM-1");
-        givenMultilingualConcept(PROJECT_A, freshId(), "TERM-1", "Person, die bestellt.",
-                "\"Kunde\"@de, \"Customer\"@en");
+        givenMultilingualConceptWithDefinition(PROJECT_A, freshId(), "TERM-1", "\"Kunde\"@de, \"Kunde\"@en",
+                "\"Person, die bestellt.\"@de, \"Person placing an order.\"@en");
         TermRepository englishConfigured = readerFor(Locale.ENGLISH, Locale.ENGLISH);
 
-        Term updated = englishConfigured.update(PROJECT_A, code, null,
-                "Person, die eine Bestellung aufgibt.", "de", "de", null, null);
+        Term updated = englishConfigured.update(PROJECT_A, code, "Kunde", null, "de", "de", null, null);
 
-        assertEquals("Kunde", updated.prefLabel());
-        assertEquals(englishConfigured.findByCode(PROJECT_A, code, "de").orElseThrow().prefLabel(),
-                updated.prefLabel(),
-                "term_update's reply must show the label term_get shows for the same project");
+        assertEquals("Person, die bestellt.", updated.definition());
+        assertEquals(englishConfigured.findByCode(PROJECT_A, code, "de").orElseThrow().definition(),
+                updated.definition(),
+                "term_update's reply must show the definition term_get shows for the same project");
     }
 
     /**

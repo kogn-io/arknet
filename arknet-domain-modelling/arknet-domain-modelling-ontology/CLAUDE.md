@@ -10,4 +10,5 @@ Im Compile-Scope haengen allein `arknet-ubiquitous-language-adapter-kogniordf` u
 Kein Vokabularmodul im Sinn von ADR-57: das Modul traegt keinen Java-Typ.
 Seine Shapes nennen als `sh:targetClass` nur Klassen aus `arkddd:` und `skos:Concept`, und keine Zielklasse formt ein zweites Modul (`ContextShapesTargetOwnNamespaceTest`).
 `skos:Concept` ist die Klasse eines fremden Standards, als die der Glossarbegriff gespeichert wird; formen darf sie nur dieses Modul.
+Regeln, die SHACL Core nicht ausdrueckt (Begriff nicht sein eigener `skos:broader`/`skos:related`, kein `skos:broader`-Zyklus, ein `skos:prefLabel`-Wortlaut unter allen Tags), stehen als `sh:sparql`-Constraints an `ulshapes:TermShape`.
 Benennung, Aenderung einer Namespace-IRI und Shapes ohne Schreibpfad regelt `arknet-ontology/CLAUDE.md` fuer alle Ontologiemodule.

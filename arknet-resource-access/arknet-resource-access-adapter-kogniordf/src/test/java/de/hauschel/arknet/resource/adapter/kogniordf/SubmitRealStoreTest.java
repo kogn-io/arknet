@@ -301,12 +301,14 @@ class SubmitRealStoreTest {
     void aDeletedCodeIsNeverAssignedAgain() {
         // given
         String term = iriOf(submit.submit(PROJECT, PREFIXES
-                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"A\"@en .\n"), "TERM-1");
+                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"A\"@en ;"
+                + " skos:definition \"Defined.\"@en .\n"), "TERM-1");
         submit.submit(PROJECT, PREFIXES + "[] a arkres:Delete ; arkres:object <" + term + "> .\n");
 
         // when
         SubmitResult next = submit.submit(PROJECT, PREFIXES
-                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"B\"@en .\n");
+                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"B\"@en ;"
+                + " skos:definition \"Defined.\"@en .\n");
 
         // then
         assertEquals("TERM-2", next.changes().get(0).code());
@@ -316,12 +318,14 @@ class SubmitRealStoreTest {
     void aDocumentWithOneInvalidActivityChangesNothing() {
         // given
         String term = iriOf(submit.submit(PROJECT, PREFIXES
-                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"A\"@en .\n"), "TERM-1");
+                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"A\"@en ;"
+                + " skos:definition \"Defined.\"@en .\n"), "TERM-1");
 
         // when
         SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT,
                 PREFIXES + "[] a arkres:Update ; arkres:object <" + term + "> ; arkres:set [ skos:prefLabel \"B\"@en ] .\n"
-                        + "[] a arkres:Create ; arkres:object _:c .\n_:c a skos:Concept ; skos:prefLabel \"C\"@en .\n"
+                        + "[] a arkres:Create ; arkres:object _:c .\n_:c a skos:Concept ; skos:prefLabel \"C\"@en ;"
+                        + " skos:definition \"Defined.\"@en .\n"
                         + "[] a arkres:Create ; arkres:object _:fr .\n"
                         + "_:fr a arkreq:FunctionalRequirement ; dcterms:title \"No description\"@en ;"
                         + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"Works.\"@en ] .\n"));
@@ -355,7 +359,7 @@ class SubmitRealStoreTest {
         // when
         SubmitResult result = submit.submit(PROJECT, """
                 [] a arkres:Create ; arkres:object _:t .
-                _:t a skos:Concept ; skos:prefLabel "Handle"@en .
+                _:t a skos:Concept ; skos:prefLabel "Handle"@en ; skos:definition "Defined."@en .
                 """);
 
         // then
@@ -381,7 +385,8 @@ class SubmitRealStoreTest {
     void aHandleNamesAnExistingResource() {
         // given
         String term = iriOf(submit.submit(PROJECT, PREFIXES
-                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"A\"@en .\n"), "TERM-1");
+                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"A\"@en ;"
+                + " skos:definition \"Defined.\"@en .\n"), "TERM-1");
         String fr = iriOf(submit.submit(PROJECT, PREFIXES + """
                 [] a arkres:Create ; arkres:object _:fr .
                 _:fr a arkreq:FunctionalRequirement ; dcterms:title "Write"@en ; dcterms:description "Writes."@en ;
