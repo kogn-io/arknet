@@ -9,16 +9,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
@@ -53,23 +56,75 @@ class OntologyIndexListsEveryShippedFileTest {
 
     /**
      * Every ontology module of the build -- found as an index in the source tree of the reactor, not
-     * listed -- is on this module's test classpath.
+     * listed -- is on this module's test classpath, and nothing else is. Both sides are compared as
+     * module names: the directory holding {@code src} in the source tree, and on the classpath the
+     * module directory above {@code target/classes} or the artifact directory above a jar's version
+     * directory (module directory and artifactId are the same by the naming rule).
      */
     @Test
     void everyOntologyModuleOfTheBuildIsOnTheTestClasspath() {
-        Path reactorRoot = Path.of("").toAbsolutePath().getParent();
-        Set<String> inSources;
-        try (Stream<Path> files = Files.walk(reactorRoot, 8)) {
-            inSources = files
-                    .filter(file -> file.endsWith(Path.of("src", "main", "resources", "META-INF", "arknet",
-                            "ontology.index")))
-                    .filter(file -> !file.toString().contains("/target/"))
-                    .map(file -> reactorRoot.relativize(file).toString())
-                    .collect(Collectors.toCollection(TreeSet::new));
+        Set<String> inSources = new TreeSet<>();
+        Path reactorRoot = reactorRoot();
+        try {
+            Files.walkFileTree(reactorRoot, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(final Path dir, final BasicFileAttributes attrs) {
+                    String name = String.valueOf(dir.getFileName());
+                    return !dir.equals(reactorRoot) && ("target".equals(name) || name.startsWith("."))
+                            ? FileVisitResult.SKIP_SUBTREE
+                            : FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs) {
+                    if (file.endsWith(INDEX_IN_SOURCES)) {
+                        inSources.add(file.getParent().getParent().getParent().getParent().getParent().getParent()
+                                .getFileName().toString());
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
         } catch (IOException e) {
             throw new UncheckedIOException("failed to walk " + reactorRoot, e);
         }
-        assertEquals(inSources.size(), ontologyModules().size(), "the build has the ontology modules " + inSources
-                + ", the test classpath of arknet-architecture-tests sees " + ontologyModules().keySet());
+        Set<String> onClasspath = ontologyModules().keySet().stream()
+                .map(OntologyIndexListsEveryShippedFileTest::moduleOf)
+                .collect(Collectors.toCollection(TreeSet::new));
+        assertEquals(inSources, onClasspath,
+                "every ontology module of the build, and only those, must be on the test classpath of "
+                        + "arknet-architecture-tests");
+    }
+
+    private static final Path INDEX_IN_SOURCES = Path.of("src", "main", "resources", "META-INF", "arknet",
+            "ontology.index");
+
+    /** The reactor root: the nearest directory upwards whose {@code pom.xml} declares no parent. */
+    private static Path reactorRoot() {
+        Path module = Path.of(System.getProperty("basedir", "")).toAbsolutePath();
+        for (Path dir = module.getParent(); dir != null; dir = dir.getParent()) {
+            Path pom = dir.resolve("pom.xml");
+            try {
+                if (Files.isRegularFile(pom) && !Files.readString(pom).contains("<parent>")) {
+                    return dir;
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException("failed to read " + pom, e);
+            }
+        }
+        throw new IllegalStateException("no reactor root above " + module);
+    }
+
+    private static String moduleOf(final URL index) {
+        String path = index.getPath();
+        if ("jar".equals(index.getProtocol())) {
+            Path jar = Path.of(path.substring("file:".length(), path.indexOf('!')));
+            return jar.getParent().getParent().getFileName().toString();
+        }
+        try {
+            return Path.of(index.toURI()).getParent().getParent().getParent().getParent().getParent().getFileName()
+                    .toString();
+        } catch (URISyntaxException e) {
+            throw new IllegalStateException("not a file location: " + index, e);
+        }
     }
 }
