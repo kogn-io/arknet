@@ -12,6 +12,7 @@
 
 @prefix sh:      <http://www.w3.org/ns/shacl#> .
 @prefix arkreq:  <https://w3id.org/arknet/requirements#> .
+@prefix arkres:  <https://w3id.org/arknet/resource#> .
 @prefix arkproc: <https://w3id.org/arknet/process#> .
 @prefix oslc_rm: <http://open-services.net/ns/rm#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
@@ -182,7 +183,8 @@ rshapes:UseCaseShape
     sh:property rshapes:UseCase-satisfies ;
     sh:property rshapes:UseCase-mainStep ;
     sh:property rshapes:UseCase-usesTerm ;
-    sh:property rshapes:UseCase-constrainedBy .
+    sh:property rshapes:UseCase-constrainedBy ;
+    sh:property rshapes:UseCase-extensionStep .
 
 rshapes:UseCase-identifier
     a sh:PropertyShape ;
@@ -286,6 +288,13 @@ rshapes:UseCase-constrainedBy
     sh:message  "oslc_rm:constrainedBy must reference a constraint (arkreq:Constraint, IRI) -- create it first with constraint_add and link it with uc_link_constraint."@en , "oslc_rm:constrainedBy muss auf eine Randbedingung (arkreq:Constraint, IRI) verweisen -- lege sie zuerst mit constraint_add an und verknuepfe sie mit uc_link_constraint."@de ;
     sh:severity sh:Violation .
 
+rshapes:UseCase-extensionStep
+    a sh:PropertyShape ;
+    sh:path     arkreq:extensionStep ;
+    sh:nodeKind sh:IRI ;
+    sh:message  "arkreq:extensionStep must reference a step of an extension (IRI)."@en , "arkreq:extensionStep muss auf einen Schritt einer Erweiterung verweisen (IRI)."@de ;
+    sh:severity sh:Violation .
+
 
 ##############################################################################
 #  FLOW STEP SHAPES
@@ -354,5 +363,22 @@ rshapes:AcceptanceCriterion-text
     sh:uniqueLang true ;
     sh:message  "An AcceptanceCriterion needs at least one arkreq:criterionText (min. 5 characters). sh:uniqueLang allows at most one arkreq:criterionText per non-empty language tag - two criterion texts sharing the same tag are not allowed, but DIFFERENT language tags are (a criterion's wording may be given in several languages)."@en , "AcceptanceCriterion braucht mindestens einen arkreq:criterionText (min. 5 Zeichen). sh:uniqueLang erlaubt hoechstens einen arkreq:criterionText je nicht-leerem Sprach-Tag - zwei Kriterientexte mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (der Wortlaut eines Kriteriums darf mehrsprachig vorliegen)."@de ;
     sh:severity sh:Violation .
+
+##############################################################################
+#  RULE DATA FOR GENERIC RESOURCE ACCESS (arkres:, arknet-resource.ttl)
+#  Not validated: says which classes are resource types, the prefix of their
+#  business codes, which edges own their children and how those are ordered.
+##############################################################################
+
+arkreq:FunctionalRequirement     a arkres:ResourceType ; arkres:codePrefix "FR-" .
+arkreq:NonFunctionalRequirement  a arkres:ResourceType ; arkres:codePrefix "NFR-" .
+arkreq:TechnicalConstraint       a arkres:ResourceType ; arkres:codePrefix "TCON-" .
+arkreq:BusinessConstraint        a arkres:ResourceType ; arkres:codePrefix "BCON-" .
+arkreq:RegulatoryConstraint      a arkres:ResourceType ; arkres:codePrefix "RCON-" .
+arkreq:UseCase                   a arkres:ResourceType ; arkres:codePrefix "UC" .
+
+rshapes:Requirement-acceptanceCriterion arkres:childKind "AC" ;        arkres:orderedBy arkreq:position .
+rshapes:UseCase-mainStep                arkres:childKind "Step" ;      arkres:orderedBy arkreq:position .
+rshapes:UseCase-extensionStep           arkres:childKind "Extension" ; arkres:orderedBy arkreq:position .
 
 # END OF REQUIREMENTS SHAPES

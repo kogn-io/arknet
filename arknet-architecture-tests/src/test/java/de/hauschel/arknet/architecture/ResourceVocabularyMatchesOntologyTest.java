@@ -53,7 +53,17 @@ class ResourceVocabularyMatchesOntologyTest {
                 ArkresVocabulary.UPDATE,
                 ArkresVocabulary.ADD_TO,
                 ArkresVocabulary.REMOVE_FROM,
-                ArkresVocabulary.DELETE), declared,
+                ArkresVocabulary.DELETE,
+                ArkresVocabulary.OBJECT,
+                ArkresVocabulary.SET,
+                ArkresVocabulary.CLEAR,
+                ArkresVocabulary.FIELD,
+                ArkresVocabulary.VALUE,
+                ArkresVocabulary.POSITION,
+                ArkresVocabulary.RESOURCE_TYPE,
+                ArkresVocabulary.CODE_PREFIX,
+                ArkresVocabulary.CHILD_KIND,
+                ArkresVocabulary.ORDERED_BY), declared,
                 "arknet-resource.ttl and ArkresVocabulary must describe the same vocabulary");
     }
 

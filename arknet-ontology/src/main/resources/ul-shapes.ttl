@@ -12,6 +12,7 @@
 @prefix sh:       <http://www.w3.org/ns/shacl#> .
 @prefix arkddd:   <https://w3id.org/arknet/ddd#> .
 @prefix skos:     <http://www.w3.org/2004/02/skos/core#> .
+@prefix arkres:  <https://w3id.org/arknet/resource#> .
 @prefix ulshapes: <https://w3id.org/arknet/shapes/ul#> .
 
 
@@ -99,5 +100,13 @@ ulshapes:BoundedContext-delimitsTerm
     sh:class    skos:Concept ;
     sh:message  "arkddd:delimitsTerm must reference a skos:Concept (IRI), not a string."@en , "arkddd:delimitsTerm muss auf einen skos:Concept (IRI) verweisen, nicht auf einen String."@de ;
     sh:severity sh:Violation .
+
+##############################################################################
+#  RULE DATA FOR GENERIC RESOURCE ACCESS (arkres:, arknet-resource.ttl)
+#  Not validated: says which classes are resource types, the prefix of their
+#  business codes, which edges own their children and how those are ordered.
+##############################################################################
+
+skos:Concept a arkres:ResourceType ; arkres:codePrefix "TERM-" .
 
 # END OF UL SHAPES

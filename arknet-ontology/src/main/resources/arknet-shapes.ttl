@@ -15,6 +15,7 @@
 @prefix sh:     <http://www.w3.org/ns/shacl#> .
 @prefix arknet: <https://w3id.org/arknet/core#> .
 @prefix arkddd: <https://w3id.org/arknet/ddd#> .
+@prefix arkres:  <https://w3id.org/arknet/resource#> .
 @prefix shapes: <https://w3id.org/arknet/shapes#> .
 
 
@@ -116,5 +117,14 @@ shapes:ContextRelationship-relationshipType
                   arkddd:SeparateWays ) ;
     sh:message  "ContextRelationship must have a valid 'arkddd:relationshipType'."@en , "ContextRelationship muss einen gueltigen 'arkddd:relationshipType' haben."@de ;
     sh:severity sh:Violation .
+
+##############################################################################
+#  RULE DATA FOR GENERIC RESOURCE ACCESS (arkres:, arknet-resource.ttl)
+#  Not validated: says which classes are resource types, the prefix of their
+#  business codes, which edges own their children and how those are ordered.
+##############################################################################
+
+arkddd:BoundedContext     a arkres:ResourceType ; arkres:codePrefix "BC-" .
+arkddd:ContextRelationship a arkres:ResourceType .
 
 # END OF SHAPES

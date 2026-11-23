@@ -19,15 +19,17 @@
 #         writes into it. It describes how resources are accessed, not what
 #         they are.
 #
-#  VOCABULARY AHEAD OF ITS IMPLEMENTATION: the activity classes are declared
-#         before the write path that reads them exists; each carries its
-#         reason as skos:note (see arknet-ontology/CLAUDE.md).
+#  RULE DATA: besides the activities it declares the annotations the shape
+#         files carry for generic access - which classes are resource types
+#         and the prefix of their business codes, which edges own their
+#         children and by which property those are ordered. Shapes check a
+#         resource; these annotations say how a resource is built.
 ##############################################################################
 
 @prefix arkres:  <https://w3id.org/arknet/resource#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix owl:     <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
 @prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix vann:    <http://purl.org/vocab/vann/> .
@@ -39,7 +41,7 @@
 <https://w3id.org/arknet/resource>
     a owl:Ontology ;
     dcterms:title    "arknet Resource Access Ontology"@en ;
-    dcterms:description "The vocabulary of generic resource access: the activities a submitted document consists of. Belongs to no bounded context; it names no class and no property of one."@en ;
+    dcterms:description "The vocabulary of generic resource access: the activities a submitted document consists of, and the rule data the shapes carry for it. Belongs to no bounded context; it names no class and no property of one."@en ;
     dcterms:version  "0.1.0" ;
     dcterms:created  "2026-11-23"^^xsd:date ;
     dcterms:rights   "CC-BY-4.0" ;
@@ -53,35 +55,84 @@
 
 arkres:Activity a owl:Class ;
     rdfs:label   "Activity"@en , "Aktivitaet"@de ;
-    rdfs:comment "One change to one resource, stated in a submitted document. A document consists of activities and is applied completely or not at all."@en , "Eine Aenderung an einer Ressource, ausgedrueckt in einem eingereichten Dokument. Ein Dokument besteht aus Aktivitaeten und wird ganz oder gar nicht angewendet."@de ;
-    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .
+    rdfs:comment "One change to one resource, stated in a submitted document. A document consists of activities and is applied completely or not at all."@en , "Eine Aenderung an einer Ressource, ausgedrueckt in einem eingereichten Dokument. Ein Dokument besteht aus Aktivitaeten und wird ganz oder gar nicht angewendet."@de .
 
 arkres:Create a owl:Class ;
     rdfs:subClassOf arkres:Activity ;
     rdfs:label   "Create"@en , "Anlegen"@de ;
-    rdfs:comment "Creates a new resource of a resource type."@en , "Legt eine neue Ressource eines Ressourcentyps an."@de ;
-    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .
+    rdfs:comment "Creates a new resource of a resource type."@en , "Legt eine neue Ressource eines Ressourcentyps an."@de .
 
 arkres:Update a owl:Class ;
     rdfs:subClassOf arkres:Activity ;
     rdfs:label   "Update"@en , "Aendern"@de ;
-    rdfs:comment "Replaces values of fields of an existing resource."@en , "Ersetzt Werte von Feldern einer bestehenden Ressource."@de ;
-    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .
+    rdfs:comment "Replaces values of fields of an existing resource."@en , "Ersetzt Werte von Feldern einer bestehenden Ressource."@de .
 
 arkres:AddTo a owl:Class ;
     rdfs:subClassOf arkres:Activity ;
     rdfs:label   "Add to"@en , "Hinzufuegen"@de ;
-    rdfs:comment "Adds values or child resources to a multi-valued field of an existing resource."@en , "Fuegt einem mehrwertigen Feld einer bestehenden Ressource Werte oder Kind-Ressourcen hinzu."@de ;
-    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .
+    rdfs:comment "Adds values or child resources to a multi-valued field of an existing resource."@en , "Fuegt einem mehrwertigen Feld einer bestehenden Ressource Werte oder Kind-Ressourcen hinzu."@de .
 
 arkres:RemoveFrom a owl:Class ;
     rdfs:subClassOf arkres:Activity ;
     rdfs:label   "Remove from"@en , "Entfernen aus"@de ;
-    rdfs:comment "Removes values or child resources from a multi-valued field of an existing resource."@en , "Entfernt Werte oder Kind-Ressourcen aus einem mehrwertigen Feld einer bestehenden Ressource."@de ;
-    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .
+    rdfs:comment "Removes values or child resources from a multi-valued field of an existing resource."@en , "Entfernt Werte oder Kind-Ressourcen aus einem mehrwertigen Feld einer bestehenden Ressource."@de .
 
 arkres:Delete a owl:Class ;
     rdfs:subClassOf arkres:Activity ;
     rdfs:label   "Delete"@en , "Loeschen"@de ;
-    rdfs:comment "Deletes an existing resource; its history is kept."@en , "Loescht eine bestehende Ressource; ihre Historie bleibt erhalten."@de ;
-    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .
+    rdfs:comment "Deletes an existing resource; its history is kept."@en , "Loescht eine bestehende Ressource; ihre Historie bleibt erhalten."@de .
+
+##############################################################################
+#  2. ACTIVITY PROPERTIES
+##############################################################################
+
+arkres:object a owl:ObjectProperty ;
+    rdfs:domain  arkres:Activity ;
+    rdfs:label   "object"@en , "Gegenstand"@de ;
+    rdfs:comment "The one resource an activity acts on. For a create it is the new resource itself, written inline as a blank node with its type and its fields; for every other activity it is the IRI of an existing resource."@en , "Die eine Ressource, auf die eine Aktivitaet wirkt. Beim Anlegen ist es die neue Ressource selbst, inline als Blank Node mit Typ und Feldern; bei jeder anderen Aktivitaet die IRI einer bestehenden Ressource."@de .
+
+arkres:set a owl:ObjectProperty ;
+    rdfs:domain  arkres:Update ;
+    rdfs:label   "set"@en , "setzen"@de ;
+    rdfs:comment "A blank node carrying the new values of an update. Each field named on it replaces the values the resource holds for that field; a literal with a language tag replaces only the value with the same tag."@en , "Ein Blank Node mit den neuen Werten einer Aenderung. Jedes darauf genannte Feld ersetzt die Werte, die die Ressource fuer dieses Feld traegt; ein Literal mit Sprachtag ersetzt nur den Wert mit demselben Tag."@de .
+
+arkres:clear a owl:ObjectProperty ;
+    rdfs:domain  arkres:Update ;
+    rdfs:label   "clear"@en , "leeren"@de ;
+    rdfs:comment "A field whose values an update removes, in every language."@en , "Ein Feld, dessen Werte eine Aenderung entfernt, in allen Sprachen."@de .
+
+arkres:field a owl:ObjectProperty ;
+    rdfs:label   "field"@en , "Feld"@de ;
+    rdfs:comment "The multi-valued field an add-to or remove-from activity changes, named by its property IRI."@en , "Das mehrwertige Feld, das eine Hinzufuegen- oder Entfernen-Aktivitaet aendert, benannt mit der IRI seiner Property."@de .
+
+arkres:value a rdf:Property ;
+    rdfs:label   "value"@en , "Wert"@de ;
+    rdfs:comment "The value an add-to activity adds or a remove-from activity removes: an IRI or a literal, or for a field that owns its children a new child written inline as a blank node."@en , "Der Wert, den eine Hinzufuegen-Aktivitaet ergaenzt oder eine Entfernen-Aktivitaet entfernt: eine IRI oder ein Literal, bei einem Feld, das seine Kinder besitzt, ein neues Kind inline als Blank Node."@de .
+
+arkres:position a owl:DatatypeProperty ;
+    rdfs:range   xsd:integer ;
+    rdfs:label   "position"@en , "Position"@de ;
+    rdfs:comment "The position of the child a remove-from activity removes from a field that owns its children, counted in the state before the document."@en , "Die Position des Kindes, das eine Entfernen-Aktivitaet aus einem Feld entfernt, das seine Kinder besitzt, gezaehlt im Stand vor dem Dokument."@de .
+
+##############################################################################
+#  3. RULE DATA ON SHAPES
+##############################################################################
+
+arkres:ResourceType a owl:Class ;
+    rdfs:label   "Resource type"@en , "Ressourcentyp"@de ;
+    rdfs:comment "A class whose instances are resources of their own: created, changed and deleted one by one, each with its own history. A class that is no resource type is the type of a child at most, owned by a resource."@en , "Eine Klasse, deren Instanzen eigene Ressourcen sind: einzeln angelegt, geaendert und geloescht, jede mit eigener Historie. Eine Klasse, die kein Ressourcentyp ist, ist hoechstens der Typ eines Kindes, das einer Ressource gehoert."@de .
+
+arkres:codePrefix a owl:DatatypeProperty ;
+    rdfs:domain  arkres:ResourceType ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "code prefix"@en , "Code-Praefix"@de ;
+    rdfs:comment "The literal every business code of a resource of this type starts with; the running number follows it. Types sharing a prefix share the counter. A resource type without a prefix carries no business code."@en , "Das Literal, mit dem jeder fachliche Code einer Ressource dieses Typs beginnt; die laufende Nummer folgt darauf. Typen mit demselben Praefix teilen den Zaehler. Ein Ressourcentyp ohne Praefix traegt keinen fachlichen Code."@de .
+
+arkres:childKind a owl:DatatypeProperty ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "child kind"@en , "Kind-Art"@de ;
+    rdfs:comment "Set on a property shape: the field owns its values as children of the resource, each named by the fragment kind-id of the resource IRI. A field without it refers to resources it does not own."@en , "An einer Property-Shape gesetzt: das Feld besitzt seine Werte als Kinder der Ressource, jedes benannt als Fragment Art-Id der Ressourcen-IRI. Ein Feld ohne diese Angabe verweist auf Ressourcen, die es nicht besitzt."@de .
+
+arkres:orderedBy a owl:ObjectProperty ;
+    rdfs:label   "ordered by"@en , "geordnet nach"@de ;
+    rdfs:comment "Set on a property shape of a field that owns its children: the property carrying each child's position, counted from 1 without gaps."@en , "An einer Property-Shape eines Feldes gesetzt, das seine Kinder besitzt: die Property, die die Position jedes Kindes traegt, lueckenlos ab 1 gezaehlt."@de .
