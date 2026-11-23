@@ -77,8 +77,9 @@ public final class ResourceAccessMcpTools {
                     + " with their properties, and the prefix declarations behind every name. With a type"
                     + " (prefixed name as listed, or full IRI): its fields with presence, cardinality and value"
                     + " kind, the edges to other resources, the children it owns, the rules of its shapes in"
-                    + " plain sentences, and an example document that creates one resource of the type and"
-                    + " runs as it stands. Call it before writing a document for a type you have not written"
+                    + " plain sentences, an example document that creates one resource of the type and"
+                    + " runs as it stands, and documents that update, add to, remove from and delete that"
+                    + " resource after it. Call it before writing a document for a type you have not written"
                     + " yet.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String describe(
@@ -110,14 +111,15 @@ public final class ResourceAccessMcpTools {
             description = "Apply one Turtle document of activities completely or not at all, in one"
                     + " transaction. Each activity is a node typed with an activity class (describe without a"
                     + " type lists them) whose arkres:object is the resource it acts on: a new resource as a"
-                    + " blank node with its type and fields, an existing one by its IRI. Declare every prefix"
-                    + " the document uses. The document is validated against the shapes of every resource it"
+                    + " blank node with its type and fields, an existing one by its IRI or by its business"
+                    + " code as a relative IRI such as <FR-12>. The prefixes describe lists need no"
+                    + " declaration; declare any other prefix the document uses. The document is validated against the shapes of every resource it"
                     + " touches; a rejection names what failed, declares the namespaces it mentions and"
                     + " changes nothing. The answer lists every created, updated and deleted resource with"
                     + " its IRI and business code.")
     public String submit(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "The Turtle document: prefix declarations, then the activities")
+            @McpToolParam(description = "The Turtle document of activities; known prefixes need no declaration")
             final String document,
             @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
@@ -162,6 +164,8 @@ public final class ResourceAccessMcpTools {
         }
         out.append("\nExample document (creates one resource; runs as it stands):\n")
                 .append(description.example());
+        description.changeExamples().forEach(change -> out.append("\nThen ").append(change.activity())
+                .append(" (runs after the documents above):\n").append(change.document()));
         out.append("\nPrefixes behind every name above:\n").append(description.prefixDeclarations());
         return out.toString();
     }

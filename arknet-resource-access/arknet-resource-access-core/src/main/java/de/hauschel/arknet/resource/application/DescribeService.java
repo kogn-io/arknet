@@ -33,6 +33,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
+import de.hauschel.arknet.resource.application.port.in.ChangeExample;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
 import de.hauschel.arknet.resource.application.port.in.FieldDescription;
 import de.hauschel.arknet.resource.application.port.in.FieldDescription.Kind;
@@ -59,6 +60,12 @@ import de.hauschel.arknet.resource.domain.ResourceSchema.OwnedField;
  * <p>The example of a type creates one resource of it with every required field and one child in
  * every owned field. A required edge to a resource type gets a resource of its own in the same
  * document, so the example runs as it stands against an empty project.</p>
+ *
+ * <p>The change examples name that resource by its handle, the code it gets in an empty project
+ * ({@code <FR-1>}), and run in their order after the create example: an update sets the first text
+ * field, or else the first value or choice; a type with owned children adds a second child to its
+ * first owned field and removes the first; the delete comes last. A type without a code has no handle;
+ * its change examples name a placeholder to replace by the IRI {@code submit} returned.</p>
  */
 public final class DescribeService implements DescribeResourceType {
 
@@ -87,6 +94,11 @@ public final class DescribeService implements DescribeResourceType {
     private static final String EXAMPLE_TEXT = "Example text";
     private static final String EXAMPLE_STRING = "example";
     private static final String DEFAULT_LANGUAGE = "en";
+    private static final String CHANGED_TEXT = "Changed example text";
+    private static final String NO_HANDLE = "<IRI-RETURNED-BY-SUBMIT>";
+    private static final int FIRST_CODE = 1;
+    private static final int ADDED_POSITION = 2;
+    private static final int REMOVED_POSITION = 1;
 
     private final ReadableGraph shapes;
     private final ReadableGraph ontology;
@@ -141,11 +153,13 @@ public final class DescribeService implements DescribeResourceType {
         List<FieldDescription> fields = fields(iri, locale);
         List<String> rules = rules(iri, locale);
         String example = example(iri, locale);
-        String rendered = Stream.of(Stream.of(summary.name(), summary.comment(), example), rules.stream(),
+        List<ChangeExample> changeExamples = changeExamples(iri, fields, locale);
+        String rendered = Stream.of(Stream.of(summary.name(), summary.comment(), example),
+                changeExamples.stream().map(ChangeExample::document), rules.stream(),
                 fields.stream().flatMap(DescribeService::names))
                 .flatMap(names -> names)
                 .collect(Collectors.joining("\n"));
-        return new ResourceTypeDescription(summary, fields, rules, example,
+        return new ResourceTypeDescription(summary, fields, rules, example, changeExamples,
                 prefixes.usedIn(rendered).declarations());
     }
 
@@ -290,12 +304,66 @@ public final class DescribeService implements DescribeResourceType {
     // --- example -------------------------------------------------------------
 
     private String example(final IRI type, final DisplayLocale locale) {
-        String language = Optional.ofNullable(locale.requested()).map(Locale::getLanguage)
-                .filter(tag -> !tag.isBlank()).orElse(DEFAULT_LANGUAGE);
-        ExampleWriter writer = new ExampleWriter(language, locale);
+        ExampleWriter writer = new ExampleWriter(language(locale), locale);
         writer.create(type);
         String body = writer.text();
         return prefixes.usedIn(body).declarations() + body;
+    }
+
+    private static String language(final DisplayLocale locale) {
+        return Optional.ofNullable(locale.requested()).map(Locale::getLanguage)
+                .filter(tag -> !tag.isBlank()).orElse(DEFAULT_LANGUAGE);
+    }
+
+    private List<ChangeExample> changeExamples(final IRI type, final List<FieldDescription> fields,
+            final DisplayLocale locale) {
+        String language = language(locale);
+        Optional<String> code = codePrefix(type).map(prefix -> prefix + FIRST_CODE);
+        String object = code.map(handle -> "<" + handle + ">").orElse(NO_HANDLE);
+        String note = code.map(handle -> "# " + handle + " is the resource the create example makes in an empty"
+                + " project; name your own by its code.\n")
+                .orElse("# This type has no code: replace " + NO_HANDLE + " by the IRI submit returned for it.\n");
+        List<ChangeExample> examples = new ArrayList<>();
+        updateValue(fields, language).ifPresent(set -> examples.add(change(ArkresVocabulary.UPDATE, note,
+                activity(ArkresVocabulary.UPDATE, object) + " ;\n    " + abbreviated(ArkresVocabulary.SET)
+                        + " [ " + set + " ] .\n")));
+        fields.stream().filter(field -> field.kind() == Kind.CHILDREN).findFirst().ifPresent(owned -> {
+            ExampleWriter writer = new ExampleWriter(language, locale);
+            String child = writer.child(owned.children().orElseThrow(), ADDED_POSITION);
+            examples.add(change(ArkresVocabulary.ADD_TO, note, writer.text()
+                    + activity(ArkresVocabulary.ADD_TO, object) + " ;\n    " + abbreviated(ArkresVocabulary.FIELD)
+                    + " " + owned.name() + " ;\n    " + abbreviated(ArkresVocabulary.VALUE) + " " + child + " .\n"));
+            examples.add(change(ArkresVocabulary.REMOVE_FROM, note, activity(ArkresVocabulary.REMOVE_FROM, object)
+                    + " ;\n    " + abbreviated(ArkresVocabulary.FIELD) + " " + owned.name() + " ;\n    "
+                    + abbreviated(ArkresVocabulary.POSITION) + " " + REMOVED_POSITION + " .\n"));
+        });
+        examples.add(change(ArkresVocabulary.DELETE, note, activity(ArkresVocabulary.DELETE, object) + " .\n"));
+        return examples;
+    }
+
+    private Optional<String> updateValue(final List<FieldDescription> fields, final String language) {
+        Optional<FieldDescription> text = fields.stream()
+                .filter(field -> !field.assigned() && field.kind() == Kind.TEXT).findFirst();
+        if (text.isPresent()) {
+            return text.map(field -> field.name() + " \"" + CHANGED_TEXT + "\"@" + language);
+        }
+        return fields.stream()
+                .filter(field -> !field.assigned() && (field.kind() == Kind.VALUE || field.kind() == Kind.CHOICE))
+                .findFirst()
+                .map(field -> field.name() + " " + (field.kind() == Kind.VALUE ? literal(field.datatype())
+                        : field.allowedValues().get(field.allowedValues().size() - 1)));
+    }
+
+    private ChangeExample change(final String activity, final String note, final String body) {
+        return new ChangeExample(abbreviated(activity), prefixes.usedIn(body).declarations() + note + body);
+    }
+
+    private String activity(final String activity, final String object) {
+        return "[] a " + abbreviated(activity) + " ; " + abbreviated(ArkresVocabulary.OBJECT) + " " + object;
+    }
+
+    private String abbreviated(final String iri) {
+        return prefixes.abbreviate(iri);
     }
 
     /**
@@ -344,7 +412,7 @@ public final class DescribeService implements DescribeResourceType {
                 case VALUE -> Optional.of(literal(field.datatype()));
                 case CHOICE -> field.allowedValues().stream().findFirst();
                 case REFERENCE -> reference(field);
-                case CHILDREN -> field.children().map(this::child);
+                case CHILDREN -> field.children().map(children -> child(children, 1));
             };
         }
 
@@ -359,9 +427,9 @@ public final class DescribeService implements DescribeResourceType {
                     .map(target -> create(RDF_FACTORY.createIRI(target)));
         }
 
-        private String child(final OwnedChildren children) {
+        private String child(final OwnedChildren children, final int position) {
             List<String> lines = new ArrayList<>();
-            lines.add(children.orderedBy() + " 1");
+            lines.add(children.orderedBy() + " " + position);
             for (FieldDescription field : children.fields()) {
                 if (field.name().equals(children.orderedBy()) || field.presence() != Presence.REQUIRED) {
                     continue;

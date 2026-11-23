@@ -15,11 +15,14 @@ import java.util.Objects;
  * @param rules   the messages of the rules that span several fields, in the display language
  * @param example a Turtle document for {@link SubmitDocument} that creates one resource of this type,
  *                runnable as it stands against an empty project; it declares the prefixes it uses itself
+ * @param changeExamples a document for each activity the type admits on an existing resource -
+ *                {@code Update}, {@code AddTo} and {@code RemoveFrom} for a type with owned children,
+ *                {@code Delete} - in an order that runs as it stands after the create example
  * @param prefixDeclarations a Turtle prefix declaration for every prefix any of the components writes -
  *                type, field and value names, datatypes, choices, rule sentences and the example
  */
 public record ResourceTypeDescription(ResourceTypeSummary summary, List<FieldDescription> fields,
-        List<String> rules, String example, String prefixDeclarations) {
+        List<String> rules, String example, List<ChangeExample> changeExamples, String prefixDeclarations) {
 
     /**
      * Copies the lists.
@@ -28,6 +31,7 @@ public record ResourceTypeDescription(ResourceTypeSummary summary, List<FieldDes
      * @param fields  its fields
      * @param rules   the rules spanning several fields
      * @param example the runnable example
+     * @param changeExamples the documents that change the resource of the example
      * @param prefixDeclarations the prefix declarations behind every name
      */
     public ResourceTypeDescription {
@@ -35,6 +39,7 @@ public record ResourceTypeDescription(ResourceTypeSummary summary, List<FieldDes
         fields = List.copyOf(Objects.requireNonNull(fields, "fields"));
         rules = List.copyOf(Objects.requireNonNull(rules, "rules"));
         Objects.requireNonNull(example, "example");
+        changeExamples = List.copyOf(Objects.requireNonNull(changeExamples, "changeExamples"));
         Objects.requireNonNull(prefixDeclarations, "prefixDeclarations");
     }
 }
