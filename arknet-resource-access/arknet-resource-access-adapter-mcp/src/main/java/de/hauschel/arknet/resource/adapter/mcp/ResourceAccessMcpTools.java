@@ -15,6 +15,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
+import de.hauschel.arknet.resource.application.port.in.ChangeExample;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
 import de.hauschel.arknet.resource.application.port.in.FieldDescription;
 import de.hauschel.arknet.resource.application.port.in.ResourceCatalog;
@@ -79,7 +80,8 @@ public final class ResourceAccessMcpTools {
                     + " kind, the edges to other resources, the children it owns, the rules of its shapes in"
                     + " plain sentences, an example document that creates one resource of the type and"
                     + " runs as it stands, and documents that update, add to, remove from and delete that"
-                    + " resource after it. Call it before writing a document for a type you have not written"
+                    + " resource after it, once their placeholder is replaced by the code or IRI the create"
+                    + " returned. Call it before writing a document for a type you have not written"
                     + " yet.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String describe(
@@ -165,7 +167,8 @@ public final class ResourceAccessMcpTools {
         out.append("\nExample document (creates one resource; runs as it stands):\n")
                 .append(description.example());
         description.changeExamples().forEach(change -> out.append("\nThen ").append(change.activity())
-                .append(" (runs after the documents above):\n").append(change.document()));
+                .append(" (runs after the documents above, after replacing ").append(ChangeExample.PLACEHOLDER)
+                .append(" with the code or IRI the create returned):\n").append(change.document()));
         out.append("\nPrefixes behind every name above:\n").append(description.prefixDeclarations());
         return out.toString();
     }

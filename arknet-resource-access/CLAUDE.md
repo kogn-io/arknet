@@ -37,7 +37,7 @@ Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context; von den Klassen
   Sie baut ausserdem `DescribeService` (`describer`), dem sie zu den Modell-Ontologien `arknet-resource.ttl` gibt, und liest die Praefixe (`prefixes`) per Rio aus denselben Dateien: zuerst die Ontologien, ein Praefix oder Namespace, der schon gebunden ist, bleibt bei seiner ersten Lesart.
   `KognioRdfResourceRepositoryFactoryTest` gleicht die Dateiliste gegen das ab, was `arknet-ontology` ausliefert.
   `KognioRdfResourceRepository` setzt `ResourceRepository` auf `VersionedWriteFunnel#writeAll` um.
-  `KognioRdfHandleLookup` (aus `handles`) setzt `HandleLookup` mit dem `HandleResolver` aus `arknet-persistence-support` um, demselben, den `resource_get` und `impact_analysis` nutzen.
+  `KognioRdfHandleLookup` (aus `handles`) setzt `HandleLookup` mit dem `HandleResolver` aus `arknet-persistence-support` um, demselben, den `resource_get` und `impact_analysis` nutzen; es laesst nur einen nackten Code durch und lehnt einen Handle mit `:`, `/` oder `#` ab, weil der Resolver Praefixnamen, IRIs und Blank-Node-Namen ungeprueft zurueckgaebe.
 - `arknet-resource-access-adapter-mcp`: treibender Adapter mit den MCP-Werkzeugen; sieht vom Core nur `..application.port.in..` und keine RDF-Technologie, haengt an `arknet-mcp-support` fuer die Anker-Aufloesung.
   `ResourceAccessMcpTools` traegt `describe` und `submit` und rendert, was die In-Ports liefern.
   Die Klasse registriert sich nicht selbst; ob ihre Werkzeuge angeboten werden, entscheidet die Composition Root, die sie als Bean an die Property `arknet.resource-access.enabled` (`ResourceAccessMcpTools.ENABLED_PROPERTY`) bindet.
@@ -74,8 +74,8 @@ Die Art eines Felds folgt aus den Shapes: besessen (Regeldaten `arkres:childKind
 Labels und Kommentare kommen aus der Ontologie, Regelsaetze aus `sh:message` der Shapes, jeweils in der Anzeigesprache ueber die `DisplayLocale`-Kette; das MCP-Werkzeug nimmt ohne `displayLocale` die Standardsprache des Projekts.
 Ohne Typ liefert `describe` alle Ressourcentypen, das Aktivitaetsvokabular aus `arknet-resource.ttl` (ohne die Regeldaten) und die Praefix-Deklarationen.
 Das Beispiel eines Typs legt eine Ressource mit allen Pflichtfeldern und je einem Kind in jedem besessenen Feld an; eine Pflichtkante auf einen Ressourcentyp bekommt eine eigene Ressource im selben Dokument, damit das Beispiel gegen ein leeres Projekt laeuft.
-Dazu kommen Aenderungsbeispiele, die in ihrer Reihenfolge nach dem Beispiel laufen und dessen Ressource ueber ihren Handle nennen (den Code, den sie in einem leeren Projekt bekommt): ein Update setzt das erste Textfeld, sonst den ersten Wert oder die erste Auswahl; ein Typ mit besessenen Kindern bekommt ein AddTo eines zweiten Kinds in sein erstes besessenes Feld und ein RemoveFrom des ersten; zuletzt ein Delete.
-Ein Typ ohne Code hat keinen Handle; seine Aenderungsbeispiele nennen einen Platzhalter, an dessen Stelle die IRI tritt, die `submit` fuer die Ressource geliefert hat.
+Dazu kommen Aenderungsbeispiele, die dessen Ressource ueber den Platzhalter `ChangeExample.PLACEHOLDER` nennen und in ihrer Reihenfolge nach dem Beispiel laufen, sobald er durch Code oder IRI ersetzt ist, die `submit` fuer sie geliefert hat: ein Update setzt das erste Textfeld, sonst den ersten Wert oder die erste Auswahl; ein Typ mit besessenen Kindern bekommt ein AddTo eines zweiten Kinds in sein erstes besessenes Feld und ein RemoveFrom des ersten; zuletzt ein Delete.
+Ein fester Code wie `FR-1` traefe in einem nicht leeren Projekt eine fremde Ressource; unersetzt ist der Platzhalter ein Handle ohne Ressource, das Dokument wird abgelehnt.
 `DescribeRealStoreTest` reicht das Beispiel jedes Typs und danach seine Aenderungsbeispiele gegen einen echten Store ein.
 
 ## Pruefung

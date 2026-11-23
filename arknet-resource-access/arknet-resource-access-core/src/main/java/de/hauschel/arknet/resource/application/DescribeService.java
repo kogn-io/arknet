@@ -61,11 +61,10 @@ import de.hauschel.arknet.resource.domain.ResourceSchema.OwnedField;
  * every owned field. A required edge to a resource type gets a resource of its own in the same
  * document, so the example runs as it stands against an empty project.</p>
  *
- * <p>The change examples name that resource by its handle, the code it gets in an empty project
- * ({@code <FR-1>}), and run in their order after the create example: an update sets the first text
- * field, or else the first value or choice; a type with owned children adds a second child to its
- * first owned field and removes the first; the delete comes last. A type without a code has no handle;
- * its change examples name a placeholder to replace by the IRI {@code submit} returned.</p>
+ * <p>The change examples name that resource by {@link ChangeExample#PLACEHOLDER} and run in their
+ * order after the create example once it is replaced by the code or IRI submit returned: an update
+ * sets the first text field, or else the first value or choice; a type with owned children adds a second child to its
+ * first owned field and removes the first; the delete comes last.</p>
  */
 public final class DescribeService implements DescribeResourceType {
 
@@ -95,8 +94,6 @@ public final class DescribeService implements DescribeResourceType {
     private static final String EXAMPLE_STRING = "example";
     private static final String DEFAULT_LANGUAGE = "en";
     private static final String CHANGED_TEXT = "Changed example text";
-    private static final String NO_HANDLE = "<IRI-RETURNED-BY-SUBMIT>";
-    private static final int FIRST_CODE = 1;
     private static final int ADDED_POSITION = 2;
     private static final int REMOVED_POSITION = 1;
 
@@ -318,11 +315,10 @@ public final class DescribeService implements DescribeResourceType {
     private List<ChangeExample> changeExamples(final IRI type, final List<FieldDescription> fields,
             final DisplayLocale locale) {
         String language = language(locale);
-        Optional<String> code = codePrefix(type).map(prefix -> prefix + FIRST_CODE);
-        String object = code.map(handle -> "<" + handle + ">").orElse(NO_HANDLE);
-        String note = code.map(handle -> "# " + handle + " is the resource the create example makes in an empty"
-                + " project; name your own by its code.\n")
-                .orElse("# This type has no code: replace " + NO_HANDLE + " by the IRI submit returned for it.\n");
+        String object = ChangeExample.PLACEHOLDER;
+        String note = "# Replace " + object + codePrefix(type).map(prefix -> " by the code (such as " + prefix
+                + "12) or the IRI").orElse(" by the IRI")
+                + " submit returned for the resource of the create example.\n";
         List<ChangeExample> examples = new ArrayList<>();
         updateValue(fields, language).ifPresent(set -> examples.add(change(ArkresVocabulary.UPDATE, note,
                 activity(ArkresVocabulary.UPDATE, object) + " ;\n    " + abbreviated(ArkresVocabulary.SET)

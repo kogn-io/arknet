@@ -107,7 +107,8 @@ class ResourceAccessMcpToolsTest {
                 answer);
         assertTrue(answer.contains("Rules across fields:\n- Spans two fields."), answer);
         assertTrue(answer.contains("[] a arkres:Create .\n"), answer);
-        assertTrue(answer.contains("Then arkres:Delete (runs after the documents above):\n"
+        assertTrue(answer.contains("Then arkres:Delete (runs after the documents above, after replacing "
+                + ChangeExample.PLACEHOLDER + " with the code or IRI the create returned):\n"
                 + "[] a arkres:Delete ; arkres:object <T-1> .\n"), answer);
         assertTrue(answer.endsWith("Prefixes behind every name above:\n@prefix m: <https://example.org/m#> .\n"
                 + "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"), answer);

@@ -40,14 +40,12 @@ import de.hauschel.arknet.resource.application.port.in.ResourceCatalog;
 import de.hauschel.arknet.resource.application.port.in.ResourceTypeDescription;
 import de.hauschel.arknet.resource.application.port.in.SubmitResult;
 import de.hauschel.arknet.resource.application.port.in.SubmittedChange;
+import de.hauschel.arknet.resource.domain.SubmitRejectedException;
 
 /**
  * Describes the shipped resource types and runs every example against a real store.
  */
 class DescribeRealStoreTest {
-
-    /** The placeholder the change examples of a type without code name their resource by. */
-    private static final String NO_HANDLE = "<IRI-RETURNED-BY-SUBMIT>";
 
     private static final DescribeResourceType DESCRIBER =
             KognioRdfResourceRepositoryFactory.describer(DisplayLocale.DEFAULT);
@@ -123,7 +121,8 @@ class DescribeRealStoreTest {
         // when
         List<SubmitResult> results = description.changeExamples().stream()
                 .map(change -> submit.submit(SubmitRealStoreTest.PROJECT,
-                        change.document().replace(NO_HANDLE, "<" + created.iri() + ">")))
+                        change.document().replace(ChangeExample.PLACEHOLDER,
+                                "<" + (created.code() != null ? created.code() : created.iri()) + ">")))
                 .toList();
 
         // then
@@ -140,7 +139,7 @@ class DescribeRealStoreTest {
     }
 
     @Test
-    void theChangeExamplesNameTheResourceByItsHandle() {
+    void theChangeExamplesNameTheResourceByAPlaceholder() {
         // when
         ResourceTypeDescription description = DESCRIBER.describe("arkreq:FunctionalRequirement", "en");
 
@@ -148,9 +147,26 @@ class DescribeRealStoreTest {
         assertEquals(List.of("arkres:Update", "arkres:AddTo", "arkres:RemoveFrom", "arkres:Delete"),
                 description.changeExamples().stream().map(ChangeExample::activity).toList());
         assertTrue(description.changeExamples().stream()
-                .allMatch(change -> change.document().contains("arkres:object <FR-1>")
+                .allMatch(change -> change.document().contains("arkres:object " + ChangeExample.PLACEHOLDER)
+                        && !change.document().contains("<FR-1>")
                         && change.document().contains("@prefix arkres: <https://w3id.org/arknet/resource#> .")),
                 description.changeExamples().toString());
+    }
+
+    @ParameterizedTest
+    @MethodSource("resourceTypes")
+    void aChangeExampleSubmittedWithItsPlaceholderIsRejected(final String type) {
+        // given
+        ResourceTypeDescription description = DESCRIBER.describe(type, "en");
+        submit.submit(SubmitRealStoreTest.PROJECT, description.example());
+        ChangeExample delete = description.changeExamples().get(description.changeExamples().size() - 1);
+
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class,
+                () -> submit.submit(SubmitRealStoreTest.PROJECT, delete.document()));
+
+        // then
+        assertTrue(rejected.getMessage().contains("CODE-OR-IRI-RETURNED-BY-SUBMIT"), rejected.getMessage());
     }
 
     @Test

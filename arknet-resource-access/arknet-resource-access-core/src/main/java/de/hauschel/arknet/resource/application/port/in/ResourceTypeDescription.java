@@ -17,7 +17,8 @@ import java.util.Objects;
  *                runnable as it stands against an empty project; it declares the prefixes it uses itself
  * @param changeExamples a document for each activity the type admits on an existing resource -
  *                {@code Update}, {@code AddTo} and {@code RemoveFrom} for a type with owned children,
- *                {@code Delete} - in an order that runs as it stands after the create example
+ *                {@code Delete} - in an order that runs after the create example once
+ *                {@link ChangeExample#PLACEHOLDER} is replaced by the code or IRI submit returned for it
  * @param prefixDeclarations a Turtle prefix declaration for every prefix any of the components writes -
  *                type, field and value names, datatypes, choices, rule sentences and the example
  */
