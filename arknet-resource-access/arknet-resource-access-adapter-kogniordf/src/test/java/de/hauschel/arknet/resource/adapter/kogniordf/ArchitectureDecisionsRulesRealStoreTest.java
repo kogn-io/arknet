@@ -115,6 +115,33 @@ class ArchitectureDecisionsRulesRealStoreTest {
         assertTrue(rejected.getMessage().contains(message), rejected.getMessage());
     }
 
+    static Stream<Arguments> blankTexts() {
+        final String date = "arkarch:decisionDate \"2026-01-01\"^^xsd:date";
+        Stream.Builder<Arguments> cases = Stream.builder();
+        for (String escape : new String[] {"\\u2003", "\\u3000", "\\u00A0", "\\u001F", "\\t", "\\n", " "}) {
+            String blank = "\"" + escape.repeat(6) + "\"@en";
+            cases.add(Arguments.of("name " + escape, adr(blank, "\"Needs links.\"@en", "\"Use RDF.\"@en", date)));
+            cases.add(Arguments.of("context " + escape, adr("\"Use RDF\"@en", blank, "\"Use RDF.\"@en", date)));
+            cases.add(Arguments.of("decision " + escape, adr("\"Use RDF\"@en", "\"Needs links.\"@en", blank, date)));
+            cases.add(Arguments.of("statement " + escape, valid("arkarch:consequence [ arknet:position 1 ;"
+                    + " arkarch:consequenceStatement " + blank + " ; arkarch:consequenceType arkarch:Positive ]")));
+            cases.add(Arguments.of("option name " + escape, valid("arkarch:consideredOption [ arknet:position 1 ;"
+                    + " arknet:name " + blank + " ; arkarch:optionRationale \"Links.\"@en ;"
+                    + " arkarch:optionOutcome arkarch:Chosen ]")));
+            cases.add(Arguments.of("rationale " + escape, valid("arkarch:consideredOption [ arknet:position 1 ;"
+                    + " arknet:name \"RDF\"@en ; arkarch:optionRationale " + blank
+                    + " ; arkarch:optionOutcome arkarch:Chosen ]")));
+        }
+        return cases.build();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("blankTexts")
+    void everyTextTheCoreCallsBlankIsRejected(final String field, final String document) {
+        // when / then
+        assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT, PREFIXES + document));
+    }
+
     @Test
     void theSupersessionChainOfTheRealCorpusIsLegal() {
         // given: ADR-7 -> ADR-51 -> ADR-55 -> ADR-70, the middle ones superseded by superseded successors

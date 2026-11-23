@@ -66,12 +66,16 @@ ashapes:ADR-identifier
 # untagged one remains legal alongside it. minCount and uniqueLang share sh:Violation severity, so
 # unlike ADR-consequence/ADR-consideredOption below they stay one PropertyShape each (mirrors
 # rshapes:Requirement-title).
+# Non-blank texts: sh:pattern "[^\\s\\p{Z}\\p{Cc}]" matches (find) when at least one character is not
+# whitespace, a Unicode separator or a control character. That is at least as strict as the cores'
+# String.isBlank(), so no text the cores treat as blank passes; it is stricter for U+00A0/U+202F
+# (isBlank keeps them), deliberately: a name of no-break spaces shows nothing. The empty string
+# fails the pattern too, hence no sh:minLength 1 next to it on arknet:name.
 ashapes:ADR-name
     a sh:PropertyShape ;
     sh:path     arknet:name ;
     sh:minCount 1 ;
-    sh:minLength 1 ;
-    sh:pattern  "\\S" ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
     sh:message  "An ADR needs an arknet:name (title of the decision), not blank. sh:uniqueLang allows at most one arknet:name per non-empty language tag."@en , "ADR braucht einen arknet:name (Titel der Entscheidung), nicht leer. sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
@@ -91,7 +95,7 @@ ashapes:ADR-context
     sh:path     arkarch:adrContext ;
     sh:minCount 1 ;
     sh:minLength 5 ;
-    sh:pattern  "\\S" ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
     sh:message  "An ADR must have an arkarch:adrContext (why was the decision necessary?), not blank. sh:uniqueLang allows at most one arkarch:adrContext per non-empty language tag."@en , "ADR muss einen arkarch:adrContext haben (warum war die Entscheidung noetig?), nicht leer. sh:uniqueLang erlaubt hoechstens einen arkarch:adrContext je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
@@ -101,7 +105,7 @@ ashapes:ADR-decision
     sh:path     arkarch:adrDecision ;
     sh:minCount 1 ;
     sh:minLength 5 ;
-    sh:pattern  "\\S" ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
     sh:message  "An ADR must have an arkarch:adrDecision (what was decided?), not blank. sh:uniqueLang allows at most one arkarch:adrDecision per non-empty language tag."@en , "ADR muss eine arkarch:adrDecision haben (was wurde entschieden?), nicht leer. sh:uniqueLang erlaubt hoechstens eine arkarch:adrDecision je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
@@ -209,6 +213,8 @@ ashapes:ConsequenceShape
     sh:property ashapes:Consequence-statement ;
     sh:property ashapes:Consequence-type .
 
+# sh:maxInclusive 2147483647: the range of a Java int. Unreachable through submit (the engine
+# rejects non-consecutive positions first) and through the typed core; a backstop for a foreign writer.
 ashapes:Consequence-position
     a sh:PropertyShape ;
     sh:path     arknet:position ;
@@ -225,7 +231,7 @@ ashapes:Consequence-statement
     sh:path     arkarch:consequenceStatement ;
     sh:minCount 1 ;
     sh:minLength 5 ;
-    sh:pattern  "\\S" ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
     sh:message  "A Consequence needs at least one arkarch:consequenceStatement (min. 5 characters, not blank). sh:uniqueLang allows at most one per non-empty language tag."@en , "Consequence braucht mindestens eine arkarch:consequenceStatement (min. 5 Zeichen, nicht leer). sh:uniqueLang erlaubt hoechstens eine je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
@@ -256,7 +262,7 @@ ashapes:ConsideredOption-name
     sh:path     arknet:name ;
     sh:minCount 1 ;
     sh:minLength 1 ;
-    sh:pattern  "\\S" ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
     sh:message  "A ConsideredOption needs at least one arknet:name, not blank. sh:uniqueLang allows at most one per non-empty language tag."@en , "ConsideredOption braucht mindestens einen arknet:name, nicht leer. sh:uniqueLang erlaubt hoechstens einen je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
@@ -277,7 +283,7 @@ ashapes:ConsideredOption-rationale
     sh:path     arkarch:optionRationale ;
     sh:minCount 1 ;
     sh:minLength 5 ;
-    sh:pattern  "\\S" ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
     sh:message  "A ConsideredOption needs at least one arkarch:optionRationale (min. 5 characters, not blank). sh:uniqueLang allows at most one per non-empty language tag."@en , "ConsideredOption braucht mindestens eine arkarch:optionRationale (min. 5 Zeichen, nicht leer). sh:uniqueLang erlaubt hoechstens eine je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
