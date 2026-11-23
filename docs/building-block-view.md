@@ -219,11 +219,13 @@ its own core only; no module of a Component depends on a module of another.
   `-adapter-html` of Model Analysis, with its read model separated from its rendering,
   which is what ends the report's borrowed in-ports into every context (ADR-49,
   ADR-70). Sections 3 to 5 then describe one shape instead of two.
-- #741 and #743: the Component for generic resource access is built outside every
-  Bounded Context. Its `submit` engine and `describe` (core and kognio-rdf out-adapter) and
-  the MCP tools for both exist; #741 still adds their wiring, #743 the generic read tools
-  (`resource_get`, `resource_history`, `text_search`), which leave the composition
-  root (ADR-69).
+- #746 and #743: the Component for generic resource access is built outside every
+  Bounded Context. Its `submit` engine and `describe` (core and kognio-rdf out-adapter), the
+  MCP tools for both and their wiring in the composition root
+  (`ArknetMcpConfiguration.ResourceAccessConfiguration`) exist. The wiring is conditional on
+  `arknet.resource-access.enabled=true`, which is off by default, so `describe` and `submit`
+  are not offered before #746. #743 moves the generic read tools
+  (`resource_get`, `resource_history`, `text_search`) out of the composition root (ADR-69).
 - #77: the building-block view moves into the store; this file goes away. Before
   that, a successor of ADR-46 (components move from "outside" to "not yet built"),
   see the comment on #77.
