@@ -23,11 +23,11 @@ the skill's generic methodology.
   on the classpath, so before trusting this module's silence on a given package as "verified
   clean", check its `pom.xml` actually depends on that package's module.
 - `arknet-app` is the composition root and additionally carries three cross-cutting,
-  BC-spanning read paths (`mcp/store`, `mcp/report`, and the model-analysis component) -- a
+  BC-spanning read paths (`mcp/store`, `mcp/search`, and `mcp/report`; the model-analysis component
+  is its own component under `arknet-model-analysis`, not part of `arknet-app`) -- a
   contract hole there distorts all six hexagons at once. Weight it above the individual BC
   modules.
-- `StoreReader` (`arknet-support/arknet-persistence-support/.../persistence/StoreReader.java`, until #560 in
-  `arknet-mcp`'s `mcp/store`) is the single highest
+- `StoreReader` (`arknet-support/arknet-persistence-support/.../persistence/StoreReader.java`) is the single highest
   priority file: all five generic tools (`store_overview`, `resource_get`, `trace_matrix`,
   `orphan_check`, `impact_analysis`) and the HTML report read through the same
   `readSnapshot`/`outgoing`/`incoming` snapshot. A filtering bug there (see #136, blank-node
@@ -35,7 +35,7 @@ the skill's generic methodology.
   shares only the existence check (`outgoing`/`incoming`, for its "not found" case) with that
   snapshot, not the snapshot itself: its history comes from `StoreReader#history`, the library
   versioning's history of one resource - the graphs the content-graph snapshot never reads.
-- `ArknetMcpConfiguration.java` (~660 lines, the central wiring) doesn't deserve a craftsmanship
+- `ArknetMcpConfiguration.java` (~1200 lines, the central wiring) doesn't deserve a craftsmanship
   deduction in this skill — that's `/clean-code-review`'s job. For Full Review the only thing
   that matters: is every one of the six BC bean families actually wired per-call rather than as
   a singleton with `ProjectId`, and is there no fallback path without an anchor -- no default,
@@ -109,8 +109,8 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
 - **`CodeAssignment`'s retry loop is duplicated logic made generic, not a shared implementation
   detail.** It exists in the kernel (not `arknet-persistence-support`) because the calling
   `*-core` services must stay free of `io.kogn.rdf` (ArchUnit rule 3), while
-  `arknet-persistence-support` carries that dependency. When reviewing any of the five call
-  sites (`req`/`ul`/`uc`/`bc`/`adr` application services), confirm the caller's
+  `arknet-persistence-support` carries that dependency. When reviewing any of the eight call
+  sites (`req`/`constraint`/`ul`/`uc`/`bc`/`adr`/`actor`/`role` application services), confirm the caller's
   `Duplicate<Type>CodeException` is the actual collision signal passed to
   `createRetryingOnCodeCollision`, not a coincidentally-matching supertype.
   **Related recurring bug (2026-08-01, issue #143):** lexicographic (`String` natural order)
@@ -258,7 +258,8 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   patched the one reported symptom.
 
 - **A new resource type or edge shipped by a BC module does not automatically reach the
-  cross-cutting read paths — check every inventory list in `arknet-app` whenever one lands.**
+  cross-cutting read paths — check every inventory list in `arknet-app` and in the model-analysis
+  component whenever one lands.**
   Found twice on 2026-08-06: `bc_link_context`'s `arkddd:upstream`/`downstream` edges (landed
   2026-08-01, the same day the last review snapshot was taken) never entered
   `TraceabilityGraph.DEPENDENT_EDGE_PREDICATES`, making a recorded ContextRelationship invisible
@@ -266,7 +267,7 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   `HtmlReportRenderer`'s leftover-suppression (which only knows `arkreq:Step`), so every AC
   renders twice. Constraint (#223) got both integrations right — proving the integration step is
   known but not enforced. The hard lists to check: `DEPENDENT_EDGE_PREDICATES` + type inventories
-  in `TraceabilityGraph`, the leftover/suppression sets in `HtmlReportRenderer`, and the
+  in `TraceabilityGraph` (`arknet-model-evaluation-core`), the leftover/suppression sets in `HtmlReportRenderer`, and the
   `@McpTool` descriptions enumerating edges/types (`impact_analysis` already under-promises
   `constrainedBy`).
 
