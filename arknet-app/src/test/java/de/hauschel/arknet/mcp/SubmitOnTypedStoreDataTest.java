@@ -260,7 +260,9 @@ class SubmitOnTypedStoreDataTest {
                     + " arkres:value [ arkreq:position 2 ; arkreq:stepText \"Confirms the decision.\"@en ;"
                     + " arkreq:stepRealises <" + second.id().value().value() + "> ] .\n"
                     + "[] a arkres:Update ; arkres:object <" + ucIri + "> ;"
-                    + " arkres:set [ arkreq:useCaseGoal \"A decision is recorded and confirmed.\"@en ] .\n");
+                    + " arkres:set [ arkreq:useCaseGoal \"A decision is recorded and confirmed.\"@en ] .\n"
+                    + "[] a arkres:AddTo ; arkres:object <" + ucIri + "> ; arkres:field oslc_rm:satisfies ;"
+                    + " arkres:value <" + second.id().value().value() + "> .\n");
 
             // then
             UseCase reloaded = store.bean(UseCaseService.class).get(PROJECT, useCase.code(), null).orElseThrow();
@@ -309,6 +311,7 @@ class SubmitOnTypedStoreDataTest {
                     + "[] a arkres:Create ; arkres:object _:uc .\n"
                     + "_:uc a arkreq:UseCase ; dcterms:title \"Model a decision\"@en ;"
                     + " arkreq:useCaseGoal \"A decision is recorded.\"@en ; arkreq:primaryRole _:role ;"
+                    + " oslc_rm:satisfies <" + fr.id().value().value() + "> ;"
                     + " arkreq:mainStep [ arkreq:position 1 ; arkreq:stepText \"Writes the decision.\"@en ;"
                     + " arkreq:stepRealises <" + fr.id().value().value() + "> ] .\n"
                     + "[] a arkres:Create ; arkres:object _:bc .\n"

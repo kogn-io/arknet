@@ -94,6 +94,7 @@ public final class DescribeService implements DescribeResourceType {
     private static final String EXAMPLE_STRING = "example";
     private static final String DEFAULT_LANGUAGE = "en";
     private static final String CHANGED_TEXT = "Changed example text";
+    private static final String ADDED_TEXT = "Added example text";
     private static final int ADDED_POSITION = 2;
     private static final int REMOVED_POSITION = 1;
 
@@ -301,7 +302,7 @@ public final class DescribeService implements DescribeResourceType {
     // --- example -------------------------------------------------------------
 
     private String example(final IRI type, final DisplayLocale locale) {
-        ExampleWriter writer = new ExampleWriter(language(locale), locale);
+        ExampleWriter writer = new ExampleWriter(language(locale), locale, EXAMPLE_TEXT);
         writer.create(type);
         String body = writer.text();
         return prefixes.usedIn(body).declarations() + body;
@@ -324,7 +325,7 @@ public final class DescribeService implements DescribeResourceType {
                 activity(ArkresVocabulary.UPDATE, object) + " ;\n    " + abbreviated(ArkresVocabulary.SET)
                         + " [ " + set + " ] .\n")));
         fields.stream().filter(field -> field.kind() == Kind.CHILDREN).findFirst().ifPresent(owned -> {
-            ExampleWriter writer = new ExampleWriter(language, locale);
+            ExampleWriter writer = new ExampleWriter(language, locale, ADDED_TEXT);
             String child = writer.child(owned.children().orElseThrow(), ADDED_POSITION);
             examples.add(change(ArkresVocabulary.ADD_TO, note, writer.text()
                     + activity(ArkresVocabulary.ADD_TO, object) + " ;\n    " + abbreviated(ArkresVocabulary.FIELD)
@@ -371,12 +372,14 @@ public final class DescribeService implements DescribeResourceType {
 
         private final String language;
         private final DisplayLocale locale;
+        private final String exampleText;
         private final Map<IRI, String> created = new LinkedHashMap<>();
         private final StringBuilder text = new StringBuilder();
 
-        private ExampleWriter(final String language, final DisplayLocale locale) {
+        private ExampleWriter(final String language, final DisplayLocale locale, final String exampleText) {
             this.language = language;
             this.locale = locale;
+            this.exampleText = exampleText;
         }
 
         private String create(final IRI type) {
@@ -404,7 +407,7 @@ public final class DescribeService implements DescribeResourceType {
 
         private Optional<String> value(final FieldDescription field) {
             return switch (field.kind()) {
-                case TEXT -> Optional.of("\"" + EXAMPLE_TEXT + "\"@" + language);
+                case TEXT -> Optional.of("\"" + exampleText + "\"@" + language);
                 case VALUE -> Optional.of(literal(field.datatype()));
                 case CHOICE -> field.allowedValues().stream().findFirst();
                 case REFERENCE -> reference(field);
