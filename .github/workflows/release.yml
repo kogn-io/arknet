@@ -11,12 +11,14 @@ name: Release (manual, version-gated Docker image)
 # fixed, reproducible daemon. Independent of the Maven `<revision>` property (stays
 # SNAPSHOT decoration -- no Maven artifact is deployed) and independent of the
 # plugin-marketplace release, which lives in its own repository now. The last step
-# of this job does bump `<revision>` to the next minor SNAPSHOT on `main`, purely to
-# keep that decoration from lagging the tag -- it is unrelated to the Docker image.
+# of the separate bump-revision job does bump `<revision>` to the next minor
+# SNAPSHOT on `main`, purely to keep that decoration from lagging the tag -- it is
+# unrelated to the Docker image.
 #
 # Uses the built-in GITHUB_TOKEN (contents: write, packages: write below) for the
 # image push, the tag push and the GitHub release object -- no dedicated release
-# secret needed.
+# secret needed. The ontology publish (publish-ontology.yml, Pages) is a called
+# workflow with its own job-level permissions (pages: write, id-token: write).
 
 on:
   workflow_dispatch:
@@ -111,11 +113,19 @@ jobs:
         run: |
           gh release create "v$VERSION" --title "v$VERSION" --verify-tag --generate-notes
 
+  bump-revision:
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Bump <revision> to the next minor SNAPSHOT
         env:
           VERSION: ${{ inputs.version }}
-        # Runs last, after the release is fully cut -- a failure here never
-        # invalidates the release itself, since the tag was already pushed above.
+        # Runs in its own job after the release is fully cut -- a failure here never
+        # invalidates the release itself, since the tag was already pushed, and never
+        # blocks the ontology publish, which depends on the release job only.
         #
         # The target is derived from the released version (X.Y.Z -> X.(Y+1).0-SNAPSHOT),
         # not read off the current pom.xml value, so a patch release (X.Y.Z, Z>0)
@@ -151,3 +161,15 @@ jobs:
           git add pom.xml
           git commit -m "chore: bump revision to $NEXT after v$VERSION"
           git push origin HEAD:main
+
+  publish-ontology:
+    # Pages deployment of the ontology and shape files of the new tag; runs after
+    # the release job cut tag and release object, independent of the revision bump.
+    needs: release
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/publish-ontology.yml
+    with:
+      ref: v${{ inputs.version }}

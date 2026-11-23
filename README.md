@@ -583,6 +583,8 @@ Not created yet (no file at all, just an intended future namespace):
 |--------|--------|----------|
 | `arknet-tech.ttl` | `arktech:` | Service, Container, API, Database (planned) |
 
+The ontology and shape files of the most recently published release are served flat under `https://kogn-io.github.io/arknet/ontology/<file>.ttl` (GitHub Pages); every `.ttl` under a module's `src/main/resources/` is copied there, parked modules included.
+
 ## Architecture
 
 Pipes & Filters (**not implemented** -- no generating output path, store-first
