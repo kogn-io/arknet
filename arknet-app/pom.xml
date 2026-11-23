@@ -222,6 +222,16 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- Schreib-Engine des generischen Ressourcenzugriffs, nur fuer SubmitOnTypedStoreDataTest:
+             submit auf Bestand, den die typgenauen Kerne geschrieben haben, ueber denselben
+             DatasetLifecycle. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-resource-access-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
