@@ -26,10 +26,12 @@ Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context; von den Klassen
   Sie liegt im Core statt neben den `Ark*Vocabulary`-Klassen von `arknet-persistence-support`, weil jene die Namespaces der Kontexte spiegeln und diese die Sprache der Komponente selbst ist.
   Die Ontologie-Seite ist `arknet-ontology/src/main/resources/arknet-resource.ttl`.
   `domain.ResourceSchema` liest die Regeldaten aus den Shapes: Ressourcentypen mit Code-Praefix (an der Klasse), besessene Felder mit Kind-Art und Ordnungs-Property (an der Property-Shape, das Feld ist ihr `sh:path`).
-  `domain.SubmittedDocument` liest die Aktivitaeten eines geparsten Dokuments und lehnt ab, was ohne Store entscheidbar ist, darunter jedes Tripel, das zu keiner Aktivitaet gehoert.
+  Ein besessenes Feld ohne `sh:class` fuer seine Kinder bricht den Aufbau des Schemas ab: erst die Klasse macht ein Kind zum Fokusknoten seiner Node-Shape, und die Engine typisiert jedes neue Kind mit ihr (ein anders getyptes Kind lehnt sie ab).
+  `domain.SubmittedDocument` liest die Aktivitaeten eines geparsten Dokuments und lehnt ab, was ohne Store entscheidbar ist: jedes Tripel, das zu keiner Aktivitaet gehoert, einen Blank Node als Gegenstand zweier Creates, einen Zyklus aus Blank Nodes ausserhalb der neuen Ressourcen.
   `application.SubmitService` implementiert den In-Port `SubmitDocument`; `DocumentApplication` baut je beruehrter Ressource den Slice nach dem Dokument und nennt die Writes auf dem Batch.
 - `arknet-resource-access-adapter-kogniordf`: Out-Adapter gegen den kognio-rdf-Store.
   `KognioRdfResourceRepositoryFactory` ist die einzige Klasse mit RDF4J: sie laedt die fuenf Shape-Dateien der Modellressourcen und die Modell-Ontologien per Dateiname vom Classpath (ohne `project-shapes.ttl`, das System-Dataset schreibt die Komponente nicht), baut daraus ein Gate und den Funnel und liefert Schema und Turtle-Parser fuer den Kern.
+  `KognioRdfResourceRepositoryFactoryTest` gleicht die Dateiliste gegen das ab, was `arknet-ontology` ausliefert.
   `KognioRdfResourceRepository` setzt `ResourceRepository` auf `VersionedWriteFunnel#writeAll` um.
 - `arknet-resource-access-adapter-mcp`: treibender Adapter mit den MCP-Werkzeugen; sieht vom Core nur `..application.port.in..` und keine RDF-Technologie.
   `McpAdapterModule` ist die einzige Klasse: sie gibt `ResourceAccessNamesNoModelNamespaceTest` eine Klasse im Modul, damit der Namespace-Scan es nachweislich erfasst, und entfaellt mit dem ersten Werkzeug.
@@ -38,6 +40,7 @@ Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context; von den Klassen
 
 Ein Dokument ist eine Tripelmenge ohne Reihenfolge und wird ganz oder gar nicht angewendet (ADR-59), in einem `writeAll`-Batch, mit je geaenderter Ressource einer Revision (ADR-66).
 Die Engine baut zuerst alle Slices nach dem Dokument aus dem Stand davor, dann nennt sie die Writes; keine Aktivitaet sieht die Wirkung einer anderen.
+Zwei Aktivitaeten auf demselben Feld einer Ressource, deren Ergebnis von ihrer Reihenfolge abhinge, lehnt sie ab; unabhaengig sind nur Sets verschiedener Sprachen und Listen-Aenderungen verschiedener Werte.
 Eine neue Ressource steht im Dokument als Blank Node, die Engine vergibt IRI und, bei einem Typ mit Praefix, den naechsten freien Code ueber lebende und von geloeschten Ressourcen gehaltene Codes.
 Ein besessenes Kind ist das Fragment `<Ressource>#<Art>-<Id>` und behaelt seinen Namen ueber jeden Write, der es behaelt; Positionen werden bei jedem Write auf das Feld lueckenlos ab 1 vergeben, die eines entfernten Kindes zaehlen im Stand vor dem Dokument.
 Ein Update nennt keinen erwarteten Stand, wie die typgenauen Werkzeuge: ein verlorener Commit laesst die Engine das ganze Dokument gegen den neuen Stand noch einmal anwenden, hoechstens `SubmitService.MAX_ATTEMPTS`-mal.

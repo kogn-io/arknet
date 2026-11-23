@@ -292,7 +292,8 @@ rshapes:UseCase-extensionStep
     a sh:PropertyShape ;
     sh:path     arkreq:extensionStep ;
     sh:nodeKind sh:IRI ;
-    sh:message  "arkreq:extensionStep must reference a step of an extension (IRI)."@en , "arkreq:extensionStep muss auf einen Schritt einer Erweiterung verweisen (IRI)."@de ;
+    sh:class    arkreq:Step ;
+    sh:message  "arkreq:extensionStep must reference a step of an extension (arkreq:Step, IRI)."@en , "arkreq:extensionStep muss auf einen Schritt einer Erweiterung verweisen (arkreq:Step, IRI)."@de ;
     sh:severity sh:Violation .
 
 

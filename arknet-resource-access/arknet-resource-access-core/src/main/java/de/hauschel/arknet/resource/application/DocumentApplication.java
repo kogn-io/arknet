@@ -181,10 +181,10 @@ final class DocumentApplication {
     private Graph changedSlice(final IRI subject, final Graph slice, final List<Activity> activities) {
         Map<IRI, Set<Integer>> removedChildren = new HashMap<>();
         Map<IRI, List<BlankNode>> addedChildren = new LinkedHashMap<>();
-        Set<String> setKeys = new HashSet<>();
+        rejectConflictingFieldWrites(subject, activities);
         for (Activity activity : activities) {
             switch (activity) {
-                case Update update -> applyUpdate(subject, slice, update, setKeys);
+                case Update update -> applyUpdate(subject, slice, update);
                 case AddTo addTo -> applyAddTo(subject, slice, addTo, addedChildren);
                 case RemoveFrom removeFrom -> applyRemoveFrom(subject, slice, removeFrom, removedChildren);
                 default -> problems.add(subject.getIRIString() + " is deleted and changed in the same document");
@@ -200,7 +200,53 @@ final class DocumentApplication {
         return slice;
     }
 
-    private void applyUpdate(final IRI subject, final Graph slice, final Update update, final Set<String> setKeys) {
+    /**
+     * Rejects two activities on one field of one resource whose result would depend on the order they
+     * are applied in - the document has none. Independent are only: sets of distinct languages, and
+     * add-to/remove-from of distinct values of a list. A clear, a set without language tag, or a list
+     * change next to any other write of the same field is a contradiction.
+     */
+    private void rejectConflictingFieldWrites(final IRI subject, final List<Activity> activities) {
+        Map<IRI, List<String>> writesByField = new LinkedHashMap<>();
+        for (Activity activity : activities) {
+            switch (activity) {
+                case Update update -> {
+                    update.clears().forEach(field -> writesByField.computeIfAbsent(field, key -> new ArrayList<>())
+                            .add("clear"));
+                    for (BlankNode values : update.sets()) {
+                        Map<IRI, Set<String>> languages = new LinkedHashMap<>();
+                        source.stream(values, null, null).forEach(triple -> languages
+                                .computeIfAbsent(triple.getPredicate(), key -> new HashSet<>())
+                                .add(languageOf(triple.getObject()).map(tag -> "set@" + tag).orElse("set")));
+                        languages.forEach((field, tags) -> writesByField
+                                .computeIfAbsent(field, key -> new ArrayList<>())
+                                .addAll(tags.contains("set") ? Set.of("set") : tags));
+                    }
+                }
+                case AddTo addTo when schema.ownedField(addTo.field()).isEmpty() -> writesByField
+                        .computeIfAbsent(addTo.field(), key -> new ArrayList<>()).add("list " + addTo.value());
+                case RemoveFrom removeFrom when removeFrom.value().isPresent() -> writesByField
+                        .computeIfAbsent(removeFrom.field(), key -> new ArrayList<>())
+                        .add("list " + removeFrom.value().get());
+                default -> {
+                }
+            }
+        }
+        writesByField.forEach((field, writes) -> {
+            Set<String> kinds = new HashSet<>();
+            writes.forEach(write -> kinds.add(write.startsWith("set@") ? "set@" : write.startsWith("list ")
+                    ? "list" : write));
+            boolean repeated = new HashSet<>(writes).size() < writes.size() && !kinds.equals(Set.of("clear"));
+            if (kinds.size() > 1 || repeated) {
+                problems.add("the activities on " + field.getIRIString() + " of " + subject.getIRIString()
+                        + " contradict each other: a document has no order, so a field takes either one clear, or"
+                        + " one set without language tag, or sets of distinct languages, or changes of distinct"
+                        + " list values");
+            }
+        });
+    }
+
+    private void applyUpdate(final IRI subject, final Graph slice, final Update update) {
         for (IRI field : update.clears()) {
             if (writable(subject, field)) {
                 removeValues(slice, subject, field, object -> true);
@@ -218,10 +264,6 @@ final class DocumentApplication {
                 Set<Optional<String>> languages = new HashSet<>();
                 newValues.forEach(value -> languages.add(languageOf(value)));
                 for (Optional<String> language : languages) {
-                    if (!setKeys.add(field.getIRIString() + "@" + language.orElse("*"))) {
-                        problems.add("two updates in the document set " + field.getIRIString() + " of "
-                                + subject.getIRIString() + language.map(tag -> " in language " + tag).orElse(""));
-                    }
                     removeValues(slice, subject, field, old -> language.isEmpty()
                             || language.equals(languageOf(old)));
                 }
@@ -314,14 +356,16 @@ final class DocumentApplication {
     private void addNewChild(final Graph slice, final IRI subject, final OwnedField field, final BlankNode child,
             final IRI name, final int position) {
         slice.add(subject, field.property(), name);
+        source.stream(child, VocabRdf.TYPE, null).map(Triple::getObject)
+                .filter(type -> !field.childClass().equals(type))
+                .forEach(type -> problems.add("a child in " + field.property().getIRIString() + " is a "
+                        + field.childClass().getIRIString() + " and nothing else, not " + type));
         source.stream(child, null, null).forEach(triple -> {
-            if (!triple.getPredicate().equals(field.orderedBy())) {
+            if (!triple.getPredicate().equals(field.orderedBy()) && !VocabRdf.TYPE.equals(triple.getPredicate())) {
                 addValue(slice, name, triple.getPredicate(), triple.getObject());
             }
         });
-        if (source.stream(child, VocabRdf.TYPE, null).findAny().isEmpty()) {
-            field.childClass().ifPresent(type -> slice.add(name, VocabRdf.TYPE, type));
-        }
+        slice.add(name, VocabRdf.TYPE, field.childClass());
         setPosition(slice, name, field, position);
     }
 

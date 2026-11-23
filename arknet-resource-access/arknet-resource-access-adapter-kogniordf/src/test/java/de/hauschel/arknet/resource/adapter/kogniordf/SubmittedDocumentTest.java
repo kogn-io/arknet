@@ -79,6 +79,27 @@ class SubmittedDocumentTest {
     }
 
     @Test
+    void aCycleOfInlineBlankNodesIsRejected() {
+        assertRejected("cycle", "[] a arkres:Create ; arkres:object _:t .\n"
+                + "_:t a skos:Concept ; skos:prefLabel \"A\"@en ; skos:note _:a .\n"
+                + "_:a skos:related _:b .\n_:b skos:related _:a .");
+    }
+
+    @Test
+    void newResourcesMayReferToEachOtherInACycle() {
+        assertEquals(2, SubmittedDocument.of(parse(SubmitRealStoreTest.PREFIXES
+                + "[] a arkres:Create ; arkres:object _:a .\n[] a arkres:Create ; arkres:object _:b .\n"
+                + "_:a a skos:Concept ; skos:prefLabel \"A\"@en ; skos:related _:b .\n"
+                + "_:b a skos:Concept ; skos:prefLabel \"B\"@en ; skos:related _:a ."), SCHEMA).creates().size());
+    }
+
+    @Test
+    void oneBlankNodeIsCreatedOnce() {
+        assertRejected("two creates", "[] a arkres:Create ; arkres:object _:t .\n"
+                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"A\"@en .");
+    }
+
+    @Test
     void anUnparseableDocumentIsRejected() {
         SubmitService service = new SubmitService(SCHEMA, (projectId, writes) -> {
             throw new AssertionError("an unparseable document reaches the store");

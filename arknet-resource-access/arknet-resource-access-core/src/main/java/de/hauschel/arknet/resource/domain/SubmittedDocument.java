@@ -6,6 +6,7 @@ package de.hauschel.arknet.resource.domain;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -91,6 +92,17 @@ public final class SubmittedDocument {
             problems.add("the document states no activity: give at least one node typed "
                     + ArkresVocabulary.CREATE + ", " + ArkresVocabulary.UPDATE + ", " + ArkresVocabulary.ADD_TO
                     + ", " + ArkresVocabulary.REMOVE_FROM + " or " + ArkresVocabulary.DELETE);
+        }
+        Set<BlankNode> createObjects = new HashSet<>();
+        creates.forEach(create -> {
+            if (!createObjects.add(create.object())) {
+                problems.add("one blank node is the " + ArkresVocabulary.OBJECT + " of two creates; each new"
+                        + " resource is created once");
+            }
+        });
+        if (hasBlankNodeCycle(graph, createObjects)) {
+            problems.add("blank nodes in the document form a cycle; a value written inline is a tree, and new"
+                    + " resources refer to each other through their own blank nodes only");
         }
         changes.forEach((object, activities) -> {
             if (activities.size() > 1 && activities.stream().anyMatch(Delete.class::isInstance)) {
@@ -278,6 +290,43 @@ public final class SubmittedDocument {
 
     private static List<RDFTerm> values(final ReadableGraph graph, final BlankNodeOrIRI node, final IRI property) {
         return graph.stream(node, property, null).map(Triple::getObject).toList();
+    }
+
+    /**
+     * Whether blank nodes other than new resources reach themselves again - inline values and children
+     * are trees; only the new resources of the document may refer to each other in a cycle.
+     */
+    private static boolean hasBlankNodeCycle(final ReadableGraph graph, final Set<BlankNode> createObjects) {
+        Map<BlankNode, Boolean> onPath = new HashMap<>();
+        for (Triple triple : graph.stream().toList()) {
+            if (triple.getSubject() instanceof BlankNode node && !createObjects.contains(node)
+                    && reachesItself(graph, node, createObjects, onPath)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean reachesItself(final ReadableGraph graph, final BlankNode node,
+            final Set<BlankNode> createObjects, final Map<BlankNode, Boolean> onPath) {
+        Boolean visiting = onPath.get(node);
+        if (visiting != null) {
+            return visiting;
+        }
+        onPath.put(node, Boolean.TRUE);
+        for (BlankNode child : children(graph, node, createObjects)) {
+            if (reachesItself(graph, child, createObjects, onPath)) {
+                return true;
+            }
+        }
+        onPath.put(node, Boolean.FALSE);
+        return false;
+    }
+
+    private static List<BlankNode> children(final ReadableGraph graph, final BlankNode node,
+            final Set<BlankNode> createObjects) {
+        return graph.stream(node, null, null).map(Triple::getObject).filter(BlankNode.class::isInstance)
+                .map(BlankNode.class::cast).filter(child -> !createObjects.contains(child)).toList();
     }
 
     private static List<Triple> strayTriples(final ReadableGraph graph, final Set<BlankNodeOrIRI> activityNodes) {

@@ -391,6 +391,104 @@ class SubmitRealStoreTest {
         assertEquals(Set.of("Old.@en", "Neu.@de"), fields(term).get("http://www.w3.org/2004/02/skos/core#definition"));
     }
 
+    static Stream<Arguments> everyOwnedField() {
+        return Stream.of(
+                Arguments.of("arkreq:UseCase ; dcterms:title \"Model\"@en ; arkreq:useCaseGoal \"Recorded.\"@en ;"
+                        + " arkreq:primaryRole <ROLE> ; arkreq:extensionStep", "arkreq:position 1 ; arkreq:stepText"),
+                Arguments.of("arkreq:UseCase ; dcterms:title \"Model\"@en ; arkreq:useCaseGoal \"Recorded.\"@en ;"
+                        + " arkreq:primaryRole <ROLE> ; arkreq:mainStep", "arkreq:position 1 ; arkreq:stepText"),
+                Arguments.of("arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ;"
+                        + " dcterms:description \"Writes it.\"@en ; arkreq:acceptanceCriterion",
+                        "arkreq:position 1 ; arkreq:criterionText"),
+                Arguments.of("arkarch:ArchitectureDecisionRecord ; arknet:name \"Use RDF\"@en ;"
+                        + " arkarch:adrStatus arkarch:Proposed ; arkarch:adrContext \"Needs links.\"@en ;"
+                        + " arkarch:adrDecision \"Use RDF.\"@en ; arkarch:consequence",
+                        "arknet:position 1 ; arkarch:consequenceType arkarch:Positive ; arkarch:consequenceStatement"),
+                Arguments.of("arkarch:ArchitectureDecisionRecord ; arknet:name \"Use RDF\"@en ;"
+                        + " arkarch:adrStatus arkarch:Proposed ; arkarch:adrContext \"Needs links.\"@en ;"
+                        + " arkarch:adrDecision \"Use RDF.\"@en ; arkarch:consideredOption",
+                        "arknet:position 1 ; arknet:name \"RDF\"@en ; arkarch:optionOutcome arkarch:Chosen ;"
+                                + " arkarch:optionRationale"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("everyOwnedField")
+    void anUntypedChildIsValidatedByTheShapeOfItsField(final String ownerAndField, final String childFields) {
+        // given
+        String role = iriOf(submit.submit(PROJECT, PREFIXES
+                + "[] a arkres:Create ; arkres:object _:r .\n_:r a arkproc:Role ; arknet:name \"Modeller\"@en .\n"),
+                "ROLE-1");
+        String owner = "[] a arkres:Create ; arkres:object _:new .\n_:new a " + ownerAndField.replace("ROLE", role);
+
+        // when - a child without rdf:type whose text breaks its shape (too short, twice in one language)
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT,
+                PREFIXES + owner + " [ " + childFields + " \"x\"@en , \"y\"@en ] .\n"));
+
+        // then
+        assertTrue(rejected.getMessage().contains("#"), rejected.getMessage());
+        assertEquals(List.of(), reader.findByIdentifier(PROJECT, "UC1"));
+        assertEquals(List.of(), reader.findByIdentifier(PROJECT, "FR-1"));
+        assertEquals(List.of(), reader.findByIdentifier(PROJECT, "ADR-1"));
+    }
+
+    @Test
+    void aChildTypedWithAnotherClassThanItsFieldRequiresIsRejected() {
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT,
+                PREFIXES + "[] a arkres:Create ; arkres:object _:fr .\n"
+                        + "_:fr a arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ;"
+                        + " dcterms:description \"Writes it.\"@en ; arkreq:acceptanceCriterion"
+                        + " [ a arkreq:Step ; arkreq:position 1 ; arkreq:criterionText \"It works.\"@en ] .\n"));
+
+        // then
+        assertTrue(rejected.getMessage().contains(REQ + "AcceptanceCriterion"), rejected.getMessage());
+        assertTrue(reader.findByIdentifier(PROJECT, "FR-1").isEmpty());
+    }
+
+    static Stream<Arguments> contradictingWrites() {
+        return Stream.of(
+                Arguments.of("arkres:set [ skos:definition \"Plain.\" ] .\n[] a arkres:Update ; arkres:object <T> ;"
+                        + " arkres:set [ skos:definition \"Deutsch.\"@de ]"),
+                Arguments.of("arkres:clear skos:definition .\n[] a arkres:Update ; arkres:object <T> ;"
+                        + " arkres:set [ skos:definition \"New.\"@en ]"),
+                Arguments.of("arkres:set [ skos:related <T> ] .\n[] a arkres:AddTo ; arkres:object <T> ;"
+                        + " arkres:field skos:related ; arkres:value <T>"),
+                Arguments.of("arkres:set [ skos:definition \"One.\"@en ] .\n[] a arkres:Update ;"
+                        + " arkres:object <T> ; arkres:set [ skos:definition \"Two.\"@en ]"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("contradictingWrites")
+    void twoActivitiesWhoseOrderWouldDecideTheResultAreRejected(final String rest) {
+        // given
+        String term = iriOf(submit.submit(PROJECT, PREFIXES + "[] a arkres:Create ; arkres:object _:t .\n"
+                + "_:t a skos:Concept ; skos:prefLabel \"Resource\"@en ; skos:definition \"Old.\"@en .\n"), "TERM-1");
+
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT,
+                PREFIXES + ("[] a arkres:Update ; arkres:object <T> ; " + rest + " .\n").replace("<T>",
+                        "<" + term + ">")));
+
+        // then
+        assertTrue(rejected.getMessage().contains("contradict"), rejected.getMessage());
+        assertEquals(1, history(term).size());
+    }
+
+    @Test
+    void setsOfDistinctLanguagesOnOneFieldAreIndependent() {
+        // given
+        String term = iriOf(submit.submit(PROJECT, PREFIXES + "[] a arkres:Create ; arkres:object _:t .\n"
+                + "_:t a skos:Concept ; skos:prefLabel \"Resource\"@en ; skos:definition \"Old.\"@en .\n"), "TERM-1");
+
+        // when
+        submit.submit(PROJECT, PREFIXES + "[] a arkres:Update ; arkres:object <" + term + "> ;"
+                + " arkres:set [ skos:definition \"New.\"@en ] .\n[] a arkres:Update ; arkres:object <" + term + "> ;"
+                + " arkres:set [ skos:definition \"Neu.\"@de ] .\n");
+
+        // then
+        assertEquals(Set.of("New.@en", "Neu.@de"), fields(term).get("http://www.w3.org/2004/02/skos/core#definition"));
+    }
+
     static String iriOf(final SubmitResult result, final String code) {
         return result.changes().stream().filter(change -> code.equals(change.code())).findFirst().orElseThrow().iri();
     }
