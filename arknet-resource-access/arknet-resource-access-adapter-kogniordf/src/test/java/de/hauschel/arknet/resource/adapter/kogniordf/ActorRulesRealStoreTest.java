@@ -86,7 +86,7 @@ class ActorRulesRealStoreTest {
         assertEquals("ACTOR-1", result.changes().get(0).code());
     }
 
-    /** Every text {@code String#isBlank()} calls blank, as a Turtle string escape. */
+    /** Every text made only of whitespace, separators or control characters, as a Turtle string escape. */
     static Stream<Arguments> blankTexts() {
         final Stream.Builder<Arguments> out = Stream.builder();
         for (final String type : new String[] {"arkproc:HumanActor", "arkproc:Role"}) {

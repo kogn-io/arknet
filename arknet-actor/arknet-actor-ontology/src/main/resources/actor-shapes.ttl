@@ -116,7 +116,7 @@ actshapes:Role-description
     sh:minLength 1 ;
     sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
-    sh:message  "A Role's 'arknet:description' is optional. sh:uniqueLang allows at most one arknet:description per non-empty language tag - two descriptions sharing the same tag are not allowed, but DIFFERENT language tags are (a role may be described in several languages)."@en , "Die 'arknet:description' einer Rolle ist optional, darf aber, wenn vorhanden, nicht leer und nicht nur Leerraum sein. sh:uniqueLang erlaubt hoechstens eine arknet:description je nicht-leerem Sprach-Tag - zwei Beschreibungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Rolle darf mehrsprachig beschrieben sein)."@de ;
+    sh:message  "A Role's 'arknet:description' is optional, but when present it must not be empty or only whitespace. sh:uniqueLang allows at most one arknet:description per non-empty language tag - two descriptions sharing the same tag are not allowed, but DIFFERENT language tags are (a role may be described in several languages)."@en , "Die 'arknet:description' einer Rolle ist optional, darf aber, wenn vorhanden, nicht leer und nicht nur Leerraum sein. sh:uniqueLang erlaubt hoechstens eine arknet:description je nicht-leerem Sprach-Tag - zwei Beschreibungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Rolle darf mehrsprachig beschrieben sein)."@de ;
     sh:severity sh:Violation .
 
 #  sh:class arkproc:Actor: the target must be an actor. The type triples of the target live

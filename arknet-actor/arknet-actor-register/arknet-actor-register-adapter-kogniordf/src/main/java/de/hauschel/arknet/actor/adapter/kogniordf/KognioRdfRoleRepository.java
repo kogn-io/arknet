@@ -63,10 +63,8 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  * kogn-io/arknet#405), sitting alongside {@link KognioRdfActorRepository} in the same package and
  * sharing its {@link ShaclWriteGate}/{@link VersionedWriteFunnel} (see
  * {@link KognioRdfRoleRepositoryFactory}): both resource types' shapes and axioms already live in
- * {@code actor-shapes.ttl}/{@code arknet-actor.ttl}. Its own named graph, though - {@link
- * #ROLE_GRAPH} ({@code .../model/roles}) is distinct from {@link KognioRdfActorRepository}'s
- * {@code .../model/actors}, since a shared gate (file-based: shapes + axioms) does not require a
- * shared graph (a {@link VersionedWriteFunnel} call is parameterised by graph on every invocation).
+ * {@code actor-shapes.ttl}/{@code arknet-actor.ttl}. Both write into the one content graph
+ * ({@link ContentGraph#GRAPH_IRI}) every component of a project shares.
  *
  * <p>Maps a {@link Role} to its opaque {@link RoleId} as the subject IRI: {@code arkproc:Role},
  * the mandatory {@code dcterms:identifier} (the business code {@code ROLE-1}), one or more
@@ -188,7 +186,7 @@ public class KognioRdfRoleRepository implements RoleRepository {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             for (ActorId occupant : role.filledBy()) {
                 IRI occupantIri = rdf.createIRI(occupant.value().value());
-                String query = "SELECT ?p ?o WHERE { GRAPH <" + ROLE_GRAPH + "> { "
+                String query = "SELECT ?p ?o WHERE { GRAPH <" + ContentGraph.GRAPH_IRI + "> { "
                         + SparqlTerms.iriRef(occupantIri.getIRIString()) + " ?p ?o } }";
                 handle.sparqlQuery().select(query).forEach(row -> context.add(
                         occupantIri, (IRI) row.getValue("p").orElseThrow(), row.getValue("o").orElseThrow()));

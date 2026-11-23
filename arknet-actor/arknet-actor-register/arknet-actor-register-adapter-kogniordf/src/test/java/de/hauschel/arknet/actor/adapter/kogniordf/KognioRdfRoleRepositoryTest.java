@@ -25,6 +25,7 @@ import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
+import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
@@ -327,14 +328,19 @@ class KognioRdfRoleRepositoryTest {
         Graph candidate = rdf.createGraph();
         candidate.add(subject, VocabRdf.TYPE, rdf.createIRI(ROLE_TYPE));
         candidate.add(subject, rdf.createIRI(NAME_PROPERTY), rdf.createLiteral("Requirements Engineer", "en"));
-        candidate.add(subject, rdf.createIRI(FILLED_BY_PROPERTY), rdf.createBlankNode());
+        BlankNode target = rdf.createBlankNode();
+        candidate.add(subject, rdf.createIRI(FILLED_BY_PROPERTY), target);
+        // a valid actor slice, so that only sh:nodeKind can reject the target
+        Graph context = rdf.createGraph();
+        context.add(target, VocabRdf.TYPE, rdf.createIRI(ArkprocVocabulary.HUMAN_ACTOR_TYPE));
+        context.add(target, rdf.createIRI(NAME_PROPERTY), rdf.createLiteral("Architect", "en"));
 
         ShaclWriteGate gate = KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
-        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
+        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate, context));
     }
 
-    /** The counterpart: an IRI target passes. */
+    /** The counterpart: an IRI target that is an actor carrying its slice passes. */
     @Test
     void gateAcceptsAFilledByTargetThatIsAnActorCarryingItsSlice() {
         RDF rdf = new SimpleRdf();
