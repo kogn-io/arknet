@@ -59,7 +59,7 @@ class DescribeRealStoreTest {
         submit = new SubmitService(KognioRdfResourceRepositoryFactory.schema(),
                 KognioRdfResourceRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT),
                 KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
-                KognioRdfResourceRepositoryFactory.prefixes());
+                KognioRdfResourceRepositoryFactory.prefixes(), KognioRdfResourceRepositoryFactory.handles(lifecycle));
     }
 
     @AfterEach
