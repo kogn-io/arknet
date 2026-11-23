@@ -149,6 +149,7 @@ class DescribeRealStoreTest {
         assertTrue(description.changeExamples().stream()
                 .allMatch(change -> change.document().contains("arkres:object " + ChangeExample.PLACEHOLDER)
                         && !change.document().contains("<FR-1>")
+                        && change.document().contains("by <FR-12> (its code) or <IRI>, in angle brackets")
                         && change.document().contains("@prefix arkres: <https://w3id.org/arknet/resource#> .")),
                 description.changeExamples().toString());
     }

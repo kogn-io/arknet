@@ -316,9 +316,9 @@ public final class DescribeService implements DescribeResourceType {
             final DisplayLocale locale) {
         String language = language(locale);
         String object = ChangeExample.PLACEHOLDER;
-        String note = "# Replace " + object + codePrefix(type).map(prefix -> " by the code (such as " + prefix
-                + "12) or the IRI").orElse(" by the IRI")
-                + " submit returned for the resource of the create example.\n";
+        String note = "# Replace " + object + " by " + codePrefix(type).map(prefix -> "<" + prefix + "12> (its code)"
+                + " or <IRI>").orElse("<IRI>") + ", in angle brackets, as submit returned it for the resource of"
+                + " the create example.\n";
         List<ChangeExample> examples = new ArrayList<>();
         updateValue(fields, language).ifPresent(set -> examples.add(change(ArkresVocabulary.UPDATE, note,
                 activity(ArkresVocabulary.UPDATE, object) + " ;\n    " + abbreviated(ArkresVocabulary.SET)

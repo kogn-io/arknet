@@ -80,7 +80,7 @@ public final class ResourceAccessMcpTools {
                     + " kind, the edges to other resources, the children it owns, the rules of its shapes in"
                     + " plain sentences, an example document that creates one resource of the type and"
                     + " runs as it stands, and documents that update, add to, remove from and delete that"
-                    + " resource after it, once their placeholder is replaced by the code or IRI the create"
+                    + " resource after it, once their placeholder is replaced by <CODE> or <IRI> the create"
                     + " returned. Call it before writing a document for a type you have not written"
                     + " yet.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
@@ -168,7 +168,8 @@ public final class ResourceAccessMcpTools {
                 .append(description.example());
         description.changeExamples().forEach(change -> out.append("\nThen ").append(change.activity())
                 .append(" (runs after the documents above, after replacing ").append(ChangeExample.PLACEHOLDER)
-                .append(" with the code or IRI the create returned):\n").append(change.document()));
+                .append(" with <CODE> or <IRI>, in angle brackets, as the create returned it):\n")
+                .append(change.document()));
         out.append("\nPrefixes behind every name above:\n").append(description.prefixDeclarations());
         return out.toString();
     }
