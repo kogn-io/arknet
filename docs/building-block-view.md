@@ -224,7 +224,7 @@ its own core only; no module of a Component depends on a module of another.
   MCP tools for both and their wiring in the composition root
   (`ArknetMcpConfiguration.ResourceAccessConfiguration`) exist. The wiring is conditional on
   `arknet.resource-access.enabled=true`, which is off by default, so `describe` and `submit`
-  are not registered until #746 sets the property. #743 moves the generic read tools
+  are not offered before #746. #743 moves the generic read tools
   (`resource_get`, `resource_history`, `text_search`) out of the composition root (ADR-69).
 - #77: the building-block view moves into the store; this file goes away. Before
   that, a successor of ADR-46 (components move from "outside" to "not yet built"),
