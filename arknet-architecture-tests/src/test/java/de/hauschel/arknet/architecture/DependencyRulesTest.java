@@ -5,11 +5,14 @@ package de.hauschel.arknet.architecture;
 
 import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import java.util.Arrays;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -63,7 +66,9 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
  * trusting it. All six were confirmed to fail this way when introduced. Rule 13 is broken the
  * same way, by naming a neighbour's type in a {@code de.hauschel.arknet.analysis} class, and
  * rule 14 by naming {@code VersionedWriteFunnel} there, rule 15 by calling
- * {@code importPublishedPastGate} from any class but the startup migration. Rule 12 is the one
+ * {@code importPublishedPastGate} from any class but the startup migration. Rule 16 is broken by
+ * naming a type of a bounded context in a {@code de.hauschel.arknet.resource} class, rule 17 by naming a class of that package from any
+ * bounded context, rule 18 by naming an RDF4J or Spring type in its core. Rule 12 is the one
  * rule that does not need the exercise: it turns red on any class in the kernel package whose
  * name is not on its list, which is the whole of what it claims.</p>
  *
@@ -506,6 +511,93 @@ class DependencyRulesTest {
                     .haveFullyQualifiedName("de.hauschel.arknet.mcp.dataset.LegacyLayoutMigration")
                     .because("every regular write faces the SHACL gate; only the one-time migration "
                             + "of an earlier storage layout may carry a stored record over as it is");
+
+    /**
+     * Rule 16 -- generic resource access names no module of a bounded context (ADR-69).
+     *
+     * <p>The component reads every resource type at runtime from the ontology and the shapes and
+     * belongs to no bounded context. The moment one of its classes names a type of a context, of a
+     * vocabulary module, or one of the {@code Ark*Vocabulary} classes that mirror a context's
+     * namespace, it has started to know a resource type in code -- the construction ADR-69 rules
+     * out. Its own vocabulary is {@code ArkresVocabulary} in its core, which this rule does not
+     * touch.</p>
+     *
+     * <p>ArchUnit sees types, not string constants: an IRI of a context's namespace written down as
+     * a literal leaves no dependency in the bytecode. The same holds for the {@code Ark*Vocabulary}
+     * classes, whose members are compile-time {@code String} constants: javac inlines a use such
+     * as {@code ArkreqVocabulary.REQUIREMENT}, so this rule catches only a non-constant use of
+     * such a class. {@code ResourceAccessNamesNoModelNamespaceTest} closes both gaps by scanning
+     * the class files themselves.</p>
+     */
+    @ArchTest
+    static final ArchRule resource_access_names_no_module_of_a_bounded_context =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.resource..")
+                    .should().dependOnClassesThat(resideInAnyPackage(boundedContextModulePackages())
+                            .or(aVocabularyMirrorOfABoundedContext()))
+                    .because("generic resource access reads every resource type at runtime from "
+                            + "the ontology and the shapes; a type of a bounded context in its code "
+                            + "is a resource type it knows at build time (ADR-69)");
+
+    /**
+     * Rule 17 -- only the composition root names generic resource access.
+     *
+     * <p>The component writes the resources of every bounded context; a context that depended on
+     * it would reach its neighbours' resources through it, past every boundary the module cut
+     * draws. The composition root wires it like every other component (ADR-70), and nothing else
+     * has a reason to name it.</p>
+     */
+    @ArchTest
+    static final ArchRule only_the_composition_root_names_resource_access =
+            noClasses()
+                    .that().resideOutsideOfPackages("de.hauschel.arknet.resource..",
+                            "de.hauschel.arknet.mcp..")
+                    .should().dependOnClassesThat().resideInAPackage("de.hauschel.arknet.resource..")
+                    .because("generic resource access is wired by the composition root and called "
+                            + "through its own tools, never by a bounded context");
+
+    /**
+     * Rule 18 -- the core of generic resource access stays free of RDF4J, Spring and the tool
+     * adapter support.
+     *
+     * <p>Rules 3 and 11 do not reach it: their package lists name the bounded contexts, and this
+     * component is none. Unlike a context's core it may know the technology-neutral kognio-rdf
+     * ports -- it works on triples by decision (ADR-69, consequence 4) -- so this rule bans only
+     * RDF4J itself and kognio-rdf's RDF4J-backed implementations, next to Spring and
+     * {@code arknet-mcp-support}.</p>
+     */
+    @ArchTest
+    static final ArchRule resource_access_core_stays_free_of_rdf4j_spring_and_tool_support =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.resource..")
+                    .and().resideOutsideOfPackage("..adapter..")
+                    .should().dependOnClassesThat().resideInAnyPackage(RDF4J_PACKAGES)
+                    .orShould().dependOnClassesThat().resideInAnyPackage(
+                            "org.springframework..", "de.hauschel.arknet.mcpsupport..")
+                    .because("the core of generic resource access works on the neutral RDF ports; "
+                            + "the store technology, the framework and the transport stay in its "
+                            + "adapters");
+
+    /** Every module of a bounded context: its components' packages and the vocabulary modules. */
+    private static String[] boundedContextModulePackages() {
+        return Stream.concat(Arrays.stream(BOUNDED_CONTEXT_PACKAGES),
+                Stream.of("de.hauschel.arknet.*.shared..")).toArray(String[]::new);
+    }
+
+    /**
+     * The {@code Ark*Vocabulary} classes of {@code arknet-persistence-support}: each mirrors the
+     * namespace of a bounded context as string constants.
+     */
+    private static DescribedPredicate<JavaClass> aVocabularyMirrorOfABoundedContext() {
+        return new DescribedPredicate<>("an Ark*Vocabulary class of arknet-persistence-support") {
+            @Override
+            public boolean test(final JavaClass input) {
+                final String name = topLevelSimpleName(input);
+                return "de.hauschel.arknet.persistence".equals(input.getPackageName())
+                        && name.startsWith("Ark") && name.endsWith("Vocabulary");
+            }
+        };
+    }
 
     private static DescribedPredicate<JavaClass> theWriteHalfOfThePersistenceSupport() {
         return new DescribedPredicate<>("the write half of arknet-persistence-support") {

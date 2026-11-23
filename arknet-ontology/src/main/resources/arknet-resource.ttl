@@ -1,0 +1,87 @@
+##############################################################################
+#  arknet - Architecture Knowledge Net
+#  Resource Access Ontology  :  Version 0.1.0
+#
+#  Namespace  : https://w3id.org/arknet/resource#
+#  License    : CC-BY-4.0
+#
+#  Scope: the vocabulary of generic resource access - the one component that
+#         belongs to no bounded context (ADR-69). It reads every resource
+#         type at runtime from the ontology and the shapes and names no class
+#         and no property of a bounded context. What it does name lives here:
+#         terms that mean the same in every bounded context.
+#
+#           [] a arkres:Create ;
+#              ...                       # a submitted activity
+#
+#  NOT A BOUNDED CONTEXT'S NAMESPACE: no resource of the architecture model
+#         is typed with a class of this namespace, and no bounded context
+#         writes into it. It describes how resources are accessed, not what
+#         they are.
+#
+#  VOCABULARY AHEAD OF ITS IMPLEMENTATION: the activity classes are declared
+#         before the write path that reads them exists; each carries its
+#         reason as skos:note (see arknet-ontology/CLAUDE.md).
+##############################################################################
+
+@prefix arkres:  <https://w3id.org/arknet/resource#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vann:    <http://purl.org/vocab/vann/> .
+
+# ============================================================
+#  Ontology Metadata
+# ============================================================
+
+<https://w3id.org/arknet/resource>
+    a owl:Ontology ;
+    dcterms:title    "arknet Resource Access Ontology"@en ;
+    dcterms:description "The vocabulary of generic resource access: the activities a submitted document consists of. Belongs to no bounded context; it names no class and no property of one."@en ;
+    dcterms:version  "0.1.0" ;
+    dcterms:created  "2026-11-23"^^xsd:date ;
+    dcterms:rights   "CC-BY-4.0" ;
+    vann:preferredNamespacePrefix "arkres" ;
+    vann:preferredNamespaceUri    "https://w3id.org/arknet/resource#" ;
+    owl:versionInfo  "0.1.0" .
+
+##############################################################################
+#  1. ACTIVITIES
+##############################################################################
+
+arkres:Activity a owl:Class ;
+    rdfs:label   "Activity"@en , "Aktivitaet"@de ;
+    rdfs:comment "One change to one resource, stated in a submitted document. A document consists of activities and is applied completely or not at all."@en , "Eine Aenderung an einer Ressource, ausgedrueckt in einem eingereichten Dokument. Ein Dokument besteht aus Aktivitaeten und wird ganz oder gar nicht angewendet."@de ;
+    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .
+
+arkres:Create a owl:Class ;
+    rdfs:subClassOf arkres:Activity ;
+    rdfs:label   "Create"@en , "Anlegen"@de ;
+    rdfs:comment "Creates a new resource of a resource type."@en , "Legt eine neue Ressource eines Ressourcentyps an."@de ;
+    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .
+
+arkres:Update a owl:Class ;
+    rdfs:subClassOf arkres:Activity ;
+    rdfs:label   "Update"@en , "Aendern"@de ;
+    rdfs:comment "Replaces values of fields of an existing resource."@en , "Ersetzt Werte von Feldern einer bestehenden Ressource."@de ;
+    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .
+
+arkres:AddTo a owl:Class ;
+    rdfs:subClassOf arkres:Activity ;
+    rdfs:label   "Add to"@en , "Hinzufuegen"@de ;
+    rdfs:comment "Adds values or child resources to a multi-valued field of an existing resource."@en , "Fuegt einem mehrwertigen Feld einer bestehenden Ressource Werte oder Kind-Ressourcen hinzu."@de ;
+    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .
+
+arkres:RemoveFrom a owl:Class ;
+    rdfs:subClassOf arkres:Activity ;
+    rdfs:label   "Remove from"@en , "Entfernen aus"@de ;
+    rdfs:comment "Removes values or child resources from a multi-valued field of an existing resource."@en , "Entfernt Werte oder Kind-Ressourcen aus einem mehrwertigen Feld einer bestehenden Ressource."@de ;
+    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .
+
+arkres:Delete a owl:Class ;
+    rdfs:subClassOf arkres:Activity ;
+    rdfs:label   "Delete"@en , "Loeschen"@de ;
+    rdfs:comment "Deletes an existing resource; its history is kept."@en , "Loescht eine bestehende Ressource; ihre Historie bleibt erhalten."@de ;
+    skos:note    "Declared, not yet read: no write path accepts activities. Deliberate vocabulary lead, not a leftover - the submit path of generic resource access reads it (kogn-io/arknet#741)."@en , "Deklariert, noch nicht gelesen: kein Schreibpfad nimmt Aktivitaeten an. Bewusster Vokabular-Vorlauf, keine Altlast - der submit-Pfad des generischen Ressourcenzugriffs liest ihn (kogn-io/arknet#741)."@de .

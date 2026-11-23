@@ -31,7 +31,8 @@ class OntologyVersionsTest {
                 "https://w3id.org/arknet/requirements",
                 "https://w3id.org/arknet/architecture",
                 "https://w3id.org/arknet/provenance",
-                "https://w3id.org/arknet/project");
+                "https://w3id.org/arknet/project",
+                "https://w3id.org/arknet/resource");
     }
 
     /** Every module must state a version; an empty one would be a silently useless envelope. */
