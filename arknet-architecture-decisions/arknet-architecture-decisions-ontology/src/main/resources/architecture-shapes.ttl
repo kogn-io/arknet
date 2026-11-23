@@ -33,6 +33,8 @@ ashapes:ADRShape
     sh:targetClass arkarch:ArchitectureDecisionRecord ;
     sh:property ashapes:ADR-identifier ;
     sh:property ashapes:ADR-name ;
+    sh:property ashapes:ADR-decisionDate ;
+    sh:sparql   ashapes:ADR-noSelfReference ;
     sh:property ashapes:ADR-status ;
     sh:property ashapes:ADR-context ;
     sh:property ashapes:ADR-decision ;
@@ -68,8 +70,10 @@ ashapes:ADR-name
     a sh:PropertyShape ;
     sh:path     arknet:name ;
     sh:minCount 1 ;
+    sh:minLength 1 ;
+    sh:pattern  "\\S" ;
     sh:uniqueLang true ;
-    sh:message  "An ADR needs an arknet:name (title of the decision). sh:uniqueLang allows at most one arknet:name per non-empty language tag."@en , "ADR braucht einen arknet:name (Titel der Entscheidung). sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag."@de ;
+    sh:message  "An ADR needs an arknet:name (title of the decision), not blank. sh:uniqueLang allows at most one arknet:name per non-empty language tag."@en , "ADR braucht einen arknet:name (Titel der Entscheidung), nicht leer. sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
 
 ashapes:ADR-status
@@ -87,8 +91,9 @@ ashapes:ADR-context
     sh:path     arkarch:adrContext ;
     sh:minCount 1 ;
     sh:minLength 5 ;
+    sh:pattern  "\\S" ;
     sh:uniqueLang true ;
-    sh:message  "An ADR must have an arkarch:adrContext (why was the decision necessary?). sh:uniqueLang allows at most one arkarch:adrContext per non-empty language tag."@en , "ADR muss einen arkarch:adrContext haben (warum war die Entscheidung noetig?). sh:uniqueLang erlaubt hoechstens einen arkarch:adrContext je nicht-leerem Sprach-Tag."@de ;
+    sh:message  "An ADR must have an arkarch:adrContext (why was the decision necessary?), not blank. sh:uniqueLang allows at most one arkarch:adrContext per non-empty language tag."@en , "ADR muss einen arkarch:adrContext haben (warum war die Entscheidung noetig?), nicht leer. sh:uniqueLang erlaubt hoechstens einen arkarch:adrContext je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
 
 ashapes:ADR-decision
@@ -96,8 +101,9 @@ ashapes:ADR-decision
     sh:path     arkarch:adrDecision ;
     sh:minCount 1 ;
     sh:minLength 5 ;
+    sh:pattern  "\\S" ;
     sh:uniqueLang true ;
-    sh:message  "An ADR must have an arkarch:adrDecision (what was decided?). sh:uniqueLang allows at most one arkarch:adrDecision per non-empty language tag."@en , "ADR muss eine arkarch:adrDecision haben (was wurde entschieden?). sh:uniqueLang erlaubt hoechstens eine arkarch:adrDecision je nicht-leerem Sprach-Tag."@de ;
+    sh:message  "An ADR must have an arkarch:adrDecision (what was decided?), not blank. sh:uniqueLang allows at most one arkarch:adrDecision per non-empty language tag."@en , "ADR muss eine arkarch:adrDecision haben (was wurde entschieden?), nicht leer. sh:uniqueLang erlaubt hoechstens eine arkarch:adrDecision je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
 
 # The pre-#357 flat shapes: no tool writes arkarch:adrConsequences/adrAlternatives any more (see
@@ -210,7 +216,8 @@ ashapes:Consequence-position
     sh:maxCount 1 ;
     sh:datatype xsd:integer ;
     sh:minInclusive 1 ;
-    sh:message  "A Consequence needs exactly one arknet:position (1-based order, >= 1)."@en , "Consequence braucht genau eine arknet:position (1-basierte Ordnung, >= 1)."@de ;
+    sh:maxInclusive 2147483647 ;
+    sh:message  "A Consequence needs exactly one arknet:position (1-based order, 1 to 2147483647, the range of a Java int)."@en , "Consequence braucht genau eine arknet:position (1-basierte Ordnung, 1 bis 2147483647, der Bereich eines Java-int)."@de ;
     sh:severity sh:Violation .
 
 ashapes:Consequence-statement
@@ -218,8 +225,9 @@ ashapes:Consequence-statement
     sh:path     arkarch:consequenceStatement ;
     sh:minCount 1 ;
     sh:minLength 5 ;
+    sh:pattern  "\\S" ;
     sh:uniqueLang true ;
-    sh:message  "A Consequence needs at least one arkarch:consequenceStatement (min. 5 characters). sh:uniqueLang allows at most one per non-empty language tag."@en , "Consequence braucht mindestens eine arkarch:consequenceStatement (min. 5 Zeichen). sh:uniqueLang erlaubt hoechstens eine je nicht-leerem Sprach-Tag."@de ;
+    sh:message  "A Consequence needs at least one arkarch:consequenceStatement (min. 5 characters, not blank). sh:uniqueLang allows at most one per non-empty language tag."@en , "Consequence braucht mindestens eine arkarch:consequenceStatement (min. 5 Zeichen, nicht leer). sh:uniqueLang erlaubt hoechstens eine je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
 
 ashapes:Consequence-type
@@ -248,8 +256,9 @@ ashapes:ConsideredOption-name
     sh:path     arknet:name ;
     sh:minCount 1 ;
     sh:minLength 1 ;
+    sh:pattern  "\\S" ;
     sh:uniqueLang true ;
-    sh:message  "A ConsideredOption needs at least one arknet:name. sh:uniqueLang allows at most one per non-empty language tag."@en , "ConsideredOption braucht mindestens einen arknet:name. sh:uniqueLang erlaubt hoechstens einen je nicht-leerem Sprach-Tag."@de ;
+    sh:message  "A ConsideredOption needs at least one arknet:name, not blank. sh:uniqueLang allows at most one per non-empty language tag."@en , "ConsideredOption braucht mindestens einen arknet:name, nicht leer. sh:uniqueLang erlaubt hoechstens einen je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
 
 ashapes:ConsideredOption-position
@@ -259,7 +268,8 @@ ashapes:ConsideredOption-position
     sh:maxCount 1 ;
     sh:datatype xsd:integer ;
     sh:minInclusive 1 ;
-    sh:message  "A ConsideredOption needs exactly one arknet:position (1-based order, >= 1)."@en , "ConsideredOption braucht genau eine arknet:position (1-basierte Ordnung, >= 1)."@de ;
+    sh:maxInclusive 2147483647 ;
+    sh:message  "A ConsideredOption needs exactly one arknet:position (1-based order, 1 to 2147483647, the range of a Java int)."@en , "ConsideredOption braucht genau eine arknet:position (1-basierte Ordnung, 1 bis 2147483647, der Bereich eines Java-int)."@de ;
     sh:severity sh:Violation .
 
 ashapes:ConsideredOption-rationale
@@ -267,8 +277,9 @@ ashapes:ConsideredOption-rationale
     sh:path     arkarch:optionRationale ;
     sh:minCount 1 ;
     sh:minLength 5 ;
+    sh:pattern  "\\S" ;
     sh:uniqueLang true ;
-    sh:message  "A ConsideredOption needs at least one arkarch:optionRationale (min. 5 characters). sh:uniqueLang allows at most one per non-empty language tag."@en , "ConsideredOption braucht mindestens eine arkarch:optionRationale (min. 5 Zeichen). sh:uniqueLang erlaubt hoechstens eine je nicht-leerem Sprach-Tag."@de ;
+    sh:message  "A ConsideredOption needs at least one arkarch:optionRationale (min. 5 characters, not blank). sh:uniqueLang allows at most one per non-empty language tag."@en , "ConsideredOption braucht mindestens eine arkarch:optionRationale (min. 5 Zeichen, nicht leer). sh:uniqueLang erlaubt hoechstens eine je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
 
 ashapes:ConsideredOption-outcome
@@ -279,6 +290,30 @@ ashapes:ConsideredOption-outcome
     sh:in       ( arkarch:Chosen arkarch:OptionRejected ) ;
     sh:message  "A ConsideredOption needs exactly one arkarch:optionOutcome (Chosen | Rejected)."@en , "ConsideredOption braucht genau ein arkarch:optionOutcome (Chosen | Rejected)."@de ;
     sh:severity sh:Violation .
+
+# The decision date (kogn-io/arknet#742): the cores write it as one xsd:date; the read path
+# silently drops a value that does not parse. Zero or one - a PROPOSED decision has none.
+ashapes:ADR-decisionDate
+    a sh:PropertyShape ;
+    sh:path     arkarch:decisionDate ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:date ;
+    sh:message  "An ADR carries at most one arkarch:decisionDate, an xsd:date."@en , "Eine ADR traegt hoechstens ein arkarch:decisionDate, ein xsd:date."@de ;
+    sh:severity sh:Violation .
+
+# An ADR never relates to or is superseded by itself (Adr's compact constructor refuses both).
+# $this-scoped, so a peer's validation-only copy in the same graph cannot trip it.
+ashapes:ADR-noSelfReference
+    a sh:SPARQLConstraint ;
+    sh:message  "An ADR must not point at itself with arkarch:relatedTo or arkarch:supersededBy."@en , "Eine ADR darf mit arkarch:relatedTo oder arkarch:supersededBy nicht auf sich selbst zeigen."@de ;
+    sh:severity sh:Violation ;
+    sh:select   """
+        PREFIX arkarch: <https://w3id.org/arknet/architecture#>
+        SELECT DISTINCT $this
+        WHERE {
+            { $this arkarch:relatedTo $this } UNION { $this arkarch:supersededBy $this }
+        }
+    """ .
 
 # Zero or more: a decision may relate to any number of peers, and most relate to
 # none - hence no sh:minCount and no sh:maxCount. Only the forward edge is ever
