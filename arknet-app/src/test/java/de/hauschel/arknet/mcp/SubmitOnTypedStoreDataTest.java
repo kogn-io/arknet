@@ -497,9 +497,10 @@ class SubmitOnTypedStoreDataTest {
     /**
      * The gate sees the deleted term from the requirement the same document changes: its reference no
      * longer finds a type. A delete alone is not rejected - the engine validates what the document
-     * writes and the neighbours reachable from it, not the resources still pointing at a deleted one;
-     * protection against deleting a referenced resource is #742.
+     * writes and the neighbours reachable from it, not the resources still pointing at a deleted one.
      */
+    // TODO #742: a lone Delete of a resource something still points at is not rejected yet; protection
+    // against deleting a referenced resource, derived from the ontology's edges, belongs to #742.
     @Test
     void rejectsDeletingATypedTermInTheDocumentThatChangesTheTypedRequirementUsingIt() {
         onStore(store -> {
@@ -512,7 +513,8 @@ class SubmitOnTypedStoreDataTest {
             assertThatThrownBy(() -> store.submit("[] a arkres:Delete ; arkres:object <" + iri(term) + "> .\n"
                     + "[] a arkres:Update ; arkres:object <" + fr.id().value().value() + "> ;"
                     + " arkres:set [ dcterms:title \"Customer places an order\"@en ] .\n"))
-                    .isInstanceOf(SubmitRejectedException.class);
+                    .isInstanceOf(SubmitRejectedException.class)
+                    .hasMessageContaining("https://w3id.org/arknet/requirements#usesTerm");
             assertThat(store.bean(TermService.class).get(PROJECT, term.code(), null)).isPresent();
             assertThat(store.bean(RequirementService.class).get(PROJECT, fr.code(), null).orElseThrow().usesTerms())
                     .containsExactly(new TermRef(term.id().value()));
@@ -528,7 +530,8 @@ class SubmitOnTypedStoreDataTest {
             // when / then
             assertThatThrownBy(() -> store.submit("[] a arkres:Update ; arkres:object <" + fr.id().value().value()
                     + "> ; arkres:clear dcterms:title .\n"))
-                    .isInstanceOf(SubmitRejectedException.class);
+                    .isInstanceOf(SubmitRejectedException.class)
+                    .hasMessageContaining("http://purl.org/dc/terms/title");
             assertThat(store.bean(RequirementService.class).get(PROJECT, fr.code(), null).orElseThrow().title())
                     .isEqualTo(fr.title());
         });
