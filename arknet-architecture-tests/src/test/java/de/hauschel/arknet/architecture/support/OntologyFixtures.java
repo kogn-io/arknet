@@ -3,19 +3,26 @@
 
 package de.hauschel.arknet.architecture.support;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Enumeration;
-import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.stream.Collectors;
 
 import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Model;
@@ -32,11 +39,8 @@ import org.eclipse.rdf4j.rio.Rio;
  */
 public final class OntologyFixtures {
 
-    /**
-     * A resource {@code arknet-ontology} certainly ships, used to locate the directory or jar the
-     * others sit in.
-     */
-    private static final String ANCHOR_RESOURCE = "/arknet-core.ttl";
+    /** The classpath name under which every ontology module lists its live files, one per line. */
+    public static final String ONTOLOGY_INDEX = "META-INF/arknet/ontology.index";
 
     private OntologyFixtures() {
     }
@@ -55,31 +59,67 @@ public final class OntologyFixtures {
     }
 
     /**
-     * Every {@code .ttl} at the root of {@code arknet-ontology} -- the live modules and their
-     * shapes, with the {@code parked/} subdirectory left out by construction.
+     * Every live {@code .ttl} the ontology modules on the classpath ship -- {@code arknet-ontology}
+     * and the ontology module of each bounded context --, as their indices name them. The
+     * {@code parked/} subdirectories are never indexed.
      *
-     * <p>Enumerated off the classpath rather than listed in a test: a hand-kept list would be the
-     * very kind of forgotten line the tests using this exist to catch. {@code arknet-ontology}
-     * resolves to a jar in an installed build and to a {@code target/classes} directory inside the
-     * reactor, so both layouts are handled.</p>
+     * <p>Read off the indices rather than listed in a test: a hand-kept list would be the very kind
+     * of forgotten line the tests using this exist to catch. That an index names exactly what its
+     * module ships is {@code OntologyIndexListsEveryShippedFileTest}'s concern.</p>
      *
      * @return absolute classpath names, e.g. {@code /arknet-core.ttl}
      */
     public static Set<String> shippedOntologyResources() {
-        URL anchor = OntologyFixtures.class.getResource(ANCHOR_RESOURCE);
-        if (anchor == null) {
-            throw new IllegalStateException("missing classpath resource " + ANCHOR_RESOURCE);
-        }
+        Set<String> resources = new TreeSet<>();
+        ontologyModules().values().forEach(resources::addAll);
+        return resources;
+    }
+
+    /**
+     * Every ontology module on the classpath, keyed by the location of its index, with the files the
+     * index names.
+     *
+     * @return the indexed files per index location, in a stable order
+     */
+    public static Map<URL, Set<String>> ontologyModules() {
+        Map<URL, Set<String>> modules = new TreeMap<>(Comparator.comparing(URL::toString));
         try {
-            return "jar".equals(anchor.getProtocol()) ? jarEntries(anchor) : directoryEntries(anchor);
+            for (URL index : Collections.list(OntologyFixtures.class.getClassLoader().getResources(ONTOLOGY_INDEX))) {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(index.openStream(), StandardCharsets.UTF_8))) {
+                    modules.put(index, reader.lines()
+                            .map(String::strip)
+                            .filter(line -> !line.isEmpty() && !line.startsWith("#"))
+                            .collect(Collectors.toCollection(TreeSet::new)));
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("failed to read " + ONTOLOGY_INDEX, e);
+        }
+        if (modules.isEmpty()) {
+            throw new IllegalStateException("no " + ONTOLOGY_INDEX + " on the classpath");
+        }
+        return modules;
+    }
+
+    /**
+     * The {@code .ttl} files at the root of the module an index belongs to, read off its jar or its
+     * {@code target/classes} directory -- what the module actually ships, independent of the index.
+     *
+     * @param index the location of a module's index
+     * @return absolute classpath names
+     */
+    public static Set<String> rootTurtleFiles(final URL index) {
+        try {
+            return "jar".equals(index.getProtocol()) ? jarEntries(index) : directoryEntries(index);
         } catch (IOException | URISyntaxException e) {
-            throw new IllegalStateException("failed to enumerate the shipped ontologies", e);
+            throw new IllegalStateException("failed to enumerate the files next to " + index, e);
         }
     }
 
-    private static Set<String> jarEntries(URL anchor) throws IOException {
-        String jarPath = anchor.getPath().substring("file:".length(), anchor.getPath().indexOf('!'));
-        Set<String> resources = new HashSet<>();
+    private static Set<String> jarEntries(final URL index) throws IOException {
+        String jarPath = index.getPath().substring("file:".length(), index.getPath().indexOf('!'));
+        Set<String> resources = new TreeSet<>();
         try (JarFile jar = new JarFile(URLDecoder.decode(jarPath, StandardCharsets.UTF_8))) {
             for (Enumeration<JarEntry> entries = jar.entries(); entries.hasMoreElements();) {
                 String name = entries.nextElement().getName();
@@ -91,9 +131,10 @@ public final class OntologyFixtures {
         return resources;
     }
 
-    private static Set<String> directoryEntries(URL anchor) throws URISyntaxException {
-        File[] files = new File(anchor.toURI()).getParentFile().listFiles();
-        Set<String> resources = new HashSet<>();
+    private static Set<String> directoryEntries(final URL index) throws URISyntaxException {
+        File root = new File(index.toURI()).getParentFile().getParentFile().getParentFile();
+        File[] files = root.listFiles();
+        Set<String> resources = new TreeSet<>();
         for (File file : files == null ? new File[0] : files) {
             if (file.isFile() && file.getName().endsWith(".ttl")) {
                 resources.add("/" + file.getName());

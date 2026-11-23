@@ -28,7 +28,7 @@ import de.hauschel.arknet.persistence.ArkprocVocabulary;
  * {@link ArkprocVocabulary} in {@code arknet-persistence-support} is what the actor out-adapter
  * actually writes into the store (and what {@code arknet-app}'s traceability read path and
  * {@code arknet-use-cases}' cross-BC actor resolution traverse back out),
- * {@code arknet-actor.ttl} in {@code arknet-ontology} is what arknet ships as the documented
+ * {@code arknet-actor.ttl} in {@code arknet-actor-ontology} is what arknet ships as the documented
  * meaning of those statements. Nothing connects them.
  *
  * <p><strong>Why this cannot be caught elsewhere (kogn-io/arknet#148).</strong> Before

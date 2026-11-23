@@ -45,8 +45,8 @@ class OntologyVersionsMatchOntologyTest {
     private static final Map<String, String> SCANNED = OntologyVersions.onClasspath();
 
     /**
-     * The same question answered by a real parse, over every {@code .ttl} {@code arknet-ontology}
-     * ships - enumerated off the classpath, never listed here. A module added to the ontology but
+     * The same question answered by a real parse, over every live {@code .ttl} the ontology modules
+     * ship - enumerated off the classpath, never listed here. A module added to the ontology but
      * forgotten in {@link OntologyVersions} is exactly the omission this must catch, and a
      * hand-kept list on this side would be the same forgotten line twice.
      */
@@ -55,7 +55,7 @@ class OntologyVersionsMatchOntologyTest {
     @Test
     void theScanFindsEveryShippedOntologyModule() {
         assertEquals(DECLARED.keySet(), SCANNED.keySet(),
-                "OntologyVersions must read every live ontology module arknet-ontology ships - "
+                "OntologyVersions must read every live ontology module the ontology modules ship - "
                         + "a module it misses silently disappears from every project_export envelope");
     }
 

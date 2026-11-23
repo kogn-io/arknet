@@ -42,7 +42,7 @@ import de.hauschel.arknet.resource.domain.ArkresVocabulary;
  * for every IRI arknet publishes.</p>
  *
  * <p><strong>Why the forbidden list is derived, not kept.</strong> The namespaces come from the
- * prefix declarations of every ontology and shapes file {@code arknet-ontology} ships -- the
+ * prefix declarations of every ontology and shapes file the ontology modules ship -- the
  * namespaces of the bounded contexts, their shapes and {@code arknet:} -- minus the component's
  * own {@code arkres:}. A new namespace is covered the moment a shipped file binds a prefix to
  * it; a hand-kept list would be the forgotten line this test exists to catch.</p>

@@ -344,8 +344,8 @@ class ReferenceGuardsCoverEveryOntologyEdgeTest {
     }
 
     /**
-     * Every {@code .ttl} at the root of {@code arknet-ontology}, parsed into one model - the live
-     * modules and their shapes. The {@code parked/} subdirectory is left out by construction: its
+     * Every live {@code .ttl} the ontology modules ship, parsed into one model - the live
+     * modules and their shapes. The {@code parked/} subdirectories are left out by construction: their
      * files describe vocabulary no bounded context writes yet, so no delete guard owes them
      * anything.
      */

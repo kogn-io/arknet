@@ -11,5 +11,5 @@ upgrade to check whether the underlying defect is still present.
   -- RDF4J's `ShaclSail` misfires `sh:qualifiedValueShape`/`sh:qualifiedMaxCount` when the
   validated data graph carries a second focus node of the same shape's target class
   (kogn-io/arknet#376, kogn-io/arknet#378). The workaround lives in
-  `arknet-ontology/src/main/resources/architecture-shapes.ttl`, at
+  `arknet-architecture-decisions/arknet-architecture-decisions-ontology/src/main/resources/architecture-shapes.ttl`, at
   `ashapes:ADR-consideredOption-atMostOneChosen`.
