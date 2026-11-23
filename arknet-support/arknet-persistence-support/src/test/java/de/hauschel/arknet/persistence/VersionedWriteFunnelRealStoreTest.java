@@ -594,6 +594,34 @@ class VersionedWriteFunnelRealStoreTest {
     }
 
     /**
+     * {@code Batch.draft} reads in the batch's transaction: a stored subject's draft, what an earlier
+     * write of the same batch left - a create and an update alike - and nothing for an unknown subject.
+     */
+    @Test
+    void aBatchReadsTheDraftsItsEarlierWritesLeft() {
+        // given
+        create(SUBJECT, CODE, "v1", "crit one");
+        Map<String, Set<String>> seen = new java.util.HashMap<>();
+
+        // when
+        funnel.writeAll(DATASET, EntryDetails.NONE, conflict -> new RevisionMismatch(), batch -> {
+            seen.put("stored", titles(batch.draft(SUBJECT)));
+            seen.put("unknown", titles(batch.draft(OTHER)));
+            batch.create(OTHER, OTHER_CODE, null, Signals::unexpected, Signals::unexpected,
+                    (tx, current) -> requirement(OTHER, OTHER_CODE, "b", "y"));
+            batch.update(SUBJECT, null, Signals::unexpected,
+                    (tx, current) -> requirement(SUBJECT, CODE, "v2", "crit one"));
+            seen.put("created", titles(batch.draft(OTHER)));
+            seen.put("updated", titles(batch.draft(SUBJECT)));
+            assertTrue(batch.draft("https://example.org/nothing").isEmpty());
+        });
+
+        // then
+        assertEquals(Map.of("stored", Set.of("v1"), "unknown", Set.of(), "created", Set.of("b"),
+                "updated", Set.of("v2")), seen);
+    }
+
+    /**
      * An update in a batch that changes nothing adds no history entry, like the single update; its
      * token is still reported.
      */

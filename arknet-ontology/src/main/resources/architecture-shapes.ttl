@@ -14,6 +14,7 @@
 
 @prefix sh:      <http://www.w3.org/ns/shacl#> .
 @prefix arkarch: <https://w3id.org/arknet/architecture#> .
+@prefix arkres:  <https://w3id.org/arknet/resource#> .
 @prefix arknet:  <https://w3id.org/arknet/core#> .
 @prefix arkreq:  <https://w3id.org/arknet/requirements#> .
 @prefix arkddd:  <https://w3id.org/arknet/ddd#> .
@@ -382,5 +383,16 @@ ashapes:ADR-usesTerm
     sh:class    skos:Concept ;
     sh:message  "An arkarch:usesTerm edge must point at a skos:Concept (glossary term) identified by an IRI."@en , "Eine arkarch:usesTerm-Kante muss auf ein skos:Concept (Glossarbegriff) mit IRI zeigen."@de ;
     sh:severity sh:Violation .
+
+##############################################################################
+#  RULE DATA FOR GENERIC RESOURCE ACCESS (arkres:, arknet-resource.ttl)
+#  Not validated: says which classes are resource types, the prefix of their
+#  business codes, which edges own their children and how those are ordered.
+##############################################################################
+
+arkarch:ArchitectureDecisionRecord a arkres:ResourceType ; arkres:codePrefix "ADR-" .
+
+ashapes:ADR-consequence-class      arkres:childKind "Consequence" ; arkres:orderedBy arknet:position .
+ashapes:ADR-consideredOption-class arkres:childKind "Option" ;      arkres:orderedBy arknet:position .
 
 # END OF ARCHITECTURE SHAPES

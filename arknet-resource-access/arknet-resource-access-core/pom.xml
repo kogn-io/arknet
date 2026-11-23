@@ -11,5 +11,31 @@
     </parent>
 
     <artifactId>arknet-resource-access-core</artifactId>
-    <description>Hexagon interior of generic resource access: the arkres: vocabulary it speaks. Free of RDF4J and Spring; depends on no module of a bounded context.</description>
+    <description>Hexagon interior of generic resource access: the arkres: vocabulary it speaks and the submit engine that applies a document of activities. Free of RDF4J and Spring; depends on no module of a bounded context.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-shared-kernel</artifactId>
+        </dependency>
+        <!-- ChildFragments: the stable fragment names of owned children (ADR-64), shared with the
+             typed out-adapters. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-persistence-support</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-terms</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>

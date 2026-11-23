@@ -495,7 +495,23 @@ public final class VersionedWriteFunnel {
         }
 
         /**
-         * Creates a resource, guarded like {@link VersionedWriteFunnel#create}: the subject must have
+         * The current draft slice of a subject in the batch's transaction - what an earlier write of
+         * this batch left included - for the reads a caller needs before naming a write: the state
+         * an update starts from, or a neighbour the asserted context of another write carries. The
+         * read joins the transaction, so a concurrent writer that changes what it saw makes one of
+         * the two commits fail.
+         *
+         * @param subjectIri the subject's IRI, without a {@code #}
+         * @return the draft slice, empty if the subject has none
+         */
+        public ReadableGraph draft(String subjectIri) {
+            requireOpen();
+            Objects.requireNonNull(subjectIri, "subjectIri");
+            return versioning.readDraft(tx, rdf.createIRI(subjectIri)).triples();
+        }
+
+        /**
+         * Creates a resource, guarded like {@link VersionedWriteFunnel#createIfAbsent}: the subject must have
          * an empty draft and a given code must be free in the content graph, codes taken earlier in
          * this batch included.
          *

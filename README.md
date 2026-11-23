@@ -566,7 +566,7 @@ Active modules (consumed by a BC, published under `w3id.org/arknet/`):
 | `arknet-provenance.ttl` | `arkprov:` | Revision, head -- the PROV-O-based revision trail of earlier versions; no write path uses it since versioning moved to the library |
 | `arknet-project.ttl` | `arkprj:` | Project, Anchor, AnchorType -- the registered store identity -- plus its two language fields: `defaultLanguage` (single-valued fallback) and `maintainedLanguage` (multi-valued commitment) |
 | `arknet-architecture.ttl` | `arkarch:` | ArchitectureDecisionRecord, its text properties, the supersededBy/supersedes/relatedTo/addressesRequirement/affectsContext/usesTerm relations and the five ADRStatus individuals -- the ISO-42010 slice `arknet-adr` actually writes. Namespace shared with the parked `arknet-architecture_parked.ttl` below |
-| `arknet-resource.ttl` | `arkres:` | Activity and its kinds Create, Update, AddTo, RemoveFrom, Delete -- the vocabulary of `arknet-resource-access`, not the namespace of a Bounded Context; no resource of the model is typed with one of its classes |
+| `arknet-resource.ttl` | `arkres:` | Activity and its kinds Create, Update, AddTo, RemoveFrom, Delete with their properties, and the rule data the shape files carry for generic access (ResourceType, codePrefix, childKind, orderedBy) -- the vocabulary of `arknet-resource-access`, not the namespace of a Bounded Context; no resource of the model is typed with one of its classes |
 
 Parked modules (`arknet-ontology/src/main/resources/parked/`, no BC consumes them yet, not published):
 

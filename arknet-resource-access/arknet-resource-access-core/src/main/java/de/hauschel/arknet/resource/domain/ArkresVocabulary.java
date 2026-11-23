@@ -41,6 +41,36 @@ public final class ArkresVocabulary {
     /** {@code arkres:Delete} - deletes an existing resource; its history is kept. */
     public static final String DELETE = NAMESPACE + "Delete";
 
+    /** {@code arkres:object} - the one resource an activity acts on. */
+    public static final String OBJECT = NAMESPACE + "object";
+
+    /** {@code arkres:set} - the blank node carrying the new values of an update. */
+    public static final String SET = NAMESPACE + "set";
+
+    /** {@code arkres:clear} - a field whose values an update removes. */
+    public static final String CLEAR = NAMESPACE + "clear";
+
+    /** {@code arkres:field} - the multi-valued field an add-to or remove-from activity changes. */
+    public static final String FIELD = NAMESPACE + "field";
+
+    /** {@code arkres:value} - the value an add-to activity adds or a remove-from activity removes. */
+    public static final String VALUE = NAMESPACE + "value";
+
+    /** {@code arkres:position} - the position, before the document, of the child a remove-from removes. */
+    public static final String POSITION = NAMESPACE + "position";
+
+    /** {@code arkres:ResourceType} - a class whose instances are resources of their own. */
+    public static final String RESOURCE_TYPE = NAMESPACE + "ResourceType";
+
+    /** {@code arkres:codePrefix} - the literal every business code of a resource type starts with. */
+    public static final String CODE_PREFIX = NAMESPACE + "codePrefix";
+
+    /** {@code arkres:childKind} - marks a field owning its children; the fragment kind of their names. */
+    public static final String CHILD_KIND = NAMESPACE + "childKind";
+
+    /** {@code arkres:orderedBy} - the property carrying the position of an owned child. */
+    public static final String ORDERED_BY = NAMESPACE + "orderedBy";
+
     private ArkresVocabulary() {
     }
 }

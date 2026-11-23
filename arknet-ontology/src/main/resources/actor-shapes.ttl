@@ -37,6 +37,7 @@
 @prefix sh:       <http://www.w3.org/ns/shacl#> .
 @prefix arknet:   <https://w3id.org/arknet/core#> .
 @prefix arkproc:  <https://w3id.org/arknet/process#> .
+@prefix arkres:  <https://w3id.org/arknet/resource#> .
 @prefix xsd:      <http://www.w3.org/2001/XMLSchema#> .
 @prefix actshapes: <https://w3id.org/arknet/shapes/actor#> .
 
@@ -126,5 +127,18 @@ actshapes:Role-filledBy
     sh:nodeKind sh:IRI ;
     sh:message  "Every 'arkproc:filledBy' target of a Role must be an IRI - a role may only be filled by an actor, addressed by its identity, and may legally be filled by none at all."@en , "Jedes Ziel von 'arkproc:filledBy' einer Rolle muss eine IRI sein - eine Rolle darf nur durch einen Actor besetzt werden, adressiert ueber seine Identitaet, und darf auch unbesetzt bleiben."@de ;
     sh:severity sh:Violation .
+
+##############################################################################
+#  RULE DATA FOR GENERIC RESOURCE ACCESS (arkres:, arknet-resource.ttl)
+#  Not validated: says which classes are resource types, the prefix of their
+#  business codes, which edges own their children and how those are ordered.
+##############################################################################
+
+arkproc:Actor       a arkres:ResourceType ; arkres:codePrefix "ACTOR-" .
+arkproc:HumanActor  a arkres:ResourceType ; arkres:codePrefix "ACTOR-" .
+arkproc:SystemActor a arkres:ResourceType ; arkres:codePrefix "ACTOR-" .
+arkproc:LegalActor  a arkres:ResourceType ; arkres:codePrefix "ACTOR-" .
+arkproc:GroupActor  a arkres:ResourceType ; arkres:codePrefix "ACTOR-" .
+arkproc:Role        a arkres:ResourceType ; arkres:codePrefix "ROLE-" .
 
 # END OF ACTOR SHAPES
