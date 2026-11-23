@@ -75,9 +75,11 @@ public final class SubmittedDocument {
         Set<BlankNodeOrIRI> activityNodes = new HashSet<>();
 
         graph.stream(null, VocabRdf.TYPE, null).forEach(typing -> {
+            if (typing.getObject() instanceof IRI type && type.getIRIString().startsWith(ArkresVocabulary.NAMESPACE)) {
+                activityNodes.add(typing.getSubject());
+            }
             Optional<Activity> activity = read(graph, schema, typing.getSubject(), typing.getObject(), problems);
             activity.ifPresent(found -> {
-                activityNodes.add(typing.getSubject());
                 if (found instanceof Create create) {
                     creates.add(create);
                 } else {
