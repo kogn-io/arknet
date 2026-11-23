@@ -37,7 +37,8 @@ the skill's generic methodology.
   versioning's history of one resource - the graphs the content-graph snapshot never reads.
 - `ArknetMcpConfiguration.java` (~1200 lines, the central wiring) doesn't deserve a craftsmanship
   deduction in this skill — that's `/clean-code-review`'s job. For Full Review the only thing
-  that matters: is every one of the six BC bean families actually wired per-call rather than as
+  that matters: is every project-scoped component's bean family (all except `arknet-project`,
+  which resolves the raw anchor itself) actually wired per-call rather than as
   a singleton with `ProjectId`, and is there no fallback path without an anchor -- no default,
   no silent fallback to the daemon's own working directory? Both held up cleanly on the
   2026-08-01 audit.
@@ -46,7 +47,7 @@ the skill's generic methodology.
 
 Feeds the skill's `next` mode (pick the module due for review without anyone having to decide).
 Priority: 1 = port/contract-carrying and cross-cutting (weighted above the rest per the module
-weighting above), 2 = the six hexagonal BCs, 3 = self-check/meta module. `arknet-ontology` carries
+weighting above), 2 = the components (one row each), 3 = self-check/meta module. `arknet-ontology` carries
 no Java ports (`.ttl` resources only) and is out of scope for this skill entirely — not listed.
 
 | Module | Path | Priority | Last reviewed commit | Date |
@@ -173,8 +174,9 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   module (`UseCaseRepository`) documents its `@throws` fully. Check this asymmetry (some ports in
   a module fully documented, others not) explicitly on every future full-review rather than
   assuming one clean module means the pattern is gone.
-- **kognio-rdf's full source is checked out locally — read it, don't `javap`/guess.**
-  `~/DEV/projects/java/kognio/kognio-rdf` (not just the `-sources.jar` under `~/.m2`) carries
+- **kognio-rdf's full source is public — read it, don't `javap`/guess.**
+  The library's repository (`github.com/kogn-io/rdf-core`), not just the `-sources.jar` in the
+  local Maven repository, carries
   the implementation and its javadoc, including measured backend quirks that aren't visible
   from the port interfaces alone. Example: `DatasetTransactorRdf4j`'s own class javadoc
   documents an RDF4J `MemoryStore` value-interning race that makes an `ASK`/`SELECT` guard
@@ -182,7 +184,7 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   (it looks values up instead of interning them). `VersionedWriteFunnel`'s existence and code
   checks already use `contains()` for exactly this reason; its `currentToken` doesn't need to,
   because it only ever reads already-persisted state (an existing resource's draft token).
-  Confirm a concurrency/isolation-adjacent suspicion against this checkout before filing it as
+  Confirm a concurrency/isolation-adjacent suspicion against that source before filing it as
   a finding — two suspicions in the persistence-support review below turned out to be
   unfounded once checked here.
 - **A missing `sh:maxCount` is a multi-valued vector for every predicate it's missing on, not
@@ -282,8 +284,9 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
 - Write funnel, library draft token as concurrency token — relevant whenever a review
   touches a write path's transaction/concurrency behavior (Phase 2).
 - Generic store read path / Borrowed In-Port pattern —
-  relevant whenever a review touches `arknet-app`'s `mcp/store`/`mcp/report` or the
-  model-analysis component, since those packages exist entirely because of these two decisions.
+  relevant whenever a review touches `arknet-app`'s `mcp/store`/`mcp/search`/`mcp/report`, since
+  those packages exist entirely because of these two decisions; the model-analysis component
+  reads through the same generic store read path (`StoreReader` via `KognioRdfModelSnapshots`).
 
 ## Calibration log
 
