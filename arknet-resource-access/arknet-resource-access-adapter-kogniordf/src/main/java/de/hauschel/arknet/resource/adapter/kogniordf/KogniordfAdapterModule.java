@@ -8,8 +8,9 @@ package de.hauschel.arknet.resource.adapter.kogniordf;
  *
  * <p>The module serves the out-ports of {@code arknet-resource-access-core} against the store: the
  * catalog of shapes and ontology, the SHACL write gate and the versioned write funnel. Until the
- * first of those classes exists, this one gives {@code arknet-architecture-tests} a class to see
- * in the module; a rule whose {@code that()} clause matches nothing fails rather than passes.
+ * first of those classes exists, this one gives {@code ResourceAccessNamesNoModelNamespaceTest}
+ * in {@code arknet-architecture-tests} a class to see in the module, so the namespace scan provably
+ * covers it.
  * It goes away with the first real adapter class.</p>
  */
 public final class KogniordfAdapterModule {

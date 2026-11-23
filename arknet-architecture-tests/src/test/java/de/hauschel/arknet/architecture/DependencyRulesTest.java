@@ -67,8 +67,7 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
  * same way, by naming a neighbour's type in a {@code de.hauschel.arknet.analysis} class, and
  * rule 14 by naming {@code VersionedWriteFunnel} there, rule 15 by calling
  * {@code importPublishedPastGate} from any class but the startup migration. Rule 16 is broken by
- * naming a type of a bounded context or an {@code Ark*Vocabulary} class in a
- * {@code de.hauschel.arknet.resource} class, rule 17 by naming a class of that package from any
+ * naming a type of a bounded context in a {@code de.hauschel.arknet.resource} class, rule 17 by naming a class of that package from any
  * bounded context, rule 18 by naming an RDF4J or Spring type in its core. Rule 12 is the one
  * rule that does not need the exercise: it turns red on any class in the kernel package whose
  * name is not on its list, which is the whole of what it claims.</p>
@@ -524,8 +523,11 @@ class DependencyRulesTest {
      * touch.</p>
      *
      * <p>ArchUnit sees types, not string constants: an IRI of a context's namespace written down as
-     * a literal leaves no dependency in the bytecode. {@code ResourceAccessNamesNoModelNamespaceTest}
-     * closes that half by scanning the class files themselves.</p>
+     * a literal leaves no dependency in the bytecode. The same holds for the {@code Ark*Vocabulary}
+     * classes, whose members are compile-time {@code String} constants: javac inlines a use such
+     * as {@code ArkreqVocabulary.REQUIREMENT}, so this rule catches only a non-constant use of
+     * such a class. {@code ResourceAccessNamesNoModelNamespaceTest} closes both gaps by scanning
+     * the class files themselves.</p>
      */
     @ArchTest
     static final ArchRule resource_access_names_no_module_of_a_bounded_context =
@@ -569,9 +571,9 @@ class DependencyRulesTest {
             noClasses()
                     .that().resideInAPackage("de.hauschel.arknet.resource..")
                     .and().resideOutsideOfPackage("..adapter..")
-                    .should().dependOnClassesThat().resideInAnyPackage(
-                            "org.eclipse.rdf4j..", "io.kogn.rdf.rdf4j..", "org.springframework..",
-                            "de.hauschel.arknet.mcpsupport..")
+                    .should().dependOnClassesThat().resideInAnyPackage(RDF4J_PACKAGES)
+                    .orShould().dependOnClassesThat().resideInAnyPackage(
+                            "org.springframework..", "de.hauschel.arknet.mcpsupport..")
                     .because("the core of generic resource access works on the neutral RDF ports; "
                             + "the store technology, the framework and the transport stay in its "
                             + "adapters");
