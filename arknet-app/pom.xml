@@ -165,6 +165,21 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Generischer Ressourcenzugriff (ADR-69, ausserhalb jedes Bounded Context): describe und
+             submit ueber die Ressourcen aller Kontexte. In-Adapter mit @McpTool-Bean + Out-Adapter
+             ueber den geteilten DatasetLifecycle; die Beans haengen an der Property
+             arknet.resource-access.enabled und fehlen ohne sie. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-resource-access-adapter-mcp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-resource-access-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Persistence-Support: RDF4J-freie Technik-Bausteine. Der generische Store-Lesepfad
              nutzt SparqlTerms (IRIREF-Serialisierung), der Traceability-Lesepfad zusaetzlich
              ArkreqVocabulary (die geteilten arkreq:-Praedikat-IRIs, gemeinsame Quelle mit den
@@ -220,16 +235,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <!-- Schreib-Engine des generischen Ressourcenzugriffs, nur fuer SubmitOnTypedStoreDataTest:
-             submit auf Bestand, den die typgenauen Kerne geschrieben haben, ueber denselben
-             DatasetLifecycle. -->
-        <dependency>
-            <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-resource-access-adapter-kogniordf</artifactId>
-            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

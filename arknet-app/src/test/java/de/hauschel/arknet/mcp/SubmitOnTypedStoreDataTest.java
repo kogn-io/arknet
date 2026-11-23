@@ -564,10 +564,12 @@ class SubmitOnTypedStoreDataTest {
 
         Store(final AssertableApplicationContext context) {
             this.context = context;
+            DatasetLifecycle lifecycle = context.getBean(DatasetLifecycle.class);
             this.engine = new SubmitService(KognioRdfResourceRepositoryFactory.schema(),
-                    KognioRdfResourceRepositoryFactory.over(context.getBean(DatasetLifecycle.class),
-                            context.getBean(DisplayLocale.class)),
-                    KognioRdfResourceRepositoryFactory.parser(), context.getBean(ResourceIdFactory.class));
+                    KognioRdfResourceRepositoryFactory.over(lifecycle, context.getBean(DisplayLocale.class)),
+                    KognioRdfResourceRepositoryFactory.parser(), context.getBean(ResourceIdFactory.class),
+                    KognioRdfResourceRepositoryFactory.prefixes(),
+                    KognioRdfResourceRepositoryFactory.handles(lifecycle));
         }
 
         <T> T bean(final Class<T> type) {
