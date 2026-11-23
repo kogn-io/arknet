@@ -10,6 +10,7 @@ import java.util.Optional;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -104,6 +105,11 @@ import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
+import de.hauschel.arknet.resource.adapter.kogniordf.KognioRdfResourceRepositoryFactory;
+import de.hauschel.arknet.resource.adapter.mcp.ResourceAccessMcpTools;
+import de.hauschel.arknet.resource.application.SubmitService;
+import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
+import de.hauschel.arknet.resource.application.port.out.ResourceRepository;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.adapter.mcp.UbiquitousLanguageMcpTools;
 import de.hauschel.arknet.ul.application.TermService;
@@ -237,6 +243,10 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       against {@link ActorRepository} directly instead of borrowing an in-port: no bounded-context
  *       boundary is crossed here.</li>
  * </ul>
+ *
+ * <p>The generic resource-access component ({@code describe}/{@code submit}, ADR-69) belongs to
+ * no bounded context and is wired only when {@code arknet.resource-access.enabled=true} - see
+ * {@link ResourceAccessConfiguration}.</p>
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
  * {@code arknet.rdf.storage}, no competing locks); the model hexagons additionally share the
@@ -1214,5 +1224,49 @@ public class ArknetMcpConfiguration {
     TextSearchMcpTools textSearchMcpTools(
             final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projectResolver) {
         return new TextSearchMcpTools(storeReader, prefixes, projectResolver);
+    }
+
+    // --- Generic resource access -------------------------------------------------
+
+    /**
+     * The generic resource-access component (ADR-69): {@code describe} and {@code submit} over the
+     * resources of every bounded context, wired over the same {@link DatasetLifecycle},
+     * {@link DisplayLocale} and {@link ResourceIdFactory} beans the type-specific hexagons use.
+     *
+     * <p><strong>Off by default.</strong> Every bean of the component sits behind
+     * {@value ResourceAccessMcpTools#ENABLED_PROPERTY}{@code =true}; without it neither tool is
+     * offered and the type-specific tools remain the only write surface. One condition on this
+     * class rather than one per bean, so no bean of the component can be left switched on by
+     * itself.</p>
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnProperty(name = ResourceAccessMcpTools.ENABLED_PROPERTY, havingValue = "true")
+    static class ResourceAccessConfiguration {
+
+        @Bean
+        ResourceRepository resourceRepository(final DatasetLifecycle datasetLifecycle,
+                final DisplayLocale displayLocale) {
+            return KognioRdfResourceRepositoryFactory.over(datasetLifecycle, displayLocale);
+        }
+
+        @Bean
+        SubmitService submitService(final ResourceRepository resourceRepository,
+                final ResourceIdFactory resourceIdFactory, final DatasetLifecycle datasetLifecycle) {
+            return new SubmitService(KognioRdfResourceRepositoryFactory.schema(), resourceRepository,
+                    KognioRdfResourceRepositoryFactory.parser(), resourceIdFactory,
+                    KognioRdfResourceRepositoryFactory.prefixes(),
+                    KognioRdfResourceRepositoryFactory.handles(datasetLifecycle));
+        }
+
+        @Bean
+        DescribeResourceType resourceDescriber(final DisplayLocale displayLocale) {
+            return KognioRdfResourceRepositoryFactory.describer(displayLocale);
+        }
+
+        @Bean
+        ResourceAccessMcpTools resourceAccessMcpTools(final DescribeResourceType resourceDescriber,
+                final SubmitService submitService, final ProjectResolver projectResolver) {
+            return new ResourceAccessMcpTools(resourceDescriber, submitService, projectResolver);
+        }
     }
 }

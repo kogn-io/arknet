@@ -1,6 +1,6 @@
 # arknet-app
 
-MCP-Server (Streamable HTTP, Spring AI 2.0 `spring-ai-starter-mcp-server-webmvc`) + Composition Root -- Spring Boot, verdrahtet requirements-Hexagon + ubiquitous-language-Hexagon + use-cases-Hexagon + bounded-context-Hexagon + adr-Hexagon + actor-Hexagon + project-Hexagon + model-analysis-Hexagon als `@McpTool`-Beans.
+MCP-Server (Streamable HTTP, Spring AI 2.0 `spring-ai-starter-mcp-server-webmvc`) + Composition Root -- Spring Boot, verdrahtet requirements-Hexagon + ubiquitous-language-Hexagon + use-cases-Hexagon + bounded-context-Hexagon + adr-Hexagon + actor-Hexagon + project-Hexagon + model-analysis-Hexagon als `@McpTool`-Beans, dazu die Komponente fuer generischen Ressourcenzugriff (`describe`/`submit`), nur bei `arknet.resource-access.enabled=true`.
 ADR-70 laesst der Composition Root nur die Verdrahtung der Komponenten, keine Anwendungslogik.
 Abweichend davon liegen in diesem Modul der typunabhaengige Lesepfad (`store_overview`, `resource_get`, `resource_history`, `project_export`), das Suchwerkzeug `text_search` und der HTML-Report.
 `resource_get`, `resource_history` und `text_search` gehoeren in die Komponente fuer generischen Zugriff ausserhalb jedes Bounded Context (ADR-69, kogn-io/arknet#743).
@@ -80,6 +80,12 @@ Das adr-Hexagon ist das einzige mit **zwei** Tool-Bean-Klassen im Composition Ro
 
 Der Pruefpfad `store_check` und die fuenf Auswertungen (`trace_matrix`, `orphan_check`, `impact_analysis`, `role_usecase_matrix`, `term_cooccurrence`) liegen nicht hier, sondern in der Komponente des Bounded Context Modellanalyse (`arknet-model-evaluation`, BC-6, ADR-54); die Composition Root verdrahtet ihre Beans und stellt ihre Werkzeuge bereit, mehr nicht.
 Wie sie lesen und was sie melden: `arknet-model-analysis/arknet-model-evaluation/CLAUDE.md`.
+
+`describe` und `submit` liegen in der Komponente `arknet-resource-access` (ADR-69, ausserhalb jedes Bounded Context); die Composition Root verdrahtet sie in der geschachtelten Konfiguration `ArknetMcpConfiguration.ResourceAccessConfiguration` ueber denselben `DatasetLifecycle`, dieselbe `DisplayLocale`, dieselbe `ResourceIdFactory` und denselben `ProjectResolver` wie die typgenauen Hexagons.
+Die ganze Konfiguration haengt an `arknet.resource-access.enabled=true` (`ResourceAccessMcpTools.ENABLED_PROPERTY`); fehlt die Property oder steht sie auf etwas anderem, entsteht keine ihrer Beans und keines der beiden Werkzeuge wird angeboten -- die typgenauen Werkzeuge bleiben dann die einzige Schreibflaeche.
+Eine Bedingung an der Klasse statt je Bean, damit keine Bean der Komponente allein eingeschaltet bleiben kann.
+`ResourceAccessWiringTest` haelt beide Schalterstellungen fest und reicht das Beispiel aus `describe` ueber `submit` ein und liest es ueber `term_get`/`req_get` zurueck.
+Wie die Komponente liest und schreibt: `arknet-resource-access/CLAUDE.md`.
 
 Daneben das Suchwerkzeug `text_search` (readOnly, kogn-io/arknet#594 Teil 1) in `mcp/search/`, ebenfalls Composition-Root-In-Adapter ohne eigene Domaene: eine Pflicht-Query als Substring, gross-/kleinschreibungs-unabhaengig, ueber jedes Literal des Projekts und jeden Sprachtag hinweg -- die Volltextsuche, die `impact_analysis` (nur Kanten) nicht bietet.
 Der Treffer selbst laeuft als eigener SPARQL-Lesepfad (`StoreReader#literalContaining`, `FILTER(CONTAINS(LCASE(STR(?o)), LCASE(?q)))`), nicht ueber `readSnapshot`: die Nutzereingabe wird ueber den gebundenen `?q`-Parameter von kognio-rdfs `SparqlQuery#select(String, Map)` eingesetzt, nie in den Query-Text verkettet.
