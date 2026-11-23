@@ -11,5 +11,5 @@
     </parent>
 
     <artifactId>arknet-ontology</artifactId>
-    <description>OWL ontologies and SHACL shapes outside the four model bounded contexts: the generic core vocabulary, the arkres: vocabulary of generic resource access, provenance and the project registry (.ttl resources only, no Java)</description>
+    <description>OWL ontologies and SHACL shapes outside every bounded context: the generic core vocabulary, the arkres: vocabulary of generic resource access, provenance (.ttl resources only, no Java)</description>
 </project>

@@ -169,8 +169,7 @@ As built (from the POMs):
   of that language is made of. It uses nothing of kognio-rdf (`DependencyRulesTest`
   rule 3) and nothing of the module's write half (rule 14).
 - Every `-adapter-kogniordf` depends on its own core and `arknet-persistence-support`,
-  the writing ones additionally on their own context's ontology module (the project registry's
-  on `arknet-ontology`); on no neighbouring module. It resolves neighbour codes
+  the writing ones additionally on their own context's ontology module; on no neighbouring module. It resolves neighbour codes
   by SPARQL in the neighbour's graph (Published Language).
 - Every `-adapter-mcp` and `arknet-app` depend on `arknet-mcp-support`; it is not
   reachable transitively, because no core depends on it.
@@ -185,7 +184,7 @@ As built (from the POMs):
 - The modules of `arknet-resource-access` depend on their own core and on no module of a
   Bounded Context; it reads their resource types at runtime from ontology and shapes, found
   through the `META-INF/arknet/ontology.index` of every ontology module on the classpath (ADR-69,
-  consequence 8). Only its out-adapter's tests pull the four context ontology modules, at test
+  consequence 8). Only its out-adapter's tests pull the five context ontology modules, at test
   scope. Only the composition root may depend on it (`DependencyRulesTest`
   rule 17).
 
