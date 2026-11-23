@@ -26,16 +26,18 @@ Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context; von den Klassen
   Sie liegt im Core statt neben den `Ark*Vocabulary`-Klassen von `arknet-persistence-support`, weil jene die Namespaces der Kontexte spiegeln und diese die Sprache der Komponente selbst ist.
   Die Ontologie-Seite ist `arknet-ontology/src/main/resources/arknet-resource.ttl`.
   `domain.ResourceSchema` liest die Regeldaten aus den Shapes: Ressourcentypen mit Code-Praefix (an der Klasse), besessene Felder mit Kind-Art und Ordnungs-Property (an der Property-Shape, das Feld ist ihr `sh:path`).
-  Ein besessenes Feld ohne `sh:class` fuer seine Kinder bricht den Aufbau des Schemas ab: erst die Klasse macht ein Kind zum Fokusknoten seiner Node-Shape, und die Engine typisiert jedes neue Kind mit ihr (ein anders getyptes Kind lehnt sie ab).
+  Ein besessenes Feld, das fuer seine Kinder nicht genau eine `sh:class` nennt (keine oder mehr als eine), bricht den Aufbau des Schemas ab: erst die Klasse macht ein Kind zum Fokusknoten seiner Node-Shape, und die Engine typisiert jedes neue Kind mit ihr (ein anders getyptes Kind lehnt sie ab).
   `domain.SubmittedDocument` liest die Aktivitaeten eines geparsten Dokuments und lehnt ab, was ohne Store entscheidbar ist: jedes Tripel, das zu keiner Aktivitaet gehoert, einen Blank Node als Gegenstand zweier Creates, einen Zyklus aus Blank Nodes ausserhalb der neuen Ressourcen.
+  `domain.HandleReferences` erkennt die Handles eines geparsten Dokuments (IRIs unter `HandleReferences.BASE`) und ersetzt sie durch die IRIs, die der Out-Port `HandleLookup` liefert.
   `application.SubmitService` implementiert den In-Port `SubmitDocument`; `DocumentApplication` baut je beruehrter Ressource den Slice nach dem Dokument und nennt die Writes auf dem Batch.
-  `application.DescribeService` implementiert den In-Port `DescribeResourceType` (Records `ResourceCatalog`, `ResourceTypeSummary`, `ResourceTypeDescription`, `FieldDescription`).
+  `application.DescribeService` implementiert den In-Port `DescribeResourceType` (Records `ResourceCatalog`, `ResourceTypeSummary`, `ResourceTypeDescription`, `FieldDescription`, `ChangeExample`).
   `domain.PrefixBindings` haelt die Praefixe der ausgelieferten Dateien mit ihren Namespaces; der Adapter liest sie aus den `@prefix`-Zeilen, im Code steht keiner.
 - `arknet-resource-access-adapter-kogniordf`: Out-Adapter gegen den kognio-rdf-Store.
   `KognioRdfResourceRepositoryFactory` ist die einzige Klasse mit RDF4J: sie laedt die fuenf Shape-Dateien der Modellressourcen und die Modell-Ontologien per Dateiname vom Classpath (ohne `project-shapes.ttl`, das System-Dataset schreibt die Komponente nicht), baut daraus ein Gate und den Funnel und liefert Schema und Turtle-Parser fuer den Kern.
   Sie baut ausserdem `DescribeService` (`describer`), dem sie zu den Modell-Ontologien `arknet-resource.ttl` gibt, und liest die Praefixe (`prefixes`) per Rio aus denselben Dateien: zuerst die Ontologien, ein Praefix oder Namespace, der schon gebunden ist, bleibt bei seiner ersten Lesart.
   `KognioRdfResourceRepositoryFactoryTest` gleicht die Dateiliste gegen das ab, was `arknet-ontology` ausliefert.
   `KognioRdfResourceRepository` setzt `ResourceRepository` auf `VersionedWriteFunnel#writeAll` um.
+  `KognioRdfHandleLookup` (aus `handles`) setzt `HandleLookup` mit dem `HandleResolver` aus `arknet-persistence-support` um, demselben, den `resource_get` und `impact_analysis` nutzen.
 - `arknet-resource-access-adapter-mcp`: treibender Adapter mit den MCP-Werkzeugen; sieht vom Core nur `..application.port.in..` und keine RDF-Technologie, haengt an `arknet-mcp-support` fuer die Anker-Aufloesung.
   `ResourceAccessMcpTools` traegt `describe` und `submit` und rendert, was die In-Ports liefern.
   Die Klasse registriert sich nicht selbst; ob ihre Werkzeuge angeboten werden, entscheidet die Composition Root, die sie als Bean an die Property `arknet.resource-access.enabled` (`ResourceAccessMcpTools.ENABLED_PROPERTY`) bindet.
@@ -49,6 +51,10 @@ Zwei Aktivitaeten auf demselben Feld einer Ressource, deren Ergebnis von ihrer R
 Eine neue Ressource steht im Dokument als Blank Node, die Engine vergibt IRI und, bei einem Typ mit Praefix, den naechsten freien Code ueber lebende und von geloeschten Ressourcen gehaltene Codes.
 Ein besessenes Kind ist das Fragment `<Ressource>#<Art>-<Id>` und behaelt seinen Namen ueber jeden Write, der es behaelt; Positionen werden bei jedem Write auf das Feld lueckenlos ab 1 vergeben, die eines entfernten Kindes zaehlen im Stand vor dem Dokument.
 Ein Update nennt keinen erwarteten Stand, wie die typgenauen Werkzeuge: ein verlorener Commit laesst die Engine das ganze Dokument gegen den neuen Stand noch einmal anwenden, hoechstens `SubmitService.MAX_ATTEMPTS`-mal.
+Ein Dokument darf jeden Praefix der ausgelieferten Dateien (`prefixes`) ohne `@prefix`-Zeile schreiben; die Engine stellt die Deklarationen in die erste Zeile des Dokuments, damit eine Zeilenangabe eines Parse-Fehlers die Zeile des Dokuments bleibt, und eine eigene Deklaration des Dokuments gewinnt.
+Eine bestehende Ressource darf es ueber ihren Handle nennen, den Business-Code als relative IRI (`<REQ-12>`): Turtle kennt keinen nackten Namen, darum parst die Engine gegen die feste Basis `HandleReferences.BASE`, die nie gespeichert und nie gezeigt wird.
+Die Handles loest sie vor dem Lesen der Aktivitaeten ausserhalb der Schreibtransaktion auf und lehnt das Dokument ab, wenn einer keine oder mehr als eine Ressource nennt, oder wenn ein Handle an der Stelle eines Felds steht; eine Ressource, die zwischen Aufloesung und Write geloescht wird, faengt der Write ab, weil der Verweis keinen Typ mehr findet.
+Ein Dokument mit eigenem `@base` schreibt keine Handles.
 Aktivitaeten werden nicht als eigene Ressourcen gespeichert; die Spur ist der History-Eintrag der Bibliothek je geaenderter Ressource.
 Jede Ablehnung nennt die volle IRI dessen, was sie betrifft, deklariert jeden Praefix, den ihr Text schreibt, und jeden Namespace, den sie nennt, als `@prefix`-Zeile und verweist auf `describe` (ADR-59, Folge 5); ein Dokument, das kein gueltiges Turtle ist, bekommt alle bekannten Praefixe.
 
@@ -68,7 +74,9 @@ Die Art eines Felds folgt aus den Shapes: besessen (Regeldaten `arkres:childKind
 Labels und Kommentare kommen aus der Ontologie, Regelsaetze aus `sh:message` der Shapes, jeweils in der Anzeigesprache ueber die `DisplayLocale`-Kette; das MCP-Werkzeug nimmt ohne `displayLocale` die Standardsprache des Projekts.
 Ohne Typ liefert `describe` alle Ressourcentypen, das Aktivitaetsvokabular aus `arknet-resource.ttl` (ohne die Regeldaten) und die Praefix-Deklarationen.
 Das Beispiel eines Typs legt eine Ressource mit allen Pflichtfeldern und je einem Kind in jedem besessenen Feld an; eine Pflichtkante auf einen Ressourcentyp bekommt eine eigene Ressource im selben Dokument, damit das Beispiel gegen ein leeres Projekt laeuft.
-`DescribeRealStoreTest` reicht das Beispiel jedes Typs gegen einen echten Store ein.
+Dazu kommen Aenderungsbeispiele, die in ihrer Reihenfolge nach dem Beispiel laufen und dessen Ressource ueber ihren Handle nennen (den Code, den sie in einem leeren Projekt bekommt): ein Update setzt das erste Textfeld, sonst den ersten Wert oder die erste Auswahl; ein Typ mit besessenen Kindern bekommt ein AddTo eines zweiten Kinds in sein erstes besessenes Feld und ein RemoveFrom des ersten; zuletzt ein Delete.
+Ein Typ ohne Code hat keinen Handle; seine Aenderungsbeispiele nennen einen Platzhalter, an dessen Stelle die IRI tritt, die `submit` fuer die Ressource geliefert hat.
+`DescribeRealStoreTest` reicht das Beispiel jedes Typs und danach seine Aenderungsbeispiele gegen einen echten Store ein.
 
 ## Pruefung
 
