@@ -6,8 +6,17 @@ package de.hauschel.arknet.resource.adapter.kogniordf;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Stream;
+
+import org.eclipse.rdf4j.model.Namespace;
+import org.eclipse.rdf4j.rio.RDFFormat;
+import org.eclipse.rdf4j.rio.Rio;
 
 import io.kogn.rdf.dataset.GraphImport;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
@@ -20,9 +29,16 @@ import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.HandleResolver;
+import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
+import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
+import de.hauschel.arknet.resource.application.DescribeService;
+import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
+import de.hauschel.arknet.resource.application.port.out.HandleLookup;
 import de.hauschel.arknet.resource.application.port.out.ResourceRepository;
+import de.hauschel.arknet.resource.domain.PrefixBindings;
 import de.hauschel.arknet.resource.domain.ResourceSchema;
 
 /**
@@ -50,6 +66,9 @@ public final class KognioRdfResourceRepositoryFactory {
     static final List<String> ONTOLOGY_RESOURCES = List.of("/arknet-core.ttl", "/arknet-ddd.ttl",
             "/arknet-actor.ttl", "/arknet-requirements.ttl", "/arknet-architecture.ttl");
 
+    /** The vocabulary of generic access itself: its labels and comments explain the activities. */
+    static final String RESOURCE_ONTOLOGY = "/arknet-resource.ttl";
+
     private KognioRdfResourceRepositoryFactory() {
     }
 
@@ -64,6 +83,18 @@ public final class KognioRdfResourceRepositoryFactory {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
         return new KognioRdfResourceRepository(buildFunnel(lifecycle, displayLocale));
+    }
+
+    /**
+     * The handle lookup over the same dataset lifecycle: a bare code resolves the way
+     * {@code resource_get} resolves it.
+     *
+     * @param lifecycle the dataset lifecycle every project dataset is acquired from
+     * @return the lookup
+     */
+    public static HandleLookup handles(final DatasetLifecycle lifecycle) {
+        Objects.requireNonNull(lifecycle, "lifecycle");
+        return new KognioRdfHandleLookup(new HandleResolver(new StoreReader(lifecycle), Prefixes.defaults()));
     }
 
     /**
@@ -105,6 +136,55 @@ public final class KognioRdfResourceRepositoryFactory {
      */
     static ReadableGraph shapes() {
         return union(SHAPE_RESOURCES);
+    }
+
+    /**
+     * The type descriptions, read off the shapes and the ontologies of the model and of {@code arkres:}.
+     *
+     * @param displayLocale the display language when a call names none
+     * @return the describing in-port
+     */
+    public static DescribeResourceType describer(final DisplayLocale displayLocale) {
+        Objects.requireNonNull(displayLocale, "displayLocale");
+        ReadableGraph shapes = shapes();
+        return new DescribeService(shapes, union(describedOntologies()), ResourceSchema.of(shapes), prefixes(),
+                displayLocale);
+    }
+
+    /**
+     * The prefixes the shipped ontologies and shapes declare, each with the namespace it stands for.
+     *
+     * <p>Read off the {@code @prefix} lines of the files, so no namespace is written down here. The
+     * ontologies are read first; a prefix a later file binds to a different namespace, and a second
+     * prefix for a namespace already bound, are left out, so every prefix and every namespace has one
+     * reading.</p>
+     *
+     * @return the bindings
+     */
+    public static PrefixBindings prefixes() {
+        Map<String, String> byPrefix = new LinkedHashMap<>();
+        Set<String> namespaces = new HashSet<>();
+        Stream.concat(describedOntologies().stream(), SHAPE_RESOURCES.stream())
+                .flatMap(resource -> namespaces(resource).stream())
+                .filter(binding -> !binding.getPrefix().isEmpty())
+                .filter(binding -> !byPrefix.containsKey(binding.getPrefix()))
+                .filter(binding -> namespaces.add(binding.getName()))
+                .forEach(binding -> byPrefix.put(binding.getPrefix(), binding.getName()));
+        return new PrefixBindings(byPrefix);
+    }
+
+    private static List<String> describedOntologies() {
+        return Stream.concat(ONTOLOGY_RESOURCES.stream(), Stream.of(RESOURCE_ONTOLOGY)).toList();
+    }
+
+    private static Set<Namespace> namespaces(final String classpathResource) {
+        URL resource = KognioRdfResourceRepositoryFactory.class.getResource(classpathResource);
+        Objects.requireNonNull(resource, "missing classpath resource " + classpathResource);
+        try (InputStream in = resource.openStream()) {
+            return Rio.parse(in, "", RDFFormat.TURTLE).getNamespaces();
+        } catch (IOException e) {
+            throw new IllegalStateException("failed to load " + classpathResource, e);
+        }
     }
 
     private static Graph union(final List<String> resources) {

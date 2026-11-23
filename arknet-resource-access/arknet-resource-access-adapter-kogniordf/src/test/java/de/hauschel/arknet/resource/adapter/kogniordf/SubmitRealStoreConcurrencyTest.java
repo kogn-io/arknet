@@ -112,9 +112,10 @@ class SubmitRealStoreConcurrencyTest {
         assertTrue(reader.outgoing(SubmitRealStoreTest.PROJECT, term).isEmpty());
     }
 
-    private static SubmitService service(final ResourceRepository store) {
+    private SubmitService service(final ResourceRepository store) {
         return new SubmitService(KognioRdfResourceRepositoryFactory.schema(), store,
-                KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory());
+                KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
+                KognioRdfResourceRepositoryFactory.prefixes(), KognioRdfResourceRepositoryFactory.handles(lifecycle));
     }
 
     /** Pauses the first read of one resource until a concurrent writer has deleted it. */

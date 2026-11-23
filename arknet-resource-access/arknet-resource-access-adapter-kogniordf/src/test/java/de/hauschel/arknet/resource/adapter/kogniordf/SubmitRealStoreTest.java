@@ -4,6 +4,7 @@
 package de.hauschel.arknet.resource.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
@@ -40,6 +42,7 @@ import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.application.port.in.SubmitResult;
 import de.hauschel.arknet.resource.application.port.in.SubmittedChange;
 import de.hauschel.arknet.resource.application.port.out.ResourceRepository;
+import de.hauschel.arknet.resource.domain.HandleReferences;
 import de.hauschel.arknet.resource.domain.SubmitRejectedException;
 
 /**
@@ -91,7 +94,8 @@ class SubmitRealStoreTest {
 
     SubmitService service(final ResourceRepository store) {
         return new SubmitService(KognioRdfResourceRepositoryFactory.schema(), store,
-                KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory());
+                KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
+                KognioRdfResourceRepositoryFactory.prefixes(), KognioRdfResourceRepositoryFactory.handles(lifecycle));
     }
 
     @Test
@@ -341,7 +345,130 @@ class SubmitRealStoreTest {
 
         // then
         assertTrue(rejected.getMessage().contains(REQ + "usesTerm"), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("@prefix arkreq: <" + REQ + "> ."), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("Call describe"), rejected.getMessage());
         assertTrue(reader.findByIdentifier(PROJECT, "FR-1").isEmpty());
+    }
+
+    @Test
+    void aDocumentWritesTheKnownPrefixesWithoutDeclaringThem() {
+        // when
+        SubmitResult result = submit.submit(PROJECT, """
+                [] a arkres:Create ; arkres:object _:t .
+                _:t a skos:Concept ; skos:prefLabel "Handle"@en .
+                """);
+
+        // then
+        assertEquals(Set.of("Handle@en"),
+                fields(iriOf(result, "TERM-1")).get("http://www.w3.org/2004/02/skos/core#prefLabel"));
+    }
+
+    @Test
+    void aDocumentsOwnPrefixDeclarationWinsAndAParseErrorKeepsItsLine() {
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT,
+                "@prefix skos: <urn:not-skos#> .\n[] a arkres:Create ; arkres:object _:t .\n"
+                        + "_:t a skos:Concept ; skos:prefLabel \"A\"@en .\n"));
+        SubmitRejectedException unparseable = assertThrows(SubmitRejectedException.class,
+                () -> submit.submit(PROJECT, "# first line\n[] a arkres:Create ;\n  arkres:object _:t _:u .\n"));
+
+        // then
+        assertTrue(rejected.getMessage().contains("urn:not-skos#Concept"), rejected.getMessage());
+        assertTrue(unparseable.getMessage().contains("line 3"), unparseable.getMessage());
+    }
+
+    @Test
+    void aHandleNamesAnExistingResource() {
+        // given
+        String term = iriOf(submit.submit(PROJECT, PREFIXES
+                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"A\"@en .\n"), "TERM-1");
+        String fr = iriOf(submit.submit(PROJECT, PREFIXES + """
+                [] a arkres:Create ; arkres:object _:fr .
+                _:fr a arkreq:FunctionalRequirement ; dcterms:title "Write"@en ; dcterms:description "Writes."@en ;
+                    arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText "Works."@en ] .
+                """), "FR-1");
+
+        // when
+        submit.submit(PROJECT, """
+                [] a arkres:Update ; arkres:object <FR-1> ; arkres:set [ arkreq:usesTerm <TERM-1> ] .
+                [] a arkres:AddTo ; arkres:object <FR-1> ; arkres:field arkreq:acceptanceCriterion ;
+                    arkres:value [ arkreq:position 2 ; arkreq:criterionText "Still works."@en ] .
+                """);
+
+        // then
+        assertEquals(Set.of(term), fields(fr).get(REQ + "usesTerm"));
+        assertEquals(2, fields(fr).get(REQ + "acceptanceCriterion").size());
+        assertTrue(reader.readSnapshot(PROJECT).resources().stream().flatMap(resource -> resource.outgoing().stream())
+                .noneMatch(triple -> triple.subject().startsWith(HandleReferences.BASE)
+                        || triple.object() instanceof RdfNode.Resource object
+                                && object.iri().startsWith(HandleReferences.BASE)),
+                "the handle base never reaches the store");
+    }
+
+    @Test
+    void aDocumentWithItsOwnBaseWritesNoHandles() {
+        // given
+        String fr = iriOf(submit.submit(PROJECT, PREFIXES + """
+                [] a arkres:Create ; arkres:object _:fr .
+                _:fr a arkreq:FunctionalRequirement ; dcterms:title "Write"@en ; dcterms:description "Writes."@en ;
+                    arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText "Works."@en ] .
+                """), "FR-1");
+
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT,
+                "@base <https://example.org/own/> .\n"
+                        + "[] a arkres:Update ; arkres:object <FR-1> ; arkres:set [ dcterms:title \"Other\"@en ] .\n"));
+
+        // then
+        assertTrue(rejected.getMessage().contains("https://example.org/own/FR-1"), rejected.getMessage());
+        assertEquals(Set.of("Write@en"), fields(fr).get(DCT + "title"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"<./arkreq:FR-1>", "<./_:b1>", "<./FR-1/x>"})
+    void aHandleThatIsNoBareCodeIsRejected(final String handle) {
+        // given
+        submit.submit(PROJECT, PREFIXES + """
+                [] a arkres:Create ; arkres:object _:fr .
+                _:fr a arkreq:FunctionalRequirement ; dcterms:title "Write"@en ; dcterms:description "Writes."@en ;
+                    arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText "Works."@en ] .
+                """);
+
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT,
+                "[] a arkres:Delete ; arkres:object " + handle + " .\n"));
+
+        // then
+        assertTrue(rejected.getMessage().contains("a handle is a bare business code"), rejected.getMessage());
+        assertFalse(reader.findByIdentifier(PROJECT, "FR-1").isEmpty());
+    }
+
+    @Test
+    void aHandleThatNamesNoResourceIsRejected() {
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT, """
+                [] a arkres:Create ; arkres:object _:fr .
+                _:fr a arkreq:FunctionalRequirement ; dcterms:title "Write"@en ; dcterms:description "Writes."@en ;
+                    arkreq:usesTerm <TERM-9> ;
+                    arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText "Works."@en ] .
+                """));
+
+        // then
+        assertTrue(rejected.getMessage().contains("<TERM-9>"), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("No resource found for id 'TERM-9'"), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("Call describe"), rejected.getMessage());
+        assertTrue(reader.findByIdentifier(PROJECT, "FR-1").isEmpty());
+    }
+
+    @Test
+    void aHandleWhereAFieldBelongsIsRejected() {
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT,
+                "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; <TERM-1> \"A\"@en .\n"));
+
+        // then
+        assertTrue(rejected.getMessage().contains("where a field belongs"), rejected.getMessage());
+        assertTrue(reader.findByIdentifier(PROJECT, "TERM-1").isEmpty());
     }
 
     @Test
