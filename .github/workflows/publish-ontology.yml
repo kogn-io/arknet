@@ -1,0 +1,69 @@
+name: Publish ontology (GitHub Pages)
+
+# Publishes every .ttl under a module's src/main/resources of the given ref flat to
+#   https://<owner>.github.io/<repo>/ontology/<file>.ttl
+# The selection follows the files, not a module name, so it survives their move
+# between modules. The Pages site is replaced as a whole by each run.
+#
+# Called by release.yml after the release object exists; can also be run by hand
+# for an existing tag (Actions tab -> "Run workflow", ref = e.g. v0.12.0).
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag to publish, e.g. v0.12.0'
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Tag to publish, e.g. v0.12.0'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write # deploy-pages
+  id-token: write # deploy-pages OIDC
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Collect ontology and shape files
+        run: |
+          mapfile -t FILES < <(find . -path '*/src/main/resources/*' -name '*.ttl' \
+            -not -path '*/target/*' -not -path '*/src/test/*' | sort)
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "::error::No .ttl files found under */src/main/resources/."
+            exit 1
+          fi
+          DUPLICATES=$(printf '%s\n' "${FILES[@]}" | xargs -n1 basename | sort | uniq -d)
+          if [ -n "$DUPLICATES" ]; then
+            echo "::error::Duplicate .ttl file names, the site path is flat: $DUPLICATES"
+            exit 1
+          fi
+          mkdir -p site/ontology
+          cp "${FILES[@]}" site/ontology/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

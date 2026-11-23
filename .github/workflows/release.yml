@@ -29,6 +29,8 @@ on:
 permissions:
   contents: write # tag push + GitHub release object
   packages: write # versioned image push to GHCR
+  pages: write # ontology publish (called workflow)
+  id-token: write # ontology publish (called workflow)
 
 jobs:
   release:
@@ -151,3 +153,11 @@ jobs:
           git add pom.xml
           git commit -m "chore: bump revision to $NEXT after v$VERSION"
           git push origin HEAD:main
+
+  publish-ontology:
+    # Pages deployment of the ontology and shape files of the new tag; runs only
+    # after the release job cut tag and release object.
+    needs: release
+    uses: ./.github/workflows/publish-ontology.yml
+    with:
+      ref: v${{ inputs.version }}

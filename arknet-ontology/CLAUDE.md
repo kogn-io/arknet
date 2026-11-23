@@ -10,6 +10,8 @@ lebenden Konsumenten (kein BC, keine Komponente, keine Java-Referenz) -- Ontolog
 gebraucht und ist darum auch nicht unter `w3id.org/arknet/` veroeffentlicht. Verschieben zurueck
 nach `src/main/resources/` erst, wenn ein BC oder eine Komponente das Modul tatsaechlich konsumiert.
 
+Jedes Release veroeffentlicht alle `.ttl` unter `*/src/main/resources/` aller Module (auch `parked/`) flach unter `https://kogn-io.github.io/arknet/ontology/<datei>.ttl` (GitHub Pages, Workflow `publish-ontology.yml`); Dateinamen muessen repoweit eindeutig sein, sonst bricht der Workflow ab.
+
 Die fuenf Shape-Dateien der Modellressourcen tragen neben den Shapes Regeldaten des generischen Ressourcenzugriffs im Namespace `arkres:` (`arknet-resource.ttl`): welche Klassen Ressourcentypen sind und mit welchem Praefix ihr fachlicher Code beginnt (an der Klasse), welche Felder ihre Kinder besitzen und nach welcher Property diese geordnet sind (an der Property-Shape).
 SHACL wertet diese Tripel nicht aus; die typgenauen Kerne ignorieren sie, `arknet-resource-access` liest allein sie und nennt keinen Ressourcentyp im Code.
 `project-shapes.ttl` traegt keine, weil die Projekt-Registry im System-Dataset liegt, das der generische Zugriff nicht schreibt.
