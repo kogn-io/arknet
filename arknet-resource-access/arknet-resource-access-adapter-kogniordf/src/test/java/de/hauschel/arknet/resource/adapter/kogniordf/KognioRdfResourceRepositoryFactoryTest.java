@@ -5,6 +5,7 @@ package de.hauschel.arknet.resource.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.net.JarURLConnection;
@@ -41,6 +42,19 @@ class KognioRdfResourceRepositoryFactoryTest {
         assertEquals(shipped(name -> !name.endsWith(KognioRdfResourceRepositoryFactory.SHAPES_SUFFIX)
                 && !KognioRdfResourceRepositoryFactory.RESOURCE_ONTOLOGY.equals(name)),
                 new TreeSet<>(KognioRdfResourceRepositoryFactory.ontologyResources()));
+    }
+
+    /**
+     * The opt-out list names files that are still shipped: a renamed or moved system file would
+     * otherwise drop out of the list unnoticed and enter the one gate under its new name.
+     */
+    @Test
+    void everyFileLeftOutOfGenericAccessIsStillIndexed() {
+        Set<String> indexed = KognioRdfResourceRepositoryFactory.indexedFiles();
+        KognioRdfResourceRepositoryFactory.OUTSIDE_GENERIC_ACCESS.forEach(name -> assertTrue(indexed.contains(name),
+                name + " is left out of generic access by name, but no ontology index lists it any more"));
+        assertTrue(indexed.contains(KognioRdfResourceRepositoryFactory.RESOURCE_ONTOLOGY),
+                KognioRdfResourceRepositoryFactory.RESOURCE_ONTOLOGY + " is named by the factory, but no index lists it");
     }
 
     /**
