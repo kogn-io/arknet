@@ -261,7 +261,6 @@ ashapes:ConsideredOption-name
     a sh:PropertyShape ;
     sh:path     arknet:name ;
     sh:minCount 1 ;
-    sh:minLength 1 ;
     sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
     sh:message  "A ConsideredOption needs at least one arknet:name, not blank. sh:uniqueLang allows at most one per non-empty language tag."@en , "ConsideredOption braucht mindestens einen arknet:name, nicht leer. sh:uniqueLang erlaubt hoechstens einen je nicht-leerem Sprach-Tag."@de ;
