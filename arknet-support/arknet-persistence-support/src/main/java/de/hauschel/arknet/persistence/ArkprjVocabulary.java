@@ -12,7 +12,7 @@ package de.hauschel.arknet.persistence;
  * constants, not domain vocabulary. The project core never sees an IRI (its identity is opaque),
  * so they live here next to {@link SparqlTerms} rather than in the shared kernel, and as bare
  * strings they keep this module RDF4J-free. The ontology side is
- * {@code arknet-ontology/src/main/resources/arknet-project.ttl}.</p>
+ * {@code arknet-project-registry/arknet-project-registry-ontology/src/main/resources/arknet-project.ttl}.</p>
  *
  * <p><strong>Two graphs, two datasets, one vocabulary.</strong> A
  * project is written twice, deliberately:</p>

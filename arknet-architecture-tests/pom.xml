@@ -244,7 +244,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Die Ontologie-Abgleiche (OntologyFixtures): alle fuenf Ontologiemodule explizit, damit
+        <!-- Die Ontologie-Abgleiche (OntologyFixtures): alle sechs Ontologiemodule explizit, damit
              kein Abgleich still ein Modul weniger prueft, wenn eine Adapter-Abhaengigkeit oben
              wegfaellt; OntologyIndexListsEveryShippedFileTest prueft, dass jedes Ontologiemodul des
              Builds auf dem Test-Classpath liegt. -->
@@ -279,6 +279,12 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-project-registry-ontology</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>

@@ -140,6 +140,7 @@ The three technical-library modules (`arknet-persistence-support`,
 | Actor                            | arknet-actor-register (Maven parent: `arknet-actor`) | -core, -adapter-kogniordf, -adapter-mcp |
 | Actor                            | (ontology module, no Component)       | arknet-actor-ontology                       |
 | Project Registry                | arknet-project (Maven parent: `arknet-project-registry`) | -core, -adapter-kogniordf, -adapter-mcp |
+| Project Registry                | (ontology module)                     | arknet-project-registry-ontology            |
 | Model Analysis                   | arknet-model-evaluation (Maven parent: `arknet-model-analysis`) | -core, -adapter-kogniordf, -adapter-mcp (an -adapter-html follows with the report, #642) |
 | (none, ADR-69)                   | arknet-resource-access (Maven parent: itself, directly under the root) | -core, -adapter-kogniordf, -adapter-mcp |
 
@@ -152,7 +153,7 @@ Outside every Bounded Context:
 | Technical library                  | arknet-persistence-support      | Under the `arknet-support` aggregator. SHACL gate, the versioned write path VersionedWriteFunnel (draft, publish and tombstone over kognio-rdf rdf-versioning, one content graph per project dataset), vocabulary constants and the type-independent read path over a project's dataset (StoreReader, the triple read model, Prefixes, HandleResolver, ResourceRenderer) -- no model term, hence neither Shared Kernel nor vocabulary |
 | Technical library                  | arknet-mcp-support              | Under the `arknet-support` aggregator. Support of the driving MCP adapters and the composition root: ProjectResolver/ResolvedProject, StaleTranslationHint/FieldLanguageLookup, WriteResponse, ToolParameterDescriptions. No core and no vocabulary module depends on it (rule 11) |
 | Technical library (test scope)     | arknet-persistence-test-support | Under the `arknet-support` aggregator. Guarded* decorators |
-| Published Language (schema)        | arknet-ontology                 | .ttl ontologies and shapes outside the four model contexts: core vocabulary, `arkres:`, provenance, project registry. Each of Product & Requirements, Domain Modelling, Architecture & Decisions and Actor ships its own as `<context>-ontology` under its Maven parent; every ontology module lists its files in `META-INF/arknet/ontology.index` |
+| Published Language (schema)        | arknet-ontology                 | .ttl ontologies and shapes outside the bounded contexts: core vocabulary, `arkres:`, provenance. Each of Product & Requirements, Domain Modelling, Architecture & Decisions, Actor and Project Registry ships its own as `<context>-ontology` under its Maven parent; every ontology module lists its files in `META-INF/arknet/ontology.index` |
 | Checker                            | arknet-architecture-tests       | ArchUnit rules and ontology cross-checks |
 
 ## 4. Dependencies

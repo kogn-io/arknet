@@ -26,7 +26,7 @@ import de.hauschel.arknet.persistence.ArkprjVocabulary;
  *
  * <p>The same terms are written down twice, in two modules that do not depend on each other:
  * {@link ArkprjVocabulary} in {@code arknet-persistence-support} is what the project out-adapter
- * actually writes into the store, {@code arknet-project.ttl} in {@code arknet-ontology} is what
+ * actually writes into the store, {@code arknet-project.ttl} in {@code arknet-project-registry-ontology} is what
  * arknet ships as the documented meaning of those statements. Nothing connects them.</p>
  *
  * <p><strong>Why this cannot be caught elsewhere.</strong> Every other test of project
