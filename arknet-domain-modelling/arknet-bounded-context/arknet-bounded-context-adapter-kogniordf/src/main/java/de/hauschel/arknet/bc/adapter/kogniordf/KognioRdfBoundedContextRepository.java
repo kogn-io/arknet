@@ -150,10 +150,11 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  * before tactical design, has no aggregates yet, and that must not block the write.</p>
  *
  * <p><strong>Row multiplication.</strong> {@code arkddd:partOf}'s
- * {@code sh:maxCount 1} is {@code sh:Warning}-severity only and {@code arkddd:ownedBy} carries no
- * {@code sh:maxCount} at all, so a store-first bounded context with two triples on
- * either predicate legally multiplies a single-subject query's SPARQL rows too, not only
- * {@link #findAll}'s. {@link #findByCode} and {@link #findCurrentByCode} share
+ * {@code sh:maxCount 1} is {@code sh:Warning}-severity only, and {@code arkddd:ownedBy}'s
+ * {@code sh:maxCount 1} ({@code shapes:BoundedContext-ownedBy-text}) is enforced only since
+ * kogn-io/arknet#742, so data written before that may still hold two values. A bounded context
+ * with two triples on either predicate therefore multiplies a single-subject query's SPARQL rows
+ * too, not only {@link #findAll}'s. {@link #findByCode} and {@link #findCurrentByCode} share
  * {@link #boundedContextByCodeWhereClause}, whose two {@code OPTIONAL} joins (subdomain,
  * ownedBy) bind a cross product of rows for one subject exactly as {@link #findAll}'s do -
  * {@link #reduceSubdomainOwnedBy} therefore consumes every row the query returns, not just the
@@ -984,9 +985,10 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * {@code WARN} naming {@code subjectIri}/{@code fieldName} when more than one distinct value
      * was collapsed. The shared row-multiplication guard behind both {@link #findAll} (via
      * {@link BoundedContextAssembly#toBoundedContext}) and {@link #reduceSubdomainOwnedBy} - {@code
-     * arkddd:partOf}/{@code arkddd:ownedBy} carry no enforceable {@code sh:maxCount}, so a
-     * store-first bounded context can legally bind more than one row for either field
-     * (issue #158).
+     * arkddd:partOf} carries no enforceable {@code sh:maxCount}, so a store-first bounded context
+     * can legally bind more than one row for it (issue #158); {@code arkddd:ownedBy} is held to
+     * one value by {@code sh:maxCount 1} since kogn-io/arknet#742, and the guard stays for data
+     * written before that.
      */
     private static <T> T firstDistinctValue(List<T> candidates, String subjectIri, String fieldName) {
         if (candidates.isEmpty()) {

@@ -242,6 +242,28 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
+     * kogn-io/arknet#742: a legacy term carrying a different word under each language tag breaks
+     * {@code ulshapes:Term-prefLabel-oneWord}. An update that leaves the labels as they are is
+     * rejected; a rename without a language, which writes one word under every tag, repairs it.
+     */
+    @Test
+    void aLegacyTermWithADifferentWordPerLanguageCanOnlyBeRenamed() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "Erste Definition.", "\"Kunde\"@de, \"Customer\"@en");
+
+        WriteConstraintViolationException rejected = assertThrows(WriteConstraintViolationException.class,
+                () -> repository.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null, null));
+        assertTrue(rejected.getMessage().contains("one word under every language tag"), rejected.getMessage());
+
+        repository.update(PROJECT_A, code, "Kunde", null, null, null, null, null);
+
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "en"));
+        assertFalse(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Customer", "en"));
+    }
+
+    /**
      * FR-10 (kogn-io/arknet#502): a {@code prefLabel} supplied without a {@code language} is a
      * rename, not a scoped correction - it replaces the word under EVERY language tag the term
      * already carries at once, not just an untagged slot. Renaming "Kunde"@de/"Customer"@en

@@ -63,6 +63,7 @@ Ein Gate prueft alle Ressourcentypen: die Shapes aller fuenf Dateien, die Modell
 Die typgenauen Adapter setzen einen referenzierten Nachbarn nur mit seinem Typ in den Asserted Context und filtern fremde Shapes aus ihrem Gate; ein Gate ueber alles kann das nicht, der Typ allein aktivierte die Node-Shape des Nachbarn und scheiterte an dessen Pflichtfeldern.
 Die Engine setzt darum die Slices aller ueber Verweise erreichbaren Ressourcen nach dem Dokument in den Asserted Context, transitiv; ein Verweis auf eine Ressource, die es danach nicht gibt, findet keinen Typ und verletzt das `sh:class` seiner Shape.
 Diese Nachbarn liest sie ueber den Batch in der Schreibtransaktion; `SubmitRealStoreConcurrencyTest` haelt fest, dass ein paralleler Loescher des Gelesenen die Engine ihren Commit kostet und der zweite Lauf den Verweis ablehnt.
+Weil die Nachbarn mitvalidiert werden, blockiert eine gespeicherte Ressource, die ihre Shapes verletzt (etwa ein Altbegriff ohne Definition), jedes Dokument, das sie ueber einen Verweis erreicht, nicht nur Schreibvorgaenge an ihr selbst.
 
 ## describe
 

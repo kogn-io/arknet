@@ -368,6 +368,7 @@ public final class DescribeService implements DescribeResourceType {
      */
     private final class ExampleWriter {
 
+        /** Most resources one example writes, counted as nodes, not as distinct types. */
         private static final int MAX_RESOURCES = 4;
 
         private final String language;
