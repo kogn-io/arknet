@@ -153,12 +153,11 @@ import de.hauschel.arknet.uc.domain.UseCaseReferencedException;
  * exactly like the {@code skos:Concept} assertion above - copying the constraint's real triples
  * would add complexity without changing what actually gets validated.</p>
  *
- * <p>A use case with zero main steps is handled the same way.
- * {@code arkreq:mainStep} is only {@code sh:Warning} severity at {@code sh:minCount 1} (not
- * {@code sh:Violation}), so {@link ShaclWriteGate#enforce} lets a store-first use case
- * through with no {@code arkreq:mainStep} triples at all - {@link UseCase}'s compact constructor
- * rejects an empty {@code steps} list unconditionally. {@link #readBySubject} skips such a use
- * case rather than letting the
+ * <p>A use case with zero main steps is handled the same way. {@code arkreq:mainStep} is
+ * {@code sh:Violation} severity at {@code sh:minCount 1}, so the gate rejects a new one; data
+ * written before that rule can still hold a use case with no {@code arkreq:mainStep} triples
+ * at all, and {@link UseCase}'s compact constructor rejects an empty {@code steps} list
+ * unconditionally. {@link #readBySubject} skips such a use case rather than letting the
  * constructor's exception propagate out of {@link #findAll}/{@link #findByCode} and crash every
  * read for the whole project.</p>
  *
@@ -1235,9 +1234,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         List<StepAssembly> stepAssemblies = readMainStepAssemblies(handle, subject);
         List<Step> steps = toSteps(stepAssemblies, locale);
         if (steps.isEmpty()) {
-            // arkreq:mainStep is only sh:Warning severity at sh:minCount 1 (not sh:Violation), so
-            // ShaclWriteGate#enforce lets a store-first use case through with zero main
-            // steps. UseCase's compact constructor rejects an empty steps list unconditionally -
+            // arkreq:mainStep is sh:Violation at sh:minCount 1, so the gate rejects a use case
+            // with zero main steps today; one written before that rule may still exist.
+            // UseCase's compact constructor rejects an empty steps list unconditionally -
             // skip this one use case instead of
             // letting the constructor throw out of findByCode/findAll for the whole project.
             return Optional.empty();

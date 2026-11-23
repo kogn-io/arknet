@@ -260,6 +260,33 @@ class ProductRequirementsRulesRealStoreTest {
     }
 
     @Test
+    void anUntaggedAndATaggedCriterionWithTheSameStringAreRejected() {
+        // when
+        SubmitRejectedException rejected = rejected("[] a arkres:Create ; arkres:object _:fr .\n"
+                + "_:fr a arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ;"
+                + " dcterms:description \"Writes it.\"@en ;"
+                + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"Works fine.\"@en ] ,"
+                + " [ arkreq:position 2 ; arkreq:criterionText \"Works fine.\" ] .\n");
+
+        // then
+        assertTrue(rejected.getMessage().contains("must not carry the same arkreq:criterionText"),
+                rejected.getMessage());
+        assertNothingStored("FR-1");
+    }
+
+    @Test
+    void twoCriteriaWithTheSameStringUnderDifferentLanguageTagsAreAccepted() {
+        assertDoesNotThrow(() -> submit.submit(SubmitRealStoreTest.PROJECT, PREFIXES
+                + "[] a arkres:Create ; arkres:object _:fr .\n"
+                + "_:fr a arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ;"
+                + " dcterms:description \"Writes it.\"@en ;"
+                + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"Works fine.\"@en ;"
+                + " arkreq:criterionText \"Funktioniert.\"@de ] ,"
+                + " [ arkreq:position 2 ; arkreq:criterionText \"Funktioniert.\"@en ;"
+                + " arkreq:criterionText \"Works fine.\"@de ] .\n"));
+    }
+
+    @Test
     void anAcceptanceCriterionAddedWithATextTheRequirementAlreadyHasIsRejected() {
         // given
         String fr = storedRequirement();
