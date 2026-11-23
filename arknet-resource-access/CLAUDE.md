@@ -17,7 +17,7 @@ Der Kern darf die technologieneutralen kognio-rdf-Ports kennen, aber weder RDF4J
 Seine In-Ports tragen dennoch keine kognio-rdf-Typen, nur Strings, Records und Kernel-Typen: der treibende MCP-Adapter der Komponente sieht nur `..application.port.in..` und keine RDF-Technologie (`DependencyRulesTest` Regel 4).
 Die Out-Ports (`ResourceRepository`, `ResourceBatch`) sprechen dagegen Tripel.
 Kein Konstruktor eines Domaenentyps prueft die Invarianten einer ueber sie geschriebenen Ressource; was sich nicht als Shape oder als Regel in Daten ausdruecken laesst, hat hier keinen Platz.
-Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context; von den Klassen anderer Module darf nur die Composition Root sie nennen (Regel 17), auf Maven-Ebene zieht sie allein `arknet-architecture-tests` im Test-Scope.
+Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context; von den Klassen anderer Module darf nur die Composition Root sie nennen (Regel 17), auf Maven-Ebene haengen an ihren Modulen nur die Composition Root und, im Test-Scope, `arknet-architecture-tests`.
 
 ## Module
 
@@ -38,8 +38,8 @@ Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context; von den Klassen
   `KognioRdfResourceRepository` setzt `ResourceRepository` auf `VersionedWriteFunnel#writeAll` um.
 - `arknet-resource-access-adapter-mcp`: treibender Adapter mit den MCP-Werkzeugen; sieht vom Core nur `..application.port.in..` und keine RDF-Technologie, haengt an `arknet-mcp-support` fuer die Anker-Aufloesung.
   `ResourceAccessMcpTools` traegt `describe` und `submit` und rendert, was die In-Ports liefern.
-  Registriert wird die Klasse nur, wenn die Property `arknet.resource-access.enabled` (`ResourceAccessMcpTools.ENABLED_PROPERTY`) `true` ist; ohne sie bleiben die typgenauen Werkzeuge die einzige Schreiboberflaeche.
-  Die Bedingung sitzt an der Bean in der Composition Root, nicht im Modul: ausser `arknet-app` traegt kein Modul eine Spring-Konfiguration.
+  Die Klasse registriert sich nicht selbst; ob ihre Werkzeuge angeboten werden, entscheidet die Composition Root, die sie als Bean an die Property `arknet.resource-access.enabled` (`ResourceAccessMcpTools.ENABLED_PROPERTY`) bindet.
+  Die Bedingung gehoert an diese Bean, nicht ins Modul: ausser `arknet-app` traegt kein Modul eine Spring-Konfiguration.
 
 ## submit
 
@@ -60,6 +60,7 @@ Diese Nachbarn liest sie ueber den Batch in der Schreibtransaktion; `SubmitRealS
 ## describe
 
 `describe` liest einen Ressourcentyp allein aus Shapes und Ontologie (ADR-59, ADR-69).
+Die Beschreibung deklariert jeden Praefix, den einer ihrer Texte schreibt, das Beispiel zusaetzlich seine eigenen.
 Die Felder eines Typs sind die Property-Shapes aller Node-Shapes, die den Typ oder eine seiner Oberklassen (`rdfs:subClassOf` der Ontologie) als `sh:targetClass` nennen; mehrere Shapes auf einem Pfad verschmelzen zu einem Feld.
 Pflicht ist ein Feld mit `sh:minCount` in einer Shape der Schwere Violation, empfohlen eines mit `sh:minCount` nur unter `sh:Warning`; `sh:maxCount` zaehlt nur aus Violation-Shapes.
 Die Art eines Felds folgt aus den Shapes: besessen (Regeldaten `arkres:childKind`), Auswahl (`sh:in`), Kante (`sh:class`, `sh:or` ueber Klassen, `sh:nodeKind sh:IRI`), Text (`sh:uniqueLang` oder `rdf:langString`), sonst Wert.

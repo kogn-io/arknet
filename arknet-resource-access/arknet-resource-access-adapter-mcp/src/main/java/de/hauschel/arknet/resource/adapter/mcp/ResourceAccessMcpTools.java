@@ -32,9 +32,10 @@ import de.hauschel.arknet.resource.application.port.in.SubmittedChange;
  * {@link DescribeResourceType}. A rejected document surfaces as the tool error; its text already
  * declares the namespaces behind its prefixes and points back to {@code describe}.</p>
  *
- * <p><strong>Off by default.</strong> The type-specific tools stay the write surface until they are
- * removed in one cut; until then the composition root registers this class only if
- * {@value #ENABLED_PROPERTY} is {@code true}.</p>
+ * <p><strong>Off by default.</strong> This class registers nothing itself: whether its tools are
+ * offered is decided where the composition root declares it as a bean, which conditions that bean on
+ * {@value #ENABLED_PROPERTY} being {@code true}. The property is the contract between the two; the
+ * type-specific tools stay the write surface while it is off.</p>
  */
 public final class ResourceAccessMcpTools {
 
@@ -161,6 +162,7 @@ public final class ResourceAccessMcpTools {
         }
         out.append("\nExample document (creates one resource; runs as it stands):\n")
                 .append(description.example());
+        out.append("\nPrefixes behind every name above:\n").append(description.prefixDeclarations());
         return out.toString();
     }
 

@@ -134,6 +134,19 @@ class DescribeRealStoreTest {
     }
 
     @Test
+    void theDescriptionDeclaresEveryPrefixItsFieldsNameNotOnlyThoseOfTheExample() {
+        // when
+        ResourceTypeDescription description = DESCRIBER.describe("arkarch:ArchitectureDecisionRecord", "en");
+
+        // then
+        assertTrue(byName(description).get("arkarch:usesTerm").valueTypes().contains("skos:Concept"));
+        assertFalse(description.example().contains("skos:"), description.example());
+        assertTrue(description.prefixDeclarations()
+                .contains("@prefix skos: <http://www.w3.org/2004/02/skos/core#> ."), description.prefixDeclarations());
+        assertTrue(description.prefixDeclarations().contains("@prefix arkarch: <"), description.prefixDeclarations());
+    }
+
+    @Test
     void aTypeIsNamedByItsFullIriAsWell() {
         assertEquals("arkreq:UseCase",
                 DESCRIBER.describe("<https://w3id.org/arknet/requirements#UseCase>", null).summary().name());

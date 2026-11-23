@@ -137,8 +137,24 @@ public final class DescribeService implements DescribeResourceType {
         Objects.requireNonNull(type, "type");
         IRI iri = resolve(type);
         DisplayLocale locale = defaultLocale.withRequestedOverride(displayLocale);
-        return new ResourceTypeDescription(summary(iri, locale), fields(iri, locale), rules(iri, locale),
-                example(iri, locale));
+        ResourceTypeSummary summary = summary(iri, locale);
+        List<FieldDescription> fields = fields(iri, locale);
+        List<String> rules = rules(iri, locale);
+        String example = example(iri, locale);
+        String rendered = Stream.of(Stream.of(summary.name(), summary.comment(), example), rules.stream(),
+                fields.stream().flatMap(DescribeService::names))
+                .flatMap(names -> names)
+                .collect(Collectors.joining("\n"));
+        return new ResourceTypeDescription(summary, fields, rules, example,
+                prefixes.usedIn(rendered).declarations());
+    }
+
+    private static Stream<String> names(final FieldDescription field) {
+        return Stream.of(Stream.of(field.name(), field.comment()), field.datatype().stream(),
+                field.valueTypes().stream(), field.allowedValues().stream(), field.rules().stream(),
+                field.children().stream().flatMap(children -> Stream.concat(Stream.of(children.orderedBy()),
+                        children.fields().stream().flatMap(DescribeService::names))))
+                .flatMap(names -> names);
     }
 
     private List<IRI> resourceTypes() {

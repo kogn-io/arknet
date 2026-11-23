@@ -59,7 +59,8 @@ class ResourceAccessMcpToolsTest {
         public ResourceTypeDescription describe(final String type, final String displayLocale) {
             requestedLocales.add(displayLocale);
             return new ResourceTypeDescription(TYPE, List.of(TITLE, PARTS), List.of("Spans two fields."),
-                    "@prefix m: <https://example.org/m#> .\n[] a arkres:Create .\n");
+                    "@prefix m: <https://example.org/m#> .\n[] a arkres:Create .\n",
+                    "@prefix m: <https://example.org/m#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n");
         }
     };
 
@@ -103,7 +104,9 @@ class ResourceAccessMcpToolsTest {
         assertTrue(answer.contains("    - m:position (position): required, literal of xsd:integer, at most one value"),
                 answer);
         assertTrue(answer.contains("Rules across fields:\n- Spans two fields."), answer);
-        assertTrue(answer.endsWith("[] a arkres:Create .\n"), answer);
+        assertTrue(answer.contains("[] a arkres:Create .\n"), answer);
+        assertTrue(answer.endsWith("Prefixes behind every name above:\n@prefix m: <https://example.org/m#> .\n"
+                + "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"), answer);
     }
 
     @Test

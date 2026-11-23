@@ -14,10 +14,12 @@ import java.util.Objects;
  *                owned children are fields too
  * @param rules   the messages of the rules that span several fields, in the display language
  * @param example a Turtle document for {@link SubmitDocument} that creates one resource of this type,
- *                runnable as it stands against an empty project
+ *                runnable as it stands against an empty project; it declares the prefixes it uses itself
+ * @param prefixDeclarations a Turtle prefix declaration for every prefix any of the components writes -
+ *                type, field and value names, datatypes, choices, rule sentences and the example
  */
 public record ResourceTypeDescription(ResourceTypeSummary summary, List<FieldDescription> fields,
-        List<String> rules, String example) {
+        List<String> rules, String example, String prefixDeclarations) {
 
     /**
      * Copies the lists.
@@ -26,11 +28,13 @@ public record ResourceTypeDescription(ResourceTypeSummary summary, List<FieldDes
      * @param fields  its fields
      * @param rules   the rules spanning several fields
      * @param example the runnable example
+     * @param prefixDeclarations the prefix declarations behind every name
      */
     public ResourceTypeDescription {
         Objects.requireNonNull(summary, "summary");
         fields = List.copyOf(Objects.requireNonNull(fields, "fields"));
         rules = List.copyOf(Objects.requireNonNull(rules, "rules"));
         Objects.requireNonNull(example, "example");
+        Objects.requireNonNull(prefixDeclarations, "prefixDeclarations");
     }
 }
