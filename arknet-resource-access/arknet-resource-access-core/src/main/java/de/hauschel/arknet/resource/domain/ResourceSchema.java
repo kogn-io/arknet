@@ -30,7 +30,8 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
  * values as children ({@code arkres:childKind}, {@code arkres:orderedBy} on a property shape, the
  * field being the shape's {@code sh:path}). An owned field is identified by its property alone: two
  * property shapes annotating the same property differently are a defect of the rule data and fail
- * construction. So is an owned field whose shapes name no {@code sh:class} for its children: the
+ * construction. So is an owned field whose shapes name no {@code sh:class} for its children, or more
+ * than one: the
  * class is what makes a child a focus node of its own node shape, and the engine types every new
  * child with it.</p>
  */
@@ -79,15 +80,18 @@ public final class ResourceSchema {
                     .map(IRI.class::cast)
                     .orElseThrow(() -> new IllegalStateException(
                             annotation.getSubject() + " carries arkres:childKind but no arkres:orderedBy"));
-            IRI childClass = shapes.stream(null, path, property)
+            Set<IRI> childClasses = shapes.stream(null, path, property)
                     .flatMap(shape -> shapes.stream(shape.getSubject(), shaclClass, null))
                     .map(Triple::getObject)
                     .filter(IRI.class::isInstance)
                     .map(IRI.class::cast)
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalStateException(annotation.getSubject() + " owns its children,"
-                            + " but no property shape on " + property + " names their sh:class; an untyped child"
-                            + " would escape every node shape"));
+                    .collect(Collectors.toSet());
+            if (childClasses.size() != 1) {
+                throw new IllegalStateException(annotation.getSubject() + " owns its children, so the property"
+                        + " shapes on " + property + " name exactly one sh:class for them - the class every new"
+                        + " child is typed with; they name " + childClasses);
+            }
+            IRI childClass = childClasses.iterator().next();
             OwnedField field = new OwnedField(property, lexical(annotation.getObject()), order, childClass);
             OwnedField earlier = owned.putIfAbsent(property, field);
             if (earlier != null && !earlier.equals(field)) {

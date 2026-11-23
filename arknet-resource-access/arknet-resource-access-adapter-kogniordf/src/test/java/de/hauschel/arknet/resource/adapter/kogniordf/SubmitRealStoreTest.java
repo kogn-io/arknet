@@ -394,26 +394,30 @@ class SubmitRealStoreTest {
     static Stream<Arguments> everyOwnedField() {
         return Stream.of(
                 Arguments.of("arkreq:UseCase ; dcterms:title \"Model\"@en ; arkreq:useCaseGoal \"Recorded.\"@en ;"
-                        + " arkreq:primaryRole <ROLE> ; arkreq:extensionStep", "arkreq:position 1 ; arkreq:stepText"),
+                        + " arkreq:primaryRole <ROLE> ; arkreq:extensionStep", "arkreq:position 1 ; arkreq:stepText",
+                        "#Extension-", REQ + "stepText"),
                 Arguments.of("arkreq:UseCase ; dcterms:title \"Model\"@en ; arkreq:useCaseGoal \"Recorded.\"@en ;"
-                        + " arkreq:primaryRole <ROLE> ; arkreq:mainStep", "arkreq:position 1 ; arkreq:stepText"),
+                        + " arkreq:primaryRole <ROLE> ; arkreq:mainStep", "arkreq:position 1 ; arkreq:stepText",
+                        "#Step-", REQ + "stepText"),
                 Arguments.of("arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ;"
                         + " dcterms:description \"Writes it.\"@en ; arkreq:acceptanceCriterion",
-                        "arkreq:position 1 ; arkreq:criterionText"),
+                        "arkreq:position 1 ; arkreq:criterionText", "#AC-", REQ + "criterionText"),
                 Arguments.of("arkarch:ArchitectureDecisionRecord ; arknet:name \"Use RDF\"@en ;"
                         + " arkarch:adrStatus arkarch:Proposed ; arkarch:adrContext \"Needs links.\"@en ;"
                         + " arkarch:adrDecision \"Use RDF.\"@en ; arkarch:consequence",
-                        "arknet:position 1 ; arkarch:consequenceType arkarch:Positive ; arkarch:consequenceStatement"),
+                        "arknet:position 1 ; arkarch:consequenceType arkarch:Positive ; arkarch:consequenceStatement",
+                        "#Consequence-", ARCH + "consequenceStatement"),
                 Arguments.of("arkarch:ArchitectureDecisionRecord ; arknet:name \"Use RDF\"@en ;"
                         + " arkarch:adrStatus arkarch:Proposed ; arkarch:adrContext \"Needs links.\"@en ;"
                         + " arkarch:adrDecision \"Use RDF.\"@en ; arkarch:consideredOption",
                         "arknet:position 1 ; arknet:name \"RDF\"@en ; arkarch:optionOutcome arkarch:Chosen ;"
-                                + " arkarch:optionRationale"));
+                                + " arkarch:optionRationale", "#Option-", ARCH + "optionRationale"));
     }
 
     @ParameterizedTest
     @MethodSource("everyOwnedField")
-    void anUntypedChildIsValidatedByTheShapeOfItsField(final String ownerAndField, final String childFields) {
+    void anUntypedChildIsValidatedByTheShapeOfItsField(final String ownerAndField, final String childFields,
+            final String fragmentKind, final String textProperty) {
         // given
         String role = iriOf(submit.submit(PROJECT, PREFIXES
                 + "[] a arkres:Create ; arkres:object _:r .\n_:r a arkproc:Role ; arknet:name \"Modeller\"@en .\n"),
@@ -424,11 +428,60 @@ class SubmitRealStoreTest {
         SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT,
                 PREFIXES + owner + " [ " + childFields + " \"x\"@en , \"y\"@en ] .\n"));
 
-        // then
-        assertTrue(rejected.getMessage().contains("#"), rejected.getMessage());
+        // then - the child's own node shape rejected its text
+        assertChildTextRejected(rejected, fragmentKind, textProperty);
         assertEquals(List.of(), reader.findByIdentifier(PROJECT, "UC1"));
         assertEquals(List.of(), reader.findByIdentifier(PROJECT, "FR-1"));
         assertEquals(List.of(), reader.findByIdentifier(PROJECT, "ADR-1"));
+    }
+
+    @Test
+    void anUntypedChildAddedToAStoredResourceIsValidatedByTheShapeOfItsField() {
+        // given
+        String fr = storedRequirement();
+
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT,
+                PREFIXES + "[] a arkres:AddTo ; arkres:object <" + fr + "> ; arkres:field arkreq:acceptanceCriterion ;"
+                        + " arkres:value [ arkreq:criterionText \"x\"@en ] .\n"));
+
+        // then
+        assertChildTextRejected(rejected, "#AC-", REQ + "criterionText");
+        assertEquals(1, history(fr).size());
+    }
+
+    @Test
+    void aChildAddedWithAnotherOrASecondTypeIsRejected() {
+        // given
+        String fr = storedRequirement();
+
+        for (String types : List.of("a arkreq:Step", "a arkreq:AcceptanceCriterion , arkreq:Step")) {
+            // when
+            SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(
+                    PROJECT, PREFIXES + "[] a arkres:AddTo ; arkres:object <" + fr + "> ;"
+                            + " arkres:field arkreq:acceptanceCriterion ; arkres:value [ " + types + " ;"
+                            + " arkreq:criterionText \"It works.\"@en ] .\n"));
+
+            // then
+            assertTrue(rejected.getMessage().contains("is a " + REQ + "AcceptanceCriterion and nothing else, not "
+                    + REQ + "Step"), rejected.getMessage());
+            assertEquals(1, history(fr).size());
+        }
+    }
+
+    private String storedRequirement() {
+        return iriOf(submit.submit(PROJECT, PREFIXES + """
+                [] a arkres:Create ; arkres:object _:fr .
+                _:fr a arkreq:FunctionalRequirement ; dcterms:title "Write"@en ; dcterms:description "Writes it."@en ;
+                    arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText "First one."@en ] .
+                """), "FR-1");
+    }
+
+    private static void assertChildTextRejected(final SubmitRejectedException rejected, final String fragmentKind,
+            final String textProperty) {
+        String message = rejected.getMessage();
+        assertTrue(message.matches("(?s).*focusNode=https://w3id\\.org/arknet/id/[^,#]+" + fragmentKind
+                + "[^,]*, path=<?" + java.util.regex.Pattern.quote(textProperty) + ".*"), message);
     }
 
     @Test
@@ -441,7 +494,8 @@ class SubmitRealStoreTest {
                         + " [ a arkreq:Step ; arkreq:position 1 ; arkreq:criterionText \"It works.\"@en ] .\n"));
 
         // then
-        assertTrue(rejected.getMessage().contains(REQ + "AcceptanceCriterion"), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("is a " + REQ + "AcceptanceCriterion and nothing else, not "
+                + REQ + "Step"), rejected.getMessage());
         assertTrue(reader.findByIdentifier(PROJECT, "FR-1").isEmpty());
     }
 
