@@ -668,6 +668,59 @@ class VersionedWriteFunnelRealStoreTest {
         assertUntouchedAfterFailedBatch(subjectToken, thirdToken);
     }
 
+    /**
+     * The remaining guards of a batch each roll back the writes before them: a create over an
+     * existing draft, a delete of an unknown subject and a throwing delete guard.
+     */
+    @Test
+    void aCreateOverAnExistingDraftAnUnknownDeleteAndAThrowingDeleteGuardChangeNothing() {
+        create(SUBJECT, CODE, "v1", "crit one");
+        create(THIRD, THIRD_CODE, "c", "z");
+        RevisionToken subjectToken = currentToken(SUBJECT);
+        RevisionToken thirdToken = currentToken(THIRD);
+
+        assertThrows(AlreadyExists.class, () -> funnel.writeAll(DATASET, EntryDetails.NONE,
+                conflict -> new RevisionMismatch(), batch -> {
+                    batch.create(OTHER, OTHER_CODE, null, Signals::unexpected, Signals::unexpected,
+                            (tx, current) -> requirement(OTHER, OTHER_CODE, "b", "y"));
+                    batch.create(SUBJECT, "FR-9", null, AlreadyExists::new, Signals::unexpected,
+                            (tx, current) -> requirement(SUBJECT, "FR-9", "x"));
+                }));
+        assertUntouchedAfterFailedBatch(subjectToken, thirdToken);
+
+        assertThrows(NotFound.class, () -> funnel.writeAll(DATASET, EntryDetails.NONE,
+                conflict -> new RevisionMismatch(), batch -> {
+                    batch.create(OTHER, OTHER_CODE, null, Signals::unexpected, Signals::unexpected,
+                            (tx, current) -> requirement(OTHER, OTHER_CODE, "b", "y"));
+                    batch.delete(FOURTH, "FR-4", NotFound::new, tx -> { });
+                }));
+        assertUntouchedAfterFailedBatch(subjectToken, thirdToken);
+
+        assertThrows(Referenced.class, () -> funnel.writeAll(DATASET, EntryDetails.NONE,
+                conflict -> new RevisionMismatch(), batch -> {
+                    batch.create(OTHER, OTHER_CODE, null, Signals::unexpected, Signals::unexpected,
+                            (tx, current) -> requirement(OTHER, OTHER_CODE, "b", "y"));
+                    batch.delete(THIRD, THIRD_CODE, Signals::unexpected, tx -> {
+                        throw new Referenced();
+                    });
+                }));
+        assertUntouchedAfterFailedBatch(subjectToken, thirdToken);
+    }
+
+    /** A create in a batch may go without a business code: no code check runs, and it is published. */
+    @Test
+    void aCreateWithoutACodeInABatchIsWrittenAndPublished() {
+        create(SUBJECT, CODE, "v1", "crit one");
+
+        VersionedWriteFunnel.BatchResult result = funnel.writeAll(DATASET, EntryDetails.NONE,
+                conflict -> new RevisionMismatch(), batch -> batch.create(OTHER, null, null,
+                        Signals::unexpected, Signals::unexpected, (tx, current) -> requirement(OTHER, CODE, "b")));
+
+        assertEquals(PublishState.PUBLISHED_UNCHANGED, funnel.publishState(DATASET, OTHER));
+        assertEquals(1, funnel.history(DATASET, OTHER).size());
+        assertEquals(currentToken(OTHER), result.tokens().get(OTHER));
+    }
+
     /** A batch names each subject at most once; a second write of the same subject fails the batch. */
     @Test
     void aBatchRejectsTheSameSubjectTwiceAndChangesNothing() {

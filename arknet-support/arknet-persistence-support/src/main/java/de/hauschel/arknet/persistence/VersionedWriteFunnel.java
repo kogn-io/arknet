@@ -271,12 +271,7 @@ public final class VersionedWriteFunnel {
         return write(dataset, commitConflict, tx -> {
             IRI subject = rdf.createIRI(subjectIri);
             DraftSlice draft = openDraft(tx, subject);
-            if (!draft.triples().isEmpty()) {
-                throw alreadyExists.get();
-            }
-            if (codeTaken(tx, code)) {
-                throw duplicateCode.get();
-            }
+            requireAbsent(tx, draft, code, alreadyExists, duplicateCode);
             return replace(tx, subject, draft, assertedContext, slice);
         });
     }
@@ -317,12 +312,7 @@ public final class VersionedWriteFunnel {
                     }
                     IRI subject = rdf.createIRI(subjectIri);
                     DraftSlice draft = openDraft(tx, subject);
-                    if (!draft.triples().isEmpty()) {
-                        throw alreadyExists.get();
-                    }
-                    if (code != null && codeTaken(tx, code)) {
-                        throw duplicateCode.get();
-                    }
+                    requireAbsent(tx, draft, code, alreadyExists, duplicateCode);
                     replace(tx, subject, draft, assertedContext, slice);
                     return subjectIri;
                 });
@@ -367,9 +357,7 @@ public final class VersionedWriteFunnel {
         return write(dataset, conflict -> revisionMismatch.get(), tx -> {
             IRI subject = rdf.createIRI(subjectIri);
             DraftSlice draft = openDraft(tx, subject);
-            if (draft.triples().isEmpty()) {
-                throw notFound.get();
-            }
+            requirePresent(draft, notFound);
             if (!draft.token().equals(expected)) {
                 throw revisionMismatch.get();
             }
@@ -407,15 +395,11 @@ public final class VersionedWriteFunnel {
             return handle.transactor().inTransaction(tx -> {
                 IRI subject = rdf.createIRI(subjectIri);
                 DraftSlice draft = openDraft(tx, subject);
-                if (draft.triples().isEmpty()) {
-                    throw notFound.get();
-                }
+                requirePresent(draft, notFound);
                 guard.accept(tx);
                 DeleteResult tombstone = versioning.delete(tx, subject, draft.token(), details);
                 if (code != null) {
-                    Graph retained = rdf.createGraph();
-                    retained.add(tombstone.entryIRI(), VocabDct.IDENTIFIER, rdf.createLiteral(code));
-                    tx.add(rdf.createIRI(RETAINED_CODES_GRAPH), retained);
+                    retainCode(tx, tombstone.entryIRI().getIRIString(), code);
                 }
                 return tombstone.entryIRI().getIRIString();
             });
@@ -530,12 +514,7 @@ public final class VersionedWriteFunnel {
             Objects.requireNonNull(slice, "slice");
             IRI subject = claim(subjectIri);
             DraftSlice draft = versioning.readDraft(tx, subject);
-            if (!draft.triples().isEmpty()) {
-                throw alreadyExists.get();
-            }
-            if (code != null && codeTaken(tx, code)) {
-                throw duplicateCode.get();
-            }
+            requireAbsent(tx, draft, code, alreadyExists, duplicateCode);
             stage(subject, draft, assertedContext, slice);
         }
 
@@ -553,9 +532,7 @@ public final class VersionedWriteFunnel {
             Objects.requireNonNull(slice, "slice");
             IRI subject = claim(subjectIri);
             DraftSlice draft = versioning.readDraft(tx, subject);
-            if (draft.triples().isEmpty()) {
-                throw notFound.get();
-            }
+            requirePresent(draft, notFound);
             stage(subject, draft, assertedContext, slice);
         }
 
@@ -576,9 +553,7 @@ public final class VersionedWriteFunnel {
             Objects.requireNonNull(guard, "guard");
             IRI subject = claim(subjectIri);
             DraftSlice draft = versioning.readDraft(tx, subject);
-            if (draft.triples().isEmpty()) {
-                throw notFound.get();
-            }
+            requirePresent(draft, notFound);
             guard.accept(tx);
             DeleteResult tombstone = versioning.delete(tx, subject, draft.token(), details);
             if (code != null) {
@@ -866,6 +841,27 @@ public final class VersionedWriteFunnel {
         RevisionToken written = versioning.replaceDraft(tx, subject, next, draft.token());
         PublishResult published = versioning.publish(tx, List.of(written), details);
         return published.results().get(subject).token();
+    }
+
+    /**
+     * The guard of every create: the subject's draft must be empty, and a given code must be free in
+     * the content graph.
+     */
+    private void requireAbsent(DatasetTx tx, DraftSlice draft, String code, Supplier<RuntimeException> alreadyExists,
+            Supplier<RuntimeException> duplicateCode) {
+        if (!draft.triples().isEmpty()) {
+            throw alreadyExists.get();
+        }
+        if (code != null && codeTaken(tx, code)) {
+            throw duplicateCode.get();
+        }
+    }
+
+    /** The guard of every update and delete: the subject's draft must not be empty. */
+    private static void requirePresent(DraftSlice draft, Supplier<RuntimeException> notFound) {
+        if (draft.triples().isEmpty()) {
+            throw notFound.get();
+        }
     }
 
     private boolean codeTaken(DatasetTx tx, String code) {
