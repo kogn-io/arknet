@@ -1,7 +1,7 @@
 # arknet-mcp-support
 
 Technischer Support der treibenden MCP-Adapter und des Composition Root -- Package `de.hauschel.arknet.mcpsupport`, sieben Typen, reines JDK plus `arknet-shared-kernel`.
-Was hier liegt, nennt kein `*-core` und kein Vokabularmodul; die Aufrufer sind ausschliesslich die sieben `*-adapter-mcp`-Module und `arknet-app`.
+Was hier liegt, nennt kein `*-core` und kein Vokabularmodul; die Aufrufer sind ausschliesslich die `*-adapter-mcp`-Module und `arknet-app`.
 Das ist die Abgrenzung zum Shared Kernel (ADR-56): dort nur Modellbegriffe, die mindestens zwei Kontexte tragen, hier die Mechanik, die keiner von ihnen braucht.
 Die Kante zeigt in eine Richtung -- dieses Modul kennt den Kernel (`ProjectId`, `LanguageTag`), der Kernel kennt dieses Modul nicht, und `arknet-architecture-tests` (`DependencyRulesTest`, Regeln 11/12) haelt beides fest.
 Keine Abhaengigkeit auf `arknet-persistence-support`: nichts hier fasst einen Store an, alle Store-Zugriffe laufen ueber Ports, die der Composition Root bedient.

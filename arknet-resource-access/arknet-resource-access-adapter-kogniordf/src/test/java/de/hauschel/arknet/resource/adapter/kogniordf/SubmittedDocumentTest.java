@@ -103,12 +103,16 @@ class SubmittedDocumentTest {
     void anUnparseableDocumentIsRejected() {
         SubmitService service = new SubmitService(SCHEMA, (projectId, writes) -> {
             throw new AssertionError("an unparseable document reaches the store");
-        }, KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory());
+        }, KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
+                KognioRdfResourceRepositoryFactory.prefixes());
 
         SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class,
                 () -> service.submit(SubmitRealStoreTest.PROJECT, "[] a undeclared:Create ."));
 
         assertTrue(rejected.getMessage().contains("not valid Turtle"), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("@prefix arkres: <https://w3id.org/arknet/resource#> ."),
+                rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("Call describe"), rejected.getMessage());
     }
 
     private static void assertRejected(final String reason, final String body) {

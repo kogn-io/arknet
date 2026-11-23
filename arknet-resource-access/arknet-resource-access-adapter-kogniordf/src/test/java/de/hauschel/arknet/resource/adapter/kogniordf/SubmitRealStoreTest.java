@@ -91,7 +91,8 @@ class SubmitRealStoreTest {
 
     SubmitService service(final ResourceRepository store) {
         return new SubmitService(KognioRdfResourceRepositoryFactory.schema(), store,
-                KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory());
+                KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
+                KognioRdfResourceRepositoryFactory.prefixes());
     }
 
     @Test
@@ -341,6 +342,8 @@ class SubmitRealStoreTest {
 
         // then
         assertTrue(rejected.getMessage().contains(REQ + "usesTerm"), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("@prefix arkreq: <" + REQ + "> ."), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("Call describe"), rejected.getMessage());
         assertTrue(reader.findByIdentifier(PROJECT, "FR-1").isEmpty());
     }
 
