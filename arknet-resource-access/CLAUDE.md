@@ -17,7 +17,7 @@ Der Kern darf die technologieneutralen kognio-rdf-Ports kennen, aber weder RDF4J
 Seine In-Ports tragen dennoch keine kognio-rdf-Typen, nur Strings, Records und Kernel-Typen: der treibende MCP-Adapter der Komponente sieht nur `..application.port.in..` und keine RDF-Technologie (`DependencyRulesTest` Regel 4).
 Die Out-Ports (`ResourceRepository`, `ResourceBatch`) sprechen dagegen Tripel.
 Kein Konstruktor eines Domaenentyps prueft die Invarianten einer ueber sie geschriebenen Ressource; was sich nicht als Shape oder als Regel in Daten ausdruecken laesst, hat hier keinen Platz.
-Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context; von den Klassen anderer Module darf nur die Composition Root sie nennen (Regel 17), auf Maven-Ebene haengen an ihren Modulen nur die Composition Root und, im Test-Scope, `arknet-architecture-tests`.
+Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context, auch an keinem Ontologiemodul eines Kontexts (ADR-69, Folge 8): deren Ontologien und Shapes findet sie zur Laufzeit ueber den Index `META-INF/arknet/ontology.index`, den jedes Ontologiemodul ausliefert, und nur ihr Adapter-Test zieht die vier Ontologiemodule im Test-Scope; von den Klassen anderer Module darf nur die Composition Root sie nennen (Regel 17), auf Maven-Ebene haengen an ihren Modulen nur die Composition Root und, im Test-Scope, `arknet-architecture-tests`.
 
 ## Module
 
@@ -33,9 +33,10 @@ Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context; von den Klassen
   `application.DescribeService` implementiert den In-Port `DescribeResourceType` (Records `ResourceCatalog`, `ResourceTypeSummary`, `ResourceTypeDescription`, `FieldDescription`, `ChangeExample`).
   `domain.PrefixBindings` haelt die Praefixe der ausgelieferten Dateien mit ihren Namespaces; der Adapter liest sie aus den `@prefix`-Zeilen, im Code steht keiner.
 - `arknet-resource-access-adapter-kogniordf`: Out-Adapter gegen den kognio-rdf-Store.
-  `KognioRdfResourceRepositoryFactory` ist die einzige Klasse mit RDF4J: sie laedt die fuenf Shape-Dateien der Modellressourcen und die Modell-Ontologien per Dateiname vom Classpath (ohne `project-shapes.ttl`, das System-Dataset schreibt die Komponente nicht), baut daraus ein Gate und den Funnel und liefert Schema und Turtle-Parser fuer den Kern.
+  `KognioRdfResourceRepositoryFactory` ist die einzige Klasse mit RDF4J: sie liest jeden `META-INF/arknet/ontology.index` auf dem Classpath, nimmt die dort genannten Dateien auf `-shapes.ttl` als Shapes und alle uebrigen ausser `arknet-resource.ttl` als Modell-Ontologien, laesst die per Dateiname genannten `project-shapes.ttl`, `arknet-project.ttl` und `arknet-provenance.ttl` weg (das System-Dataset schreibt die Komponente nicht), baut daraus ein Gate und den Funnel und liefert Schema und Turtle-Parser fuer den Kern.
+  Die Dateien sind sortiert, Gate und Praefixe haengen also nicht an der Classpath-Reihenfolge; findet sie keine Shape-Datei, bricht sie ab.
   Sie baut ausserdem `DescribeService` (`describer`), dem sie zu den Modell-Ontologien `arknet-resource.ttl` gibt, und liest die Praefixe (`prefixes`) per Rio aus denselben Dateien: zuerst die Ontologien, ein Praefix oder Namespace, der schon gebunden ist, bleibt bei seiner ersten Lesart.
-  `KognioRdfResourceRepositoryFactoryTest` gleicht die Dateiliste gegen das ab, was `arknet-ontology` ausliefert.
+  `KognioRdfResourceRepositoryFactoryTest` gleicht die gefundenen Dateien gegen die `.ttl`-Dateien ab, die die Ontologiemodule auf dem Test-Classpath tatsaechlich ausliefern (gelesen aus Jar bzw. Verzeichnis neben dem Index, nicht aus dem Index).
   `KognioRdfResourceRepository` setzt `ResourceRepository` auf `VersionedWriteFunnel#writeAll` um.
   `KognioRdfHandleLookup` (aus `handles`) setzt `HandleLookup` mit dem `HandleResolver` aus `arknet-persistence-support` um, demselben, den `resource_get` und `impact_analysis` nutzen; es laesst nur einen nackten Code durch und lehnt einen Handle mit `:`, `/` oder `#` ab, weil der Resolver Praefixnamen, IRIs und Blank-Node-Namen ungeprueft zurueckgaebe.
 - `arknet-resource-access-adapter-mcp`: treibender Adapter mit den MCP-Werkzeugen; sieht vom Core nur `..application.port.in..` und keine RDF-Technologie, haengt an `arknet-mcp-support` fuer die Anker-Aufloesung.

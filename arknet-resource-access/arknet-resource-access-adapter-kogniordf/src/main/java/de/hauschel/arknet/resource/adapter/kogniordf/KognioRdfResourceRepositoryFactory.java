@@ -3,15 +3,22 @@
 
 package de.hauschel.arknet.resource.adapter.kogniordf;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.eclipse.rdf4j.model.Namespace;
@@ -52,22 +59,31 @@ import de.hauschel.arknet.resource.domain.ResourceSchema;
  * of their gate; one gate over everything cannot, since the type would activate the neighbour's
  * own node shape. The engine asserts the neighbour's real slice instead.</p>
  *
- * <p>The files are listed by name: a file name is no class or property of a bounded context, and
- * a shapes file that is added has to be listed here to take part. {@code project-shapes.ttl} stays
- * out - the project registry lives in the system dataset, which generic access never writes.</p>
+ * <p>The files are found, not listed: every ontology module ships a {@value #ONTOLOGY_INDEX} naming
+ * its live files, and the factory reads every such index on the classpath. The component depends on
+ * no module of a bounded context at build time (ADR-69, consequence 8); the composition root puts
+ * their ontology modules on the classpath, and a shapes file a context adds takes part without a
+ * line here. A file whose name ends in {@value #SHAPES_SUFFIX} is a shapes file, every other one an
+ * ontology. {@link #OUTSIDE_GENERIC_ACCESS} names the shipped files generic access leaves out by
+ * file name - a file name is no class or property of a bounded context.</p>
  */
 public final class KognioRdfResourceRepositoryFactory {
 
-    /** The shape files of the resource types generic access writes, with their {@code arkres:} rule data. */
-    static final List<String> SHAPE_RESOURCES = List.of("/requirements-shapes.ttl", "/ul-shapes.ttl",
-            "/architecture-shapes.ttl", "/actor-shapes.ttl", "/arknet-shapes.ttl");
+    /** The classpath name under which every ontology module lists its live files, one per line. */
+    static final String ONTOLOGY_INDEX = "META-INF/arknet/ontology.index";
 
-    /** The model ontologies whose axioms the gate reasons over. */
-    static final List<String> ONTOLOGY_RESOURCES = List.of("/arknet-core.ttl", "/arknet-ddd.ttl",
-            "/arknet-actor.ttl", "/arknet-requirements.ttl", "/arknet-architecture.ttl");
+    /** The file name suffix that marks a shapes file in an index. */
+    static final String SHAPES_SUFFIX = "-shapes.ttl";
 
     /** The vocabulary of generic access itself: its labels and comments explain the activities. */
     static final String RESOURCE_ONTOLOGY = "/arknet-resource.ttl";
+
+    /**
+     * Shipped and indexed, but outside generic access: the project registry lives in the system
+     * dataset, which generic access never writes, and no gate reasons over the provenance vocabulary.
+     */
+    static final Set<String> OUTSIDE_GENERIC_ACCESS = Set.of("/project-shapes.ttl", "/arknet-project.ttl",
+            "/arknet-provenance.ttl");
 
     private KognioRdfResourceRepositoryFactory() {
     }
@@ -105,7 +121,7 @@ public final class KognioRdfResourceRepositoryFactory {
      * @return the funnel
      */
     static VersionedWriteFunnel buildFunnel(final DatasetLifecycle lifecycle, final DisplayLocale displayLocale) {
-        ShaclWriteGate gate = new ShaclWriteGate(new ShaclValidationRdf4j(), shapes(), union(ONTOLOGY_RESOURCES),
+        ShaclWriteGate gate = new ShaclWriteGate(new ShaclValidationRdf4j(), shapes(), union(ontologyResources()),
                 new ValidationOptions(true), displayLocale);
         return new VersionedWriteFunnel(lifecycle, gate, ContentGraph.GRAPH_IRI,
                 VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
@@ -135,7 +151,71 @@ public final class KognioRdfResourceRepositoryFactory {
      * @return the shapes
      */
     static ReadableGraph shapes() {
-        return union(SHAPE_RESOURCES);
+        return union(shapeResources());
+    }
+
+    /**
+     * The shape files of the resource types generic access writes, with their {@code arkres:} rule
+     * data, as the indices on the classpath name them.
+     *
+     * @return absolute classpath names, sorted
+     */
+    static List<String> shapeResources() {
+        List<String> shapes = indexed(name -> name.endsWith(SHAPES_SUFFIX));
+        if (shapes.isEmpty()) {
+            throw new IllegalStateException("no ontology module on the classpath lists a shapes file in "
+                    + ONTOLOGY_INDEX);
+        }
+        return shapes;
+    }
+
+    /**
+     * The model ontologies whose axioms the gate reasons over, as the indices on the classpath name
+     * them.
+     *
+     * @return absolute classpath names, sorted
+     */
+    static List<String> ontologyResources() {
+        return indexed(name -> !name.endsWith(SHAPES_SUFFIX) && !RESOURCE_ONTOLOGY.equals(name));
+    }
+
+    /**
+     * Every live file any index on the classpath names, of one kind, minus the files outside generic
+     * access. Sorted, so the gate and the prefixes do not depend on the classpath order.
+     *
+     * @param kind which of the indexed files to keep
+     * @return absolute classpath names, sorted
+     */
+    static List<String> indexed(final Predicate<String> kind) {
+        return indexedFiles().stream()
+                .filter(kind)
+                .filter(name -> !OUTSIDE_GENERIC_ACCESS.contains(name))
+                .toList();
+    }
+
+    /**
+     * Every file name any {@value #ONTOLOGY_INDEX} on the classpath lists; blank lines and lines
+     * starting with {@code #} are no file.
+     *
+     * @return absolute classpath names, sorted
+     */
+    static Set<String> indexedFiles() {
+        Set<String> names = new TreeSet<>();
+        try {
+            for (URL index : Collections.list(
+                    KognioRdfResourceRepositoryFactory.class.getClassLoader().getResources(ONTOLOGY_INDEX))) {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(index.openStream(), StandardCharsets.UTF_8))) {
+                    reader.lines()
+                            .map(String::strip)
+                            .filter(line -> !line.isEmpty() && !line.startsWith("#"))
+                            .forEach(names::add);
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("failed to read " + ONTOLOGY_INDEX, e);
+        }
+        return names;
     }
 
     /**
@@ -164,7 +244,7 @@ public final class KognioRdfResourceRepositoryFactory {
     public static PrefixBindings prefixes() {
         Map<String, String> byPrefix = new LinkedHashMap<>();
         Set<String> namespaces = new HashSet<>();
-        Stream.concat(describedOntologies().stream(), SHAPE_RESOURCES.stream())
+        Stream.concat(describedOntologies().stream(), shapeResources().stream())
                 .flatMap(resource -> namespaces(resource).stream())
                 .filter(binding -> !binding.getPrefix().isEmpty())
                 .filter(binding -> !byPrefix.containsKey(binding.getPrefix()))
@@ -174,7 +254,7 @@ public final class KognioRdfResourceRepositoryFactory {
     }
 
     private static List<String> describedOntologies() {
-        return Stream.concat(ONTOLOGY_RESOURCES.stream(), Stream.of(RESOURCE_ONTOLOGY)).toList();
+        return Stream.concat(ontologyResources().stream(), Stream.of(RESOURCE_ONTOLOGY)).toList();
     }
 
     private static Set<Namespace> namespaces(final String classpathResource) {

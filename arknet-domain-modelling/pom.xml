@@ -12,10 +12,11 @@
 
     <artifactId>arknet-domain-modelling</artifactId>
     <packaging>pom</packaging>
-    <description>Domain Modelling bounded context (BC-2): aggregates the ubiquitous-language and bounded-context components and the vocabulary module they share</description>
+    <description>Domain Modelling bounded context (BC-2): aggregates the ubiquitous-language and bounded-context components, the vocabulary module they share and the context's ontology module</description>
 
     <modules>
         <module>arknet-domain-modelling-shared</module>
+        <module>arknet-domain-modelling-ontology</module>
         <module>arknet-ubiquitous-language</module>
         <module>arknet-bounded-context</module>
     </modules>
@@ -25,6 +26,11 @@
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
                 <artifactId>arknet-domain-modelling-shared</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-domain-modelling-ontology</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

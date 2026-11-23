@@ -4,6 +4,7 @@
 package de.hauschel.arknet.resource.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.io.IOException;
 import java.net.JarURLConnection;
@@ -11,8 +12,10 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -20,45 +23,57 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * The factory lists the shape and ontology files by name; this keeps the list in step with what
- * {@code arknet-ontology} ships, so a new shapes file cannot stay outside the one gate unnoticed.
+ * The factory finds the shape and ontology files through the index every ontology module ships;
+ * this keeps the indices in step with what the modules on the classpath actually ship, so a new
+ * shapes file cannot stay outside the one gate unnoticed.
  */
 class KognioRdfResourceRepositoryFactoryTest {
 
-    /** Shipped, but outside generic access: the registry's system dataset, and vocabularies no gate reasons over. */
-    private static final Set<String> NOT_FOR_RESOURCES = Set.of("/project-shapes.ttl", "/arknet-project.ttl",
-            "/arknet-provenance.ttl", "/arknet-resource.ttl");
-
     @Test
-    void theFactoryListsEveryShippedShapesFile() throws Exception {
-        assertEquals(shipped(name -> name.endsWith("-shapes.ttl")),
-                new TreeSet<>(KognioRdfResourceRepositoryFactory.SHAPE_RESOURCES));
+    void theFactoryFindsEveryShippedShapesFile() throws Exception {
+        Set<String> shipped = shipped(name -> name.endsWith(KognioRdfResourceRepositoryFactory.SHAPES_SUFFIX));
+        assertFalse(shipped.isEmpty(), "no ontology module on the test classpath ships a shapes file");
+        assertEquals(shipped, new TreeSet<>(KognioRdfResourceRepositoryFactory.shapeResources()));
     }
 
     @Test
-    void theFactoryListsEveryShippedModelOntology() throws Exception {
-        assertEquals(shipped(name -> name.startsWith("/arknet-") && !name.endsWith("-shapes.ttl")),
-                new TreeSet<>(KognioRdfResourceRepositoryFactory.ONTOLOGY_RESOURCES));
+    void theFactoryFindsEveryShippedModelOntology() throws Exception {
+        assertEquals(shipped(name -> !name.endsWith(KognioRdfResourceRepositoryFactory.SHAPES_SUFFIX)
+                && !KognioRdfResourceRepositoryFactory.RESOURCE_ONTOLOGY.equals(name)),
+                new TreeSet<>(KognioRdfResourceRepositoryFactory.ontologyResources()));
     }
 
-    private static Set<String> shipped(final java.util.function.Predicate<String> kind)
-            throws IOException, URISyntaxException {
-        URL anchor = KognioRdfResourceRepositoryFactoryTest.class.getResource("/arknet-core.ttl");
+    /**
+     * The root {@code .ttl} files of every module that ships an index, read off the jar or the
+     * {@code target/classes} directory the index sits in -- not off the index itself.
+     */
+    private static Set<String> shipped(final Predicate<String> kind) throws IOException, URISyntaxException {
+        Set<String> names = new TreeSet<>();
+        for (URL index : Collections.list(KognioRdfResourceRepositoryFactoryTest.class.getClassLoader()
+                .getResources(KognioRdfResourceRepositoryFactory.ONTOLOGY_INDEX))) {
+            names.addAll(rootTurtleFiles(index));
+        }
+        return names.stream()
+                .filter(kind)
+                .filter(name -> !KognioRdfResourceRepositoryFactory.OUTSIDE_GENERIC_ACCESS.contains(name))
+                .collect(Collectors.toCollection(TreeSet::new));
+    }
+
+    private static Set<String> rootTurtleFiles(final URL index) throws IOException, URISyntaxException {
         Stream<String> names;
-        if ("jar".equals(anchor.getProtocol())) {
-            JarURLConnection connection = (JarURLConnection) anchor.openConnection();
+        if ("jar".equals(index.getProtocol())) {
+            JarURLConnection connection = (JarURLConnection) index.openConnection();
             connection.setUseCaches(false);
             try (JarFile jar = connection.getJarFile()) {
                 names = jar.stream().map(entry -> "/" + entry.getName()).toList().stream();
             }
         } else {
-            try (Stream<Path> files = Files.list(Path.of(anchor.toURI()).getParent())) {
+            Path root = Path.of(index.toURI()).getParent().getParent().getParent();
+            try (Stream<Path> files = Files.list(root)) {
                 names = files.map(file -> "/" + file.getFileName()).toList().stream();
             }
         }
         return names.filter(name -> name.lastIndexOf('/') == 0 && name.endsWith(".ttl"))
-                .filter(kind)
-                .filter(name -> !NOT_FOR_RESOURCES.contains(name))
                 .collect(Collectors.toCollection(TreeSet::new));
     }
 }

@@ -22,8 +22,8 @@
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-persistence-support</artifactId>
         </dependency>
-        <!-- Runtime source of the resource types: the ontologies and the shapes are read from
-             the classpath, never named in code (ADR-69). -->
+        <!-- The vocabulary of generic access itself (arknet-resource.ttl) and the core vocabulary
+             the model ontologies build on; no module of a bounded context. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-ontology</artifactId>
@@ -56,6 +56,34 @@
         <dependency>
             <groupId>io.kogn.rdf</groupId>
             <artifactId>rdf-shacl-rdf4j</artifactId>
+        </dependency>
+        <!-- The ontologies and shapes of the bounded contexts are found at runtime through their
+             META-INF/arknet/ontology.index, never named in code and never on the compile
+             classpath (ADR-69, consequence 8); the tests put them on the classpath the way the
+             composition root does. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-product-requirements-ontology</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-domain-modelling-ontology</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-architecture-decisions-ontology</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-actor-ontology</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

@@ -1,0 +1,5 @@
+# The live ontology and shapes files this module ships, one classpath name per line.
+# Read at runtime via ClassLoader.getResources; parked/ is never listed.
+/arknet-ddd.ttl
+/arknet-shapes.ttl
+/ul-shapes.ttl

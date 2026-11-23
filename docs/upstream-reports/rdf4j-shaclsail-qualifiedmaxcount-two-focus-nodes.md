@@ -85,7 +85,7 @@ merely "a qualified shape can be strict."
 `kogn-io/arknet` replaced the `sh:qualifiedValueShape`/`sh:qualifiedMaxCount` form with an
 equivalent `sh:sparql` `$this`-scoped `SELECT` constraint
 (`ashapes:ADR-consideredOption-atMostOneChosen` in
-`arknet-ontology/src/main/resources/architecture-shapes.ttl`), which evaluates one focus node at
+`arknet-architecture-decisions/arknet-architecture-decisions-ontology/src/main/resources/architecture-shapes.ttl`), which evaluates one focus node at
 a time and is unaffected by a sibling focus node of the same shape. See that file's comment and
 kogn-io/arknet#376/#378 for the full history, including the concrete production trigger (a
 `relatedTo`/`supersededBy` peer's validation-only type-and-mandatory-fields copy landing in the

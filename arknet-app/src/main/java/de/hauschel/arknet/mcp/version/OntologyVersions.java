@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
  * out-adapter's repository factory, and none of them owns "all ontology modules". Rather than
  * widen an architecture rule or hand-maintain a table of version constants that would drift
  * silently, this reads the shipped files with a deliberately narrow scan of the exact two-line
- * header shape every {@code arknet-*.ttl} in {@code arknet-ontology} uses. It is not a Turtle
+ * header shape every {@code arknet-*.ttl} of the ontology modules uses. It is not a Turtle
  * parser and must never be mistaken for one: it recognises the ontology header of arknet's own
  * files and nothing else. {@code OntologyVersionsMatchOntologyTest} in
  * {@code arknet-architecture-tests} - the one module that may parse with RDF4J - pins the result
@@ -48,7 +48,7 @@ public final class OntologyVersions {
 
     /**
      * The live ontology modules, in the order they are listed in {@code CLAUDE.md}. The parked
-     * modules under {@code arknet-ontology/src/main/resources/parked/} are deliberately absent:
+     * modules under the {@code parked/} directory of each ontology module are deliberately absent:
      * they are not on the runtime classpath and describe nothing an export can contain.
      */
     private static final List<String> MODULE_RESOURCES = List.of(

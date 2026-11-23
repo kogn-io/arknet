@@ -1,9 +1,9 @@
 # arknet-domain-modelling
 
 Maven-Parent (packaging pom) des Bounded Context **Domain Modelling**; aggregiert, traegt keinen Code und keine Ports.
-Der Kontext haelt zwei Komponenten -- `arknet-ubiquitous-language` (Glossar, `term_*`) und `arknet-bounded-context` (Kontextlandkarte, `bc_*`) -- sowie das Vokabularmodul `arknet-domain-modelling-shared`.
+Der Kontext haelt zwei Komponenten -- `arknet-ubiquitous-language` (Glossar, `term_*`) und `arknet-bounded-context` (Kontextlandkarte, `bc_*`) -- sowie das Vokabularmodul `arknet-domain-modelling-shared` und das Ontologiemodul `arknet-domain-modelling-ontology` (Ontologie `arkddd:` und die Shapes beider Komponenten).
 Der Kontext ist die Grenze der Bedeutung, nicht die Bauform: jede Komponente bleibt ein eigenes Hexagon mit eigenem Aggregat, eigenen Ports und eigenen Adaptern (ADR-48).
-`dependencyManagement` hier verwaltet allein die Version des Vokabularmoduls; die Komponenten-Parents verwalten ihre eigenen Module weiterhin selbst.
+`dependencyManagement` hier verwaltet allein die Versionen des Vokabular- und des Ontologiemoduls; die Komponenten-Parents verwalten ihre eigenen Module weiterhin selbst.
 
 ## Was der gemeinsame Kontext erlaubt -- und was nicht
 

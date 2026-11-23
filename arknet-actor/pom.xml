@@ -12,9 +12,20 @@
 
     <artifactId>arknet-actor</artifactId>
     <packaging>pom</packaging>
-    <description>Actor bounded context (BC-4): aggregates the arknet-actor-register component, its only component</description>
+    <description>Actor bounded context (BC-4): aggregates the arknet-actor-register component, its only component, and the context's ontology module</description>
 
     <modules>
+        <module>arknet-actor-ontology</module>
         <module>arknet-actor-register</module>
     </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-actor-ontology</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 </project>

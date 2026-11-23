@@ -55,7 +55,7 @@ Things to raise in an issue first:
 
 - New MCP tools, ports, or store backends.
 - Anything touching a bounded context's domain model or its ontology
-  (`arknet-ontology`) / SHACL shapes.
+  (`arknet-ontology` and the `*-ontology` module of each bounded context) / SHACL shapes.
 - New dependencies.
 
 ## Working on a change

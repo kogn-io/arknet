@@ -1,10 +1,10 @@
 # arknet-product-requirements
 
 Kontext-Parent des Bounded Context "Produkt & Anforderungen" (BC-1 im Store): `packaging=pom`, nur Aggregation, kein Code.
-Er haelt die beiden Komponenten `arknet-requirements` (Requirement- und Constraint-Lifecycle) und `arknet-use-cases` (Cockburn-Use-Cases) sowie deren gemeinsames Vokabularmodul `arknet-product-requirements-shared`.
+Er haelt die beiden Komponenten `arknet-requirements` (Requirement- und Constraint-Lifecycle) und `arknet-use-cases` (Cockburn-Use-Cases) sowie deren gemeinsames Vokabularmodul `arknet-product-requirements-shared` und das Ontologiemodul `arknet-product-requirements-ontology` (Ontologie `arkreq:` und Shapes des Kontexts).
 Ein Bounded Context ist ein Maven-Parent, kein Hexagon -- jede Komponente bleibt ihr eigenes Hexagon mit eigenem Core, eigenen Ports und eigenen Adaptern.
 Die beiden Komponenten sind nicht verschmolzen: sie teilen die Sprache des Kontexts, nicht ihre Module.
-Sein `dependencyManagement` fuehrt nur das Vokabularmodul; die Versionen der Komponenten-Module fuehren die Komponenten-Parents darunter weiter selbst.
+Sein `dependencyManagement` fuehrt nur das Vokabular- und das Ontologiemodul; die Versionen der Komponenten-Module fuehren die Komponenten-Parents darunter weiter selbst.
 
 Kein Modul der einen Komponente haengt an einem Modul der anderen, und `DependencyRulesTest` (Regel 10) in `arknet-architecture-tests` haelt das fest -- Maven kann es nicht, weil eine Abhaengigkeit zwischen zwei Modulen desselben Parents voellig legal waere.
 Was eine Komponente von der anderen braucht, holt sie ueber einen eigenen Out-Port, den ihr eigener `-adapter-kogniordf` erfuellt, indem er den benannten Graphen der Nachbarin liest (Published Language, ADR-49): `arknet-use-cases-core` haelt dafuer `RequirementLookup` und `ConstraintLookup`, beide in beide Richtungen (Code -> Identitaet beim Schreiben, Identitaet -> Code beim Anzeigen).

@@ -27,7 +27,7 @@ import de.hauschel.arknet.persistence.ArkarchVocabulary;
  * <p>The same terms are written down twice, in two modules that do not depend on each other:
  * {@link ArkarchVocabulary} in {@code arknet-persistence-support} is what the ADR out-adapter
  * actually writes into the store (and what {@code arknet-app}'s traceability read path traverses
- * back out), {@code arknet-architecture.ttl} in {@code arknet-ontology} is what arknet ships as the
+ * back out), {@code arknet-architecture.ttl} in {@code arknet-architecture-decisions-ontology} is what arknet ships as the
  * documented meaning of those statements. Nothing connects them.
  *
  * <p><strong>Why this cannot be caught elsewhere.</strong> Every other ADR test phrases its
