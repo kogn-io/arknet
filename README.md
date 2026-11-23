@@ -555,8 +555,6 @@ truth anymore.
 
 Modular layout under the namespace `https://w3id.org/arknet/`:
 
-The ontology and shape files of the latest release are served flat under `https://kogn-io.github.io/arknet/ontology/<file>.ttl` (GitHub Pages); every `.ttl` under a module's `src/main/resources/` is copied there, parked modules included.
-
 Active modules (consumed by a BC, published under `w3id.org/arknet/`):
 
 | Module | Prefix | Concepts |
@@ -584,6 +582,8 @@ Not created yet (no file at all, just an intended future namespace):
 | Module | Prefix | Concepts |
 |--------|--------|----------|
 | `arknet-tech.ttl` | `arktech:` | Service, Container, API, Database (planned) |
+
+The ontology and shape files of the most recently published release are served flat under `https://kogn-io.github.io/arknet/ontology/<file>.ttl` (GitHub Pages); every `.ttl` under a module's `src/main/resources/` is copied there, parked modules included.
 
 ## Architecture
 
