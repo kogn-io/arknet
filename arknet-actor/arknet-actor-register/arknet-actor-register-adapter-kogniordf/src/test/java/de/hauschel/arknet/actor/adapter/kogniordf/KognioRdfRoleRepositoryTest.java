@@ -126,6 +126,21 @@ class KognioRdfRoleRepositoryTest {
         return new ActorId(ResourceId.of("https://w3id.org/arknet/id/" + localName));
     }
 
+    private int storedActors;
+
+    /**
+     * An actor that really exists in the store, written through the sibling actor repository over
+     * the shared funnel: {@code actshapes:Role-filledBy} demands an {@code arkproc:Actor} target.
+     */
+    private ActorId storedActor() {
+        ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, funnel);
+        storedActors++;
+        ActorId id = freshActorId();
+        actors.create(PROJECT_A, new Actor(id, new ActorCode("ACTOR-" + storedActors), ActorType.HUMAN,
+                "Occupant " + storedActors, null), "en");
+        return id;
+    }
+
     private static Role role(RoleCode code, String description, List<ActorId> filledBy) {
         return new Role(freshId(), code, "Requirements Engineer", description, filledBy);
     }
@@ -243,7 +258,7 @@ class KognioRdfRoleRepositoryTest {
 
     @Test
     void filledByRoundTripsAsOpaqueActorIdentities() {
-        ActorId occupant = freshActorId();
+        ActorId occupant = storedActor();
         Role stored = role(new RoleCode("ROLE-1"), null, List.of(occupant));
 
         repository.create(PROJECT_A, stored, "en");
@@ -273,8 +288,8 @@ class KognioRdfRoleRepositoryTest {
      */
     @Test
     void filledByAcceptsSeveralOccupantsAndReadsThemBackInTheAggregatesCanonicalOrder() {
-        ActorId first = freshActorId();
-        ActorId second = freshActorId();
+        ActorId first = storedActor();
+        ActorId second = storedActor();
         Role stored = role(new RoleCode("ROLE-1"), null, List.of(first, second));
 
         repository.create(PROJECT_A, stored, "en");
@@ -288,8 +303,8 @@ class KognioRdfRoleRepositoryTest {
     @Test
     void updateReplacesTheOccupancyWholesale() {
         RoleId id = freshId();
-        ActorId first = freshActorId();
-        ActorId second = freshActorId();
+        ActorId first = storedActor();
+        ActorId second = storedActor();
         Role original = new Role(id, new RoleCode("ROLE-1"), "Case Handler", null, List.of(first));
         repository.create(PROJECT_A, original, "en");
 
@@ -303,7 +318,7 @@ class KognioRdfRoleRepositoryTest {
     /**
      * The gate's {@code sh:nodeKind sh:IRI} constraint on {@code actshapes:Role-filledBy} actually
      * fires - a candidate targeting a blank node is rejected. See {@link KognioRdfRoleRepository}'s
-     * own javadoc for why this is {@code sh:nodeKind}, not {@code sh:class arkproc:Actor}.
+     * own javadoc for how the actor's slice reaches the gate.
      */
     @Test
     void gateRejectsAFilledByTargetThatIsABlankNode() {
@@ -321,7 +336,7 @@ class KognioRdfRoleRepositoryTest {
 
     /** The counterpart: an IRI target passes. */
     @Test
-    void gateAcceptsAFilledByTargetThatIsAnIri() {
+    void gateAcceptsAFilledByTargetThatIsAnActorCarryingItsSlice() {
         RDF rdf = new SimpleRdf();
         IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
         IRI occupant = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
@@ -329,10 +344,29 @@ class KognioRdfRoleRepositoryTest {
         candidate.add(subject, VocabRdf.TYPE, rdf.createIRI(ROLE_TYPE));
         candidate.add(subject, rdf.createIRI(NAME_PROPERTY), rdf.createLiteral("Requirements Engineer", "en"));
         candidate.add(subject, rdf.createIRI(FILLED_BY_PROPERTY), occupant);
+        Graph context = rdf.createGraph();
+        context.add(occupant, VocabRdf.TYPE, rdf.createIRI(ArkprocVocabulary.HUMAN_ACTOR_TYPE));
+        context.add(occupant, rdf.createIRI(NAME_PROPERTY), rdf.createLiteral("Architect", "en"));
 
         ShaclWriteGate gate = KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
-        gate.enforce(candidate);
+        gate.enforce(candidate, context);
+    }
+
+    /** A {@code filledBy} target the gate knows nothing about is no actor, so it is rejected. */
+    @Test
+    void gateRejectsAFilledByTargetThatIsNoActor() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = rdf.createGraph();
+        candidate.add(subject, VocabRdf.TYPE, rdf.createIRI(ROLE_TYPE));
+        candidate.add(subject, rdf.createIRI(NAME_PROPERTY), rdf.createLiteral("Requirements Engineer", "en"));
+        candidate.add(subject, rdf.createIRI(FILLED_BY_PROPERTY),
+                rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID()));
+
+        ShaclWriteGate gate = KognioRdfActorRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+
+        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
     }
 
     /**

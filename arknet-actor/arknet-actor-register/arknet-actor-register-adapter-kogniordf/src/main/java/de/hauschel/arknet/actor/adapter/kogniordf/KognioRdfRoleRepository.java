@@ -85,20 +85,15 @@ import de.hauschel.arknet.persistence.VersionedWriteFunnel;
  * including the issue #258 sweep of a stale untagged sibling of a default-language write. See
  * {@link Role}'s own javadoc for why this hexagon's two resource types disagree on tagging.</p>
  *
- * <p><strong>{@code arkproc:filledBy} is validated by {@code sh:nodeKind sh:IRI}, not
- * {@code sh:class arkproc:Actor}.</strong> The obvious mirror of
- * {@code KognioRdfRequirementRepository}'s {@code usesTerm}/{@code sh:class skos:Concept} pattern
- * - asserting an occupant's type as validation-only context - does not work here: this gate reasons
- * over {@code arknet-actor.ttl}'s {@code rdfs:subClassOf} chain so {@code actshapes:ActorShape} can
- * fire through it (see {@link KognioRdfActorRepositoryFactory#buildGate}), and that very shape
- * targets {@link ArkprocVocabulary#ACTOR_TYPE}. Asserting an occupant's type would pull it under
- * {@code ActorShape}'s own {@code sh:minCount 1} on {@code arknet:name} too - a node this write
- * never carries a name for, since only its opaque identity is known here. {@code actshapes:
- * Role-filledBy} therefore only demands an IRI; whether the target actually <em>is</em> an actor is
- * {@code RoleService}'s job (it resolves every {@code filledByActorCodes} entry against
- * {@code ActorRepository} and rejects an unknown one before a {@link Role} is ever built), not this
- * shape's - see {@code actor-shapes.ttl}'s own comment on {@code actshapes:Role-filledBy} for the
- * full reasoning. {@code filledBy} itself is genuinely multi-valued by design (not a
+ * <p><strong>{@code arkproc:filledBy} is validated by {@code sh:class arkproc:Actor}.</strong> The
+ * occupants' own triples live in their slices, not in this role's candidate graph, so
+ * {@link #occupantContext} hands every occupant's full slice to the gate as validation-only asserted
+ * context (never persisted here) - the whole slice, not a bare type triple, because {@code
+ * actshapes:ActorShape} targets the same class through the gate's {@code rdfs:subClassOf} reasoning
+ * and demands a name and a concrete subtype of it. An occupant with no slice fails the class check.
+ * {@code RoleService} still resolves every {@code filledByActorCodes} entry against
+ * {@code ActorRepository} before a {@link Role} is built; the shape is what holds for a write that
+ * does not go through the service. {@code filledBy} itself is genuinely multi-valued by design (not a
  * row-multiplication artefact), so it is read via its own separate per-subject query
  * ({@link #readFilledBy}), independent of the multilingual name/description reads.</p>
  *
@@ -171,10 +166,35 @@ public class KognioRdfRoleRepository implements RoleRepository {
         IRI subjectIri = rdf.createIRI(subjectIriString);
         Graph graph = buildCandidateGraph(subjectIri, role, tag, tag);
 
-        funnel.create(new DatasetId(projectId.value()), subjectIriString, role.code().value(), null,
+        funnel.create(new DatasetId(projectId.value()), subjectIriString, role.code().value(),
+                occupantContext(projectId, role),
                 () -> new ResourceAlreadyExistsException(projectId, role.id().value()),
                 () -> new DuplicateRoleCodeException(projectId, role.code()),
                 (tx, current) -> graph);
+    }
+
+    /**
+     * The validation-only asserted context for {@code actshapes:Role-filledBy}'s
+     * {@code sh:class arkproc:Actor}: every occupant's full slice as it stands in the content graph,
+     * never persisted here. The whole slice, not a bare type triple, because {@code ActorShape}
+     * targets the same class and demands a name and a concrete subtype of it. An occupant with no
+     * triples contributes nothing and so fails the class check.
+     */
+    private Graph occupantContext(ProjectId projectId, Role role) {
+        Graph context = rdf.createGraph();
+        if (role.filledBy().isEmpty()) {
+            return context;
+        }
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            for (ActorId occupant : role.filledBy()) {
+                IRI occupantIri = rdf.createIRI(occupant.value().value());
+                String query = "SELECT ?p ?o WHERE { GRAPH <" + ROLE_GRAPH + "> { "
+                        + SparqlTerms.iriRef(occupantIri.getIRIString()) + " ?p ?o } }";
+                handle.sparqlQuery().select(query).forEach(row -> context.add(
+                        occupantIri, (IRI) row.getValue("p").orElseThrow(), row.getValue("o").orElseThrow()));
+            }
+        }
+        return context;
     }
 
     /**
@@ -198,7 +218,8 @@ public class KognioRdfRoleRepository implements RoleRepository {
         Graph graph = buildCandidateGraph(subjectIri, updated, nameTag, descriptionTag);
 
         funnel.compareAndUpdate(new DatasetId(projectId.value()), subjectIriString,
-                expectedHead == null ? null : (io.kogn.rdf.versioning.RevisionToken) expectedHead.value(), null,
+                expectedHead == null ? null : (io.kogn.rdf.versioning.RevisionToken) expectedHead.value(),
+                occupantContext(projectId, updated),
                 () -> new RoleNotFoundException(projectId, updated.code()),
                 () -> new RoleConcurrentlyModifiedException(projectId, updated.code()),
                 (tx, draft) -> {

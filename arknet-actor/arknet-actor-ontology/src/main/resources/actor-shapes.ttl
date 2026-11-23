@@ -49,6 +49,12 @@
 actshapes:ActorShape
     a sh:NodeShape ;
     sh:targetClass arkproc:Actor ;
+    sh:or ( [ sh:class arkproc:HumanActor ]
+            [ sh:class arkproc:SystemActor ]
+            [ sh:class arkproc:LegalActor ]
+            [ sh:class arkproc:GroupActor ] ) ;
+    sh:message  "An Actor must be typed as one of the concrete subtypes arkproc:HumanActor, arkproc:SystemActor, arkproc:LegalActor or arkproc:GroupActor - arkproc:Actor alone is an abstract superclass and stays invisible to every read path."@en , "Ein Actor muss als einer der konkreten Untertypen arkproc:HumanActor, arkproc:SystemActor, arkproc:LegalActor oder arkproc:GroupActor getypt sein - arkproc:Actor allein ist ein abstrakter Obertyp und bleibt fuer jeden Lesepfad unsichtbar."@de ;
+    sh:severity sh:Violation ;
     sh:property actshapes:Actor-name ;
     sh:property actshapes:Actor-description .
 
@@ -57,15 +63,18 @@ actshapes:Actor-name
     sh:path     arknet:name ;
     sh:minCount 1 ;
     sh:minLength 2 ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
-    sh:message  "An Actor needs at least one 'arknet:name' (min. 2 characters) - what this actor is called, e.g. 'Sachbearbeiter' or 'PaymentService'. sh:uniqueLang allows at most one arknet:name per non-empty language tag - two names sharing the same tag are not allowed, but DIFFERENT language tags are (an actor may be named in several languages)."@en , "Ein Actor braucht mindestens einen 'arknet:name' (min. 2 Zeichen) - wie dieser Akteur heisst, z.B. 'Sachbearbeiter' oder 'PaymentService'. sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag - zwei Namen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (ein Actor darf mehrsprachig benannt sein)."@de ;
+    sh:message  "An Actor needs at least one 'arknet:name' (min. 2 characters, not only whitespace) - what this actor is called, e.g. 'Sachbearbeiter' or 'PaymentService'. sh:uniqueLang allows at most one arknet:name per non-empty language tag - two names sharing the same tag are not allowed, but DIFFERENT language tags are (an actor may be named in several languages)."@en , "Ein Actor braucht mindestens einen 'arknet:name' (min. 2 Zeichen, nicht nur Leerraum) - wie dieser Akteur heisst, z.B. 'Sachbearbeiter' oder 'PaymentService'. sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag - zwei Namen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (ein Actor darf mehrsprachig benannt sein)."@de ;
     sh:severity sh:Violation .
 
 actshapes:Actor-description
     a sh:PropertyShape ;
     sh:path     arknet:description ;
+    sh:minLength 1 ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
-    sh:message  "An Actor's 'arknet:description' is optional. sh:uniqueLang allows at most one arknet:description per non-empty language tag - two descriptions sharing the same tag are not allowed, but DIFFERENT language tags are (an actor may be described in several languages)."@en , "Die 'arknet:description' eines Actors ist optional. sh:uniqueLang erlaubt hoechstens eine arknet:description je nicht-leerem Sprach-Tag - zwei Beschreibungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (ein Actor darf mehrsprachig beschrieben sein)."@de ;
+    sh:message  "An Actor's 'arknet:description' is optional, but when present it must not be empty or only whitespace. sh:uniqueLang allows at most one arknet:description per non-empty language tag - two descriptions sharing the same tag are not allowed, but DIFFERENT language tags are (an actor may be described in several languages)."@en , "Die 'arknet:description' eines Actors ist optional, darf aber, wenn vorhanden, nicht leer und nicht nur Leerraum sein. sh:uniqueLang erlaubt hoechstens eine arknet:description je nicht-leerem Sprach-Tag - zwei Beschreibungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (ein Actor darf mehrsprachig beschrieben sein)."@de ;
     sh:severity sh:Violation .
 
 ##############################################################################
@@ -96,36 +105,33 @@ actshapes:Role-name
     sh:path     arknet:name ;
     sh:minCount 1 ;
     sh:minLength 2 ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
-    sh:message  "A Role needs at least one 'arknet:name' (min. 2 characters) - what this role is called, e.g. 'Requirements Engineer'. sh:uniqueLang allows at most one arknet:name per non-empty language tag - two names sharing the same tag are not allowed, but DIFFERENT language tags are (a role may be named in several languages)."@en , "Eine Rolle braucht mindestens einen 'arknet:name' (min. 2 Zeichen) - wie diese Rolle heisst, z.B. 'Requirements Engineer'. sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag - zwei Namen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Rolle darf mehrsprachig benannt sein)."@de ;
+    sh:message  "A Role needs at least one 'arknet:name' (min. 2 characters, not only whitespace) - what this role is called, e.g. 'Requirements Engineer'. sh:uniqueLang allows at most one arknet:name per non-empty language tag - two names sharing the same tag are not allowed, but DIFFERENT language tags are (a role may be named in several languages)."@en , "Eine Rolle braucht mindestens einen 'arknet:name' (min. 2 Zeichen, nicht nur Leerraum) - wie diese Rolle heisst, z.B. 'Requirements Engineer'. sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag - zwei Namen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Rolle darf mehrsprachig benannt sein)."@de ;
     sh:severity sh:Violation .
 
 actshapes:Role-description
     a sh:PropertyShape ;
     sh:path     arknet:description ;
+    sh:minLength 1 ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
-    sh:message  "A Role's 'arknet:description' is optional. sh:uniqueLang allows at most one arknet:description per non-empty language tag - two descriptions sharing the same tag are not allowed, but DIFFERENT language tags are (a role may be described in several languages)."@en , "Die 'arknet:description' einer Rolle ist optional. sh:uniqueLang erlaubt hoechstens eine arknet:description je nicht-leerem Sprach-Tag - zwei Beschreibungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Rolle darf mehrsprachig beschrieben sein)."@de ;
+    sh:message  "A Role's 'arknet:description' is optional. sh:uniqueLang allows at most one arknet:description per non-empty language tag - two descriptions sharing the same tag are not allowed, but DIFFERENT language tags are (a role may be described in several languages)."@en , "Die 'arknet:description' einer Rolle ist optional, darf aber, wenn vorhanden, nicht leer und nicht nur Leerraum sein. sh:uniqueLang erlaubt hoechstens eine arknet:description je nicht-leerem Sprach-Tag - zwei Beschreibungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Rolle darf mehrsprachig beschrieben sein)."@de ;
     sh:severity sh:Violation .
 
-#  sh:nodeKind sh:IRI, not sh:class arkproc:Actor: this write-gate reasons over
-#  arknet-actor.ttl's rdfs:subClassOf chain so ActorShape fires through it
-#  (KognioRdfActorRepositoryFactory#buildGate), and ActorShape targets that
-#  very same arkproc:Actor class. Asserting a filledBy target's type as
-#  validation-only context (the requirements gate's usesTerm pattern) would
-#  therefore also pull that target under ActorShape's own sh:minCount 1 on
-#  arknet:name - a node this write never carries a name for, since only its
-#  opaque identity is known at this point. KognioRdfRoleRepositoryTest#
-#  gateRejectsAFilledByTargetThatIsABlankNode/#gateAcceptsAFilledByTarget
-#  ThatIsAnIri pin what this shape does demand, and what it stays
-#  deliberately silent on is the rest: whether the
-#  target actually IS an arkproc:Actor is RoleService's job (it resolves
-#  every filledByActorCodes entry against ActorRepository before a Role is
-#  ever built), not this shape's.
+#  sh:class arkproc:Actor: the target must be an actor. The type triples of the target live
+#  in its own slice, not in the role's candidate graph, so the typed write path hands the
+#  occupant's full slice to the gate as validation-only asserted context
+#  (KognioRdfRoleRepository); the generic submit path does the same for every neighbour. The
+#  gate reasons over arknet-actor.ttl's rdfs:subClassOf chain, so a HumanActor/SystemActor/...
+#  target satisfies sh:class arkproc:Actor. The whole slice, not a bare type triple, because
+#  ActorShape targets the same class and demands a name and a concrete subtype of it.
 actshapes:Role-filledBy
     a sh:PropertyShape ;
     sh:path     arkproc:filledBy ;
     sh:nodeKind sh:IRI ;
-    sh:message  "Every 'arkproc:filledBy' target of a Role must be an IRI - a role may only be filled by an actor, addressed by its identity, and may legally be filled by none at all."@en , "Jedes Ziel von 'arkproc:filledBy' einer Rolle muss eine IRI sein - eine Rolle darf nur durch einen Actor besetzt werden, adressiert ueber seine Identitaet, und darf auch unbesetzt bleiben."@de ;
+    sh:class    arkproc:Actor ;
+    sh:message  "Every 'arkproc:filledBy' target of a Role must be an IRI of an existing arkproc:Actor - a role may only be filled by an actor, addressed by its identity, and may legally be filled by none at all."@en , "Jedes Ziel von 'arkproc:filledBy' einer Rolle muss die IRI eines vorhandenen arkproc:Actor sein - eine Rolle darf nur durch einen Actor besetzt werden, adressiert ueber seine Identitaet, und darf auch unbesetzt bleiben."@de ;
     sh:severity sh:Violation .
 
 ##############################################################################
@@ -134,7 +140,8 @@ actshapes:Role-filledBy
 #  business codes, which edges own their children and how those are ordered.
 ##############################################################################
 
-arkproc:Actor       a arkres:ResourceType ; arkres:codePrefix "ACTOR-" .
+#  arkproc:Actor is no resource type: it is the abstract superclass, only the four concrete
+#  subtypes below can be created.
 arkproc:HumanActor  a arkres:ResourceType ; arkres:codePrefix "ACTOR-" .
 arkproc:SystemActor a arkres:ResourceType ; arkres:codePrefix "ACTOR-" .
 arkproc:LegalActor  a arkres:ResourceType ; arkres:codePrefix "ACTOR-" .
