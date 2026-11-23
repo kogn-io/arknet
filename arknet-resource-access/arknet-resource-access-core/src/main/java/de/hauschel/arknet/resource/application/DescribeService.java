@@ -3,13 +3,10 @@
 
 package de.hauschel.arknet.resource.application;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -71,7 +68,6 @@ public final class DescribeService implements DescribeResourceType {
 
     private static final RDF RDF_FACTORY = new SimpleRdf();
     private static final String SHACL = "http://www.w3.org/ns/shacl#";
-    private static final IRI TARGET_CLASS = sh("targetClass");
     private static final IRI PROPERTY = sh("property");
     private static final IRI PATH = sh("path");
     private static final IRI MIN_COUNT = sh("minCount");
@@ -87,7 +83,6 @@ public final class DescribeService implements DescribeResourceType {
     private static final IRI SEVERITY = sh("severity");
     private static final IRI WARNING = sh("Warning");
     private static final IRI SPARQL = sh("sparql");
-    private static final IRI SUB_CLASS_OF = RDF_FACTORY.createIRI(VocabRdfs.NAMESPACE + "subClassOf");
     private static final String LANG_STRING = "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString";
     private static final Set<String> RULE_DATA = Set.of(ArkresVocabulary.RESOURCE_TYPE,
             ArkresVocabulary.CODE_PREFIX, ArkresVocabulary.CHILD_KIND, ArkresVocabulary.ORDERED_BY);
@@ -110,7 +105,8 @@ public final class DescribeService implements DescribeResourceType {
      *
      * @param shapes        the shapes the write gate validates against, with their rule data
      * @param ontology      the ontologies of the model and of {@code arkres:}: class hierarchy, labels, comments
-     * @param schema        the rule data read off {@code shapes}
+     * @param schema        the rule data read off {@code shapes}, and the node shapes of a type over the class
+     *                      hierarchy - the same that decide which predicates {@code submit} knows
      * @param prefixes      the prefixes the shipped files bind
      * @param defaultLocale the display language when a call names none
      */
@@ -279,25 +275,7 @@ public final class DescribeService implements DescribeResourceType {
     }
 
     private List<BlankNodeOrIRI> nodeShapes(final IRI type) {
-        return superclasses(type).stream()
-                .flatMap(superclass -> shapes.stream(null, TARGET_CLASS, superclass).map(Triple::getSubject))
-                .distinct()
-                .toList();
-    }
-
-    private Set<IRI> superclasses(final IRI type) {
-        Set<IRI> seen = new LinkedHashSet<>();
-        Deque<IRI> open = new ArrayDeque<>(List.of(type));
-        while (!open.isEmpty()) {
-            IRI next = open.pop();
-            if (seen.add(next)) {
-                ontology.stream(next, SUB_CLASS_OF, null).map(Triple::getObject)
-                        .filter(IRI.class::isInstance)
-                        .map(IRI.class::cast)
-                        .forEach(open::push);
-            }
-        }
-        return seen;
+        return schema.nodeShapes(type);
     }
 
     // --- example -------------------------------------------------------------

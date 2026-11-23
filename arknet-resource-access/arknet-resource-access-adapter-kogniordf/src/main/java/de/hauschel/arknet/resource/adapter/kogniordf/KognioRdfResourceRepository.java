@@ -10,6 +10,7 @@ import java.util.stream.Stream;
 
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
@@ -72,6 +73,14 @@ final class KognioRdfResourceRepository implements ResourceRepository {
         @Override
         public ReadableGraph slice(final IRI subject) {
             return batch.draft(subject.getIRIString());
+        }
+
+        @Override
+        public ReadableGraph pointingAt(final IRI resource) {
+            Graph triples = RDF_FACTORY.createGraph();
+            batch.tx().match(RDF_FACTORY.createIRI(funnel.contentGraph()), null, null, resource).stream()
+                    .forEach(triples::add);
+            return triples;
         }
 
         @Override

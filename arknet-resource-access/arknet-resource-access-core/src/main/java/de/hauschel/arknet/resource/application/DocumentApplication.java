@@ -16,6 +16,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.BlankNodeOrIRI;
@@ -59,6 +61,20 @@ import de.hauschel.arknet.resource.domain.SubmittedDocument.Update;
  * not carry; its real slice passes, and a reference to a resource that does not exist after the
  * document finds no type and fails the shape's {@code sh:class}.</p>
  *
+ * <p><strong>Known predicates.</strong> The document writes only fields: a create, an inline child,
+ * a set and an add-to name only predicates some property shape gives the node's class or one of its
+ * superclasses ({@link ResourceSchema#fields}, the fields {@code describe} lists), besides
+ * {@code rdf:type}; an inline value written as a blank node is held to the classes it is typed with.
+ * The shapes are open, so this is checked on the document, not on the stored slice: a stored
+ * predicate outside the fields stays, and a clear or a remove-from may still take it away.</p>
+ *
+ * <p><strong>Delete guard.</strong> A resource is deleted only if no stored edge is left pointing at
+ * it: a triple of another resource, or of one of its children, over a property the shapes or the
+ * ontology make an edge to the deleted resource's class ({@link ResourceSchema#edgesTo}). An edge
+ * whose holder the same document deletes, or whose slice after the document no longer carries it,
+ * does not count. The gate cannot catch this itself: it validates what is written, and the holder
+ * of the edge is not.</p>
+ *
  * <p><strong>Codes and children.</strong> A created resource of a type with a code prefix gets the
  * next free code of that prefix, counted over living resources and codes kept by deleted ones. An
  * owned child is the fragment {@code <resource>#<kind>-<id>} of its resource and keeps that name
@@ -79,6 +95,8 @@ final class DocumentApplication {
     private final Map<IRI, Graph> after = new LinkedHashMap<>();
     private final Map<IRI, String> codes = new HashMap<>();
     private final Set<IRI> deleted = new HashSet<>();
+    private final Map<IRI, Set<IRI>> deletedTypes = new HashMap<>();
+    private final Map<Set<IRI>, Set<IRI>> fieldsByTypes = new HashMap<>();
     private final Map<String, Integer> nextNumber = new HashMap<>();
     private final List<String> problems = new ArrayList<>();
 
@@ -114,11 +132,13 @@ final class DocumentApplication {
             codeOf(current, object).ifPresent(code -> codes.put(object, code));
             if (activities.get(0) instanceof Delete) {
                 deleted.add(object);
+                deletedTypes.put(object, typesOf(current, object));
                 return;
             }
             after.put(object, changedSlice(object, current, activities));
             updated.add(object);
         });
+        deletedTypes.forEach(this::rejectEdgesLeftPointingAt);
         if (!problems.isEmpty()) {
             throw new SubmitRejectedException(String.join("; ", problems));
         }
@@ -142,11 +162,15 @@ final class DocumentApplication {
     private Graph createdSlice(final Create create, final IRI subject) {
         Graph slice = RDF_FACTORY.createGraph();
         Map<IRI, List<BlankNode>> children = new LinkedHashMap<>();
+        Set<IRI> types = typesOf(source, create.object());
         source.stream(create.object(), null, null).forEach(triple -> {
             IRI property = triple.getPredicate();
             if (IDENTIFIER.equals(property)) {
                 problems.add("a created resource carries no " + IDENTIFIER.getIRIString()
                         + "; the store assigns its code");
+                return;
+            }
+            if (!known(property, types, "a created resource")) {
                 return;
             }
             Optional<OwnedField> owned = schema.ownedField(property);
@@ -258,7 +282,7 @@ final class DocumentApplication {
                     .forEach(triple -> byField.computeIfAbsent(triple.getPredicate(), key -> new ArrayList<>())
                             .add(triple.getObject()));
             byField.forEach((field, newValues) -> {
-                if (!writable(subject, field)) {
+                if (!writable(subject, field) || !known(field, typesOf(slice, subject), subject.getIRIString())) {
                     return;
                 }
                 Set<Optional<String>> languages = new HashSet<>();
@@ -283,7 +307,8 @@ final class DocumentApplication {
             }
             return;
         }
-        if (!writable(subject, addTo.field())) {
+        if (!writable(subject, addTo.field())
+                || !known(addTo.field(), typesOf(slice, subject), subject.getIRIString())) {
             return;
         }
         RDFTerm value = resolve(addTo.value());
@@ -360,9 +385,12 @@ final class DocumentApplication {
                 .filter(type -> !field.childClass().equals(type))
                 .forEach(type -> problems.add("a child in " + field.property().getIRIString() + " is a "
                         + field.childClass().getIRIString() + " and nothing else, not " + type));
+        Set<IRI> childTypes = Set.of(field.childClass());
         source.stream(child, null, null).forEach(triple -> {
-            if (!triple.getPredicate().equals(field.orderedBy()) && !VocabRdf.TYPE.equals(triple.getPredicate())) {
-                addValue(slice, name, triple.getPredicate(), triple.getObject());
+            IRI property = triple.getPredicate();
+            if (!property.equals(field.orderedBy()) && !VocabRdf.TYPE.equals(property)
+                    && known(property, childTypes, "a new child in " + field.property().getIRIString())) {
+                addValue(slice, name, property, triple.getObject());
             }
         });
         slice.add(name, VocabRdf.TYPE, field.childClass());
@@ -427,9 +455,63 @@ final class DocumentApplication {
         RDFTerm resolved = resolve(value);
         slice.add(subject, property, resolved);
         if (value instanceof BlankNode node && !minted.containsKey(node)) {
-            source.stream(node, null, null).forEach(triple -> addValue(slice, node, triple.getPredicate(),
-                    triple.getObject()));
+            Set<IRI> types = typesOf(source, node);
+            source.stream(node, null, null)
+                    .filter(triple -> known(triple.getPredicate(), types,
+                            "a blank node written inline as the value of " + property.getIRIString()))
+                    .forEach(triple -> addValue(slice, node, triple.getPredicate(), triple.getObject()));
         }
+    }
+
+    /**
+     * Whether a document may write {@code property} on a node typed with {@code types}: it is
+     * {@code rdf:type} or a field a shape gives one of the types or a superclass. Records the
+     * rejection otherwise.
+     */
+    private boolean known(final IRI property, final Set<IRI> types, final String node) {
+        if (VocabRdf.TYPE.equals(property)
+                || fieldsByTypes.computeIfAbsent(types, schema::fields).contains(property)) {
+            return true;
+        }
+        problems.add(property.getIRIString() + " is no field of " + node + " typed "
+                + types.stream().map(IRI::getIRIString).sorted().toList() + ": no shape of those classes or"
+                + " their superclasses names it, so a document does not write it; describe lists the fields,"
+                + " and a stored value outside them can still be cleared");
+        return false;
+    }
+
+    /**
+     * Records a rejection for every stored edge left pointing at {@code target} after the document:
+     * an edge to its class whose holder is neither deleted nor rid of it by the same document.
+     */
+    private void rejectEdgesLeftPointingAt(final IRI target, final Set<IRI> types) {
+        Set<IRI> edges = schema.edgesTo(types);
+        Map<String, Set<String>> predicatesByHolder = new TreeMap<>();
+        batch.pointingAt(target).stream()
+                .filter(edge -> edges.contains(edge.getPredicate()))
+                .filter(edge -> !(edge.getSubject() instanceof IRI holder) || leftAfter(edge, holder, target))
+                .forEach(edge -> predicatesByHolder.computeIfAbsent(edge.getSubject() instanceof IRI holder
+                        ? holder.getIRIString() : "a stored blank node", key -> new TreeSet<>())
+                        .add(edge.getPredicate().getIRIString()));
+        predicatesByHolder.forEach((holder, predicates) -> problems.add(target.getIRIString() + " is not deleted: "
+                + holder + " still points at it over " + String.join(", ", predicates)
+                + "; delete that resource or remove the edge in the same document, or keep "
+                + target.getIRIString()));
+    }
+
+    private boolean leftAfter(final Triple edge, final IRI holder, final IRI target) {
+        IRI resource = resourceOf(holder);
+        if (resource.equals(target) || deleted.contains(resource)) {
+            return false;
+        }
+        return stateAfter(resource).contains(edge);
+    }
+
+    private static Set<IRI> typesOf(final ReadableGraph graph, final BlankNodeOrIRI node) {
+        return graph.stream(node, VocabRdf.TYPE, null).map(Triple::getObject)
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     private RDFTerm resolve(final RDFTerm value) {

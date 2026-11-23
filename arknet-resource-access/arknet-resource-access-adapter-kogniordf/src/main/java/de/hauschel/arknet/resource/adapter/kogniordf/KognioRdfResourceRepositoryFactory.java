@@ -128,12 +128,13 @@ public final class KognioRdfResourceRepositoryFactory {
     }
 
     /**
-     * The resource types and owned fields, read off the shapes' rule data.
+     * The resource types and owned fields, read off the shapes' rule data, with the class hierarchy
+     * and ranges of the model ontologies for the fields of a type and the edges pointing at it.
      *
      * @return the schema
      */
     public static ResourceSchema schema() {
-        return ResourceSchema.of(shapes());
+        return ResourceSchema.of(shapes(), union(ontologyResources()));
     }
 
     /**
@@ -227,7 +228,8 @@ public final class KognioRdfResourceRepositoryFactory {
     public static DescribeResourceType describer(final DisplayLocale displayLocale) {
         Objects.requireNonNull(displayLocale, "displayLocale");
         ReadableGraph shapes = shapes();
-        return new DescribeService(shapes, union(describedOntologies()), ResourceSchema.of(shapes), prefixes(),
+        return new DescribeService(shapes, union(describedOntologies()),
+                ResourceSchema.of(shapes, union(ontologyResources())), prefixes(),
                 displayLocale);
     }
 

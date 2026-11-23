@@ -154,6 +154,11 @@ class SubmitRealStoreConcurrencyTest {
         }
 
         @Override
+        public ReadableGraph pointingAt(final IRI resource) {
+            return delegate.pointingAt(resource);
+        }
+
+        @Override
         public int highestRunningNumber(final String codePrefix) {
             return delegate.highestRunningNumber(codePrefix);
         }

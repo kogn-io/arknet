@@ -498,12 +498,31 @@ class SubmitOnTypedStoreDataTest {
     }
 
     /**
-     * The gate sees the deleted term from the requirement the same document changes: its reference no
-     * longer finds a type. A delete alone is not rejected - the engine validates what the document
-     * writes and the neighbours reachable from it, not the resources still pointing at a deleted one.
+     * A lone delete of a term a typed requirement still uses is rejected: the engine's delete guard
+     * finds the stored {@code usesTerm} edge, derived from the shapes and the ontology, and names it
+     * with the requirement holding it.
      */
-    // TODO #742: a lone Delete of a resource something still points at is not rejected yet; protection
-    // against deleting a referenced resource, derived from the ontology's edges, belongs to #742.
+    @Test
+    void rejectsDeletingATypedTermATypedRequirementStillUses() {
+        onStore(store -> {
+            // given
+            Term term = store.addTerm("Order", "A customer's request to buy.");
+            Requirement fr = store.addFunctionalRequirement();
+            store.bean(RequirementService.class).linkTerm(PROJECT, fr.code(), term.code().value(), LANGUAGE);
+
+            // when / then
+            assertThatThrownBy(() -> store.submit("[] a arkres:Delete ; arkres:object <" + iri(term) + "> .\n"))
+                    .isInstanceOf(SubmitRejectedException.class)
+                    .hasMessageContaining("https://w3id.org/arknet/requirements#usesTerm")
+                    .hasMessageContaining(fr.id().value().value());
+            assertThat(store.bean(TermService.class).get(PROJECT, term.code(), null)).isPresent();
+        });
+    }
+
+    /**
+     * A document that deletes the term and changes the requirement using it, without removing the
+     * edge, is rejected as well: the requirement after the document still points at the term.
+     */
     @Test
     void rejectsDeletingATypedTermInTheDocumentThatChangesTheTypedRequirementUsingIt() {
         onStore(store -> {
