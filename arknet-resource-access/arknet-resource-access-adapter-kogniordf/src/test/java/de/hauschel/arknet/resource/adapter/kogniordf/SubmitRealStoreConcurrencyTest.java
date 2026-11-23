@@ -4,6 +4,7 @@
 package de.hauschel.arknet.resource.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,6 +46,11 @@ import de.hauschel.arknet.resource.domain.SubmitRejectedException;
  * engine read it and before it commits: the engine's commit must not land a reference to the
  * deleted resource. It loses the commit race, runs the document again against the new state, and
  * the shapes reject the reference.
+ *
+ * <p>The other direction pins the delete guard: a concurrent writer adds an edge to a resource after
+ * the engine read the edges pointing at it and before the delete commits. The read happens inside
+ * the write transaction, so the delete loses its commit, runs again, and the guard finds the new
+ * edge.</p>
  */
 class SubmitRealStoreConcurrencyTest {
 
@@ -86,7 +92,7 @@ class SubmitRealStoreConcurrencyTest {
         ResourceRepository pausing = (projectId, writes) -> {
             attempts.incrementAndGet();
             repository.writeAll(projectId, batch -> writes.accept(
-                    new PausingBatch(batch, term, firstRead, termRead, termDeleted)));
+                    new PausingBatch(batch, term, false, firstRead, termRead, termDeleted)));
         };
 
         // when
@@ -112,25 +118,70 @@ class SubmitRealStoreConcurrencyTest {
         assertTrue(reader.outgoing(SubmitRealStoreTest.PROJECT, term).isEmpty());
     }
 
+    @Test
+    void anEdgeCommittedAfterTheDeleteReadTheEdgesKeepsTheResource() throws Exception {
+        // given
+        SubmitService plain = service(repository);
+        String term = SubmitRealStoreTest.iriOf(plain.submit(SubmitRealStoreTest.PROJECT, SubmitRealStoreTest.PREFIXES
+                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"A\"@en .\n"),
+                "TERM-1");
+        CountDownLatch edgesRead = new CountDownLatch(1);
+        CountDownLatch edgeCommitted = new CountDownLatch(1);
+        AtomicBoolean firstRead = new AtomicBoolean(true);
+        AtomicInteger attempts = new AtomicInteger();
+        ResourceRepository pausing = (projectId, writes) -> {
+            attempts.incrementAndGet();
+            repository.writeAll(projectId, batch -> writes.accept(
+                    new PausingBatch(batch, term, true, firstRead, edgesRead, edgeCommitted)));
+        };
+
+        // when
+        Future<SubmitResult> deleter = executor.submit(() -> service(pausing).submit(SubmitRealStoreTest.PROJECT,
+                SubmitRealStoreTest.PREFIXES + "[] a arkres:Delete ; arkres:object <" + term + "> .\n"));
+        assertTrue(edgesRead.await(WAIT_SECONDS, TimeUnit.SECONDS), "the engine never read the edges to the term");
+        Future<SubmitResult> writer = executor.submit(() -> plain.submit(SubmitRealStoreTest.PROJECT,
+                SubmitRealStoreTest.PREFIXES + "[] a arkres:Create ; arkres:object _:fr .\n"
+                        + "_:fr a arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ;"
+                        + " dcterms:description \"Writes it.\"@en ; arkreq:usesTerm <" + term + "> ;"
+                        + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"Works.\"@en ] .\n"));
+        writer.get(WAIT_SECONDS, TimeUnit.SECONDS);
+        edgeCommitted.countDown();
+
+        // then
+        ExecutionException failure = assertThrows(ExecutionException.class,
+                () -> deleter.get(WAIT_SECONDS, TimeUnit.SECONDS));
+        assertInstanceOf(SubmitRejectedException.class, failure.getCause());
+        assertTrue(failure.getCause().getMessage().contains("https://w3id.org/arknet/requirements#usesTerm"),
+                failure.getCause().getMessage());
+        assertEquals(2, attempts.get(), "the lost commit runs the document once more");
+        assertFalse(reader.findByIdentifier(SubmitRealStoreTest.PROJECT, "TERM-1").isEmpty());
+        assertFalse(reader.findByIdentifier(SubmitRealStoreTest.PROJECT, "FR-1").isEmpty());
+    }
+
     private SubmitService service(final ResourceRepository store) {
         return new SubmitService(KognioRdfResourceRepositoryFactory.schema(), store,
                 KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
                 KognioRdfResourceRepositoryFactory.prefixes(), KognioRdfResourceRepositoryFactory.handles(lifecycle));
     }
 
-    /** Pauses the first read of one resource until a concurrent writer has deleted it. */
+    /**
+     * Pauses the first read of one resource - its slice, or the edges pointing at it - until a
+     * concurrent writer has committed.
+     */
     private static final class PausingBatch implements ResourceBatch {
 
         private final ResourceBatch delegate;
         private final String pauseOn;
+        private final boolean onEdges;
         private final AtomicBoolean firstRead;
         private final CountDownLatch read;
         private final CountDownLatch resume;
 
-        private PausingBatch(final ResourceBatch delegate, final String pauseOn, final AtomicBoolean firstRead,
-                final CountDownLatch read, final CountDownLatch resume) {
+        private PausingBatch(final ResourceBatch delegate, final String pauseOn, final boolean onEdges,
+                final AtomicBoolean firstRead, final CountDownLatch read, final CountDownLatch resume) {
             this.delegate = delegate;
             this.pauseOn = pauseOn;
+            this.onEdges = onEdges;
             this.firstRead = firstRead;
             this.read = read;
             this.resume = resume;
@@ -139,23 +190,33 @@ class SubmitRealStoreConcurrencyTest {
         @Override
         public ReadableGraph slice(final IRI subject) {
             ReadableGraph slice = delegate.slice(subject);
-            if (subject.getIRIString().equals(pauseOn) && firstRead.getAndSet(false)) {
-                read.countDown();
-                try {
-                    if (!resume.await(WAIT_SECONDS, TimeUnit.SECONDS)) {
-                        throw new IllegalStateException("the concurrent delete never finished");
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new IllegalStateException(e);
-                }
+            if (!onEdges) {
+                pauseOnFirstRead(subject);
             }
             return slice;
         }
 
         @Override
         public ReadableGraph pointingAt(final IRI resource) {
-            return delegate.pointingAt(resource);
+            ReadableGraph edges = delegate.pointingAt(resource);
+            if (onEdges) {
+                pauseOnFirstRead(resource);
+            }
+            return edges;
+        }
+
+        private void pauseOnFirstRead(final IRI subject) {
+            if (subject.getIRIString().equals(pauseOn) && firstRead.getAndSet(false)) {
+                read.countDown();
+                try {
+                    if (!resume.await(WAIT_SECONDS, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("the concurrent write never finished");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+            }
         }
 
         @Override

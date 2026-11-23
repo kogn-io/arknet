@@ -72,7 +72,8 @@ import de.hauschel.arknet.resource.domain.SubmittedDocument.Update;
  * it: a triple of another resource, or of one of its children, over a property the shapes or the
  * ontology make an edge to the deleted resource's class ({@link ResourceSchema#edgesTo}). An edge
  * whose holder the same document deletes, or whose slice after the document no longer carries it,
- * does not count. The gate cannot catch this itself: it validates what is written, and the holder
+ * does not count; an edge the document itself writes, into a created or an updated resource, counts
+ * like a stored one, whether or not its shape names a {@code sh:class} the gate would check. The gate cannot catch this itself: it validates what is written, and the holder
  * of the edge is not.</p>
  *
  * <p><strong>Codes and children.</strong> A created resource of a type with a code prefix gets the
@@ -493,18 +494,33 @@ final class DocumentApplication {
                 .forEach(edge -> predicatesByHolder.computeIfAbsent(edge.getSubject() instanceof IRI holder
                         ? holder.getIRIString() : "a stored blank node", key -> new TreeSet<>())
                         .add(edge.getPredicate().getIRIString()));
+        after.forEach((resource, slice) -> slice.stream(null, null, target)
+                .filter(edge -> edges.contains(edge.getPredicate()))
+                .forEach(edge -> predicatesByHolder.computeIfAbsent(holderOf(edge, resource), key -> new TreeSet<>())
+                        .add(edge.getPredicate().getIRIString())));
         predicatesByHolder.forEach((holder, predicates) -> problems.add(target.getIRIString() + " is not deleted: "
                 + holder + " still points at it over " + String.join(", ", predicates)
                 + "; delete that resource or remove the edge in the same document, or keep "
                 + target.getIRIString()));
     }
 
+    /**
+     * A stored edge counts if the resource holding it, or holding the child that does, is neither the
+     * deleted resource nor deleted itself, and still carries the edge after the document.
+     */
     private boolean leftAfter(final Triple edge, final IRI holder, final IRI target) {
         IRI resource = resourceOf(holder);
         if (resource.equals(target) || deleted.contains(resource)) {
             return false;
         }
         return stateAfter(resource).contains(edge);
+    }
+
+    /** Names the holder of an edge in a slice the document writes: the node, or its resource. */
+    private String holderOf(final Triple edge, final IRI resource) {
+        String created = minted.containsValue(resource) ? " (created by this document)" : "";
+        return edge.getSubject() instanceof IRI holder ? holder.getIRIString() + created
+                : "a blank node of " + resource.getIRIString() + created;
     }
 
     private static Set<IRI> typesOf(final ReadableGraph graph, final BlankNodeOrIRI node) {

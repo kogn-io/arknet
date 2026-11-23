@@ -64,6 +64,9 @@ class DocumentApplicationTest {
     private static final IRI TEXT = vocab("text");
     private static final IRI POSITION = vocab("position");
     private static final IRI BASE_FIELD = vocab("baseField");
+    private static final IRI DETAIL = vocab("Detail");
+    private static final IRI DETAILS = vocab("detail");
+    private static final IRI NOTE = vocab("note");
 
     private static final IRI OBJECT = arkres(ArkresVocabulary.OBJECT);
     private static final IRI SET = arkres(ArkresVocabulary.SET);
@@ -153,6 +156,79 @@ class DocumentApplicationTest {
         SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, this::apply);
 
         assertTrue(rejected.getMessage().contains(SEE_ALSO.getIRIString()), rejected.getMessage());
+    }
+
+    @Test
+    void anInlineValueTypedWithAClassIsHeldToThatClassesFields() {
+        BlankNode thing = create(THING);
+        BlankNode detail = RDF_FACTORY.createBlankNode();
+        document.add(thing, DETAILS, detail);
+        document.add(detail, VocabRdf.TYPE, DETAIL);
+        document.add(detail, NOTE, literal("a field of the detail"));
+        document.add(detail, NAME, literal("a field of the thing, not of the detail"));
+
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, this::apply);
+
+        assertTrue(rejected.getMessage().contains(NAME.getIRIString()), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains(DETAIL.getIRIString()), rejected.getMessage());
+        assertFalse(rejected.getMessage().contains(NOTE.getIRIString() + " is no field"), rejected.getMessage());
+    }
+
+    @Test
+    void anInlineValueWithFieldsOfItsClassOnlyIsWritten() {
+        BlankNode thing = create(THING);
+        BlankNode detail = RDF_FACTORY.createBlankNode();
+        document.add(thing, DETAILS, detail);
+        document.add(detail, VocabRdf.TYPE, DETAIL);
+        document.add(detail, NOTE, literal("a field of the detail"));
+
+        assertDoesNotThrow(this::apply);
+
+        assertEquals(1, batch.created.size());
+    }
+
+    @Test
+    void anUntypedInlineValueHasNoFields() {
+        BlankNode thing = create(THING);
+        BlankNode detail = RDF_FACTORY.createBlankNode();
+        document.add(thing, DETAILS, detail);
+        document.add(detail, NOTE, literal("no class names this field for an untyped node"));
+
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, this::apply);
+
+        assertTrue(rejected.getMessage().contains(NOTE.getIRIString() + " is no field"), rejected.getMessage());
+    }
+
+    @Test
+    void anEdgeTheSameDocumentAddsToAStoredResourceBlocksTheDelete() {
+        IRI target = storedThing("T-1");
+        IRI referrer = storedThing("T-2");
+        delete(target);
+        BlankNode activity = RDF_FACTORY.createBlankNode();
+        document.add(activity, VocabRdf.TYPE, arkres(ArkresVocabulary.ADD_TO));
+        document.add(activity, OBJECT, referrer);
+        document.add(activity, FIELD, REFERS_TO);
+        document.add(activity, VALUE, target);
+
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, this::apply);
+
+        assertTrue(rejected.getMessage().contains(referrer.getIRIString() + " still points at it over "
+                + REFERS_TO.getIRIString()), rejected.getMessage());
+        assertTrue(batch.deleted.isEmpty());
+    }
+
+    @Test
+    void anEdgeAResourceTheSameDocumentCreatesBlocksTheDelete() {
+        IRI target = storedThing("T-1");
+        delete(target);
+        BlankNode thing = create(THING);
+        document.add(thing, REFERS_TO, target);
+
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, this::apply);
+
+        assertTrue(rejected.getMessage().contains("(created by this document) still points at it over "
+                + REFERS_TO.getIRIString()), rejected.getMessage());
+        assertTrue(batch.created.isEmpty());
     }
 
     @Test
@@ -278,7 +354,8 @@ class DocumentApplicationTest {
         shapes.add(THING, VocabRdf.TYPE, arkres(ArkresVocabulary.RESOURCE_TYPE));
         shapes.add(THING, arkres(ArkresVocabulary.CODE_PREFIX), literal("T-"));
         shapes.add(SPECIAL, VocabRdf.TYPE, arkres(ArkresVocabulary.RESOURCE_TYPE));
-        nodeShape(shapes, "Thing", THING, NAME, REFERS_TO, PARTS);
+        nodeShape(shapes, "Thing", THING, NAME, REFERS_TO, PARTS, DETAILS);
+        nodeShape(shapes, "Detail", DETAIL, NOTE);
         IRI refers = RDF_FACTORY.createIRI(SHAPES + "Thing-refersTo");
         shapes.add(refers, shacl("class"), THING);
         IRI owned = RDF_FACTORY.createIRI(SHAPES + "Thing-part");
