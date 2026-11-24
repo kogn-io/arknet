@@ -75,8 +75,10 @@ import io.kogn.rdf.terms.vocab.VocabRdfs;
  * shapes do not give the status field's classes, a field in two groups, the status field in a group,
  * an editable status outside the status field's {@code sh:in}, an {@code arkres:immutable} that is not
  * the boolean {@code true} or that sits on an owned field or a status field, and a default into an
- * owned, an immutable or the status field, or without exactly one field and value, fail construction
- * as well.</p>
+ * owned, an immutable or the status field, or without exactly one field and value, and a default
+ * value outside the {@code sh:datatype} or {@code sh:in} of its field ({@code arkres:today} being an
+ * {@code xsd:date}) fail construction as well. A default may go into a field of a group: the
+ * transition writes it, and the group freezes it afterwards.</p>
  */
 public final class ResourceSchema {
 
@@ -91,6 +93,8 @@ public final class ResourceSchema {
     private static final IRI RANGE = RDF_FACTORY.createIRI(VocabRdfs.NAMESPACE + "range");
     private static final IRI IMMUTABLE = RDF_FACTORY.createIRI(ArkresVocabulary.IMMUTABLE);
     private static final String XSD_BOOLEAN = "http://www.w3.org/2001/XMLSchema#boolean";
+    private static final String XSD_DATE = "http://www.w3.org/2001/XMLSchema#date";
+    private static final IRI DATATYPE = RDF_FACTORY.createIRI(SHACL + "datatype");
 
     private final Map<IRI, Optional<String>> codePrefixByType;
     private final Map<IRI, OwnedField> ownedFieldByProperty;
@@ -235,6 +239,9 @@ public final class ResourceSchema {
                         : ownedFieldByProperty.containsKey(field) ? "it owns its children"
                         : immutable.contains(field) ? "it is " + ArkresVocabulary.IMMUTABLE
                         : field.equals(status.property()) ? "it is the status field" : null;
+                if (reason == null) {
+                    reason = defaultValueBreaking(type, value);
+                }
                 if (reason != null) {
                     throw new IllegalStateException("the transition from " + transition.from() + " to "
                             + transition.to() + " of " + status.property() + " writes a default into " + field
@@ -242,6 +249,45 @@ public final class ResourceSchema {
                 }
             }
         }
+    }
+
+    /**
+     * Why a default value breaks the {@code sh:datatype} or {@code sh:in} the property shapes of its
+     * field on {@code type} declare, null if it keeps both: {@code arkres:today} is an
+     * {@code xsd:date} and in no {@code sh:in} list; a literal carries the declared datatype
+     * ({@code rdf:langString} for one with a language tag).
+     */
+    private String defaultValueBreaking(final IRI type, final DefaultValue value) {
+        List<BlankNodeOrIRI> fieldShapes = nodeShapes(type).stream()
+                .flatMap(node -> shapes.stream(node, PROPERTY, null))
+                .map(Triple::getObject)
+                .filter(BlankNodeOrIRI.class::isInstance)
+                .map(BlankNodeOrIRI.class::cast)
+                .filter(shape -> shapes.stream(shape, PATH, value.field()).findAny().isPresent())
+                .toList();
+        String written = value.today() ? ArkresVocabulary.TODAY + " (an xsd:date)" : String.valueOf(value.value());
+        for (BlankNodeOrIRI shape : fieldShapes) {
+            Optional<String> datatype = single(shapes, shape, DATATYPE)
+                    .map(term -> term instanceof IRI iri ? iri.getIRIString() : term.toString());
+            Optional<String> actual = value.today() ? Optional.of(XSD_DATE) : datatypeOf(value.value());
+            if (datatype.isPresent() && !actual.equals(datatype)) {
+                return "the field's sh:datatype is " + datatype.get() + " and " + written + " is "
+                        + actual.orElse("no literal");
+            }
+            Optional<Set<RDFTerm>> allowed = allowedValues(shapes, shape);
+            if (allowed.isPresent() && (value.today() || !allowed.get().contains(value.value()))) {
+                return "the field's sh:in allows " + allowed.get() + ", not " + written;
+            }
+        }
+        return null;
+    }
+
+    private static Optional<String> datatypeOf(final RDFTerm term) {
+        if (!(term instanceof Literal literal)) {
+            return Optional.empty();
+        }
+        return Optional.of(literal.getLanguageTag().isPresent() ? VocabRdf.NAMESPACE + "langString"
+                : literal.getDatatype().getIRIString());
     }
 
     /**

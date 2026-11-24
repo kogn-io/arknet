@@ -50,6 +50,10 @@ class ResourceSchemaBeforeAfterRulesTest {
     private static final IRI STATE_SHAPE = RDF_FACTORY.createIRI(SHAPES + "Paper-state");
     private static final IRI CATEGORY_SHAPE = RDF_FACTORY.createIRI(SHAPES + "Paper-category");
     private static final IRI SECTIONS_SHAPE = RDF_FACTORY.createIRI(SHAPES + "Paper-section");
+    private static final IRI PUBLISHED_ON_SHAPE = RDF_FACTORY.createIRI(SHAPES + "Paper-publishedOn");
+    private static final IRI SUMMARY_SHAPE = RDF_FACTORY.createIRI(SHAPES + "Paper-summary");
+    private static final IRI KIND = vocab("kind");
+    private static final IRI ESSAY = vocab("Essay");
     private static final IRI TODAY = RDF_FACTORY.createIRI(ArkresVocabulary.TODAY);
 
     private BlankNode group;
@@ -214,6 +218,68 @@ class ResourceSchemaBeforeAfterRulesTest {
     }
 
     @Test
+    void aDefaultIntoAFieldOfTheGroupIsAllowed() {
+        Graph shapes = shapes();
+        shapes.add(group, arkres(ArkresVocabulary.GROUP_FIELD), PUBLISHED_ON);
+
+        ResourceSchema schema = ResourceSchema.of(shapes, RDF_FACTORY.createGraph());
+
+        assertTrue(schema.statusField(Set.of(PAPER)).orElseThrow().groups().get(0).fields().contains(PUBLISHED_ON));
+    }
+
+    @Test
+    void todayIntoAFieldWhoseDatatypeIsNoDateFailsTheSchema() {
+        Graph shapes = shapes();
+        shapes.stream(PUBLISHED_ON_SHAPE, shacl("datatype"), null).toList().forEach(shapes::remove);
+        shapes.add(PUBLISHED_ON_SHAPE, shacl("datatype"), VocabXsd.DATETIME);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, RDF_FACTORY.createGraph()));
+
+        assertTrue(failure.getMessage().contains(VocabXsd.DATETIME.getIRIString()), failure.getMessage());
+        assertTrue(failure.getMessage().contains(ArkresVocabulary.TODAY), failure.getMessage());
+    }
+
+    @Test
+    void todayIntoAFieldWithAnShInFailsTheSchema() {
+        Graph shapes = shapes();
+        shapes.stream(PUBLISHED_ON_SHAPE, shacl("datatype"), null).toList().forEach(shapes::remove);
+        shapes.add(PUBLISHED_ON_SHAPE, shacl("in"), list(shapes, DRAFT));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, RDF_FACTORY.createGraph()));
+
+        assertTrue(failure.getMessage().contains("sh:in"), failure.getMessage());
+    }
+
+    @Test
+    void aDefaultOutsideTheFieldsShInFailsTheSchema() {
+        Graph shapes = shapes();
+        defaultValue(shapes, publish, KIND, vocab("Poem"));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, RDF_FACTORY.createGraph()));
+
+        assertTrue(failure.getMessage().contains(VOCAB + "Poem"), failure.getMessage());
+    }
+
+    @Test
+    void aDefaultOfTheWrongDatatypeFailsTheSchemaAndOneWithinTheFieldsRulesPasses() {
+        Graph wrong = shapes();
+        defaultValue(wrong, publish, SUMMARY, RDF_FACTORY.createLiteral("plain"));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(wrong, RDF_FACTORY.createGraph()));
+
+        assertTrue(failure.getMessage().contains(VocabXsd.STRING.getIRIString()), failure.getMessage());
+        Graph right = shapes();
+        defaultValue(right, publish, KIND, ESSAY);
+        defaultValue(right, publish, SUMMARY, RDF_FACTORY.createLiteral("Summary", "en"));
+        assertEquals(3, ResourceSchema.of(right, RDF_FACTORY.createGraph()).statusField(Set.of(PAPER)).orElseThrow()
+                .transition(DRAFT, PUBLISHED).orElseThrow().defaults().size());
+    }
+
+    @Test
     void twoDefaultsIntoOneFieldFailTheSchema() {
         Graph shapes = shapes();
         defaultValue(shapes, publish, PUBLISHED_ON, RDF_FACTORY.createLiteral("2026-01-01", VocabXsd.DATE));
@@ -233,11 +299,14 @@ class ResourceSchemaBeforeAfterRulesTest {
         Graph shapes = RDF_FACTORY.createGraph();
         IRI node = RDF_FACTORY.createIRI(SHAPES + "Paper");
         shapes.add(node, shacl("targetClass"), PAPER);
-        for (IRI field : List.of(TITLE, SUMMARY, PUBLISHED_ON)) {
+        for (IRI field : List.of(TITLE, SUMMARY, PUBLISHED_ON, KIND)) {
             IRI property = RDF_FACTORY.createIRI(SHAPES + "Paper-" + field.getIRIString().substring(VOCAB.length()));
             shapes.add(node, shacl("property"), property);
             shapes.add(property, shacl("path"), field);
         }
+        shapes.add(PUBLISHED_ON_SHAPE, shacl("datatype"), VocabXsd.DATE);
+        shapes.add(SUMMARY_SHAPE, shacl("datatype"), RDF_FACTORY.createIRI(VocabRdf.NAMESPACE + "langString"));
+        shapes.add(RDF_FACTORY.createIRI(SHAPES + "Paper-kind"), shacl("in"), list(shapes, ESSAY, vocab("Review")));
         shapes.add(node, shacl("property"), CATEGORY_SHAPE);
         shapes.add(CATEGORY_SHAPE, shacl("path"), CATEGORY);
         shapes.add(CATEGORY_SHAPE, arkres(ArkresVocabulary.IMMUTABLE), bool(true));

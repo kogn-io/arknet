@@ -258,6 +258,68 @@ class DocumentApplicationBeforeAfterTest {
     }
 
     @Test
+    void aDefaultIntoAGroupFieldIsWrittenByItsTransitionAndFrozenAfterwards() {
+        Graph shapes = shapes();
+        BlankNode group = (BlankNode) shapes.stream(STATE_SHAPE, arkres(ArkresVocabulary.FIELD_GROUP), null)
+                .findFirst().orElseThrow().getObject();
+        shapes.add(group, arkres(ArkresVocabulary.GROUP_FIELD), PUBLISHED_ON);
+        ResourceSchema schema = ResourceSchema.of(shapes, RDF_FACTORY.createGraph());
+        IRI draft = storedPaper(DRAFT);
+        document.add(update(draft), STATE, PUBLISHED);
+
+        assertDoesNotThrow(() -> applyWith(schema));
+        assertEquals(Set.of(date("2026-11-24")), values(batch.updated.get(draft), draft, PUBLISHED_ON));
+
+        IRI published = storedPaper(PUBLISHED);
+        batch.add(published, PUBLISHED_ON, OLD_DAY);
+        document.clear();
+        document.add(update(published), PUBLISHED_ON, date("2026-11-01"));
+        SubmitRejectedException rewritten = assertThrows(SubmitRejectedException.class, () -> applyWith(schema));
+        assertTrue(rewritten.getMessage().contains(PUBLISHED_ON.getIRIString()), rewritten.getMessage());
+
+        IRI withdrawn = storedPaper(WITHDRAWN);
+        batch.add(withdrawn, PUBLISHED_ON, OLD_DAY);
+        document.clear();
+        document.add(update(withdrawn), STATE, PUBLISHED);
+        assertDoesNotThrow(() -> applyWith(schema));
+        assertEquals(Set.of(OLD_DAY), values(batch.updated.get(withdrawn), withdrawn, PUBLISHED_ON));
+    }
+
+    @Test
+    void anImmutableFieldOfAKeptChildStaysWhileTheListChanges() {
+        IRI paper = storedPaper(DRAFT);
+        IRI kept = RDF_FACTORY.createIRI(paper.getIRIString() + "#Section-1");
+        BlankNode inserted = addSection(paper);
+        document.add(inserted, HEADING, text("Preface", "en"));
+        document.add(inserted, POSITION, RDF_FACTORY.createLiteral("1", VocabXsd.INTEGER));
+
+        assertEquals(Set.of(KIND), SCHEMA.immutableFields(Set.of(SECTION)));
+        assertDoesNotThrow(this::apply);
+        assertEquals(Set.of(BODY), values(batch.updated.get(paper), kept, KIND));
+    }
+
+    @Test
+    void aChangeOfAnImmutableFieldOfAKeptChildIsRejected() {
+        Graph shapes = shapes();
+        shapes.add(RDF_FACTORY.createIRI(SHAPES + "Section-position"), arkres(ArkresVocabulary.IMMUTABLE),
+                RDF_FACTORY.createLiteral("true", VocabXsd.BOOLEAN));
+        ResourceSchema schema = ResourceSchema.of(shapes, RDF_FACTORY.createGraph());
+        IRI paper = storedPaper(DRAFT);
+        BlankNode inserted = addSection(paper);
+        document.add(inserted, HEADING, text("Preface", "en"));
+        document.add(inserted, POSITION, RDF_FACTORY.createLiteral("1", VocabXsd.INTEGER));
+
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> applyWith(schema));
+
+        assertTrue(rejected.getMessage().contains(ArkresVocabulary.IMMUTABLE), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains(paper.getIRIString() + "#Section-1"), rejected.getMessage());
+
+        document.clear();
+        document.add(addSection(paper), HEADING, text("Appendix", "en"));
+        assertDoesNotThrow(() -> applyWith(schema), "appending a sibling moves no kept child");
+    }
+
+    @Test
     void aTypeWithoutBeforeAfterRuleDataBehavesAsBefore() {
         IRI memo = RDF_FACTORY.createIRI(STORE + "memo-1");
         batch.add(memo, VocabRdf.TYPE, MEMO);
@@ -273,7 +335,11 @@ class DocumentApplicationBeforeAfterTest {
     }
 
     private void apply() {
-        new DocumentApplication(SubmittedDocument.of(document, SCHEMA), SCHEMA, batch,
+        applyWith(SCHEMA);
+    }
+
+    private void applyWith(final ResourceSchema schema) {
+        new DocumentApplication(SubmittedDocument.of(document, schema), schema, batch,
                 () -> ResourceId.of(STORE + UUID.randomUUID()), TODAY).apply();
     }
 
@@ -339,7 +405,7 @@ class DocumentApplicationBeforeAfterTest {
 
     /**
      * A paper: status Draft/Published/Withdrawn; title, summary and the owned sections only grow
-     * outside Draft; an immutable category; the publication day as default of Draft to Published,
+     * outside Draft; an immutable category, and an immutable kind of a section; the publication day as default of Draft to Published,
      * whose condition is answered by the batch, and none for Withdrawn to Published. A memo carries
      * the same fields without any rule data.
      */
@@ -363,7 +429,8 @@ class DocumentApplicationBeforeAfterTest {
         IRI sectionShape = RDF_FACTORY.createIRI(SHAPES + "Section");
         shapes.add(sectionShape, shacl("targetClass"), SECTION);
         property(shapes, sectionShape, "Section", HEADING);
-        property(shapes, sectionShape, "Section", KIND);
+        shapes.add(property(shapes, sectionShape, "Section", KIND), arkres(ArkresVocabulary.IMMUTABLE),
+                RDF_FACTORY.createLiteral("true", VocabXsd.BOOLEAN));
         property(shapes, sectionShape, "Section", POSITION);
         shapes.add(paperShape, shacl("property"), STATE_SHAPE);
         shapes.add(STATE_SHAPE, shacl("path"), STATE);
