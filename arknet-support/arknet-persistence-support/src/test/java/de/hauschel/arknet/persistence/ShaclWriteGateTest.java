@@ -101,6 +101,14 @@ class ShaclWriteGateTest {
     }
 
     @Test
+    void aReportWithWarningsOnlyNeverBlocks() {
+        ShaclReport report = new ShaclReport(false, List.of(shaclResult("https://example.org/warn", null,
+                Severity.WARNING, List.of(ShaclMessage.untagged("just a warning")))));
+
+        assertDoesNotThrow(() -> gateReturning(report).enforce(graphWith(SUBJECT)));
+    }
+
+    @Test
     void violationsListsEachViolationOnItsOwnAndNothingForAConformingCandidate() {
         ShaclReport report = new ShaclReport(false, List.of(
                 shaclResult("https://example.org/warn", null, Severity.WARNING,
