@@ -5,6 +5,7 @@ package de.hauschel.arknet.resource.application;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -219,6 +220,22 @@ class DocumentApplicationStatusTest {
         assertTrue(rejected.getMessage().contains(CLOSED.getIRIString()), rejected.getMessage());
         assertTrue(rejected.getMessage().contains(ArkresVocabulary.DELETABLE_IN), rejected.getMessage());
         assertTrue(batch.deleted.isEmpty());
+    }
+
+    @Test
+    void aDeleteRejectionOfAResourceWithoutStatusNamesTheInitialStatusItCountsAs() {
+        Graph shapes = shapes();
+        shapes.stream(STATE_SHAPE, arkres(ArkresVocabulary.DELETABLE_IN), OPEN).toList().forEach(shapes::remove);
+        ResourceSchema schema = ResourceSchema.of(shapes, RDF_FACTORY.createGraph());
+        IRI ticket = storedTicket("TK-1", null);
+        delete(ticket);
+
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class,
+                () -> new DocumentApplication(SubmittedDocument.of(document, schema), schema, batch,
+                        () -> ResourceId.of(STORE + UUID.randomUUID())).apply());
+
+        assertTrue(rejected.getMessage().contains("initial status " + OPEN), rejected.getMessage());
+        assertFalse(rejected.getMessage().contains("[]"), rejected.getMessage());
     }
 
     @Test

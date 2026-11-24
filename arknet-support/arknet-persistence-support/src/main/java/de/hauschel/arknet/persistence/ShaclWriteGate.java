@@ -149,22 +149,38 @@ public final class ShaclWriteGate {
         Objects.requireNonNull(candidate, "candidate");
         Objects.requireNonNull(assertedContext, "assertedContext");
 
+        List<String> violations = violations(candidate, assertedContext);
+        if (!violations.isEmpty()) {
+            throw new WriteConstraintViolationException(String.join("; ", violations));
+        }
+    }
+
+    /**
+     * Validates the candidate graph together with a validation-only asserted context against
+     * the SHACL shapes and reports each violation on its own, rendered as
+     * {@link #enforce(ReadableGraph, ReadableGraph)} renders it; warnings and infos are left out.
+     *
+     * @param candidate       the instance graph to check
+     * @param assertedContext additional triples merged into the validated data for this call only
+     * @return one message per violation, empty if the merged data conforms
+     */
+    public List<String> violations(ReadableGraph candidate, ReadableGraph assertedContext) {
+        Objects.requireNonNull(candidate, "candidate");
+        Objects.requireNonNull(assertedContext, "assertedContext");
+
         Graph data = rdf.createGraph();
         candidate.stream().forEach(data::add);
         assertedContext.stream().forEach(data::add);
         axioms.stream().forEach(data::add);
 
         ShaclReport report = validation.validate(data, shapes, options);
-        if (!report.conforms()) {
-            throw new WriteConstraintViolationException(violationMessage(report.results()));
+        if (report.conforms()) {
+            return List.of();
         }
-    }
-
-    private String violationMessage(List<ShaclResult> results) {
-        return results.stream()
+        return report.results().stream()
                 .filter(result -> result.severity() == Severity.VIOLATION)
                 .map(this::describe)
-                .collect(Collectors.joining("; "));
+                .toList();
     }
 
     private String describe(ShaclResult result) {

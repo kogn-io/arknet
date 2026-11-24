@@ -59,7 +59,8 @@ import io.kogn.rdf.terms.vocab.VocabRdfs;
  * a transition without exactly one source and one target status, a condition that is no IRI, no
  * shape the shapes declare, or a shape with a target of its own, a status the {@code sh:in} of the
  * status field's shape does not allow, and two status fields reaching one class - on the class itself
- * or across its superclasses - are defects of the rule data and fail construction.</p>
+ * or across its superclasses, including two superclasses of a class without a field of its own - are
+ * defects of the rule data and fail construction.</p>
  */
 public final class ResourceSchema {
 
@@ -145,7 +146,18 @@ public final class ResourceSchema {
             }
         });
         ResourceSchema schema = new ResourceSchema(prefixes, owned, statusFields(shapes), shapes, ontology);
-        schema.statusFieldByClass.keySet().forEach(type -> schema.statusField(Set.of(type)));
+        Set<IRI> classes = new LinkedHashSet<>(schema.statusFieldByClass.keySet());
+        ontology.stream(null, SUB_CLASS_OF, null).map(Triple::getSubject)
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .forEach(classes::add);
+        classes.forEach(type -> {
+            Set<StatusField> reached = schema.statusFieldsReachedBy(Set.of(type));
+            if (reached.size() > 1) {
+                throw new IllegalStateException(type + " reaches two status fields over itself and its superclasses: "
+                        + reached.stream().map(field -> field.property().getIRIString()).sorted().toList());
+            }
+        });
         return schema;
     }
 
@@ -422,18 +434,27 @@ public final class ResourceSchema {
      *
      * @param types the {@code rdf:type} values of a node
      * @return the status field, empty for a type without status rules
-     * @throws IllegalStateException if the types reach two different status fields
+     * @throws SubmitRejectedException if the types reach two different status fields - one class
+     *                                  never does, the schema build rejects that, so only a node typed
+     *                                  with several unrelated classes can
      */
     public Optional<StatusField> statusField(final Set<IRI> types) {
-        Set<StatusField> found = types.stream()
+        Set<StatusField> found = statusFieldsReachedBy(types);
+        if (found.size() > 1) {
+            throw new SubmitRejectedException("a resource has at most one status field, but one typed "
+                    + types.stream().map(IRI::getIRIString).sorted().toList() + " reaches "
+                    + found.stream().map(field -> field.property().getIRIString()).sorted().toList()
+                    + "; type it with one class only");
+        }
+        return found.stream().findFirst();
+    }
+
+    private Set<StatusField> statusFieldsReachedBy(final Set<IRI> types) {
+        return types.stream()
                 .flatMap(type -> superclasses(type).stream())
                 .map(statusFieldByClass::get)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        if (found.size() > 1) {
-            throw new IllegalStateException("a node typed " + types + " reaches two status fields: " + found);
-        }
-        return found.stream().findFirst();
     }
 
     /**

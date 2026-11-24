@@ -100,6 +100,24 @@ class ShaclWriteGateTest {
                 + "focusNode=https://example.org/b, message=second", thrown.getMessage());
     }
 
+    @Test
+    void violationsListsEachViolationOnItsOwnAndNothingForAConformingCandidate() {
+        ShaclReport report = new ShaclReport(false, List.of(
+                shaclResult("https://example.org/warn", null, Severity.WARNING,
+                        List.of(ShaclMessage.untagged("just a warning"))),
+                shaclResult("https://example.org/a", null, Severity.VIOLATION,
+                        List.of(ShaclMessage.untagged("first; with a semicolon"))),
+                shaclResult("https://example.org/b", null, Severity.VIOLATION,
+                        List.of(ShaclMessage.untagged("second")))));
+
+        List<String> violations = gateReturning(report).violations(graphWith(SUBJECT), graphWith(SUBJECT));
+
+        assertEquals(List.of("focusNode=https://example.org/a, message=first; with a semicolon",
+                "focusNode=https://example.org/b, message=second"), violations);
+        assertEquals(List.of(), gateReturning(new ShaclReport(true, List.of()))
+                .violations(graphWith(SUBJECT), graphWith(SUBJECT)));
+    }
+
     /**
      * The RDFS gotcha the requirements/use-cases adapters depend on: shapes targeting a
      * superclass only fire if the axioms travel with the candidate into the validated data.

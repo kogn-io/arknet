@@ -252,6 +252,43 @@ class ResourceSchemaTest {
     }
 
     @Test
+    void aClassInheritingTwoStatusFieldsFromTwoSuperclassesFailsTheSchema() {
+        Graph shapes = statusShapes();
+        IRI other = RDF_FACTORY.createIRI(SHAPES + "Other");
+        IRI otherState = RDF_FACTORY.createIRI(SHAPES + "Other-state");
+        shapes.add(other, RDF_FACTORY.createIRI(SHACL + "targetClass"), OTHER_CLASS);
+        shapes.add(other, RDF_FACTORY.createIRI(SHACL + "property"), otherState);
+        shapes.add(otherState, PATH, UNRELATED_FIELD);
+        shapes.add(otherState, RDF_FACTORY.createIRI(ArkresVocabulary.INITIAL_STATUS), OPEN);
+        Graph ontology = RDF_FACTORY.createGraph();
+        ontology.add(SPECIAL, SUB_CLASS_OF, BASE);
+        ontology.add(SPECIAL, SUB_CLASS_OF, OTHER_CLASS);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, ontology));
+
+        assertTrue(failure.getMessage().contains(SPECIAL.getIRIString()), failure.getMessage());
+    }
+
+    @Test
+    void aNodeTypedWithTwoUnrelatedClassesWithStatusFieldsIsRejected() {
+        Graph shapes = statusShapes();
+        IRI other = RDF_FACTORY.createIRI(SHAPES + "Other");
+        IRI otherState = RDF_FACTORY.createIRI(SHAPES + "Other-state");
+        shapes.add(other, RDF_FACTORY.createIRI(SHACL + "targetClass"), OTHER_CLASS);
+        shapes.add(other, RDF_FACTORY.createIRI(SHACL + "property"), otherState);
+        shapes.add(otherState, PATH, UNRELATED_FIELD);
+        shapes.add(otherState, RDF_FACTORY.createIRI(ArkresVocabulary.INITIAL_STATUS), OPEN);
+        ResourceSchema schema = ResourceSchema.of(shapes, RDF_FACTORY.createGraph());
+
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class,
+                () -> schema.statusField(Set.of(BASE, OTHER_CLASS)));
+
+        assertTrue(rejected.getMessage().contains(STATE.getIRIString()), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains(UNRELATED_FIELD.getIRIString()), rejected.getMessage());
+    }
+
+    @Test
     void aStatusOfTheRuleDataOutsideTheFieldsShInFailsTheSchema() {
         Graph shapes = statusShapes();
         shapes.add(STATE_SHAPE, RDF_FACTORY.createIRI(SHACL + "in"), list(shapes, OPEN));

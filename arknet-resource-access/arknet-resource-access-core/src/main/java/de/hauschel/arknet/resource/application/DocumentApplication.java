@@ -596,7 +596,9 @@ final class DocumentApplication {
         if (field.deletable().isEmpty() || current.size() == 1 && field.deletableIn(current.iterator().next())) {
             return;
         }
-        problems.add(subject.getIRIString() + " is not deleted: its status " + sorted(status) + " in "
+        String held = status.isEmpty() ? "it holds no status, so it counts as in the initial status "
+                + field.initial() + ", which" : "its status " + sorted(status);
+        problems.add(subject.getIRIString() + " is not deleted: " + held + " in "
                 + field.property().getIRIString() + " is none of the statuses it may be deleted in ("
                 + ArkresVocabulary.DELETABLE_IN + "): " + sorted(field.deletable()));
     }
