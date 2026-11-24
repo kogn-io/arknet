@@ -19,7 +19,9 @@ gebraucht und ist darum auch nicht unter `w3id.org/arknet/` veroeffentlicht. Ver
 nach `src/main/resources/` erst, wenn ein BC oder eine Komponente das Modul tatsaechlich konsumiert.
 
 Die Shape-Dateien der Modellressourcen in den vier Kontext-Ontologiemodulen tragen neben den Shapes Regeldaten des generischen Ressourcenzugriffs im Namespace `arkres:` (`arknet-resource.ttl`): welche Klassen Ressourcentypen sind und mit welchem Praefix ihr fachlicher Code beginnt (an der Klasse), welche Felder ihre Kinder besitzen und nach welcher Property diese geordnet sind (an der Property-Shape).
+An der Property-Shape eines Statusfelds stehen ausserdem Anfangsstatus, Uebergaenge mit Bedingungen und Standardwerten, loeschbare Status und Feldgruppen, an jeder Property-Shape `arkres:immutable`; ein Statusfeld zeichnen `architecture-shapes.ttl` und `requirements-shapes.ttl` aus.
 SHACL wertet diese Tripel nicht aus; die typgenauen Kerne ignorieren sie, `arknet-resource-access` liest allein sie und nennt keinen Ressourcentyp im Code.
+Welche Regel der typgenauen Kerne als Shape, als Regeldatum, als Garantie der Engine oder als festgehaltene Ausnahme gilt, fuehrt `docs/rules-inventory.md`; `RulesInventoryNamesShippedShapesTest` haelt jede dort genannte Shape gegen die ausgelieferten Dateien fest.
 `project-shapes.ttl` (`arknet-project-registry-ontology`) traegt keine, weil die Projekt-Registry im System-Dataset liegt, das der generische Zugriff nicht schreibt.
 
 Ein Namespace-Name behauptet nicht mehr, als der Namespace traegt.

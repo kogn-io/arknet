@@ -21,6 +21,7 @@ import de.hauschel.arknet.resource.application.port.in.FieldDescription;
 import de.hauschel.arknet.resource.application.port.in.ResourceCatalog;
 import de.hauschel.arknet.resource.application.port.in.ResourceTypeDescription;
 import de.hauschel.arknet.resource.application.port.in.ResourceTypeSummary;
+import de.hauschel.arknet.resource.application.port.in.StatusRules;
 import de.hauschel.arknet.resource.application.port.in.SubmitDocument;
 import de.hauschel.arknet.resource.application.port.in.SubmitResult;
 import de.hauschel.arknet.resource.application.port.in.SubmittedChange;
@@ -78,7 +79,9 @@ public final class ResourceAccessMcpTools {
                     + " with their properties, and the prefix declarations behind every name. With a type"
                     + " (prefixed name as listed, or full IRI): its fields with presence, cardinality and value"
                     + " kind, the edges to other resources, the children it owns, the rules of its shapes in"
-                    + " plain sentences, an example document that creates one resource of the type and"
+                    + " plain sentences, its status rules (initial status, the transitions a document may make"
+                    + " with their conditions and default values, the statuses a resource may be deleted in,"
+                    + " the fields frozen by status), an example document that creates one resource of the type and"
                     + " runs as it stands, and documents that update, add to, remove from and delete that"
                     + " resource after it, once their placeholder is replaced by <CODE> or <IRI> the create"
                     + " returned. Call it before writing a document for a type you have not written"
@@ -116,7 +119,8 @@ public final class ResourceAccessMcpTools {
                     + " blank node with its type and fields, an existing one by its IRI or by its business"
                     + " code as a relative IRI such as <FR-12>. The prefixes describe lists need no"
                     + " declaration; declare any other prefix the document uses. A document writes only the"
-                    + " fields describe lists for a type; a stored value outside them can still be cleared. A"
+                    + " fields describe lists for a type; a stored value outside them can still be cleared."
+                    + " Text in a multilingual field carries a language tag. A"
                     + " delete is rejected while a resource the document leaves in place still points at the"
                     + " deleted one. The document is validated against the shapes of every resource it"
                     + " touches; a rejection names what failed, declares the namespaces it mentions and"
@@ -163,6 +167,7 @@ public final class ResourceAccessMcpTools {
                 .append(" and are assigned by submit.\n"));
         out.append("\nFields:\n");
         description.fields().forEach(field -> field(out, field, ""));
+        description.status().ifPresent(status -> status(out, status));
         if (!description.rules().isEmpty()) {
             out.append("\nRules across fields:\n");
             description.rules().forEach(rule -> out.append("- ").append(rule).append('\n'));
@@ -211,6 +216,29 @@ public final class ResourceAccessMcpTools {
         });
     }
 
+    private static void status(final StringBuilder out, final StatusRules status) {
+        out.append("\nStatus field ").append(status.field()).append(": a created resource starts in ")
+                .append(status.initialStatus()).append("; a document changes it only along these transitions")
+                .append(" (writing the current status again changes nothing):\n");
+        status.transitions().forEach(transition -> {
+            out.append("- ").append(transition.from()).append(" -> ").append(transition.to()).append('\n');
+            transition.conditions().forEach(condition -> out.append(INDENT).append("Condition ")
+                    .append(condition.shape()).append(": ").append(String.join(" ", condition.messages()))
+                    .append('\n'));
+            transition.defaults().forEach(value -> out.append(INDENT).append("Default: ").append(value.field())
+                    .append(" = ").append(value.value())
+                    .append(value.today() ? " (the day the document is applied)" : "")
+                    .append(", unless the document names ").append(value.field()).append('\n'));
+        });
+        out.append(status.deletableIn().isEmpty() ? "Deletable in every status\n"
+                : "Deletable only in: " + String.join(", ", status.deletableIn()) + "\n");
+        status.frozenGroups().forEach(group -> out.append("Frozen outside ")
+                .append(String.join(", ", group.editableIn())).append(": ").append(String.join(", ", group.fields()))
+                .append(" - each keeps its values and takes values only in a language none of these fields")
+                .append(" carries yet; an owned field keeps every child, takes new children after the last, and a")
+                .append(" kept child takes text only in a language new to it\n"));
+    }
+
     private static String shape(final FieldDescription field) {
         if (field.assigned()) {
             return "assigned by submit, never written by a document";
@@ -230,7 +258,8 @@ public final class ResourceAccessMcpTools {
         };
         String count = field.maxCount().map(max -> max == 1 ? "at most one value" : "at most " + max + " values")
                 .orElse(field.onePerLanguage() ? "one value per language" : "any number of values");
-        return presence + ", " + values + ", " + count;
+        return presence + ", " + values + ", " + count + (field.immutable() ? ", keeps the values the create wrote"
+                : "");
     }
 
     private static String sentence(final String text) {

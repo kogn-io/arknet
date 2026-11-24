@@ -4,6 +4,7 @@
 package de.hauschel.arknet.architecture;
 
 import static de.hauschel.arknet.architecture.support.OntologyFixtures.ontologyModules;
+import static de.hauschel.arknet.architecture.support.OntologyFixtures.reactorRoot;
 import static de.hauschel.arknet.architecture.support.OntologyFixtures.rootTurtleFiles;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -97,22 +98,6 @@ class OntologyIndexListsEveryShippedFileTest {
 
     private static final Path INDEX_IN_SOURCES = Path.of("src", "main", "resources", "META-INF", "arknet",
             "ontology.index");
-
-    /** The reactor root: the nearest directory upwards whose {@code pom.xml} declares no parent. */
-    private static Path reactorRoot() {
-        Path module = Path.of(System.getProperty("basedir", "")).toAbsolutePath();
-        for (Path dir = module.getParent(); dir != null; dir = dir.getParent()) {
-            Path pom = dir.resolve("pom.xml");
-            try {
-                if (Files.isRegularFile(pom) && !Files.readString(pom).contains("<parent>")) {
-                    return dir;
-                }
-            } catch (IOException e) {
-                throw new UncheckedIOException("failed to read " + pom, e);
-            }
-        }
-        throw new IllegalStateException("no reactor root above " + module);
-    }
 
     private static String moduleOf(final URL index) {
         String path = index.getPath();

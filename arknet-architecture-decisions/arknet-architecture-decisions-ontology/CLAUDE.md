@@ -10,5 +10,6 @@ Im Compile-Scope haengen allein `arknet-adr-adapter-kogniordf` daran, die ihre D
 Kein Vokabularmodul im Sinn von ADR-57: das Modul traegt keinen Java-Typ.
 `architecture-shapes.ttl` traegt neben den Shapes die Regeldaten fuer `submit` (`arkres:`): Ressourcentyp und Kind-Arten, dazu den Lebenszyklus des Records am Statusfeld -- Anfangsstatus, Uebergaenge mit ihren Bedingungen, loeschbare Status, die ab der Entscheidung eingefrorene Feldgruppe und das Entscheidungsdatum als Standardwert am Uebergang.
 Die Bedingungen sind Shapes ohne Ziel: sie gelten nur beim Uebergang, das Gate prueft sie nie als Endzustand.
+Welche Regel des Kerns wo steht, auch die festgehaltenen Abweichungen (`supersededBy` eines Superseded-Records, datierte Proposed-Altbestaende), fuehrt `docs/rules-inventory.md`.
 Seine Shapes nennen als `sh:targetClass` nur Klassen aus `arkarch:`, und keine Zielklasse formt ein zweites Modul (`ContextShapesTargetOwnNamespaceTest`).
 Benennung, Aenderung einer Namespace-IRI und Shapes ohne Schreibpfad regelt `arknet-ontology/CLAUDE.md` fuer alle Ontologiemodule.

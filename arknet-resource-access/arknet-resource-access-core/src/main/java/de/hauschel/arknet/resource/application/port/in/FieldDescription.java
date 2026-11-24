@@ -22,13 +22,14 @@ import java.util.Optional;
  * @param allowedValues  for a choice, the values it takes, in Turtle
  * @param onePerLanguage whether it takes at most one value per language tag
  * @param assigned       whether {@link SubmitDocument} assigns it itself, so a document must not set it
+ * @param immutable      whether it keeps exactly the values the create wrote ({@code arkres:immutable})
  * @param rules          the messages the shapes attach to it, in the display language
  * @param children       for owned children, how they are kept and their own fields
  */
 public record FieldDescription(String iri, String name, String label, String comment, Kind kind,
         Presence presence, Optional<Integer> maxCount, Optional<String> datatype, List<String> valueTypes,
-        List<String> allowedValues, boolean onePerLanguage, boolean assigned, List<String> rules,
-        Optional<OwnedChildren> children) {
+        List<String> allowedValues, boolean onePerLanguage, boolean assigned, boolean immutable,
+        List<String> rules, Optional<OwnedChildren> children) {
 
     /**
      * Checks the components and copies the lists.
@@ -45,6 +46,7 @@ public record FieldDescription(String iri, String name, String label, String com
      * @param allowedValues  the values of a choice
      * @param onePerLanguage at most one value per language tag
      * @param assigned       assigned by submit
+     * @param immutable      keeps the values the create wrote
      * @param rules          the attached messages
      * @param children       the owned children
      */

@@ -27,6 +27,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
@@ -435,12 +437,11 @@ class ProductRequirementsRulesRealStoreTest {
         assertNothingStored("FR-1");
     }
 
+    /** Untagged texts are left out: submit rejects a text without a language tag before this rule. */
     static Stream<Arguments> collidingCriteria() {
         return Stream.of(
                 Arguments.of("en and en", "\"Works fine.\"@en", "\"Works fine.\"@en"),
                 Arguments.of("en and de", "\"Works fine.\"@en", "\"Works fine.\"@de"),
-                Arguments.of("en and untagged", "\"Works fine.\"@en", "\"Works fine.\""),
-                Arguments.of("untagged and untagged", "\"Works fine.\"", "\"Works fine.\""),
                 Arguments.of("de and de, the first also in en", "\"Other text.\"@en ; arkreq:criterionText"
                         + " \"Works fine.\"@de", "\"Works fine.\"@de"));
     }
@@ -487,6 +488,33 @@ class ProductRequirementsRulesRealStoreTest {
         // then
         assertTrue(rejected.getMessage().contains("must not carry the same arkreq:criterionText"),
                 rejected.getMessage());
+    }
+
+    @Test
+    void aCriterionAddedWithTheTextOfAStoredUntaggedCriterionIsRejected() {
+        // given: an untagged criterion text stored past the gate, as written before the tag was mandatory
+        String fr = storedRequirement();
+        String criterion = reader.outgoing(SubmitRealStoreTest.PROJECT, fr).stream()
+                .filter(triple -> (REQ + "acceptanceCriterion").equals(triple.predicate()))
+                .map(triple -> ((RdfNode.Resource) triple.object()).iri())
+                .findFirst().orElseThrow();
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(SubmitRealStoreTest.PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <" + criterion + "> <"
+                        + REQ + "criterionText> \"Legacy text.\" } }");
+                return null;
+            });
+        }
+
+        // when
+        SubmitRejectedException rejected = rejected("[] a arkres:AddTo ; arkres:object <" + fr + "> ;"
+                + " arkres:field arkreq:acceptanceCriterion ;"
+                + " arkres:value [ arkreq:criterionText \"Legacy text.\"@en ] .\n");
+
+        // then
+        assertTrue(rejected.getMessage().contains("must not carry the same arkreq:criterionText"),
+                rejected.getMessage());
+        assertEquals(1, reader.history(SubmitRealStoreTest.PROJECT, fr).size());
     }
 
     @Test
