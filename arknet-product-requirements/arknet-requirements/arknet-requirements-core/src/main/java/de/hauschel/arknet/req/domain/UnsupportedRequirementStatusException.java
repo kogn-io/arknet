@@ -16,9 +16,9 @@ import de.hauschel.arknet.kernel.ProjectId;
  * admits only those two via {@code sh:in}, so such a value reaches the store only past the gate
  * (written before the shape narrowed, or straight into the graph).
  *
- * <p><strong>Adapter-boundary translation, not a domain outcome.</strong> A SHACL-legal status
- * this narrow can only reach a requirement store-first (no MCP tool writes one of the
- * four unimplemented values), so this is not a business rule a caller can trigger through the
+ * <p><strong>Adapter-boundary translation, not a domain outcome.</strong> A status outside
+ * the shape's {@code sh:in} can only reach a requirement past the gate (no MCP tool and no
+ * {@code submit} writes one of the four unimplemented values), so this is not a business rule a caller can trigger through the
  * tool surface - it is the out-adapter refusing to silently misrepresent data it cannot map.
  * Thrown directly, in place of a raw, uncaught {@link IllegalStateException}, by every read path
  * that decodes a status IRI ({@code findByCode}, {@code findCurrentByCode}, {@code findAll}) - it
@@ -32,7 +32,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * {@code rdf:type} join to the two known requirement types (an unfiltered join would hand
  * {@code typeFromIri} a value it cannot map either) - status is deliberately not filtered the same
  * way. Silently excluding a requirement whose status this adapter cannot decode would turn a
- * SHACL-legal, store-first-written requirement invisible to {@code req_list}/{@code req_get}
+ * requirement stored past the gate invisible to {@code req_list}/{@code req_get}
  * without any signal - the same silent-drop failure mode issue #136 already named as the bug for
  * blank-node {@code usesTerm} subjects, not a pattern to repeat for status. A legal store value
  * fails loudly here instead of vanishing quietly.</p>
@@ -50,7 +50,7 @@ public class UnsupportedRequirementStatusException extends RuntimeException {
      *
      * @param projectId the project the requirement lives in
      * @param code        the requirement code whose status could not be decoded
-     * @param statusIri   the SHACL-legal but unsupported {@code arkreq:status} object IRI found
+     * @param statusIri   the unsupported {@code arkreq:status} object IRI (outside the shape) found
      *                    in the store
      */
     public UnsupportedRequirementStatusException(ProjectId projectId, RequirementCode code, String statusIri) {
@@ -76,7 +76,7 @@ public class UnsupportedRequirementStatusException extends RuntimeException {
         return code;
     }
 
-    /** @return the SHACL-legal but unsupported {@code arkreq:status} object IRI found in the store */
+    /** @return the unsupported {@code arkreq:status} object IRI (outside the shape) found in the store */
     public String statusIri() {
         return statusIri;
     }

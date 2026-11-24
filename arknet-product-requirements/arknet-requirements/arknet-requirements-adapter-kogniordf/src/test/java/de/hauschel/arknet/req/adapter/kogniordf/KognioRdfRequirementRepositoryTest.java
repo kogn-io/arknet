@@ -1089,7 +1089,7 @@ class KognioRdfRequirementRepositoryTest {
         }
     }
 
-    // ---- status: SHACL-legal but MVP-unsupported (issue #160) ----------------------------
+    // ---- status: outside the shape, stored past the gate (issue #160) ----------------------------
 
     /**
      * Store-first regression test for issue #160: {@code requirements-shapes.ttl}'s
@@ -1131,7 +1131,7 @@ class KognioRdfRequirementRepositoryTest {
      * called {@code statusFromIri} once per row inside a {@code computeIfAbsent} lambda, so one
      * requirement with an unsupported status aborted the whole listing with an uninformative
      * {@link IllegalStateException} - unreadable requirements alongside perfectly good ones. The
-     * fix keeps the abort (a SHACL-legal value must fail visibly, not vanish - see the class-level
+     * fix keeps the abort (a stored value outside the shape must fail visibly, not vanish - see the class-level
      * Javadoc), but with a dedicated, named exception instead of a raw one.
      */
     @Test
