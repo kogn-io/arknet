@@ -39,6 +39,7 @@ import de.hauschel.arknet.resource.application.port.in.FieldDescription.Kind;
 import de.hauschel.arknet.resource.application.port.in.FieldDescription.Presence;
 import de.hauschel.arknet.resource.application.port.in.ResourceCatalog;
 import de.hauschel.arknet.resource.application.port.in.ResourceTypeDescription;
+import de.hauschel.arknet.resource.application.port.in.StatusRules;
 import de.hauschel.arknet.resource.application.port.in.SubmitResult;
 import de.hauschel.arknet.resource.application.port.in.SubmittedChange;
 import de.hauschel.arknet.resource.domain.SubmitRejectedException;
@@ -219,6 +220,88 @@ class DescribeRealStoreTest {
     }
 
     @Test
+    void anArchitectureDecisionShowsItsStatusTransitionsConditionsAndDefaults() {
+        // when
+        StatusRules status = DESCRIBER.describe("arkarch:ArchitectureDecisionRecord", "en").status().orElseThrow();
+
+        // then
+        assertEquals("arkarch:adrStatus", status.field());
+        assertEquals("arkarch:Proposed", status.initialStatus());
+        assertEquals(List.of("arkarch:Accepted -> arkarch:Deprecated", "arkarch:Accepted -> arkarch:Superseded",
+                "arkarch:Proposed -> arkarch:Accepted", "arkarch:Proposed -> arkarch:Rejected",
+                "arkarch:Superseded -> arkarch:Accepted"),
+                status.transitions().stream().map(transition -> transition.from() + " -> " + transition.to())
+                        .toList());
+        StatusRules.Transition accepting = transition(status, "arkarch:Proposed", "arkarch:Accepted");
+        assertEquals(List.of("ashapes:ADR-dated", "ashapes:ADR-oneChosenOption"),
+                accepting.conditions().stream().map(StatusRules.Condition::shape).toList());
+        assertTrue(accepting.conditions().stream().anyMatch(condition -> condition.messages().contains(
+                "A decision with considered options is accepted only when exactly one arkarch:consideredOption"
+                        + " has arkarch:optionOutcome arkarch:Chosen.")), accepting.conditions().toString());
+        assertEquals(List.of(new StatusRules.DefaultValue("arkarch:decisionDate", "arkres:today", true)),
+                accepting.defaults());
+        StatusRules.Transition superseding = transition(status, "arkarch:Accepted", "arkarch:Superseded");
+        assertEquals(List.of("ashapes:ADR-supersededByAcceptedDecision"),
+                superseding.conditions().stream().map(StatusRules.Condition::shape).toList());
+        assertTrue(transition(status, "arkarch:Accepted", "arkarch:Deprecated").conditions().isEmpty());
+        assertEquals(List.of("arkarch:Accepted", "arkarch:Proposed"), status.deletableIn());
+    }
+
+    @Test
+    void anArchitectureDecisionShowsTheFieldsFrozenOnceDecided() {
+        // when
+        StatusRules status = DESCRIBER.describe("arkarch:ArchitectureDecisionRecord", "en").status().orElseThrow();
+
+        // then
+        assertEquals(1, status.frozenGroups().size());
+        StatusRules.FieldGroup group = status.frozenGroups().get(0);
+        assertEquals(List.of("arkarch:adrContext", "arkarch:adrDecision", "arkarch:consequence",
+                "arkarch:consideredOption", "arkarch:decisionDate", "arknet:name"), group.fields());
+        assertEquals(List.of("arkarch:Proposed"), group.editableIn());
+    }
+
+    @Test
+    void conditionNamesAndDefaultsDeclareTheirPrefixes() {
+        // when
+        ResourceTypeDescription description = DESCRIBER.describe("arkarch:ArchitectureDecisionRecord", "de");
+
+        // then
+        assertTrue(description.prefixDeclarations().contains("@prefix ashapes: <"), description.prefixDeclarations());
+        assertTrue(description.prefixDeclarations().contains("@prefix arkres: <"), description.prefixDeclarations());
+        assertTrue(transition(description.status().orElseThrow(), "arkarch:Superseded", "arkarch:Accepted")
+                .conditions().get(0).messages().contains(
+                        "Wer eine Abloesung zuruecknimmt, leert arkarch:supersededBy im selben Dokument."),
+                description.status().toString());
+    }
+
+    @Test
+    void aRequirementShowsItsStatusRulesAndItsImmutableQualityCategory() {
+        // when
+        ResourceTypeDescription functional = DESCRIBER.describe("arkreq:FunctionalRequirement", "en");
+        ResourceTypeDescription nonFunctional = DESCRIBER.describe("arkreq:NonFunctionalRequirement", "en");
+
+        // then
+        StatusRules status = functional.status().orElseThrow();
+        assertEquals("arkreq:status", status.field());
+        assertEquals("arkreq:Proposed", status.initialStatus());
+        assertEquals(List.of("arkreq:Accepted -> arkreq:Proposed", "arkreq:Proposed -> arkreq:Accepted"),
+                status.transitions().stream().map(transition -> transition.from() + " -> " + transition.to())
+                        .toList());
+        assertTrue(status.transitions().stream().allMatch(transition -> transition.conditions().isEmpty()
+                && transition.defaults().isEmpty()));
+        assertEquals(List.of("arkreq:Accepted", "arkreq:Proposed"), status.deletableIn());
+        assertTrue(status.frozenGroups().isEmpty());
+        assertTrue(byName(nonFunctional).get("arkreq:qualityCategory").immutable());
+        assertFalse(byName(nonFunctional).get("dcterms:title").immutable());
+    }
+
+    @Test
+    void aTypeWithoutStatusRuleDataShowsNoStatus() {
+        assertTrue(DESCRIBER.describe("skos:Concept", "en").status().isEmpty());
+        assertTrue(DESCRIBER.describe("arkreq:UseCase", "en").status().isEmpty());
+    }
+
+    @Test
     void theDescriptionDeclaresEveryPrefixItsFieldsNameNotOnlyThoseOfTheExample() {
         // when
         ResourceTypeDescription description = DESCRIBER.describe("arkarch:ArchitectureDecisionRecord", "en");
@@ -256,6 +339,12 @@ class DescribeRealStoreTest {
 
         assertTrue(rejected.getMessage().contains("arkreq:UseCase"), rejected.getMessage());
         assertTrue(rejected.getMessage().contains("@prefix arkreq:"), rejected.getMessage());
+    }
+
+    private static StatusRules.Transition transition(final StatusRules status, final String from, final String to) {
+        return status.transitions().stream()
+                .filter(transition -> transition.from().equals(from) && transition.to().equals(to))
+                .findFirst().orElseThrow(() -> new AssertionError("no transition " + from + " -> " + to));
     }
 
     private static Map<String, FieldDescription> byName(final ResourceTypeDescription description) {

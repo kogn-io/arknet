@@ -4,6 +4,7 @@
 package de.hauschel.arknet.resource.adapter.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ import de.hauschel.arknet.resource.application.port.in.ResourceCatalog;
 import de.hauschel.arknet.resource.application.port.in.ResourceCatalog.VocabularyTerm;
 import de.hauschel.arknet.resource.application.port.in.ResourceTypeDescription;
 import de.hauschel.arknet.resource.application.port.in.ResourceTypeSummary;
+import de.hauschel.arknet.resource.application.port.in.StatusRules;
 import de.hauschel.arknet.resource.application.port.in.SubmitResult;
 import de.hauschel.arknet.resource.application.port.in.SubmittedChange;
 
@@ -35,13 +37,21 @@ class ResourceAccessMcpToolsTest {
             "m:Thing", "Thing", "A thing worth keeping.", Optional.of("T-"));
     private static final FieldDescription POSITION = new FieldDescription("https://example.org/m#position",
             "m:position", "position", "", Kind.VALUE, Presence.REQUIRED, Optional.of(1), Optional.of("xsd:integer"),
-            List.of(), List.of(), false, false, List.of(), Optional.empty());
+            List.of(), List.of(), false, false, false, List.of(), Optional.empty());
+    private static final FieldDescription KIND = new FieldDescription("https://example.org/m#kind", "m:kind",
+            "Kind", "", Kind.VALUE, Presence.OPTIONAL, Optional.of(1), Optional.of("xsd:string"), List.of(),
+            List.of(), false, false, true, List.of(), Optional.empty());
+    private static final StatusRules STATUS = new StatusRules("m:status", "m:Draft",
+            List.of(new StatusRules.Transition("m:Draft", "m:Done",
+                    List.of(new StatusRules.Condition("m:Done-checked", List.of("A done thing is checked."))),
+                    List.of(new StatusRules.DefaultValue("m:doneOn", "arkres:today", true)))),
+            List.of("m:Draft"), List.of(new StatusRules.FieldGroup(List.of("m:title"), List.of("m:Draft"))));
     private static final FieldDescription TITLE = new FieldDescription("https://example.org/m#title", "m:title",
             "Title", "What it is called.", Kind.TEXT, Presence.REQUIRED, Optional.empty(), Optional.empty(),
-            List.of(), List.of(), true, false, List.of("A thing needs a title."), Optional.empty());
+            List.of(), List.of(), true, false, false, List.of("A thing needs a title."), Optional.empty());
     private static final FieldDescription PARTS = new FieldDescription("https://example.org/m#part", "m:part",
             "Part", "", Kind.CHILDREN, Presence.OPTIONAL, Optional.empty(), Optional.empty(), List.of("m:Part"),
-            List.of(), false, false, List.of(), Optional.of(new OwnedChildren("Part", "m:position",
+            List.of(), false, false, false, List.of(), Optional.of(new OwnedChildren("Part", "m:position",
                     List.of(POSITION))));
 
     private final List<String> requestedLocales = new ArrayList<>();
@@ -59,7 +69,8 @@ class ResourceAccessMcpToolsTest {
         @Override
         public ResourceTypeDescription describe(final String type, final String displayLocale) {
             requestedLocales.add(displayLocale);
-            return new ResourceTypeDescription(TYPE, List.of(TITLE, PARTS), List.of("Spans two fields."),
+            return new ResourceTypeDescription(TYPE, List.of(TITLE, KIND, PARTS), Optional.of(STATUS),
+                    List.of("Spans two fields."),
                     "@prefix m: <https://example.org/m#> .\n[] a arkres:Create .\n",
                     List.of(new ChangeExample("arkres:Delete", "[] a arkres:Delete ; arkres:object <T-1> .\n")),
                     "@prefix m: <https://example.org/m#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n");
@@ -112,6 +123,49 @@ class ResourceAccessMcpToolsTest {
                 + "[] a arkres:Delete ; arkres:object <T-1> .\n"), answer);
         assertTrue(answer.endsWith("Prefixes behind every name above:\n@prefix m: <https://example.org/m#> .\n"
                 + "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"), answer);
+    }
+
+    @Test
+    void describeWithATypeRendersItsStatusRulesAndImmutableFields() {
+        // when
+        String answer = tools.describe(null, "m:Thing", "en", null);
+
+        // then
+        assertTrue(answer.contains("- m:kind (Kind): optional, literal of xsd:string, at most one value,"
+                + " keeps the values the create wrote\n"), answer);
+        assertTrue(answer.contains("\nStatus field m:status: a created resource starts in m:Draft; a document changes"
+                + " it only along these transitions (writing the current status again changes nothing):\n"
+                + "- m:Draft -> m:Done\n"
+                + "  Condition m:Done-checked: A done thing is checked.\n"
+                + "  Default: m:doneOn = arkres:today (the day the document is applied),"
+                + " unless the document names m:doneOn\n"
+                + "Deletable only in: m:Draft\n"
+                + "Frozen outside m:Draft: m:title - each keeps its values and takes values only in a language"
+                + " none of these fields carries yet; an owned field keeps every child, takes new children after"
+                + " the last, and a kept child takes text only in a language new to it\n"), answer);
+    }
+
+    @Test
+    void describeOfATypeWithoutStatusRulesSaysNothingAboutAStatus() {
+        // given
+        ResourceAccessMcpTools plain = new ResourceAccessMcpTools(new DescribeResourceType() {
+            @Override
+            public ResourceCatalog catalog(final String displayLocale) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public ResourceTypeDescription describe(final String type, final String displayLocale) {
+                return new ResourceTypeDescription(TYPE, List.of(TITLE), Optional.empty(), List.of(), "", List.of(),
+                        "");
+            }
+        }, (projectId, document) -> new SubmitResult(List.of()), projects);
+
+        // when
+        String answer = plain.describe(null, "m:Thing", "en", null);
+
+        // then
+        assertFalse(answer.contains("Status field"), answer);
     }
 
     @Test

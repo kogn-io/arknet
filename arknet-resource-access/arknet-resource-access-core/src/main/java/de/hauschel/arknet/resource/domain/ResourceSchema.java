@@ -676,6 +676,17 @@ public final class ResourceSchema {
     }
 
     /**
+     * Whether {@code type} is a class of resources: a resource type or a superclass of one. A node of
+     * such a class is a resource of its own and has an IRI, never a value written inline.
+     *
+     * @param type a class
+     * @return true for a resource type and every superclass of one
+     */
+    public boolean isResourceClass(final IRI type) {
+        return codePrefixByType.keySet().stream().anyMatch(resourceType -> superclasses(resourceType).contains(type));
+    }
+
+    /**
      * The resource types this schema knows, by IRI.
      *
      * @return the resource type IRIs

@@ -8,10 +8,13 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
@@ -56,6 +59,27 @@ public final class OntologyFixtures {
         } catch (IOException e) {
             throw new IllegalStateException("failed to load " + resource, e);
         }
+    }
+
+    /**
+     * The reactor root: the nearest directory upwards of the module under test whose {@code pom.xml}
+     * declares no parent.
+     *
+     * @return the absolute reactor root
+     */
+    public static Path reactorRoot() {
+        Path module = Path.of(System.getProperty("basedir", "")).toAbsolutePath();
+        for (Path dir = module.getParent(); dir != null; dir = dir.getParent()) {
+            Path pom = dir.resolve("pom.xml");
+            try {
+                if (Files.isRegularFile(pom) && !Files.readString(pom).contains("<parent>")) {
+                    return dir;
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException("failed to read " + pom, e);
+            }
+        }
+        throw new IllegalStateException("no reactor root above " + module);
     }
 
     /**

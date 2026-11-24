@@ -182,6 +182,32 @@ class DocumentApplicationTest {
     }
 
     @Test
+    void anInlineValueTypedWithAResourceTypeIsRejected() {
+        assertInlineValueTypedRejected(THING);
+    }
+
+    @Test
+    void anInlineValueTypedWithASuperclassOfAResourceTypeIsRejected() {
+        assertInlineValueTypedRejected(BASE);
+    }
+
+    private void assertInlineValueTypedRejected(final IRI type) {
+        // given
+        BlankNode thing = create(THING);
+        BlankNode inline = RDF_FACTORY.createBlankNode();
+        document.add(thing, REFERS_TO, inline);
+        document.add(inline, VocabRdf.TYPE, type);
+
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, this::apply);
+
+        // then
+        assertTrue(rejected.getMessage().contains("written inline as the value of " + REFERS_TO.getIRIString()
+                + " is typed " + type.getIRIString()), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains(ArkresVocabulary.CREATE), rejected.getMessage());
+    }
+
+    @Test
     void anUntypedInlineValueHasNoFields() {
         BlankNode thing = create(THING);
         BlankNode detail = RDF_FACTORY.createBlankNode();

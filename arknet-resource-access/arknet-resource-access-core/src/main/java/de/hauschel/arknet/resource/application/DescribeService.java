@@ -41,6 +41,7 @@ import de.hauschel.arknet.resource.application.port.in.ResourceCatalog;
 import de.hauschel.arknet.resource.application.port.in.ResourceCatalog.VocabularyTerm;
 import de.hauschel.arknet.resource.application.port.in.ResourceTypeDescription;
 import de.hauschel.arknet.resource.application.port.in.ResourceTypeSummary;
+import de.hauschel.arknet.resource.application.port.in.StatusRules;
 import de.hauschel.arknet.resource.domain.ArkresVocabulary;
 import de.hauschel.arknet.resource.domain.PrefixBindings;
 import de.hauschel.arknet.resource.domain.ResourceSchema;
@@ -54,6 +55,12 @@ import de.hauschel.arknet.resource.domain.ResourceSchema.OwnedField;
  * comments come from the ontology, rule texts from the {@code sh:message} of the shapes, each in the
  * display language. Nothing here names a class or a property of the model: the only IRIs it knows
  * are those of SHACL, RDF, RDFS, XSD, Dublin Core's identifier and its own {@code arkres:}.</p>
+ *
+ * <p>The status rules of a type are the rule data {@code submit} applies, read off the same
+ * {@link ResourceSchema}: the status field with its initial status, the transitions with their
+ * conditions (each named shape with the messages of its constraints) and default values, the
+ * deletable statuses and the field groups with their editable statuses. A field marked
+ * {@code arkres:immutable} says so itself.</p>
  *
  * <p>The example of a type creates one resource of it with every required field and one child in
  * every owned field. A required edge to a resource type gets a resource of its own in the same
@@ -156,16 +163,29 @@ public final class DescribeService implements DescribeResourceType {
         DisplayLocale locale = defaultLocale.withRequestedOverride(displayLocale);
         ResourceTypeSummary summary = summary(iri, locale);
         List<FieldDescription> fields = fields(iri, locale);
+        Optional<StatusRules> status = status(iri, locale);
         List<String> rules = rules(iri, locale);
         String example = example(iri, locale);
         List<ChangeExample> changeExamples = changeExamples(iri, fields, locale);
         String rendered = Stream.of(Stream.of(summary.name(), summary.comment(), example),
                 changeExamples.stream().map(ChangeExample::document), rules.stream(),
-                fields.stream().flatMap(DescribeService::names))
+                fields.stream().flatMap(DescribeService::names), status.stream().flatMap(DescribeService::names))
                 .flatMap(names -> names)
                 .collect(Collectors.joining("\n"));
-        return new ResourceTypeDescription(summary, fields, rules, example, changeExamples,
+        return new ResourceTypeDescription(summary, fields, status, rules, example, changeExamples,
                 prefixes.usedIn(rendered).declarations());
+    }
+
+    private static Stream<String> names(final StatusRules status) {
+        return Stream.of(Stream.of(status.field(), status.initialStatus()), status.deletableIn().stream(),
+                status.transitions().stream().flatMap(transition -> Stream.of(Stream.of(transition.from(),
+                        transition.to()), transition.conditions().stream().flatMap(condition -> Stream.concat(
+                                Stream.of(condition.shape()), condition.messages().stream())),
+                        transition.defaults().stream().flatMap(value -> Stream.of(value.field(), value.value())))
+                        .flatMap(names -> names)),
+                status.frozenGroups().stream().flatMap(group -> Stream.concat(group.fields().stream(),
+                        group.editableIn().stream())))
+                .flatMap(names -> names);
     }
 
     private static Stream<String> names(final FieldDescription field) {
@@ -204,6 +224,7 @@ public final class DescribeService implements DescribeResourceType {
 
     private List<FieldDescription> fields(final IRI type, final DisplayLocale locale) {
         boolean coded = codePrefix(type).isPresent();
+        Set<IRI> immutable = schema.immutableFields(Set.of(type));
         Map<IRI, List<BlankNodeOrIRI>> shapesByPath = new LinkedHashMap<>();
         nodeShapes(type).forEach(node -> shapes.stream(node, PROPERTY, null)
                 .map(Triple::getObject)
@@ -214,13 +235,14 @@ public final class DescribeService implements DescribeResourceType {
                         .ifPresent(path -> shapesByPath.computeIfAbsent(path, any -> new ArrayList<>())
                                 .add(property))));
         return shapesByPath.entrySet().stream()
-                .map(entry -> field(entry.getKey(), entry.getValue(), coded, locale))
+                .map(entry -> field(entry.getKey(), entry.getValue(), coded, immutable.contains(entry.getKey()),
+                        locale))
                 .sorted(Comparator.comparing(FieldDescription::presence).thenComparing(FieldDescription::name))
                 .toList();
     }
 
     private FieldDescription field(final IRI path, final List<BlankNodeOrIRI> propertyShapes, final boolean coded,
-            final DisplayLocale locale) {
+            final boolean immutable, final DisplayLocale locale) {
         int required = 0;
         int recommended = 0;
         Optional<Integer> maxCount = Optional.empty();
@@ -269,7 +291,54 @@ public final class DescribeService implements DescribeResourceType {
         return new FieldDescription(path.getIRIString(), prefixes.abbreviate(path.getIRIString()),
                 label(path, locale), comment(path, locale), kind, presence, maxCount,
                 datatype.map(prefixes::abbreviate), valueTypes, allowed, onePerLanguage,
-                coded && VocabDct.IDENTIFIER.equals(path), rules, children);
+                coded && VocabDct.IDENTIFIER.equals(path), immutable, rules, children);
+    }
+
+    /**
+     * The status rules of {@code type}, read off the same rule data {@code submit} applies.
+     */
+    private Optional<StatusRules> status(final IRI type, final DisplayLocale locale) {
+        return schema.statusField(Set.of(type)).map(field -> new StatusRules(
+                abbreviated(field.property().getIRIString()), turtle(field.initial()),
+                field.transitions().stream()
+                        .map(transition -> new StatusRules.Transition(turtle(transition.from()),
+                                turtle(transition.to()),
+                                transition.conditions().stream()
+                                        .map(condition -> new StatusRules.Condition(
+                                                abbreviated(condition.getIRIString()), messages(condition, locale)))
+                                        .sorted(Comparator.comparing(StatusRules.Condition::shape))
+                                        .toList(),
+                                transition.defaults().stream()
+                                        .map(value -> new StatusRules.DefaultValue(
+                                                abbreviated(value.field().getIRIString()), turtle(value.value()),
+                                                value.today()))
+                                        .sorted(Comparator.comparing(StatusRules.DefaultValue::field))
+                                        .toList()))
+                        .sorted(Comparator.comparing(StatusRules.Transition::from)
+                                .thenComparing(StatusRules.Transition::to))
+                        .toList(),
+                field.deletable().stream().map(this::turtle).sorted().toList(),
+                field.groups().stream()
+                        .map(group -> new StatusRules.FieldGroup(
+                                group.fields().stream().map(property -> abbreviated(property.getIRIString()))
+                                        .sorted().toList(),
+                                group.editable().stream().map(this::turtle).sorted().toList()))
+                        .toList()));
+    }
+
+    /**
+     * The messages of a condition: its own, then those of its property and SPARQL constraints.
+     */
+    private List<String> messages(final IRI condition, final DisplayLocale locale) {
+        return Stream.concat(Stream.of(condition), Stream.of(PROPERTY, SPARQL)
+                        .flatMap(constraint -> shapes.stream(condition, constraint, null))
+                        .map(Triple::getObject)
+                        .filter(BlankNodeOrIRI.class::isInstance)
+                        .map(BlankNodeOrIRI.class::cast))
+                .map(shape -> text(shapes, shape, MESSAGE, locale))
+                .flatMap(Optional::stream)
+                .distinct()
+                .toList();
     }
 
     private List<String> rules(final IRI type, final DisplayLocale locale) {

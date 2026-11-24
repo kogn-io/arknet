@@ -70,7 +70,9 @@ import de.hauschel.arknet.resource.domain.SubmittedDocument.Update;
  * <p><strong>Known predicates.</strong> The document writes only fields: a create, an inline child,
  * a set and an add-to name only predicates some property shape gives the node's class or one of its
  * superclasses ({@link ResourceSchema#fields}, the fields {@code describe} lists), besides
- * {@code rdf:type}; an inline value written as a blank node is held to the classes it is typed with.
+ * {@code rdf:type}; an inline value written as a blank node is held to the classes it is typed with,
+ * and is rejected if one of them is a class of resources ({@link ResourceSchema#isResourceClass}):
+ * every resource is stored under an IRI, never as a blank node inside another one's slice.
  * The shapes are open, so this is checked on the document, not on the stored slice: a stored
  * predicate outside the fields stays, and a clear or a remove-from may still take it away.</p>
  *
@@ -506,6 +508,12 @@ final class DocumentApplication {
         slice.add(subject, property, resolved);
         if (value instanceof BlankNode node && !minted.containsKey(node)) {
             Set<IRI> types = typesOf(source, node);
+            types.stream().filter(schema::isResourceClass).sorted(Comparator.comparing(IRI::getIRIString))
+                    .forEach(type -> problems.add("a blank node written inline as the value of "
+                            + property.getIRIString() + " is typed " + type.getIRIString() + ", a class of"
+                            + " resources: a resource is stored under its own IRI, so write it with its own "
+                            + ArkresVocabulary.CREATE + " in the same document and name that create's blank node"
+                            + " as the value, or name an existing resource by its IRI or code"));
             source.stream(node, null, null)
                     .filter(triple -> known(triple.getPredicate(), types,
                             "a blank node written inline as the value of " + property.getIRIString()))
