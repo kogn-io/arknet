@@ -312,7 +312,7 @@ ashapes:ADR-decisionDate
 # With the field group of the rule data below this keeps the date the one the decision got.
 ashapes:ADR-proposedUndated
     a sh:SPARQLConstraint ;
-    sh:message  "A Proposed decision carries no arkarch:decisionDate: the day is recorded when it is accepted or rejected."@en , "Eine Proposed-Entscheidung traegt kein arkarch:decisionDate: der Tag wird beim Annehmen oder Verwerfen festgehalten."@de ;
+    sh:message  "A Proposed decision carries no arkarch:decisionDate: the day is recorded when it is accepted or rejected. A record that already carries one (written before that rule): accept or reject it - the transition records the date and may keep this day (submit: name it in the same document; adr_set_status: decidedOn) - or delete it, or clear the field while it is Proposed (submit: arkres:clear; adr_update cannot clear it)."@en , "Eine Proposed-Entscheidung traegt kein arkarch:decisionDate: der Tag wird beim Annehmen oder Verwerfen festgehalten. Ein Record, der schon eines traegt (vor dieser Regel geschrieben): annehmen oder verwerfen - der Uebergang haelt das Datum fest und darf diesen Tag behalten (submit: im selben Dokument nennen; adr_set_status: decidedOn) -, oder loeschen, oder das Feld leeren, solange er Proposed ist (submit: arkres:clear; adr_update kann es nicht leeren)."@de ;
     sh:severity sh:Violation ;
     sh:select   """
         PREFIX arkarch: <https://w3id.org/arknet/architecture#>
