@@ -13,6 +13,7 @@
 ##############################################################################
 
 @prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
 @prefix arknet: <https://w3id.org/arknet/core#> .
 @prefix arkddd: <https://w3id.org/arknet/ddd#> .
 @prefix arkres:  <https://w3id.org/arknet/resource#> .
@@ -31,15 +32,19 @@ shapes:BoundedContextShape
     sh:property shapes:BoundedContext-hasAggregate ;
     sh:property shapes:BoundedContext-partOf ;
     sh:property shapes:BoundedContext-ownedBy ;
+    sh:property shapes:BoundedContext-ownedBy-text ;
     sh:property shapes:BoundedContext-delimitsTerm-disjoint .
 
+# Not blank: at least one character that is no white space, no separator (incl. the no-break
+# space) and no control character - stricter than, never looser than, Java's String.isBlank().
 shapes:BoundedContext-name
     a sh:PropertyShape ;
     sh:path     arknet:name ;
     sh:minCount 1 ;
     sh:minLength 2 ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
-    sh:message  "A BoundedContext needs at least one 'arknet:name' (min. 2 characters) - the context's human-readable name, e.g. 'OrderManagement'. sh:uniqueLang allows at most one arknet:name per non-empty language tag - two names sharing the same tag are not allowed, but DIFFERENT language tags are (a context may be named in several languages)."@en , "Ein BoundedContext braucht mindestens einen 'arknet:name' (min. 2 Zeichen) - den menschenlesbaren Namen des Contexts, z.B. 'OrderManagement'. sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag - zwei Namen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (ein Context darf mehrsprachig benannt sein)."@de ;
+    sh:message  "A BoundedContext needs at least one 'arknet:name' (min. 2 characters, not blank) - the context's human-readable name, e.g. 'OrderManagement'. sh:uniqueLang allows at most one arknet:name per non-empty language tag - two names sharing the same tag are not allowed, but DIFFERENT language tags are (a context may be named in several languages)."@en , "Ein BoundedContext braucht mindestens einen 'arknet:name' (min. 2 Zeichen, nicht leer) - den menschenlesbaren Namen des Contexts, z.B. 'OrderManagement'. sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag - zwei Namen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (ein Context darf mehrsprachig benannt sein)."@de ;
     sh:severity sh:Violation .
 
 shapes:BoundedContext-domainVision
@@ -47,8 +52,9 @@ shapes:BoundedContext-domainVision
     sh:path     arkddd:domainVision ;
     sh:minCount 1 ;
     sh:minLength 10 ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
-    sh:message  "A BoundedContext needs at least one 'arkddd:domainVision' (min. 10 characters) - one sentence: What does this context do? sh:uniqueLang allows at most one arkddd:domainVision per non-empty language tag - two visions sharing the same tag are not allowed, but DIFFERENT language tags are (a context's vision may be stated in several languages)."@en , "Ein BoundedContext braucht mindestens eine 'arkddd:domainVision' (min. 10 Zeichen) - ein Satz: Was leistet dieser Context? sh:uniqueLang erlaubt hoechstens eine arkddd:domainVision je nicht-leerem Sprach-Tag - zwei Visionen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (die Vision eines Contexts darf mehrsprachig formuliert sein)."@de ;
+    sh:message  "A BoundedContext needs at least one 'arkddd:domainVision' (min. 10 characters, not blank) - one sentence: What does this context do? sh:uniqueLang allows at most one arkddd:domainVision per non-empty language tag - two visions sharing the same tag are not allowed, but DIFFERENT language tags are (a context's vision may be stated in several languages)."@en , "Ein BoundedContext braucht mindestens eine 'arkddd:domainVision' (min. 10 Zeichen, nicht leer) - ein Satz: Was leistet dieser Context? sh:uniqueLang erlaubt hoechstens eine arkddd:domainVision je nicht-leerem Sprach-Tag - zwei Visionen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (die Vision eines Contexts darf mehrsprachig formuliert sein)."@de ;
     sh:severity sh:Violation .
 
 shapes:BoundedContext-hasAggregate
@@ -73,12 +79,43 @@ shapes:BoundedContext-ownedBy
     sh:message  "A BoundedContext should have 'arkddd:ownedBy' (team name)."@en , "BoundedContext sollte 'arkddd:ownedBy' (Team-Name) haben."@de ;
     sh:severity sh:Warning .
 
+# The owning team, if given, is one plain, non-blank name.
+shapes:BoundedContext-ownedBy-text
+    a sh:PropertyShape ;
+    sh:path     arkddd:ownedBy ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
+    sh:message  "'arkddd:ownedBy' is optional but, if present, must be exactly one plain, non-blank team name (xsd:string, no language tag)."@en , "'arkddd:ownedBy' ist optional, muss aber, falls vorhanden, genau ein schlichter, nicht leerer Team-Name sein (xsd:string, ohne Sprach-Tag)."@de ;
+    sh:severity sh:Violation .
+
 # A term is either part of the context's language or delimited, never both.
 shapes:BoundedContext-delimitsTerm-disjoint
     a sh:PropertyShape ;
     sh:path     arkddd:delimitsTerm ;
     sh:disjoint arkddd:ubiquitousLanguageTerm ;
     sh:message  "A BoundedContext must not carry the same term as both 'arkddd:ubiquitousLanguageTerm' and 'arkddd:delimitsTerm' - a term is either part of the language or delimited."@en , "Ein BoundedContext darf denselben Begriff nicht zugleich als 'arkddd:ubiquitousLanguageTerm' und 'arkddd:delimitsTerm' tragen - ein Begriff gehoert entweder zur Sprache oder ist abgegrenzt."@de ;
+    sh:severity sh:Violation .
+
+
+##############################################################################
+#  SUBDOMAIN SHAPES
+#  A Subdomain is a child node of its BoundedContext (arkddd:partOf), written by the
+#  bounded-context adapter; its strategic classification is one of the three SubdomainType
+#  individuals of arknet-ddd.ttl.
+##############################################################################
+
+shapes:SubdomainShape
+    a sh:NodeShape ;
+    sh:targetClass arkddd:Subdomain ;
+    sh:property shapes:Subdomain-subdomainType .
+
+shapes:Subdomain-subdomainType
+    a sh:PropertyShape ;
+    sh:path     arkddd:subdomainType ;
+    sh:maxCount 1 ;
+    sh:in       ( arkddd:CoreDomain arkddd:SupportingDomain arkddd:GenericDomain ) ;
+    sh:message  "A Subdomain has at most one 'arkddd:subdomainType', one of arkddd:CoreDomain, arkddd:SupportingDomain, arkddd:GenericDomain."@en , "Eine Subdomain hat hoechstens einen 'arkddd:subdomainType', einen von arkddd:CoreDomain, arkddd:SupportingDomain, arkddd:GenericDomain."@de ;
     sh:severity sh:Violation .
 
 
@@ -97,7 +134,8 @@ shapes:ContextRelationship-upstream
     a sh:PropertyShape ;
     sh:path     arkddd:upstream ;
     sh:minCount 1 ; sh:maxCount 1 ; sh:class arkddd:BoundedContext ;
-    sh:message  "ContextRelationship must have exactly one 'arkddd:upstream' BoundedContext."@en , "ContextRelationship muss genau einen 'arkddd:upstream' BoundedContext haben."@de ;
+    sh:disjoint arkddd:downstream ;
+    sh:message  "ContextRelationship must have exactly one 'arkddd:upstream' BoundedContext, and it must not be its 'arkddd:downstream' - a context has no relationship with itself."@en , "ContextRelationship muss genau einen 'arkddd:upstream' BoundedContext haben, und er darf nicht sein 'arkddd:downstream' sein - ein Context hat keine Beziehung zu sich selbst."@de ;
     sh:severity sh:Violation .
 
 shapes:ContextRelationship-downstream

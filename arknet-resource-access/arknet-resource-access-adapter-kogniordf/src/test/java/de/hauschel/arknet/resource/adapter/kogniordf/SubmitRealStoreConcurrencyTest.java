@@ -77,8 +77,8 @@ class SubmitRealStoreConcurrencyTest {
         // given
         SubmitService plain = service(repository);
         String term = SubmitRealStoreTest.iriOf(plain.submit(SubmitRealStoreTest.PROJECT, SubmitRealStoreTest.PREFIXES
-                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"A\"@en .\n"),
-                "TERM-1");
+                + "[] a arkres:Create ; arkres:object _:t .\n_:t a skos:Concept ; skos:prefLabel \"A\"@en ;"
+                + " skos:definition \"Defined.\"@en .\n"), "TERM-1");
         CountDownLatch termRead = new CountDownLatch(1);
         CountDownLatch termDeleted = new CountDownLatch(1);
         AtomicBoolean firstRead = new AtomicBoolean(true);

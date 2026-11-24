@@ -58,8 +58,6 @@ class ResourceAccessWiringTest {
 
     private static final String CHANGED_TEXT = "Changed example text";
 
-    private static final String DEFINITION = "What the example term means.";
-
     @TempDir
     Path storageDir;
 
@@ -114,10 +112,8 @@ class ResourceAccessWiringTest {
             // given
             String type = "skos:Concept";
             String description = tools.describe(null, type, null, anchor);
-            // TODO #742: skos:definition is set by hand - the typed read path skips a term without one,
-            // and the shapes do not require it, so the example leaves it out.
-            String document = example(description)
-                    .replace("a " + type, "a " + type + " ;\n    skos:definition \"" + DEFINITION + "\"@en");
+            // the shapes require skos:definition, so the example carries the one the typed read path needs
+            String document = example(description);
 
             // when
             String created = tools.submit(null, document, anchor);

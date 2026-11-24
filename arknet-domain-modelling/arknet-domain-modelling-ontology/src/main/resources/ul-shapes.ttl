@@ -27,22 +27,32 @@ ulshapes:TermShape
     sh:property ulshapes:Term-definition ;
     sh:property ulshapes:Term-inScheme ;
     sh:property ulshapes:Term-broader ;
-    sh:property ulshapes:Term-related .
+    sh:property ulshapes:Term-related ;
+    sh:sparql   ulshapes:Term-broader-notSelf ,
+                ulshapes:Term-related-notSelf ,
+                ulshapes:Term-broader-noCycle ,
+                ulshapes:Term-prefLabel-oneWord .
 
+# Not blank: at least one character that is no white space, no separator (incl. the no-break
+# space) and no control character - stricter than, never looser than, Java's String.isBlank().
 ulshapes:Term-prefLabel
     a sh:PropertyShape ;
     sh:path     skos:prefLabel ;
     sh:minCount 1 ;
     sh:minLength 1 ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
-    sh:message  "A glossary term (skos:Concept) needs at least one skos:prefLabel (the term). At most one skos:prefLabel per language tag (SKOS S14) - several untagged or same-language-tagged prefLabels on one term are not allowed, but several DIFFERENT language tags are (a term may be labelled in several languages)."@en , "Ein Glossar-Begriff (skos:Concept) braucht mindestens ein skos:prefLabel (der Fachbegriff). Hoechstens ein skos:prefLabel je Sprach-Tag (SKOS S14) - mehrere untagged oder gleichsprachige prefLabels an einem Begriff sind nicht erlaubt, mehrere VERSCHIEDENE Sprach-Tags dagegen schon (ein Begriff darf mehrsprachig benannt sein)."@de ;
+    sh:message  "A glossary term (skos:Concept) needs at least one skos:prefLabel (the term), and none of them may be blank. At most one skos:prefLabel per language tag (SKOS S14) - several untagged or same-language-tagged prefLabels on one term are not allowed, but several DIFFERENT language tags are (a term may be labelled in several languages)."@en , "Ein Glossar-Begriff (skos:Concept) braucht mindestens ein skos:prefLabel (der Fachbegriff), und keines davon darf leer sein. Hoechstens ein skos:prefLabel je Sprach-Tag (SKOS S14) - mehrere untagged oder gleichsprachige prefLabels an einem Begriff sind nicht erlaubt, mehrere VERSCHIEDENE Sprach-Tags dagegen schon (ein Begriff darf mehrsprachig benannt sein)."@de ;
     sh:severity sh:Violation .
 
 ulshapes:Term-definition
     a sh:PropertyShape ;
     sh:path     skos:definition ;
+    sh:minCount 1 ;
+    sh:minLength 1 ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;
-    sh:message  "At most one skos:definition per language tag (SKOS S14) - several untagged or same-language-tagged definitions on one term are not allowed, but several DIFFERENT language tags are (a term's meaning may be explained in several languages)."@en , "Hoechstens ein skos:definition je Sprach-Tag (SKOS S14) - mehrere untagged oder gleichsprachige Definitionen an einem Begriff sind nicht erlaubt, mehrere VERSCHIEDENE Sprach-Tags dagegen schon (die Bedeutung eines Begriffs darf mehrsprachig erklaert sein)."@de ;
+    sh:message  "A glossary term needs at least one skos:definition, and none of them may be blank. At most one skos:definition per language tag (SKOS S14) - several untagged or same-language-tagged definitions on one term are not allowed, but several DIFFERENT language tags are (a term's meaning may be explained in several languages)."@en , "Hoechstens ein skos:definition je Sprach-Tag (SKOS S14) - mehrere untagged oder gleichsprachige Definitionen an einem Begriff sind nicht erlaubt, mehrere VERSCHIEDENE Sprach-Tags dagegen schon (die Bedeutung eines Begriffs darf mehrsprachig erklaert sein)."@de ;
     sh:severity sh:Violation .
 
 ulshapes:Term-inScheme
@@ -69,6 +79,55 @@ ulshapes:Term-related
     sh:nodeKind sh:IRI ;
     sh:message  "skos:related is optional and may name several terms, but every value must be another skos:Concept (IRI) - an associative, non-hierarchical relation between two terms. Use skos:broader instead when one term specializes the other."@en , "skos:related ist optional und darf mehrere Begriffe nennen, jeder Wert muss aber ein anderer skos:Concept (IRI) sein - eine assoziative, nicht-hierarchische Beziehung zwischen zwei Begriffen. Wenn ein Begriff den anderen spezialisiert, gehoert dorthin skos:broader."@de ;
     sh:severity sh:Violation .
+
+# SPARQL-based constraints ($this-scoped, one focus node at a time - the same form as
+# ashapes:ADR-consideredOption-atMostOneChosen): SHACL Core has no "value is not the focus node" and
+# no transitive path check that reports a cycle.
+
+ulshapes:Term-broader-notSelf
+    a sh:SPARQLConstraint ;
+    sh:message  "A glossary term must not be its own broader term (skos:broader)."@en , "Ein Glossar-Begriff darf nicht sein eigener uebergeordneter Begriff sein (skos:broader)."@de ;
+    sh:severity sh:Violation ;
+    sh:select   """
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+        SELECT $this
+        WHERE { $this skos:broader $this . }
+    """ .
+
+ulshapes:Term-related-notSelf
+    a sh:SPARQLConstraint ;
+    sh:message  "A glossary term must not be related to itself (skos:related)."@en , "Ein Glossar-Begriff darf nicht mit sich selbst verwandt sein (skos:related)."@de ;
+    sh:severity sh:Violation ;
+    sh:select   """
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+        SELECT $this
+        WHERE { $this skos:related $this . }
+    """ .
+
+ulshapes:Term-broader-noCycle
+    a sh:SPARQLConstraint ;
+    sh:message  "The skos:broader chain of a glossary term must not lead back to the term - a cycle of broader terms is not allowed."@en , "Die skos:broader-Kette eines Glossar-Begriffs darf nicht zu ihm zurueckfuehren - ein Zyklus uebergeordneter Begriffe ist nicht erlaubt."@de ;
+    sh:severity sh:Violation ;
+    sh:select   """
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+        SELECT $this
+        WHERE { $this skos:broader ?next . ?next skos:broader+ $this . }
+    """ .
+
+# The term is one word: its skos:prefLabel carries the same lexical form under every language tag;
+# only the definition is translated (kogn-io/arknet#502).
+ulshapes:Term-prefLabel-oneWord
+    a sh:SPARQLConstraint ;
+    sh:message  "A glossary term carries one word under every language tag: all its skos:prefLabel values must have the same text, only the definition is translated."@en , "Ein Glossar-Begriff traegt unter jedem Sprach-Tag dasselbe Wort: alle seine skos:prefLabel-Werte muessen denselben Text haben, uebersetzt wird nur die Definition."@de ;
+    sh:severity sh:Violation ;
+    sh:select   """
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+        SELECT DISTINCT $this
+        WHERE {
+            $this skos:prefLabel ?label1 , ?label2 .
+            FILTER (STR(?label1) != STR(?label2))
+        }
+    """ .
 
 
 ##############################################################################

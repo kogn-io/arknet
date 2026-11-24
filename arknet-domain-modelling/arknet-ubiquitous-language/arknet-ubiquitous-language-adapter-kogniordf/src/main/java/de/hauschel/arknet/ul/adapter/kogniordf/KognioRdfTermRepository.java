@@ -363,8 +363,8 @@ public class KognioRdfTermRepository implements TermRepository {
     /**
      * Asserts just enough of {@code targetIri}'s own already-persisted state into
      * {@code assertedContext} for {@code ulshapes:TermShape} to accept it as a shape-legal
-     * reference target of {@code skos:broader} or {@code skos:related}: its type and one
-     * {@code skos:prefLabel} literal.
+     * reference target of {@code skos:broader} or {@code skos:related}: its type, one
+     * {@code skos:prefLabel} literal and one {@code skos:definition} literal.
      *
      * <p><strong>Why a bare type assertion is not enough here.</strong> Unlike a cross-BC
      * reference (e.g. the requirements adapter asserting a term's type for
@@ -376,11 +376,15 @@ public class KognioRdfTermRepository implements TermRepository {
      * {@code sh:class} constraint on the referencing subject - it also makes {@code
      * ulshapes:TermShape} itself target {@code targetIri}, whose real {@code skos:prefLabel} the
      * gate's isolated candidate+assertedContext graph does not otherwise contain, which fails
-     * {@code Term-prefLabel}'s {@code sh:minCount 1}. Asserting one of the target's real {@code
-     * skos:prefLabel} literals closes that gap ({@code Term-definition} carries no
-     * {@code sh:minCount}, and {@code Term-inScheme} is {@code sh:Warning}-severity only, so
-     * neither needs the same treatment). Which literal is picked when the target legally carries
-     * several (a store-first, multi-language term) is deliberately unspecified - this exists only
+     * {@code Term-prefLabel}'s {@code sh:minCount 1}, and likewise {@code Term-definition}'s
+     * {@code sh:minCount 1} (kogn-io/arknet#742). Asserting one of the target's real {@code
+     * skos:prefLabel} and one of its real {@code skos:definition} literals closes that gap
+     * ({@code Term-inScheme} is {@code sh:Warning}-severity only, so it needs no such treatment).
+     * One literal of each is enough for the SPARQL constraints of {@code ulshapes:TermShape} as
+     * well: a single label cannot disagree with another, and the target's own broader chain is
+     * re-checked by {@link #assertNoCycle}, not by the gate. Which literal is picked when the
+     * target legally carries several (a store-first, multi-language term) is deliberately
+     * unspecified - this exists only
      * to keep the gate from re-rejecting a target whose full state already satisfies the shape,
      * not to re-verify a shape this class's own {@link #create}/{@link #attemptUpdate} already
      * enforced when that target was written.</p>
@@ -393,6 +397,11 @@ public class KognioRdfTermRepository implements TermRepository {
                 + " <" + PREF_LABEL_PROPERTY + "> ?prefLabel } } LIMIT 1";
         selectFn.apply(query).findFirst()
                 .ifPresent(row -> assertedContext.add(target, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(row, "prefLabel")));
+        String definitionQuery = "SELECT ?definition WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+                + SparqlTerms.iriRef(targetIri) + " <" + DEFINITION_PROPERTY + "> ?definition } } LIMIT 1";
+        selectFn.apply(definitionQuery).findFirst()
+                .ifPresent(row -> assertedContext.add(target, rdf.createIRI(DEFINITION_PROPERTY),
+                        literalOf(row, "definition")));
     }
 
     /**
@@ -792,8 +801,13 @@ public class KognioRdfTermRepository implements TermRepository {
                 assertedContext.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), toLiteral(existing));
             }
         }
-        // skos:definition's shape carries sh:uniqueLang but no sh:minCount - nothing to assert
-        // for the gate to still pass when it is left untouched.
+        // skos:definition carries sh:minCount 1 (kogn-io/arknet#742): an untouched definition is
+        // asserted for the gate exactly like an untouched prefLabel above.
+        if (definition == null) {
+            for (LocalizedLiteral existing : current.definitions) {
+                assertedContext.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), toLiteral(existing));
+            }
+        }
         if (broader != null) {
             if (broader.isPresent()) {
                 writeCandidate.add(subjectIri, rdf.createIRI(BROADER_PROPERTY), rdf.createIRI(broaderTargetIri));
