@@ -98,7 +98,26 @@ public final class KognioRdfResourceRepositoryFactory {
     public static ResourceRepository over(final DatasetLifecycle lifecycle, final DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        return new KognioRdfResourceRepository(buildFunnel(lifecycle, displayLocale));
+        return over(lifecycle, displayLocale, shapes(), union(ontologyResources()));
+    }
+
+    /**
+     * The store side over explicit shapes and ontologies instead of the indexed files - for a test
+     * that brings rule data of its own.
+     *
+     * @param lifecycle     the dataset lifecycle every project dataset is acquired from
+     * @param displayLocale the language a rejected write is reported in
+     * @param shapes        the shapes with their rule data
+     * @param ontology      the model ontologies the gate reasons over
+     * @return the repository
+     */
+    static ResourceRepository over(final DatasetLifecycle lifecycle, final DisplayLocale displayLocale,
+            final ReadableGraph shapes, final ReadableGraph ontology) {
+        ShaclWriteGate gate = new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, ontology,
+                new ValidationOptions(true), displayLocale);
+        return new KognioRdfResourceRepository(new VersionedWriteFunnel(lifecycle, gate, ContentGraph.GRAPH_IRI,
+                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT),
+                new TransitionConditions(new ShaclValidationRdf4j(), shapes, ontology, displayLocale));
     }
 
     /**
@@ -111,20 +130,6 @@ public final class KognioRdfResourceRepositoryFactory {
     public static HandleLookup handles(final DatasetLifecycle lifecycle) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         return new KognioRdfHandleLookup(new HandleResolver(new StoreReader(lifecycle), Prefixes.defaults()));
-    }
-
-    /**
-     * The funnel generic access writes through, with the one gate over every resource type.
-     *
-     * @param lifecycle     the dataset lifecycle
-     * @param displayLocale the language a rejected write is reported in
-     * @return the funnel
-     */
-    static VersionedWriteFunnel buildFunnel(final DatasetLifecycle lifecycle, final DisplayLocale displayLocale) {
-        ShaclWriteGate gate = new ShaclWriteGate(new ShaclValidationRdf4j(), shapes(), union(ontologyResources()),
-                new ValidationOptions(true), displayLocale);
-        return new VersionedWriteFunnel(lifecycle, gate, ContentGraph.GRAPH_IRI,
-                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT);
     }
 
     /**

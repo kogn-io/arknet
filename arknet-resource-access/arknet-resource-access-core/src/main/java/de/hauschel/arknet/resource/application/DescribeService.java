@@ -85,7 +85,10 @@ public final class DescribeService implements DescribeResourceType {
     private static final IRI SPARQL = sh("sparql");
     private static final String LANG_STRING = "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString";
     private static final Set<String> RULE_DATA = Set.of(ArkresVocabulary.RESOURCE_TYPE,
-            ArkresVocabulary.CODE_PREFIX, ArkresVocabulary.CHILD_KIND, ArkresVocabulary.ORDERED_BY);
+            ArkresVocabulary.CODE_PREFIX, ArkresVocabulary.CHILD_KIND, ArkresVocabulary.ORDERED_BY,
+            ArkresVocabulary.INITIAL_STATUS, ArkresVocabulary.TRANSITION_CLASS, ArkresVocabulary.TRANSITION,
+            ArkresVocabulary.FROM_STATUS, ArkresVocabulary.TO_STATUS, ArkresVocabulary.CONDITION,
+            ArkresVocabulary.DELETABLE_IN);
     private static final String EXAMPLE_TEXT = "Example text";
     private static final String EXAMPLE_STRING = "example";
     private static final String DEFAULT_LANGUAGE = "en";

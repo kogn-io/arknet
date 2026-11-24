@@ -84,7 +84,12 @@ class DescribeRealStoreTest {
                 catalog.types().stream().map(type -> type.iri()).collect(Collectors.toSet()));
         assertTrue(catalog.activityVocabulary().stream().anyMatch(term -> term.name().equals("arkres:Create")
                 && !term.comment().isBlank()), catalog.activityVocabulary().toString());
-        assertTrue(catalog.activityVocabulary().stream().noneMatch(term -> term.name().equals("arkres:codePrefix")));
+        for (String ruleData : List.of("arkres:codePrefix", "arkres:initialStatus", "arkres:Transition",
+                "arkres:transition", "arkres:fromStatus", "arkres:toStatus", "arkres:condition",
+                "arkres:deletableIn")) {
+            assertTrue(catalog.activityVocabulary().stream().noneMatch(term -> term.name().equals(ruleData)),
+                    ruleData);
+        }
         assertTrue(catalog.prefixDeclarations().contains("@prefix arkres: <https://w3id.org/arknet/resource#> ."),
                 catalog.prefixDeclarations());
     }

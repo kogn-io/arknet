@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -227,6 +228,11 @@ class SubmitRealStoreConcurrencyTest {
         @Override
         public ChildFragments childFragments(final IRI parent, final ReadableGraph current) {
             return delegate.childFragments(parent, current);
+        }
+
+        @Override
+        public List<String> violations(final IRI shape, final IRI focus, final ReadableGraph data) {
+            return delegate.violations(shape, focus, data);
         }
 
         @Override

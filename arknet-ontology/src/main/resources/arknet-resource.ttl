@@ -22,8 +22,10 @@
 #  RULE DATA: besides the activities it declares the annotations the shape
 #         files carry for generic access - which classes are resource types
 #         and the prefix of their business codes, which edges own their
-#         children and by which property those are ordered. Shapes check a
-#         resource; these annotations say how a resource is built.
+#         children and by which property those are ordered, and which field
+#         carries a status with its initial value, its transitions and the
+#         statuses a resource may be deleted in. Shapes check a resource;
+#         these annotations say how a resource is built and how it moves.
 ##############################################################################
 
 @prefix arkres:  <https://w3id.org/arknet/resource#> .
@@ -136,3 +138,39 @@ arkres:childKind a owl:DatatypeProperty ;
 arkres:orderedBy a owl:ObjectProperty ;
     rdfs:label   "ordered by"@en , "geordnet nach"@de ;
     rdfs:comment "Set on a property shape of a field that owns its children: the property carrying each child's position, counted from 1 without gaps."@en , "An einer Property-Shape eines Feldes gesetzt, das seine Kinder besitzt: die Property, die die Position jedes Kindes traegt, lueckenlos ab 1 gezaehlt."@de .
+
+##############################################################################
+#  4. STATUS RULE DATA ON SHAPES
+##############################################################################
+
+arkres:initialStatus a rdf:Property ;
+    rdfs:label   "initial status"@en , "Anfangsstatus"@de ;
+    rdfs:comment "Set on a property shape: the field is the status of the resource, and every created resource starts with this value. A create that writes no status gets it; a create that writes another one is rejected. A resource type whose shapes mark no status field has no status rules."@en , "An einer Property-Shape gesetzt: das Feld ist der Status der Ressource, und jede angelegte Ressource beginnt mit diesem Wert. Ein Anlegen ohne Status bekommt ihn; ein Anlegen mit einem anderen wird abgelehnt. Ein Ressourcentyp, dessen Shapes kein Statusfeld auszeichnen, hat keine Statusregeln."@de .
+
+arkres:Transition a owl:Class ;
+    rdfs:label   "Transition"@en , "Uebergang"@de ;
+    rdfs:comment "An allowed change of a status field from one value to another. A document changes a status only along a transition the status field declares; writing the status a resource already has is no change."@en , "Eine erlaubte Aenderung eines Statusfelds von einem Wert auf einen anderen. Ein Dokument aendert einen Status nur entlang eines Uebergangs, den das Statusfeld deklariert; den Status, den eine Ressource schon hat, erneut zu schreiben, ist keine Aenderung."@de .
+
+arkres:transition a owl:ObjectProperty ;
+    rdfs:range   arkres:Transition ;
+    rdfs:label   "transition"@en , "Uebergang"@de ;
+    rdfs:comment "Set on the property shape of a status field: one transition that field allows."@en , "An der Property-Shape eines Statusfelds gesetzt: ein Uebergang, den dieses Feld erlaubt."@de .
+
+arkres:fromStatus a rdf:Property ;
+    rdfs:domain  arkres:Transition ;
+    rdfs:label   "from status"@en , "von Status"@de ;
+    rdfs:comment "The status a transition leaves, in the state before the document."@en , "Der Status, den ein Uebergang verlaesst, im Stand vor dem Dokument."@de .
+
+arkres:toStatus a rdf:Property ;
+    rdfs:domain  arkres:Transition ;
+    rdfs:label   "to status"@en , "nach Status"@de ;
+    rdfs:comment "The status a transition reaches, in the state after the document."@en , "Der Status, den ein Uebergang erreicht, im Stand nach dem Dokument."@de .
+
+arkres:condition a owl:ObjectProperty ;
+    rdfs:domain  arkres:Transition ;
+    rdfs:label   "condition"@en , "Bedingung"@de ;
+    rdfs:comment "A shape that must hold for the resource whose status the transition changes, in its state after the document, together with the resources it reaches after the document. Checked only at the transition, not after it, and never on a resource that is merely referenced; a condition on an edge target is a shape that follows the edge. The shape names no target of its own, so the write gate never checks it."@en , "Eine Shape, die fuer die Ressource gelten muss, deren Status der Uebergang aendert, in ihrem Stand nach dem Dokument, zusammen mit den Ressourcen, die sie danach erreicht. Geprueft nur beim Uebergang, nicht danach, und nie an einer Ressource, die nur referenziert wird; eine Bedingung an ein Kantenziel ist eine Shape, die der Kante folgt. Die Shape nennt kein eigenes Ziel, darum prueft das Schreib-Gate sie nie."@de .
+
+arkres:deletableIn a rdf:Property ;
+    rdfs:label   "deletable in"@en , "loeschbar in"@de ;
+    rdfs:comment "Set on the property shape of a status field: a status in which a resource may be deleted. A status field naming none leaves deletion open in every status; one naming some rejects a delete in any other status."@en , "An der Property-Shape eines Statusfelds gesetzt: ein Status, in dem eine Ressource geloescht werden darf. Ein Statusfeld, das keinen nennt, laesst das Loeschen in jedem Status offen; eines, das welche nennt, lehnt ein Loeschen in jedem anderen Status ab."@de .

@@ -42,9 +42,11 @@ final class KognioRdfResourceRepository implements ResourceRepository {
     private static final RDF RDF_FACTORY = new SimpleRdf();
 
     private final VersionedWriteFunnel funnel;
+    private final TransitionConditions conditions;
 
-    KognioRdfResourceRepository(final VersionedWriteFunnel funnel) {
+    KognioRdfResourceRepository(final VersionedWriteFunnel funnel, final TransitionConditions conditions) {
         this.funnel = Objects.requireNonNull(funnel, "funnel");
+        this.conditions = Objects.requireNonNull(conditions, "conditions");
     }
 
     @Override
@@ -95,6 +97,11 @@ final class KognioRdfResourceRepository implements ResourceRepository {
         @Override
         public ChildFragments childFragments(final IRI parent, final ReadableGraph current) {
             return funnel.childFragments(parent, current);
+        }
+
+        @Override
+        public List<String> violations(final IRI shape, final IRI focus, final ReadableGraph data) {
+            return conditions.violations(shape, focus, data);
         }
 
         @Override

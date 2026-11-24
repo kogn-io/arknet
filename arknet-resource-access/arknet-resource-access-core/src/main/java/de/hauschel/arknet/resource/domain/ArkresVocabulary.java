@@ -71,6 +71,27 @@ public final class ArkresVocabulary {
     /** {@code arkres:orderedBy} - the property carrying the position of an owned child. */
     public static final String ORDERED_BY = NAMESPACE + "orderedBy";
 
+    /** {@code arkres:initialStatus} - marks a status field; the value every created resource starts with. */
+    public static final String INITIAL_STATUS = NAMESPACE + "initialStatus";
+
+    /** {@code arkres:Transition} - an allowed change of a status field from one value to another. */
+    public static final String TRANSITION_CLASS = NAMESPACE + "Transition";
+
+    /** {@code arkres:transition} - one transition a status field allows. */
+    public static final String TRANSITION = NAMESPACE + "transition";
+
+    /** {@code arkres:fromStatus} - the status a transition leaves. */
+    public static final String FROM_STATUS = NAMESPACE + "fromStatus";
+
+    /** {@code arkres:toStatus} - the status a transition reaches. */
+    public static final String TO_STATUS = NAMESPACE + "toStatus";
+
+    /** {@code arkres:condition} - a shape the resource must satisfy after the document to take a transition. */
+    public static final String CONDITION = NAMESPACE + "condition";
+
+    /** {@code arkres:deletableIn} - a status in which a resource of a status field may be deleted. */
+    public static final String DELETABLE_IN = NAMESPACE + "deletableIn";
+
     private ArkresVocabulary() {
     }
 }

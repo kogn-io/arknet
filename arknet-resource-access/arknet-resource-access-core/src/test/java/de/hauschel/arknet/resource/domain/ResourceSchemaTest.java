@@ -4,13 +4,16 @@
 package de.hauschel.arknet.resource.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
@@ -21,7 +24,9 @@ import io.kogn.rdf.terms.vocab.VocabRdfs;
 /**
  * The guards of the rule data: an owned field names exactly one class for its children, since that
  * class is what puts a new child under its node shape. And the two readings over shapes and
- * ontology: the fields of a type, and the edges pointing at it.
+ * ontology: the fields of a type, and the edges pointing at it. And the status rule data: which field
+ * is the status of a type, with its initial value, its transitions and the statuses a resource may be
+ * deleted in.
  */
 class ResourceSchemaTest {
 
@@ -46,6 +51,12 @@ class ResourceSchemaTest {
     private static final IRI SUB_CLASS_OF = RDF_FACTORY.createIRI(VocabRdfs.NAMESPACE + "subClassOf");
     private static final IRI SEVERITY = RDF_FACTORY.createIRI(SHACL + "severity");
     private static final IRI WARNING = RDF_FACTORY.createIRI(SHACL + "Warning");
+    private static final IRI STATE = RDF_FACTORY.createIRI("https://example.org/vocab#state");
+    private static final IRI OPEN = RDF_FACTORY.createIRI("https://example.org/vocab#Open");
+    private static final IRI DONE = RDF_FACTORY.createIRI("https://example.org/vocab#Done");
+    private static final IRI CLOSED = RDF_FACTORY.createIRI("https://example.org/vocab#Closed");
+    private static final IRI STATE_SHAPE = RDF_FACTORY.createIRI(SHAPES + "Base-state");
+    private static final IRI CONDITION_SHAPE = RDF_FACTORY.createIRI(SHAPES + "DoneNeedsNote");
 
     @Test
     void anOwnedFieldTakesTheOneClassItsShapesName() {
@@ -122,6 +133,145 @@ class ResourceSchemaTest {
         Set<IRI> edges = ResourceSchema.of(shapes, ontology).edgesTo(Set.of(SPECIAL));
 
         assertEquals(Set.of(SHAPED_EDGE, EITHER_EDGE, RANGED_EDGE), edges);
+    }
+
+    @Test
+    void theStatusFieldOfATypeIsReadOffTheShapeOfASuperclass() {
+        Graph shapes = statusShapes();
+        Graph ontology = RDF_FACTORY.createGraph();
+        ontology.add(SPECIAL, SUB_CLASS_OF, BASE);
+
+        ResourceSchema.StatusField status = ResourceSchema.of(shapes, ontology).statusField(Set.of(SPECIAL))
+                .orElseThrow();
+
+        assertEquals(STATE, status.property());
+        assertEquals(OPEN, status.initial());
+        assertEquals(List.of(CONDITION_SHAPE), status.transition(OPEN, DONE).orElseThrow().conditions());
+        assertTrue(status.transition(DONE, OPEN).orElseThrow().conditions().isEmpty());
+        assertTrue(status.transition(OPEN, CLOSED).isEmpty());
+        assertTrue(status.deletableIn(OPEN));
+        assertFalse(status.deletableIn(DONE));
+    }
+
+    @Test
+    void aTypeWithoutStatusRuleDataHasNoStatusField() {
+        Graph shapes = statusShapes();
+        nodeShape(shapes, "Unrelated", OTHER_CLASS, UNRELATED_FIELD);
+
+        assertTrue(ResourceSchema.of(shapes, RDF_FACTORY.createGraph()).statusField(Set.of(OTHER_CLASS)).isEmpty());
+    }
+
+    @Test
+    void aStatusFieldNamingNoDeletableStatusLeavesDeletionOpen() {
+        Graph shapes = statusShapes();
+        removeAll(shapes, STATE_SHAPE, RDF_FACTORY.createIRI(ArkresVocabulary.DELETABLE_IN), OPEN);
+
+        ResourceSchema.StatusField status = ResourceSchema.of(shapes, RDF_FACTORY.createGraph())
+                .statusField(Set.of(BASE)).orElseThrow();
+
+        assertTrue(status.deletableIn(DONE));
+    }
+
+    @Test
+    void aTransitionWithoutTargetStatusFailsTheSchema() {
+        Graph shapes = statusShapes();
+        BlankNode broken = RDF_FACTORY.createBlankNode();
+        shapes.add(STATE_SHAPE, RDF_FACTORY.createIRI(ArkresVocabulary.TRANSITION), broken);
+        shapes.add(broken, RDF_FACTORY.createIRI(ArkresVocabulary.FROM_STATUS), DONE);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, RDF_FACTORY.createGraph()));
+
+        assertTrue(failure.getMessage().contains(ArkresVocabulary.TO_STATUS), failure.getMessage());
+    }
+
+    @Test
+    void aTransitionOnAShapeThatMarksNoStatusFieldFailsTheSchema() {
+        Graph shapes = statusShapes();
+        removeAll(shapes, STATE_SHAPE, RDF_FACTORY.createIRI(ArkresVocabulary.INITIAL_STATUS), OPEN);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, RDF_FACTORY.createGraph()));
+
+        assertTrue(failure.getMessage().contains(ArkresVocabulary.INITIAL_STATUS), failure.getMessage());
+    }
+
+    @Test
+    void aConditionThatIsNoNamedShapeFailsTheSchema() {
+        Graph shapes = statusShapes();
+        BlankNode transition = RDF_FACTORY.createBlankNode();
+        shapes.add(STATE_SHAPE, RDF_FACTORY.createIRI(ArkresVocabulary.TRANSITION), transition);
+        shapes.add(transition, RDF_FACTORY.createIRI(ArkresVocabulary.FROM_STATUS), DONE);
+        shapes.add(transition, RDF_FACTORY.createIRI(ArkresVocabulary.TO_STATUS), CLOSED);
+        shapes.add(transition, RDF_FACTORY.createIRI(ArkresVocabulary.CONDITION), RDF_FACTORY.createBlankNode());
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, RDF_FACTORY.createGraph()));
+
+        assertTrue(failure.getMessage().contains(ArkresVocabulary.CONDITION), failure.getMessage());
+    }
+
+    @Test
+    void aConditionNamingNoDeclaredShapeFailsTheSchema() {
+        Graph shapes = statusShapes();
+        removeAll(shapes, CONDITION_SHAPE, null, null);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, RDF_FACTORY.createGraph()));
+
+        assertTrue(failure.getMessage().contains(CONDITION_SHAPE.getIRIString()), failure.getMessage());
+    }
+
+    @Test
+    void aConditionWithATargetOfItsOwnFailsTheSchema() {
+        Graph shapes = statusShapes();
+        shapes.add(CONDITION_SHAPE, RDF_FACTORY.createIRI(SHACL + "targetClass"), BASE);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, RDF_FACTORY.createGraph()));
+
+        assertTrue(failure.getMessage().contains("no target of its own"), failure.getMessage());
+    }
+
+    @Test
+    void twoStatusFieldsOnOneTypeFailTheSchema() {
+        Graph shapes = statusShapes();
+        IRI second = RDF_FACTORY.createIRI(SHAPES + "Base-other");
+        shapes.add(RDF_FACTORY.createIRI(SHAPES + "Base"), RDF_FACTORY.createIRI(SHACL + "property"), second);
+        shapes.add(second, PATH, UNRELATED_FIELD);
+        shapes.add(second, RDF_FACTORY.createIRI(ArkresVocabulary.INITIAL_STATUS), OPEN);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, RDF_FACTORY.createGraph()));
+
+        assertTrue(failure.getMessage().contains(BASE.getIRIString()), failure.getMessage());
+    }
+
+    private static Graph statusShapes() {
+        Graph shapes = RDF_FACTORY.createGraph();
+        IRI node = RDF_FACTORY.createIRI(SHAPES + "Base");
+        shapes.add(node, RDF_FACTORY.createIRI(SHACL + "targetClass"), BASE);
+        shapes.add(node, RDF_FACTORY.createIRI(SHACL + "property"), STATE_SHAPE);
+        shapes.add(STATE_SHAPE, PATH, STATE);
+        shapes.add(STATE_SHAPE, RDF_FACTORY.createIRI(ArkresVocabulary.INITIAL_STATUS), OPEN);
+        shapes.add(STATE_SHAPE, RDF_FACTORY.createIRI(ArkresVocabulary.DELETABLE_IN), OPEN);
+        BlankNode toDone = transition(shapes, OPEN, DONE);
+        shapes.add(toDone, RDF_FACTORY.createIRI(ArkresVocabulary.CONDITION), CONDITION_SHAPE);
+        shapes.add(CONDITION_SHAPE, VocabRdf.TYPE, RDF_FACTORY.createIRI(SHACL + "NodeShape"));
+        transition(shapes, DONE, OPEN);
+        return shapes;
+    }
+
+    private static void removeAll(final Graph graph, final IRI subject, final IRI predicate, final IRI object) {
+        graph.stream(subject, predicate, object).toList().forEach(graph::remove);
+    }
+
+    private static BlankNode transition(final Graph shapes, final IRI from, final IRI to) {
+        BlankNode transition = RDF_FACTORY.createBlankNode();
+        shapes.add(STATE_SHAPE, RDF_FACTORY.createIRI(ArkresVocabulary.TRANSITION), transition);
+        shapes.add(transition, RDF_FACTORY.createIRI(ArkresVocabulary.FROM_STATUS), from);
+        shapes.add(transition, RDF_FACTORY.createIRI(ArkresVocabulary.TO_STATUS), to);
+        return transition;
     }
 
     private static void nodeShape(final Graph shapes, final String name, final IRI target, final IRI field) {

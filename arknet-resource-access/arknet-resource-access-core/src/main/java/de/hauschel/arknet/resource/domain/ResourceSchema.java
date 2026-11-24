@@ -49,6 +49,16 @@ import io.kogn.rdf.terms.vocab.VocabRdfs;
  * at it - every property a property shape constrains to the class or a superclass by
  * {@code sh:class} or by an {@code sh:or} over classes, and every property the ontology gives such a
  * class as {@code rdfs:range}.</p>
+ *
+ * <p>A third kind of rule data marks the <em>status field</em> of a type: a property shape carrying
+ * {@code arkres:initialStatus} makes its {@code sh:path} the status of every class its node shape
+ * targets, and of their subclasses. On the same property shape, {@code arkres:transition} names
+ * each allowed change ({@code arkres:fromStatus}, {@code arkres:toStatus}, any number of
+ * {@code arkres:condition} shapes, each a named shape) and {@code arkres:deletableIn} each status a
+ * resource may be deleted in. Transition or deletability data on a shape that marks no status field,
+ * a transition without exactly one source and one target status, a condition that is no IRI, no
+ * shape the shapes declare, or a shape with a target of its own, and two status fields for one class
+ * are defects of the rule data and fail construction.</p>
  */
 public final class ResourceSchema {
 
@@ -64,13 +74,16 @@ public final class ResourceSchema {
 
     private final Map<IRI, Optional<String>> codePrefixByType;
     private final Map<IRI, OwnedField> ownedFieldByProperty;
+    private final Map<IRI, StatusField> statusFieldByClass;
     private final ReadableGraph shapes;
     private final ReadableGraph ontology;
 
     private ResourceSchema(final Map<IRI, Optional<String>> codePrefixByType,
-            final Map<IRI, OwnedField> ownedFieldByProperty, final ReadableGraph shapes, final ReadableGraph ontology) {
+            final Map<IRI, OwnedField> ownedFieldByProperty, final Map<IRI, StatusField> statusFieldByClass,
+            final ReadableGraph shapes, final ReadableGraph ontology) {
         this.codePrefixByType = Map.copyOf(codePrefixByType);
         this.ownedFieldByProperty = Map.copyOf(ownedFieldByProperty);
+        this.statusFieldByClass = Map.copyOf(statusFieldByClass);
         this.shapes = shapes;
         this.ontology = ontology;
     }
@@ -130,7 +143,115 @@ public final class ResourceSchema {
                         + " and " + field);
             }
         });
-        return new ResourceSchema(prefixes, owned, shapes, ontology);
+        return new ResourceSchema(prefixes, owned, statusFields(shapes), shapes, ontology);
+    }
+
+    /**
+     * Reads the status rule data: for every property shape marking a status field, the classes its
+     * node shapes target.
+     */
+    private static Map<IRI, StatusField> statusFields(final ReadableGraph shapes) {
+        IRI initialStatus = RDF_FACTORY.createIRI(ArkresVocabulary.INITIAL_STATUS);
+        for (String marker : List.of(ArkresVocabulary.TRANSITION, ArkresVocabulary.DELETABLE_IN)) {
+            shapes.stream(null, RDF_FACTORY.createIRI(marker), null).map(Triple::getSubject)
+                    .filter(shape -> single(shapes, shape, initialStatus).isEmpty())
+                    .findFirst()
+                    .ifPresent(shape -> {
+                        throw new IllegalStateException(shape + " carries " + marker + " but no "
+                                + ArkresVocabulary.INITIAL_STATUS + ": transitions and deletable statuses belong"
+                                + " to the property shape that marks the status field");
+                    });
+        }
+        Map<IRI, StatusField> byClass = new HashMap<>();
+        shapes.stream(null, initialStatus, null).map(Triple::getSubject).distinct().forEach(shape -> {
+            StatusField field = statusField(shapes, shape);
+            List<IRI> classes = shapes.stream(null, PROPERTY, shape).map(Triple::getSubject)
+                    .flatMap(node -> shapes.stream(node, TARGET_CLASS, null))
+                    .map(Triple::getObject)
+                    .filter(IRI.class::isInstance)
+                    .map(IRI.class::cast)
+                    .toList();
+            if (classes.isEmpty()) {
+                throw new IllegalStateException(shape + " marks a status field, but no node shape with an"
+                        + " sh:targetClass holds it");
+            }
+            classes.forEach(type -> {
+                StatusField earlier = byClass.putIfAbsent(type, field);
+                if (earlier != null && !earlier.equals(field)) {
+                    throw new IllegalStateException(type + " has two status fields: " + earlier.property() + " and "
+                            + field.property());
+                }
+            });
+        });
+        return byClass;
+    }
+
+    private static StatusField statusField(final ReadableGraph shapes, final BlankNodeOrIRI shape) {
+        IRI property = single(shapes, shape, PATH).filter(IRI.class::isInstance).map(IRI.class::cast)
+                .orElseThrow(() -> new IllegalStateException(shape + " marks a status field but has no sh:path"));
+        RDFTerm initial = exactlyOne(shapes, shape, ArkresVocabulary.INITIAL_STATUS);
+        List<Transition> transitions = shapes.stream(shape, RDF_FACTORY.createIRI(ArkresVocabulary.TRANSITION), null)
+                .map(Triple::getObject)
+                .map(transition -> {
+                    if (!(transition instanceof BlankNodeOrIRI node)) {
+                        throw new IllegalStateException(shape + " names the literal " + transition + " as "
+                                + ArkresVocabulary.TRANSITION);
+                    }
+                    List<IRI> conditions = shapes.stream(node, RDF_FACTORY.createIRI(ArkresVocabulary.CONDITION), null)
+                            .map(Triple::getObject)
+                            .map(condition -> {
+                                if (condition instanceof IRI named) {
+                                    return declaredCondition(shapes, property, named);
+                                }
+                                throw new IllegalStateException("a transition of " + property + " names " + condition
+                                        + " as " + ArkresVocabulary.CONDITION + "; a condition is a named shape");
+                            })
+                            .sorted((a, b) -> a.getIRIString().compareTo(b.getIRIString()))
+                            .toList();
+                    return new Transition(exactlyOne(shapes, node, ArkresVocabulary.FROM_STATUS),
+                            exactlyOne(shapes, node, ArkresVocabulary.TO_STATUS), conditions);
+                })
+                .toList();
+        Set<Transition> distinct = Set.copyOf(transitions);
+        Set<RDFTerm> deletable = shapes.stream(shape, RDF_FACTORY.createIRI(ArkresVocabulary.DELETABLE_IN), null)
+                .map(Triple::getObject)
+                .collect(Collectors.toUnmodifiableSet());
+        long pairs = distinct.stream().map(transition -> List.of(transition.from(), transition.to())).distinct()
+                .count();
+        if (pairs < distinct.size()) {
+            throw new IllegalStateException(property + " declares one transition twice with different conditions");
+        }
+        return new StatusField(property, initial, distinct, deletable);
+    }
+
+    /**
+     * A condition is a shape the shapes declare and that targets nothing itself: a target would make
+     * the write gate check it on every write, not only at the transition.
+     */
+    private static IRI declaredCondition(final ReadableGraph shapes, final IRI property, final IRI condition) {
+        if (shapes.stream(condition, null, null).findAny().isEmpty()) {
+            throw new IllegalStateException("a transition of " + property + " names " + condition + " as "
+                    + ArkresVocabulary.CONDITION + ", but the shapes declare no such shape");
+        }
+        shapes.stream(condition, null, null).map(Triple::getPredicate)
+                .filter(predicate -> predicate.getIRIString().startsWith(SHACL + "target"))
+                .findFirst()
+                .ifPresent(target -> {
+                    throw new IllegalStateException("the condition " + condition + " of a transition of " + property
+                            + " carries " + target + "; a condition names no target of its own, the engine checks"
+                            + " it on the changed resource only");
+                });
+        return condition;
+    }
+
+    private static RDFTerm exactlyOne(final ReadableGraph shapes, final BlankNodeOrIRI subject, final String property) {
+        List<RDFTerm> values = shapes.stream(subject, RDF_FACTORY.createIRI(property), null).map(Triple::getObject)
+                .distinct().toList();
+        if (values.size() != 1) {
+            throw new IllegalStateException("status rule data on " + subject + " names " + values.size()
+                    + " values of " + property + "; it takes exactly one");
+        }
+        return values.get(0);
     }
 
     /**
@@ -261,6 +382,26 @@ public final class ResourceSchema {
     }
 
     /**
+     * The status field of a node typed with {@code types}: the one a shape on one of the types or a
+     * superclass marks with {@code arkres:initialStatus}.
+     *
+     * @param types the {@code rdf:type} values of a node
+     * @return the status field, empty for a type without status rules
+     * @throws IllegalStateException if the types reach two different status fields
+     */
+    public Optional<StatusField> statusField(final Set<IRI> types) {
+        Set<StatusField> found = types.stream()
+                .flatMap(type -> superclasses(type).stream())
+                .map(statusFieldByClass::get)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (found.size() > 1) {
+            throw new IllegalStateException("a node typed " + types + " reaches two status fields: " + found);
+        }
+        return found.stream().findFirst();
+    }
+
+    /**
      * The owned field a property names.
      *
      * @param property a field's property
@@ -311,5 +452,63 @@ public final class ResourceSchema {
      * @param childClass the class the shapes require of a child; every new child is typed with it
      */
     public record OwnedField(IRI property, String childKind, IRI orderedBy, IRI childClass) {
+    }
+
+    /**
+     * The field carrying the status of a resource type, with the rules of its changes.
+     *
+     * @param property    the field's property
+     * @param initial     the status every created resource starts with
+     * @param transitions the allowed changes
+     * @param deletable   the statuses a resource may be deleted in; empty for deletion in every status
+     */
+    public record StatusField(IRI property, RDFTerm initial, Set<Transition> transitions, Set<RDFTerm> deletable) {
+
+        /**
+         * Copies the sets.
+         */
+        public StatusField {
+            transitions = Set.copyOf(transitions);
+            deletable = Set.copyOf(deletable);
+        }
+
+        /**
+         * The transition from one status to another.
+         *
+         * @param from the status before the document
+         * @param to   the status after it
+         * @return the transition, empty if the field allows no such change
+         */
+        public Optional<Transition> transition(final RDFTerm from, final RDFTerm to) {
+            return transitions.stream().filter(transition -> transition.from().equals(from)
+                    && transition.to().equals(to)).findFirst();
+        }
+
+        /**
+         * Whether a resource in {@code status} may be deleted.
+         *
+         * @param status the status before the document
+         * @return true if the field names no deletable status or names this one
+         */
+        public boolean deletableIn(final RDFTerm status) {
+            return deletable.isEmpty() || deletable.contains(status);
+        }
+    }
+
+    /**
+     * One allowed change of a status field.
+     *
+     * @param from       the status it leaves
+     * @param to         the status it reaches
+     * @param conditions the named shapes the resource must satisfy after the document, sorted
+     */
+    public record Transition(RDFTerm from, RDFTerm to, List<IRI> conditions) {
+
+        /**
+         * Copies the conditions.
+         */
+        public Transition {
+            conditions = List.copyOf(conditions);
+        }
     }
 }
