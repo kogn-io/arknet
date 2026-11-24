@@ -12,9 +12,20 @@
 
     <artifactId>arknet-project-registry</artifactId>
     <packaging>pom</packaging>
-    <description>Project Registry bounded context (BC-5): aggregates the arknet-project component, its only component</description>
+    <description>Project Registry bounded context (BC-5): aggregates the arknet-project component, its only component, and the context's ontology module</description>
 
     <modules>
+        <module>arknet-project-registry-ontology</module>
         <module>arknet-project</module>
     </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-project-registry-ontology</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 </project>

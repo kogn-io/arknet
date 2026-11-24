@@ -1,10 +1,10 @@
 # arknet-ontology
 
-Nur .ttl-Ressourcen, kein Java: die Ontologien und Shapes, die keinem der vier Modellkontexte gehoeren.
-Live sind `arknet-core.ttl` (generisches Utility-Vokabular `arknet:`, auf dem die Kontext-Ontologien aufbauen), `arknet-resource.ttl` (`arkres:`, Vokabular der Komponente `arknet-resource-access`), `arknet-provenance.ttl` (`arkprov:`, von keinem Schreibpfad genutzt) sowie `arknet-project.ttl` und `project-shapes.ttl` der Projekt-Registry (BC-5).
+Nur .ttl-Ressourcen, kein Java: die Ontologien und Shapes, die keinem Bounded Context gehoeren.
+Live sind `arknet-core.ttl` (generisches Utility-Vokabular `arknet:`, auf dem die Kontext-Ontologien aufbauen), `arknet-resource.ttl` (`arkres:`, Vokabular der Komponente `arknet-resource-access`), `arknet-provenance.ttl` (`arkprov:`, von keinem Schreibpfad genutzt).
 `parked/` haelt `arknet-privacy.ttl` und `privacy-shapes.ttl` (`arkpriv:`).
 
-Die Ontologie und die Shapes von Produkt & Anforderungen, Domain Modelling, Architektur & Entscheidungen und Akteur liefert je ein Ontologiemodul unter dem Kontext-Parent: `arknet-product-requirements-ontology`, `arknet-domain-modelling-ontology`, `arknet-architecture-decisions-ontology`, `arknet-actor-ontology`.
+Die Ontologie und die Shapes von Produkt & Anforderungen, Domain Modelling, Architektur & Entscheidungen, Akteur und Projekt-Registry liefert je ein Ontologiemodul unter dem Kontext-Parent: `arknet-product-requirements-ontology`, `arknet-domain-modelling-ontology`, `arknet-architecture-decisions-ontology`, `arknet-actor-ontology`, `arknet-project-registry-ontology`.
 Jedes Ontologiemodul, dieses eingeschlossen, nennt seine live Dateien in `META-INF/arknet/ontology.index`, eine je Zeile mit absolutem Classpath-Namen; `parked/` steht nie im Index.
 `arknet-resource-access` findet die Dateien der Kontexte allein ueber diese Indizes, `arknet-architecture-tests` leitet daraus jeden Ontologie-Abgleich ab, `OntologyIndexListsEveryShippedFileTest` haelt jeden Index gegen den Inhalt seines Moduls fest.
 Die Classpath-Namen sind ueber alle Ontologiemodule eindeutig und Vertrag: die typgenauen Out-Adapter laden ihre Dateien per Namen.
@@ -20,7 +20,7 @@ nach `src/main/resources/` erst, wenn ein BC oder eine Komponente das Modul tats
 
 Die Shape-Dateien der Modellressourcen in den vier Kontext-Ontologiemodulen tragen neben den Shapes Regeldaten des generischen Ressourcenzugriffs im Namespace `arkres:` (`arknet-resource.ttl`): welche Klassen Ressourcentypen sind und mit welchem Praefix ihr fachlicher Code beginnt (an der Klasse), welche Felder ihre Kinder besitzen und nach welcher Property diese geordnet sind (an der Property-Shape).
 SHACL wertet diese Tripel nicht aus; die typgenauen Kerne ignorieren sie, `arknet-resource-access` liest allein sie und nennt keinen Ressourcentyp im Code.
-`project-shapes.ttl` traegt keine, weil die Projekt-Registry im System-Dataset liegt, das der generische Zugriff nicht schreibt.
+`project-shapes.ttl` (`arknet-project-registry-ontology`) traegt keine, weil die Projekt-Registry im System-Dataset liegt, das der generische Zugriff nicht schreibt.
 
 Ein Namespace-Name behauptet nicht mehr, als der Namespace traegt.
 Ein Namespace-Name ist publizierte Sprache, er steht in jedem Tripel: ein Name, der einen ganzen Gegenstandsbereich ankuendigt, aber live nur einen einzelnen Begriff traegt, fuehrt jeden in die Irre, der aus der IRI auf den Inhalt schliesst.

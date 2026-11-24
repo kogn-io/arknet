@@ -48,7 +48,7 @@ the skill's generic methodology.
 Feeds the skill's `next` mode (pick the module due for review without anyone having to decide).
 Priority: 1 = port/contract-carrying and cross-cutting (weighted above the rest per the module
 weighting above), 2 = the components (one row each), 3 = self-check/meta module. `arknet-ontology` and the
-four context ontology modules (`arknet-product-requirements-ontology`, `arknet-domain-modelling-ontology`,
+five context ontology modules (`arknet-project-registry-ontology`, `arknet-product-requirements-ontology`, `arknet-domain-modelling-ontology`,
 `arknet-architecture-decisions-ontology`, `arknet-actor-ontology`) carry no Java ports (`.ttl` resources only)
 and are out of scope for this skill entirely — not listed.
 
