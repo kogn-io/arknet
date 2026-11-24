@@ -209,6 +209,16 @@ class DescribeRealStoreTest {
     }
 
     @Test
+    void theExampleOfARequirementWritesTheInitialStatusItsShapeRequires() {
+        // when
+        ResourceTypeDescription description = DESCRIBER.describe("arkreq:FunctionalRequirement", "en");
+
+        // then
+        assertTrue(description.example().contains("arkreq:status arkreq:Proposed"), description.example());
+        assertFalse(description.example().contains("arkreq:Accepted"), description.example());
+    }
+
+    @Test
     void theDescriptionDeclaresEveryPrefixItsFieldsNameNotOnlyThoseOfTheExample() {
         // when
         ResourceTypeDescription description = DESCRIBER.describe("arkarch:ArchitectureDecisionRecord", "en");

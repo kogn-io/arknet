@@ -137,10 +137,7 @@ class ResourceAccessWiringTest {
         onEnabledStore((context, tools, anchor) -> {
             // given
             String type = "arkreq:FunctionalRequirement";
-            // TODO #742: arkreq:status is set by hand - the typed read path skips a requirement without
-            // one, and the example writes only what the shapes require.
-            String document = example(tools.describe(null, type, null, anchor))
-                    .replace("a " + type, "a " + type + " ;\n    arkreq:status arkreq:Proposed");
+            String document = example(tools.describe(null, type, null, anchor));
 
             // when
             String created = tools.submit(null, document, anchor);

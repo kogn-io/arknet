@@ -285,8 +285,6 @@ class SubmitOnTypedStoreDataTest {
             BoundedContext upstream = store.addBoundedContext("Modelling");
 
             // when
-            // TODO #742: arkreq:status is set by hand - the typed read path skips a requirement without
-            // one, and the shapes do not require it; the initial status as data belongs to #742.
             SubmitResult result = store.submit("[] a arkres:Create ; arkres:object _:term .\n"
                     + "_:term a skos:Concept ; skos:prefLabel \"Customer\"@en ; skos:definition \"Buys.\"@en ;"
                     + " skos:related <" + iri(term) + "> .\n"
@@ -296,13 +294,11 @@ class SubmitOnTypedStoreDataTest {
                     + "[] a arkres:Create ; arkres:object _:fr .\n"
                     + "_:fr a arkreq:FunctionalRequirement ; dcterms:title \"Confirm an order\"@en ;"
                     + " dcterms:description \"The user confirms an order.\"@en ;"
-                    + " arkreq:status arkreq:Proposed ;"
                     + " arkreq:usesTerm <" + iri(term) + "> ; oslc_rm:constrainedBy _:con ;"
                     + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"Confirmed.\"@en ] .\n"
                     + "[] a arkres:Create ; arkres:object _:nfr .\n"
                     + "_:nfr a arkreq:NonFunctionalRequirement ; dcterms:title \"Fast\"@en ;"
                     + " dcterms:description \"Within a second.\"@en ; arkreq:qualityCategory \"performance\" ;"
-                    + " arkreq:status arkreq:Proposed ;"
                     + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"Fast.\"@en ] .\n"
                     + "[] a arkres:Create ; arkres:object _:actor .\n"
                     + "_:actor a arkproc:SystemActor ; arknet:name \"Store\"@en .\n"

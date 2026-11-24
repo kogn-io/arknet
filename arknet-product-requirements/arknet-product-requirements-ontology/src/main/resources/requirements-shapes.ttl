@@ -111,9 +111,14 @@ rshapes:Requirement-priority
 rshapes:Requirement-status
     a sh:PropertyShape ;
     sh:path     arkreq:status ;
+    sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:in       ( arkreq:Proposed arkreq:Accepted ) ;
-    sh:message  "arkreq:status must be Proposed or Accepted. Implemented, Verified, Rejected and Deprecated stay vocabulary of the ontology, but the requirement lifecycle does not reach them."@en , "arkreq:status muss Proposed oder Accepted sein. Implemented, Verified, Rejected und Deprecated bleiben Vokabular der Ontologie, der Requirement-Lebenszyklus erreicht sie aber nicht."@de ;
+    arkres:initialStatus arkreq:Proposed ;
+    arkres:transition [ arkres:fromStatus arkreq:Proposed ; arkres:toStatus arkreq:Accepted ] ,
+                      [ arkres:fromStatus arkreq:Accepted ; arkres:toStatus arkreq:Proposed ] ;
+    arkres:deletableIn arkreq:Proposed , arkreq:Accepted ;
+    sh:message  "A Requirement needs exactly one arkreq:status, Proposed or Accepted. Implemented, Verified, Rejected and Deprecated stay vocabulary of the ontology, but the requirement lifecycle does not reach them."@en , "Requirement braucht genau einen arkreq:status, Proposed oder Accepted. Implemented, Verified, Rejected und Deprecated bleiben Vokabular der Ontologie, der Requirement-Lebenszyklus erreicht sie aber nicht."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-usesTerm
@@ -194,6 +199,7 @@ rshapes:NFR-qualityCategory
     sh:path     arkreq:qualityCategory ;
     sh:minCount 1 ;
     sh:datatype xsd:string ;
+    arkres:immutable true ;
     sh:message  "A Non-Functional Requirement should state an arkreq:qualityCategory (e.g. performance, security, reliability)."@en , "Non-Functional Requirement sollte eine arkreq:qualityCategory nennen (z.B. performance, security, reliability)."@de ;
     sh:severity sh:Warning .
 

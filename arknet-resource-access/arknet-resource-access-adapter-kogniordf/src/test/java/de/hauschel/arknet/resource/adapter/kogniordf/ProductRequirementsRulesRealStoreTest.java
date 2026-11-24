@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
@@ -27,6 +29,7 @@ import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
+import de.hauschel.arknet.persistence.RdfNode;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.domain.SubmitRejectedException;
@@ -112,23 +115,157 @@ class ProductRequirementsRulesRealStoreTest {
 
     // -- requirement status, priority, quality category ---------------------------------------
 
-    @ParameterizedTest
-    @ValueSource(strings = {"Implemented", "Verified", "Rejected", "Deprecated"})
-    void aRequirementStatusBeyondProposedAndAcceptedIsRejected(final String status) {
+    @Test
+    void aRequirementStartsProposedWithoutAStatusInTheDocument() {
+        // given
+        String requirement = storedRequirement();
+
+        // then
+        assertEquals(Set.of(REQ + "Proposed"), statusOf(requirement));
+    }
+
+    @Test
+    void aRequirementCreatedProposedIsAcceptedAndOneCreatedAcceptedIsRejected() {
         // when
-        SubmitRejectedException rejected = rejected(functionalRequirement("arkreq:status arkreq:" + status + " ;"));
+        assertDoesNotThrow(() -> submit.submit(SubmitRealStoreTest.PROJECT,
+                PREFIXES + functionalRequirement("arkreq:status arkreq:Proposed ;")));
+        SubmitRejectedException rejected = rejected(functionalRequirement("arkreq:status arkreq:Accepted ;"));
 
         // then
         assertTrue(rejected.getMessage().contains(REQ + "status"), rejected.getMessage());
-        assertTrue(rejected.getMessage().contains("Proposed or Accepted"), rejected.getMessage());
-        assertNothingStored("FR-1");
+        assertNothingStored("FR-2");
+    }
+
+    @Test
+    void aRequirementMovesBetweenProposedAndAccepted() {
+        // given
+        String requirement = storedRequirement();
+
+        // when
+        submit.submit(SubmitRealStoreTest.PROJECT, PREFIXES + setStatus(requirement, "Accepted"));
+        Set<String> accepted = statusOf(requirement);
+        submit.submit(SubmitRealStoreTest.PROJECT, PREFIXES + setStatus(requirement, "Proposed"));
+
+        // then
+        assertEquals(Set.of(REQ + "Accepted"), accepted);
+        assertEquals(Set.of(REQ + "Proposed"), statusOf(requirement));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Implemented", "Verified", "Rejected", "Deprecated"})
+    void aRequirementCannotMoveToAStatusBeyondProposedAndAccepted(final String status) {
+        // given
+        String requirement = storedRequirement();
+
+        // when
+        SubmitRejectedException rejected = rejected(setStatus(requirement, status));
+
+        // then
+        assertTrue(rejected.getMessage().contains(REQ + "status"), rejected.getMessage());
+        assertEquals(Set.of(REQ + "Proposed"), statusOf(requirement));
+    }
+
+    @Test
+    void aRequirementWithoutStatusIsRejectedByTheShape() {
+        // when
+        SubmitRejectedException rejected = rejected(
+                "[] a arkres:Update ; arkres:object <" + storedRequirement() + "> ; arkres:clear arkreq:status .\n");
+
+        // then
+        assertTrue(rejected.getMessage().contains(REQ + "status"), rejected.getMessage());
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"Proposed", "Accepted"})
-    void aRequirementStatusProposedOrAcceptedIsAccepted(final String status) {
-        assertDoesNotThrow(() -> submit.submit(SubmitRealStoreTest.PROJECT,
-                PREFIXES + functionalRequirement("arkreq:status arkreq:" + status + " ;")));
+    void aRequirementIsDeletableInEveryStatus(final String status) {
+        // given
+        String requirement = storedRequirement();
+        if (status.equals("Accepted")) {
+            submit.submit(SubmitRealStoreTest.PROJECT, PREFIXES + setStatus(requirement, status));
+        }
+
+        // when
+        submit.submit(SubmitRealStoreTest.PROJECT,
+                PREFIXES + "[] a arkres:Delete ; arkres:object <" + requirement + "> .\n");
+
+        // then
+        assertTrue(statusOf(requirement).isEmpty());
+    }
+
+    @Test
+    void theTypeOfARequirementAndOfAConstraintStays() {
+        // given
+        String requirement = storedRequirement();
+        String constraint = SubmitRealStoreTest.iriOf(submit.submit(SubmitRealStoreTest.PROJECT, PREFIXES
+                + "[] a arkres:Create ; arkres:object _:con .\n"
+                + "_:con a arkreq:TechnicalConstraint ; dcterms:title \"Java 25\"@en ;"
+                + " arkreq:constraintStatement \"Runs on Java 25.\"@en .\n"), "TCON-1");
+
+        // when / then
+        for (String resource : new String[] {requirement, constraint}) {
+            SubmitRejectedException rejected = rejected("[] a arkres:Update ; arkres:object <" + resource
+                    + "> ; arkres:set [ a arkreq:NonFunctionalRequirement ] .\n");
+            assertTrue(rejected.getMessage().contains("the type stays"), rejected.getMessage());
+        }
+    }
+
+    @Test
+    void theQualityCategoryOfANonFunctionalRequirementStaysAsTheCreateWroteIt() {
+        // given
+        String nfr = SubmitRealStoreTest.iriOf(submit.submit(SubmitRealStoreTest.PROJECT, PREFIXES
+                + nonFunctionalRequirement("arkreq:qualityCategory \"performance\" ;")), "NFR-1");
+
+        // when
+        SubmitRejectedException changed = rejected("[] a arkres:Update ; arkres:object <" + nfr
+                + "> ; arkres:set [ arkreq:qualityCategory \"security\" ] .\n");
+        SubmitRejectedException cleared = rejected(
+                "[] a arkres:Update ; arkres:object <" + nfr + "> ; arkres:clear arkreq:qualityCategory .\n");
+
+        // then
+        assertTrue(changed.getMessage().contains(REQ + "qualityCategory"), changed.getMessage());
+        assertTrue(cleared.getMessage().contains(REQ + "qualityCategory"), cleared.getMessage());
+        assertEquals(Set.of("performance"), valuesOf(nfr, REQ + "qualityCategory"));
+    }
+
+    @Test
+    void aQualityCategoryCannotBeAddedAfterTheCreateLeftItOut() {
+        // given
+        String nfr = SubmitRealStoreTest.iriOf(submit.submit(SubmitRealStoreTest.PROJECT, PREFIXES
+                + nonFunctionalRequirement("")), "NFR-1");
+
+        // when
+        SubmitRejectedException rejected = rejected("[] a arkres:Update ; arkres:object <" + nfr
+                + "> ; arkres:set [ arkreq:qualityCategory \"performance\" ] .\n");
+
+        // then
+        assertTrue(rejected.getMessage().contains(REQ + "qualityCategory"), rejected.getMessage());
+        assertTrue(valuesOf(nfr, REQ + "qualityCategory").isEmpty());
+    }
+
+    private static String setStatus(final String requirement, final String status) {
+        return "[] a arkres:Update ; arkres:object <" + requirement + "> ; arkres:set [ arkreq:status arkreq:"
+                + status + " ] .\n";
+    }
+
+    private static String nonFunctionalRequirement(final String extraFields) {
+        return "[] a arkres:Create ; arkres:object _:nfr .\n"
+                + "_:nfr a arkreq:NonFunctionalRequirement ; dcterms:title \"Fast\"@en ;"
+                + " dcterms:description \"Within a second.\"@en ; " + extraFields
+                + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"Below one second.\"@en ] .\n";
+    }
+
+    private Set<String> statusOf(final String requirement) {
+        return valuesOf(requirement, REQ + "status");
+    }
+
+    private Set<String> valuesOf(final String resource, final String property) {
+        return reader.outgoing(SubmitRealStoreTest.PROJECT, resource).stream()
+                .filter(triple -> triple.predicate().equals(property))
+                .map(triple -> switch (triple.object()) {
+                    case RdfNode.Resource node -> node.iri();
+                    case RdfNode.Literal literal -> literal.lexicalForm();
+                })
+                .collect(Collectors.toSet());
     }
 
     @Test
