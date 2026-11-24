@@ -73,6 +73,8 @@ import de.hauschel.arknet.resource.domain.SubmittedDocument.Update;
  * {@code rdf:type}; an inline value written as a blank node is held to the classes it is typed with,
  * and is rejected if one of them is a class of resources ({@link ResourceSchema#isResourceClass}):
  * every resource is stored under an IRI, never as a blank node inside another one's slice.
+ * A literal the document writes to a multilingual field ({@code sh:uniqueLang true}) carries a
+ * language tag; a stored literal without one stays and blocks nothing.
  * The shapes are open, so this is checked on the document, not on the stored slice: a stored
  * predicate outside the fields stays, and a clear or a remove-from may still take it away.</p>
  *
@@ -131,6 +133,7 @@ final class DocumentApplication {
     private final Set<IRI> deleted = new HashSet<>();
     private final Map<IRI, Set<IRI>> deletedTypes = new HashMap<>();
     private final Map<Set<IRI>, Set<IRI>> fieldsByTypes = new HashMap<>();
+    private final Map<Set<IRI>, Set<IRI>> multilingualByTypes = new HashMap<>();
     private final Map<Set<IRI>, Set<IRI>> immutableByTypes = new HashMap<>();
     private final Map<String, Integer> nextNumber = new HashMap<>();
     private final Map<IRI, Transition> transitions = new LinkedHashMap<>();
@@ -227,6 +230,7 @@ final class DocumentApplication {
             }
             Optional<OwnedField> owned = schema.ownedField(property);
             if (owned.isEmpty()) {
+                rejectUntaggedText(property, types, "a created resource", triple.getObject());
                 addValue(slice, subject, property, triple.getObject());
                 return;
             }
@@ -343,6 +347,8 @@ final class DocumentApplication {
                     removeValues(slice, subject, field, old -> language.isEmpty()
                             || language.equals(languageOf(old)));
                 }
+                Set<IRI> types = typesOf(slice, subject);
+                newValues.forEach(value -> rejectUntaggedText(field, types, subject.getIRIString(), value));
                 newValues.forEach(value -> addValue(slice, subject, field, value));
             });
         }
@@ -368,6 +374,7 @@ final class DocumentApplication {
             problems.add(subject.getIRIString() + " already holds " + value + " in " + addTo.field().getIRIString());
             return;
         }
+        rejectUntaggedText(addTo.field(), typesOf(slice, subject), subject.getIRIString(), addTo.value());
         addValue(slice, subject, addTo.field(), addTo.value());
     }
 
@@ -442,6 +449,8 @@ final class DocumentApplication {
             IRI property = triple.getPredicate();
             if (!property.equals(field.orderedBy()) && !VocabRdf.TYPE.equals(property)
                     && known(property, childTypes, "a new child in " + field.property().getIRIString())) {
+                rejectUntaggedText(property, childTypes, "a new child in " + field.property().getIRIString(),
+                        triple.getObject());
                 addValue(slice, name, property, triple.getObject());
             }
         });
@@ -517,7 +526,27 @@ final class DocumentApplication {
             source.stream(node, null, null)
                     .filter(triple -> known(triple.getPredicate(), types,
                             "a blank node written inline as the value of " + property.getIRIString()))
-                    .forEach(triple -> addValue(slice, node, triple.getPredicate(), triple.getObject()));
+                    .forEach(triple -> {
+                        rejectUntaggedText(triple.getPredicate(), types,
+                                "a blank node written inline as the value of " + property.getIRIString(),
+                                triple.getObject());
+                        addValue(slice, node, triple.getPredicate(), triple.getObject());
+                    });
+        }
+    }
+
+    /**
+     * Records a rejection when {@code value} is a literal without a language tag written to a
+     * multilingual field of a node typed with {@code types} ({@link ResourceSchema#multilingualFields}).
+     * Checked on the document only, like the known fields: a stored literal without a tag stays and
+     * blocks nothing.
+     */
+    private void rejectUntaggedText(final IRI property, final Set<IRI> types, final String node,
+            final RDFTerm value) {
+        if (value instanceof Literal literal && literal.getLanguageTag().isEmpty()
+                && multilingualByTypes.computeIfAbsent(types, schema::multilingualFields).contains(property)) {
+            problems.add(property.getIRIString() + " of " + node + " is text in a language: write each value"
+                    + " with a language tag, such as \"" + literal.getLexicalForm() + "\"@en, not without one");
         }
     }
 

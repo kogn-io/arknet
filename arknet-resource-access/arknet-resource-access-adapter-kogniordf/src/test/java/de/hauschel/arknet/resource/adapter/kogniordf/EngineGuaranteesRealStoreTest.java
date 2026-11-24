@@ -22,6 +22,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
@@ -214,6 +216,67 @@ class EngineGuaranteesRealStoreTest {
         // then
         assertTrue(rejected.getMessage().contains(rule), rejected.getMessage());
         assertTrue(reader.findByIdentifier(PROJECT, "FR-1").isEmpty());
+    }
+
+    // --- language tags: every text a document writes carries one ------------------------------
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "a skos:Concept ; skos:prefLabel \"Model\" ; skos:definition \"What the store holds.\"@en"
+                + " | skos/core#prefLabel",
+        "a arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ; dcterms:description \"Writes it.\" ;"
+                + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"First one.\"@en ]"
+                + " | http://purl.org/dc/terms/description",
+        "a arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ; dcterms:description \"Writes it.\"@en ;"
+                + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"First one.\" ]"
+                + " | requirements#criterionText"})
+    void aTextWrittenWithoutALanguageTagIsRejected(final String resource, final String field) {
+        // when
+        SubmitRejectedException rejected = rejected("[] a arkres:Create ; arkres:object _:x .\n_:x " + resource
+                + " .\n");
+
+        // then
+        assertTrue(rejected.getMessage().contains(field), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("language tag"), rejected.getMessage());
+    }
+
+    @Test
+    void aTextSetWithoutALanguageTagIsRejected() {
+        // given
+        String fr = storedRequirement();
+
+        // when
+        SubmitRejectedException rejected = rejected("[] a arkres:Update ; arkres:object <" + fr + "> ;"
+                + " arkres:set [ dcterms:title \"Rewrite\" ] .\n");
+
+        // then
+        assertTrue(rejected.getMessage().contains("http://purl.org/dc/terms/title of " + fr), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("language tag"), rejected.getMessage());
+        assertEquals(1, reader.history(PROJECT, fr).size());
+    }
+
+    @Test
+    void aStoredTextWithoutALanguageTagBlocksNeitherItsResourceNorItsNeighbours() {
+        // given: a constraint whose title was stored untagged, as written before the tag was mandatory
+        String constraint = SubmitRealStoreTest.iriOf(submit.submit(PROJECT, PREFIXES
+                + "[] a arkres:Create ; arkres:object _:con .\n_:con a arkreq:TechnicalConstraint ;"
+                + " dcterms:title \"Java 25\"@en ; arkreq:constraintStatement \"Runs on Java 25.\"@en .\n"), "TCON-1");
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <" + constraint
+                        + "> <http://purl.org/dc/terms/title> \"Java 25 untagged\" } }");
+                return null;
+            });
+        }
+
+        // when
+        submit.submit(PROJECT, PREFIXES + "[] a arkres:Update ; arkres:object <" + constraint + "> ;"
+                + " arkres:set [ arkreq:constraintStatement \"Runs on Java 25 or later.\"@en ] .\n");
+        submit.submit(PROJECT, PREFIXES + REQUIREMENT + "; oslc_rm:constrainedBy <" + constraint + "> .\n");
+
+        // then
+        assertTrue(values(constraint, "http://purl.org/dc/terms/title").contains("Java 25 untagged"));
+        assertTrue(!reader.findByIdentifier(PROJECT, "FR-1").isEmpty());
     }
 
     // --- helpers -------------------------------------------------------------------------------

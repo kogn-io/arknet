@@ -61,12 +61,16 @@ class DocumentApplicationTest {
     private static final IRI DETAIL = vocab("Detail");
     private static final IRI DETAILS = vocab("detail");
     private static final IRI NOTE = vocab("note");
+    private static final IRI LABEL = vocab("label");
+    private static final IRI CAPTION = vocab("caption");
 
     private static final IRI OBJECT = arkres(ArkresVocabulary.OBJECT);
     private static final IRI SET = arkres(ArkresVocabulary.SET);
     private static final IRI CLEAR = arkres(ArkresVocabulary.CLEAR);
     private static final IRI FIELD = arkres(ArkresVocabulary.FIELD);
     private static final IRI VALUE = arkres(ArkresVocabulary.VALUE);
+
+    private static final RDFTerm TRUE = RDF_FACTORY.createLiteral("true", VocabXsd.BOOLEAN);
 
     private static final ResourceSchema SCHEMA = ResourceSchema.of(shapes(), ontology());
 
@@ -205,6 +209,71 @@ class DocumentApplicationTest {
         assertTrue(rejected.getMessage().contains("written inline as the value of " + REFERS_TO.getIRIString()
                 + " is typed " + type.getIRIString()), rejected.getMessage());
         assertTrue(rejected.getMessage().contains(ArkresVocabulary.CREATE), rejected.getMessage());
+    }
+
+    @Test
+    void aCreateWritingATextFieldWithoutALanguageTagIsRejected() {
+        BlankNode thing = create(THING);
+        document.add(thing, LABEL, literal("untagged"));
+
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, this::apply);
+
+        assertTrue(rejected.getMessage().contains(LABEL.getIRIString() + " of a created resource"),
+                rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("language tag"), rejected.getMessage());
+    }
+
+    @Test
+    void aCreateWritingATextFieldWithALanguageTagIsApplied() {
+        BlankNode thing = create(THING);
+        document.add(thing, LABEL, RDF_FACTORY.createLiteral("tagged", "en"));
+
+        assertDoesNotThrow(this::apply);
+    }
+
+    @Test
+    void aNewChildWritingATextFieldWithoutALanguageTagIsRejected() {
+        BlankNode thing = create(THING);
+        BlankNode part = RDF_FACTORY.createBlankNode();
+        document.add(thing, PARTS, part);
+        document.add(part, POSITION, RDF_FACTORY.createLiteral("1", VocabXsd.INTEGER));
+        document.add(part, CAPTION, literal("untagged"));
+
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, this::apply);
+
+        assertTrue(rejected.getMessage().contains(CAPTION.getIRIString()), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("language tag"), rejected.getMessage());
+    }
+
+    @Test
+    void aSetOrAddToOfATextFieldWithoutALanguageTagIsRejected() {
+        IRI stored = storedThing("T-1");
+        BlankNode values = update(stored);
+        document.add(values, LABEL, literal("untagged set"));
+        BlankNode addTo = RDF_FACTORY.createBlankNode();
+        document.add(addTo, VocabRdf.TYPE, arkres(ArkresVocabulary.ADD_TO));
+        document.add(addTo, OBJECT, storedThing("T-2"));
+        document.add(addTo, FIELD, LABEL);
+        document.add(addTo, VALUE, literal("untagged add"));
+
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, this::apply);
+
+        assertTrue(rejected.getMessage().contains(LABEL.getIRIString() + " of " + stored.getIRIString()),
+                rejected.getMessage());
+        assertTrue(rejected.getMessage().contains(LABEL.getIRIString() + " of " + STORE + "T-2"),
+                rejected.getMessage());
+    }
+
+    @Test
+    void aStoredTextWithoutALanguageTagBlocksNoDocument() {
+        IRI stored = storedThing("T-1");
+        batch.add(stored, LABEL, literal("legacy untagged"));
+        BlankNode values = update(stored);
+        document.add(values, NAME, literal("renamed"));
+
+        assertDoesNotThrow(this::apply);
+
+        assertTrue(batch.updated.get(stored).stream(stored, LABEL, literal("legacy untagged")).findAny().isPresent());
     }
 
     @Test
@@ -374,7 +443,8 @@ class DocumentApplicationTest {
         shapes.add(THING, VocabRdf.TYPE, arkres(ArkresVocabulary.RESOURCE_TYPE));
         shapes.add(THING, arkres(ArkresVocabulary.CODE_PREFIX), literal("T-"));
         shapes.add(SPECIAL, VocabRdf.TYPE, arkres(ArkresVocabulary.RESOURCE_TYPE));
-        nodeShape(shapes, "Thing", THING, NAME, REFERS_TO, PARTS, DETAILS);
+        nodeShape(shapes, "Thing", THING, NAME, REFERS_TO, PARTS, DETAILS, LABEL);
+        shapes.add(RDF_FACTORY.createIRI(SHAPES + "Thing-label"), shacl("uniqueLang"), TRUE);
         nodeShape(shapes, "Detail", DETAIL, NOTE);
         IRI refers = RDF_FACTORY.createIRI(SHAPES + "Thing-refersTo");
         shapes.add(refers, shacl("class"), THING);
@@ -382,7 +452,8 @@ class DocumentApplicationTest {
         shapes.add(owned, shacl("class"), PART);
         shapes.add(owned, arkres(ArkresVocabulary.CHILD_KIND), literal("Part"));
         shapes.add(owned, arkres(ArkresVocabulary.ORDERED_BY), POSITION);
-        nodeShape(shapes, "Part", PART, TEXT, POSITION, REFERS_TO);
+        nodeShape(shapes, "Part", PART, TEXT, POSITION, REFERS_TO, CAPTION);
+        shapes.add(RDF_FACTORY.createIRI(SHAPES + "Part-caption"), shacl("uniqueLang"), TRUE);
         nodeShape(shapes, "Base", BASE, BASE_FIELD);
         return shapes;
     }

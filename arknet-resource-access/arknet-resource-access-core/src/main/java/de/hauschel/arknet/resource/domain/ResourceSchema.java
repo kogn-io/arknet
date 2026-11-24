@@ -92,6 +92,7 @@ public final class ResourceSchema {
     private static final IRI SUB_CLASS_OF = RDF_FACTORY.createIRI(VocabRdfs.NAMESPACE + "subClassOf");
     private static final IRI RANGE = RDF_FACTORY.createIRI(VocabRdfs.NAMESPACE + "range");
     private static final IRI IMMUTABLE = RDF_FACTORY.createIRI(ArkresVocabulary.IMMUTABLE);
+    private static final IRI UNIQUE_LANG = RDF_FACTORY.createIRI(SHACL + "uniqueLang");
     private static final String XSD_BOOLEAN = "http://www.w3.org/2001/XMLSchema#boolean";
     private static final String XSD_DATE = "http://www.w3.org/2001/XMLSchema#date";
     private static final IRI DATATYPE = RDF_FACTORY.createIRI(SHACL + "datatype");
@@ -559,6 +560,30 @@ public final class ResourceSchema {
                 .map(Triple::getObject)
                 .filter(property -> property instanceof BlankNodeOrIRI node
                         && shapes.stream(node, IMMUTABLE, null).findAny().isPresent())
+                .flatMap(property -> single(shapes, property, PATH).stream())
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * The fields of a node typed with {@code types} that hold text in a language: those of
+     * {@link #fields} whose property shape carries {@code sh:uniqueLang true}. A document writes each
+     * of their values with a language tag.
+     *
+     * @param types the {@code rdf:type} values of a node
+     * @return the multilingual field properties
+     */
+    public Set<IRI> multilingualFields(final Set<IRI> types) {
+        return types.stream()
+                .flatMap(type -> nodeShapes(type).stream())
+                .distinct()
+                .flatMap(node -> shapes.stream(node, PROPERTY, null))
+                .map(Triple::getObject)
+                .filter(property -> property instanceof BlankNodeOrIRI node
+                        && shapes.stream(node, UNIQUE_LANG, null).map(Triple::getObject)
+                                .anyMatch(value -> value instanceof Literal literal
+                                        && Boolean.parseBoolean(literal.getLexicalForm())))
                 .flatMap(property -> single(shapes, property, PATH).stream())
                 .filter(IRI.class::isInstance)
                 .map(IRI.class::cast)

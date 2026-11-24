@@ -435,12 +435,11 @@ class ProductRequirementsRulesRealStoreTest {
         assertNothingStored("FR-1");
     }
 
+    /** Untagged texts are left out: submit rejects a text without a language tag before this rule. */
     static Stream<Arguments> collidingCriteria() {
         return Stream.of(
                 Arguments.of("en and en", "\"Works fine.\"@en", "\"Works fine.\"@en"),
                 Arguments.of("en and de", "\"Works fine.\"@en", "\"Works fine.\"@de"),
-                Arguments.of("en and untagged", "\"Works fine.\"@en", "\"Works fine.\""),
-                Arguments.of("untagged and untagged", "\"Works fine.\"", "\"Works fine.\""),
                 Arguments.of("de and de, the first also in en", "\"Other text.\"@en ; arkreq:criterionText"
                         + " \"Works fine.\"@de", "\"Works fine.\"@de"));
     }

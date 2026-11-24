@@ -42,12 +42,12 @@ How to read a row:
 |---|---|
 | `shape` | 58 |
 | `rule data` | 15 |
-| `engine` | 31 |
-| `exception` | 5 |
+| `engine` | 32 |
+| `exception` | 4 |
 | **total** | **109** |
 
-Section 6 holds 9 documented exceptions (the 5 rows above and 4 without a row of their own),
-section 7 holds 8 intended differences, section 8 holds 10 items that are no rule.
+Section 6 holds 9 documented exceptions (the 4 rows above and 5 without a row of their own),
+section 7 holds 7 intended differences, section 8 holds 10 items that are no rule.
 
 ## 1. Product & Requirements (BC-1)
 
@@ -191,7 +191,7 @@ Rules every typed core enforces for its own resources, enforced once by the engi
 | A status changes only by a declared transition, conditions checked at the transition | `Requirement`, `Adr` | `engine` | status mechanism over the rule data | `StatusTransitionsRealStoreTest`, `core:DocumentApplicationStatusTest` |
 | Fields frozen by status, immutable fields, defaults at a transition | `Adr`, `RequirementService` | `engine` | before/after comparison over the rule data | `BeforeAfterRulesRealStoreTest`, `core:DocumentApplicationBeforeAfterTest` |
 | A document is applied completely or not at all | every tool writes in one transaction | `engine` | one `writeAll` batch per document | `SubmitRealStoreTest#aDocumentWithOneInvalidActivityChangesNothing` |
-| Multilingual text carries a language tag | `LanguageTag#resolveWriteLanguage` | `exception` | section 6 | -- |
+| Multilingual text carries a language tag | `LanguageTag#resolveWriteLanguage` | `engine` | a literal a document writes to a field with `sh:uniqueLang true` (create, inline child, set, add-to) carries a tag; stored literals are not checked | `EngineGuaranteesRealStoreTest#aTextWrittenWithoutALanguageTagIsRejected`, `EngineGuaranteesRealStoreTest#aTextSetWithoutALanguageTagIsRejected`, `EngineGuaranteesRealStoreTest#aStoredTextWithoutALanguageTagBlocksNeitherItsResourceNorItsNeighbours`, `core:DocumentApplicationTest#aSetOrAddToOfATextFieldWithoutALanguageTagIsRejected` |
 
 ## 6. Documented exceptions
 
@@ -203,7 +203,7 @@ Rules every typed core enforces for its own resources, enforced once by the engi
 | Legacy Proposed records with a decision date | Written only by releases before the date rule (kogn-io/arknet#374). `ashapes:ADR-proposedUndated` rejects every write that leaves such a record Proposed, and in `submit` every document that reaches it, since the engine validates reached neighbours. Ways out: accept, reject, delete or clear the date while Proposed. Pinned on the typed side by `AdrServiceLegacyProposedDateRealStoreTest` (`arknet-adr-adapter-kogniordf`). | kogn-io/arknet#745 (migration) |
 | Legacy flat `arkarch:adrConsequences` / `arkarch:adrAlternatives` | No tool writes them; they stay outside the frozen field group. | kogn-io/arknet#745 (migration) |
 | A kept child of a decided record takes text only in a new language | The engine compares a kept child's text by language, but no activity changes a child in place (an update on a child IRI is rejected), so the branch is unreachable and untested. The observable rule -- no child of a decided record changes or disappears -- is pinned by `ArchitectureDecisionsRulesRealStoreTest#theChildListsOfADecidedRecordKeepEveryChild`. | test due with a child-update activity |
-| Multilingual text carries a language tag | The cores never write an untagged literal (`LanguageTag#resolveWriteLanguage` rejects a write without a tag), but they read untagged literals of older data, and a typed constraint write under another tag leaves them in place. A shape requiring the tag would make every such stored literal block the writes that reach its resource, typed and `submit` alike. `submit` therefore still accepts an untagged literal. | kogn-io/arknet#745 (migration of untagged literals), then a shape |
+| Stored literals without a language tag | The cores never write one (`LanguageTag#resolveWriteLanguage` rejects a write without a tag), but older data holds some (constraints, actors and roles written before the tag was mandatory), and a typed write under another tag leaves them in place. `submit` rejects an untagged literal in the document only; a stored one stays and blocks no write, which is why there is no end-state shape for the tag. | kogn-io/arknet#745 (migration of the stored untagged literals), then an end-state shape |
 | Conditions see only outgoing edges | A transition condition sees the changed resource and what its outgoing edges reach; a condition over incoming edges would hold wrongly. No shipped condition needs incoming edges. | limit of the engine, stated in `arknet-resource-access/CLAUDE.md` |
 | `arkreq:dependsOn`, `arkreq:scopedTo`, `arkddd:hasContext` have no shape | See section 8: not writable through `submit` at all. | -- |
 
@@ -218,7 +218,6 @@ Rules every typed core enforces for its own resources, enforced once by the engi
 | Consequence type and option outcome | `Adr#with*Corrections` lets a Proposed record correct them | the same, through remove and add; frozen outside Proposed by the field group, not by `arkres:immutable` |
 | Requirement status | `req_update` never changes it, `req_accept`/`req_propose` do | an update changes it along the two transitions |
 | A legacy actor breaking the actor shapes | blocks no role write | blocks every role write that reaches it (neighbour validation) |
-| Untagged literals | never written | accepted (section 6) |
 
 ## 8. Not rule subjects
 
