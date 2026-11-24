@@ -36,7 +36,11 @@ rshapes:RequirementShape
     sh:property rshapes:Requirement-status ;
     sh:property rshapes:Requirement-usesTerm ;
     sh:property rshapes:Requirement-acceptanceCriterion ;
-    sh:property rshapes:Requirement-constrainedBy .
+    sh:property rshapes:Requirement-constrainedBy ;
+    sh:property rshapes:Requirement-title-notBlank ;
+    sh:property rshapes:Requirement-description-notBlank ;
+    sh:property rshapes:Requirement-rationale-notBlank ;
+    sh:sparql   rshapes:Requirement-acceptanceCriterion-textsDiffer .
 
 rshapes:Requirement-identifier
     a sh:PropertyShape ;
@@ -75,21 +79,41 @@ rshapes:Requirement-rationale
     sh:message  "A Requirement may carry arkreq:rationale (WHY it exists, min. 5 characters). Deliberately optional - unlike dcterms:description it has no sh:minCount, so a requirement without a recorded reason stays legal (issue #321). sh:uniqueLang allows at most one arkreq:rationale per non-empty language tag - two rationales sharing the same tag are not allowed, but DIFFERENT language tags are (the reason may be given in several languages)."@en , "Requirement darf eine arkreq:rationale tragen (das WARUM, min. 5 Zeichen). Bewusst optional - anders als dcterms:description ohne sh:minCount, ein Requirement ohne festgehaltene Begruendung bleibt also legal (issue #321). sh:uniqueLang erlaubt hoechstens eine arkreq:rationale je nicht-leerem Sprach-Tag - zwei Begruendungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (die Begruendung darf mehrsprachig vorliegen)."@de ;
     sh:severity sh:Violation .
 
+rshapes:Requirement-title-notBlank
+    a sh:PropertyShape ;
+    sh:path     dcterms:title ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
+    sh:message  "A Requirement dcterms:title must contain a non-whitespace character."@en , "Requirement-dcterms:title muss ein Zeichen ausser Leerraum enthalten."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Requirement-description-notBlank
+    a sh:PropertyShape ;
+    sh:path     dcterms:description ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
+    sh:message  "A Requirement dcterms:description must contain a non-whitespace character."@en , "Requirement-dcterms:description muss ein Zeichen ausser Leerraum enthalten."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Requirement-rationale-notBlank
+    a sh:PropertyShape ;
+    sh:path     arkreq:rationale ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
+    sh:message  "A Requirement arkreq:rationale must contain a non-whitespace character."@en , "Requirement-arkreq:rationale muss ein Zeichen ausser Leerraum enthalten."@de ;
+    sh:severity sh:Violation .
+
 rshapes:Requirement-priority
     a sh:PropertyShape ;
     sh:path     arkreq:priority ;
     sh:maxCount 1 ;
     sh:in       ( arkreq:MustHave arkreq:ShouldHave arkreq:CouldHave arkreq:WontHave ) ;
-    sh:message  "A Requirement should have an arkreq:priority (MoSCoW: MustHave | ShouldHave | CouldHave | WontHave)."@en , "Requirement sollte eine arkreq:priority (MoSCoW: MustHave | ShouldHave | CouldHave | WontHave) haben."@de ;
-    sh:severity sh:Warning .
+    sh:message  "arkreq:priority must be one of MoSCoW: MustHave | ShouldHave | CouldHave | WontHave."@en , "arkreq:priority muss einer der MoSCoW-Werte sein: MustHave | ShouldHave | CouldHave | WontHave."@de ;
+    sh:severity sh:Violation .
 
 rshapes:Requirement-status
     a sh:PropertyShape ;
     sh:path     arkreq:status ;
     sh:maxCount 1 ;
-    sh:in       ( arkreq:Proposed arkreq:Accepted arkreq:Implemented
-                  arkreq:Verified arkreq:Rejected arkreq:Deprecated ) ;
-    sh:message  "arkreq:status must be one of the valid lifecycle values (Proposed | Accepted | Implemented | Verified | Rejected | Deprecated)."@en , "arkreq:status muss einer der gueltigen Lifecycle-Werte sein (Proposed | Accepted | Implemented | Verified | Rejected | Deprecated)."@de ;
+    sh:in       ( arkreq:Proposed arkreq:Accepted ) ;
+    sh:message  "arkreq:status must be Proposed or Accepted. Implemented, Verified, Rejected and Deprecated stay vocabulary of the ontology, but the requirement lifecycle does not reach them."@en , "arkreq:status muss Proposed oder Accepted sein. Implemented, Verified, Rejected und Deprecated bleiben Vokabular der Ontologie, der Requirement-Lebenszyklus erreicht sie aber nicht."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-usesTerm
@@ -114,6 +138,45 @@ rshapes:Requirement-constrainedBy
     sh:nodeKind sh:IRI ;
     sh:class    arkreq:Constraint ;
     sh:message  "oslc_rm:constrainedBy must reference a constraint (arkreq:Constraint, IRI) -- create it first with constraint_add."@en , "oslc_rm:constrainedBy muss auf eine Randbedingung (arkreq:Constraint, IRI) verweisen -- lege sie zuerst mit constraint_add an."@de ;
+    sh:severity sh:Violation .
+
+# Two criteria of one requirement must not share a text. The core compares the texts it resolves
+# per criterion through the language fallback, so which pair of literals collides depends on the
+# reader's language. Stricter on purpose: no two criteria may share a literal with the same
+# string, whatever the tags.
+# SPARQL-based because SHACL has no "distinct across the values of a path through a second node".
+rshapes:Requirement-acceptanceCriterion-textsDiffer
+    a sh:SPARQLConstraint ;
+    sh:message  "Two acceptance criteria of one Requirement must not carry the same arkreq:criterionText."@en , "Zwei Akzeptanzkriterien eines Requirements duerfen nicht denselben arkreq:criterionText tragen."@de ;
+    sh:severity sh:Violation ;
+    sh:select   """
+        PREFIX arkreq: <https://w3id.org/arknet/requirements#>
+        SELECT DISTINCT $this
+        WHERE {
+            $this arkreq:acceptanceCriterion ?first .
+            $this arkreq:acceptanceCriterion ?second .
+            FILTER (?first != ?second)
+            ?first  arkreq:criterionText ?firstText .
+            ?second arkreq:criterionText ?secondText .
+            FILTER (str(?firstText) = str(?secondText))
+        }
+        """ .
+
+
+##############################################################################
+#  FUNCTIONAL REQUIREMENT SHAPES
+##############################################################################
+
+rshapes:FunctionalRequirementShape
+    a sh:NodeShape ;
+    sh:targetClass arkreq:FunctionalRequirement ;
+    sh:property rshapes:FR-noQualityCategory .
+
+rshapes:FR-noQualityCategory
+    a sh:PropertyShape ;
+    sh:path     arkreq:qualityCategory ;
+    sh:maxCount 0 ;
+    sh:message  "A FunctionalRequirement must not carry arkreq:qualityCategory; it belongs to NonFunctionalRequirement only."@en , "Ein FunctionalRequirement darf keine arkreq:qualityCategory tragen; sie gehoert nur an NonFunctionalRequirement."@de ;
     sh:severity sh:Violation .
 
 
@@ -143,7 +206,9 @@ rshapes:ConstraintShape
     a sh:NodeShape ;
     sh:targetClass arkreq:Constraint ;
     sh:property rshapes:Constraint-title ;
-    sh:property rshapes:Constraint-statement .
+    sh:property rshapes:Constraint-statement ;
+    sh:property rshapes:Constraint-title-notBlank ;
+    sh:property rshapes:Constraint-statement-notBlank .
 
 rshapes:Constraint-title
     a sh:PropertyShape ;
@@ -161,6 +226,20 @@ rshapes:Constraint-statement
     sh:minLength 5 ;
     sh:uniqueLang true ;
     sh:message  "A Constraint needs at least one arkreq:constraintStatement (min. 5 characters). sh:uniqueLang allows at most one arkreq:constraintStatement per non-empty language tag - two statements sharing the same tag are not allowed, but DIFFERENT language tags are (a constraint may be stated in several languages)."@en , "Constraint braucht mindestens eine arkreq:constraintStatement (min. 5 Zeichen). sh:uniqueLang erlaubt hoechstens eine arkreq:constraintStatement je nicht-leerem Sprach-Tag - zwei Statements mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Constraint darf mehrsprachig formuliert sein)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Constraint-title-notBlank
+    a sh:PropertyShape ;
+    sh:path     dcterms:title ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
+    sh:message  "A Constraint dcterms:title must contain a non-whitespace character."@en , "Constraint-dcterms:title muss ein Zeichen ausser Leerraum enthalten."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Constraint-statement-notBlank
+    a sh:PropertyShape ;
+    sh:path     arkreq:constraintStatement ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
+    sh:message  "A Constraint arkreq:constraintStatement must contain a non-whitespace character."@en , "Constraint-arkreq:constraintStatement muss ein Zeichen ausser Leerraum enthalten."@de ;
     sh:severity sh:Violation .
 
 
@@ -184,7 +263,13 @@ rshapes:UseCaseShape
     sh:property rshapes:UseCase-mainStep ;
     sh:property rshapes:UseCase-usesTerm ;
     sh:property rshapes:UseCase-constrainedBy ;
-    sh:property rshapes:UseCase-extensionStep .
+    sh:property rshapes:UseCase-extensionStep ;
+    sh:property rshapes:UseCase-title-notBlank ;
+    sh:property rshapes:UseCase-goal-notBlank ;
+    sh:property rshapes:UseCase-supportingRole ;
+    sh:property rshapes:UseCase-includesUseCase ;
+    sh:property rshapes:UseCase-extendsUseCase ;
+    sh:sparql   rshapes:UseCase-satisfies-isWhatTheStepsRealise .
 
 rshapes:UseCase-identifier
     a sh:PropertyShape ;
@@ -209,8 +294,8 @@ rshapes:UseCase-goal
     a sh:PropertyShape ;
     sh:path     arkreq:useCaseGoal ;
     sh:minCount 1 ;
-    sh:message  "A Use Case should state an arkreq:useCaseGoal (goal-in-context)."@en , "Use Case sollte ein arkreq:useCaseGoal (goal-in-context) nennen."@de ;
-    sh:severity sh:Warning .
+    sh:message  "A Use Case needs an arkreq:useCaseGoal (goal-in-context)."@en , "Use Case braucht ein arkreq:useCaseGoal (goal-in-context)."@de ;
+    sh:severity sh:Violation .
 
 rshapes:UseCase-goal-uniqueLang
     a sh:PropertyShape ;
@@ -269,8 +354,75 @@ rshapes:UseCase-mainStep
     sh:path     arkreq:mainStep ;
     sh:minCount 1 ;
     sh:class    arkreq:Step ;
-    sh:message  "A Use Case should have a main flow of arkreq:mainStep steps."@en , "Use Case sollte einen Hauptablauf aus arkreq:mainStep-Schritten haben."@de ;
-    sh:severity sh:Warning .
+    sh:message  "A Use Case needs a main flow of at least one arkreq:mainStep."@en , "Use Case braucht einen Hauptablauf aus mindestens einem arkreq:mainStep."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-title-notBlank
+    a sh:PropertyShape ;
+    sh:path     dcterms:title ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
+    sh:message  "A Use Case dcterms:title must contain a non-whitespace character."@en , "Use-Case-dcterms:title muss ein Zeichen ausser Leerraum enthalten."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-goal-notBlank
+    a sh:PropertyShape ;
+    sh:path     arkreq:useCaseGoal ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
+    sh:message  "A Use Case arkreq:useCaseGoal must contain a non-whitespace character."@en , "Use-Case-arkreq:useCaseGoal muss ein Zeichen ausser Leerraum enthalten."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-supportingRole
+    a sh:PropertyShape ;
+    sh:path     arkreq:supportingRole ;
+    sh:nodeKind sh:IRI ;
+    sh:class    arkproc:Role ;
+    sh:message  "arkreq:supportingRole must reference a role (arkproc:Role, IRI)."@en , "arkreq:supportingRole muss auf eine Rolle verweisen (arkproc:Role, IRI)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-includesUseCase
+    a sh:PropertyShape ;
+    sh:path     arkreq:includesUseCase ;
+    sh:nodeKind sh:IRI ;
+    sh:class    arkreq:UseCase ;
+    sh:message  "arkreq:includesUseCase must reference a use case (arkreq:UseCase, IRI)."@en , "arkreq:includesUseCase muss auf einen Use Case verweisen (arkreq:UseCase, IRI)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-extendsUseCase
+    a sh:PropertyShape ;
+    sh:path     arkreq:extendsUseCase ;
+    sh:nodeKind sh:IRI ;
+    sh:class    arkreq:UseCase ;
+    sh:message  "arkreq:extendsUseCase must reference a use case (arkreq:UseCase, IRI)."@en , "arkreq:extendsUseCase muss auf einen Use Case verweisen (arkreq:UseCase, IRI)."@de ;
+    sh:severity sh:Violation .
+
+# oslc_rm:satisfies is the coarse edge the core used to derive on every write: exactly the union
+# of the requirements the main steps realise (arkreq:stepRealises). With the typed tools gone the
+# author writes both, and this keeps the edge the traceability and orphan evaluations read from
+# drifting away from the steps. Extension steps carry no stepRealises, so they do not take part.
+rshapes:UseCase-satisfies-isWhatTheStepsRealise
+    a sh:SPARQLConstraint ;
+    sh:message  "oslc_rm:satisfies of a Use Case must be exactly the set of requirements its main steps realise via arkreq:stepRealises."@en , "oslc_rm:satisfies eines Use Case muss genau die Menge der Requirements sein, die seine Hauptschritte per arkreq:stepRealises realisieren."@de ;
+    sh:severity sh:Violation ;
+    sh:select   """
+        PREFIX arkreq:  <https://w3id.org/arknet/requirements#>
+        PREFIX oslc_rm: <http://open-services.net/ns/rm#>
+        SELECT DISTINCT $this
+        WHERE {
+            {
+                $this arkreq:mainStep ?step .
+                ?step arkreq:stepRealises ?requirement .
+                FILTER NOT EXISTS { $this oslc_rm:satisfies ?requirement }
+            }
+            UNION
+            {
+                $this oslc_rm:satisfies ?requirement .
+                FILTER NOT EXISTS {
+                    $this arkreq:mainStep ?step .
+                    ?step arkreq:stepRealises ?requirement .
+                }
+            }
+        }
+        """ .
 
 rshapes:UseCase-usesTerm
     a sh:PropertyShape ;
@@ -306,7 +458,8 @@ rshapes:StepShape
     sh:targetClass arkreq:Step ;
     sh:property rshapes:Step-position ;
     sh:property rshapes:Step-text ;
-    sh:property rshapes:Step-realises .
+    sh:property rshapes:Step-realises ;
+    sh:property rshapes:Step-text-notBlank .
 
 rshapes:Step-position
     a sh:PropertyShape ;
@@ -327,6 +480,13 @@ rshapes:Step-text
     sh:message  "A Step needs at least one arkreq:stepText (min. 3 characters). sh:uniqueLang allows at most one arkreq:stepText per non-empty language tag - two step texts sharing the same tag are not allowed, but DIFFERENT language tags are (a step's wording may be given in several languages)."@en , "Step braucht mindestens einen arkreq:stepText (min. 3 Zeichen). sh:uniqueLang erlaubt hoechstens einen arkreq:stepText je nicht-leerem Sprach-Tag - zwei Step-Texte mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (der Wortlaut eines Steps darf mehrsprachig vorliegen)."@de ;
     sh:severity sh:Violation .
 
+rshapes:Step-text-notBlank
+    a sh:PropertyShape ;
+    sh:path     arkreq:stepText ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
+    sh:message  "A Step arkreq:stepText must contain a non-whitespace character."@en , "Step-arkreq:stepText muss ein Zeichen ausser Leerraum enthalten."@de ;
+    sh:severity sh:Violation .
+
 rshapes:Step-realises
     a sh:PropertyShape ;
     sh:path     arkreq:stepRealises ;
@@ -344,7 +504,8 @@ rshapes:AcceptanceCriterionShape
     a sh:NodeShape ;
     sh:targetClass arkreq:AcceptanceCriterion ;
     sh:property rshapes:AcceptanceCriterion-position ;
-    sh:property rshapes:AcceptanceCriterion-text .
+    sh:property rshapes:AcceptanceCriterion-text ;
+    sh:property rshapes:AcceptanceCriterion-text-notBlank .
 
 rshapes:AcceptanceCriterion-position
     a sh:PropertyShape ;
@@ -363,6 +524,13 @@ rshapes:AcceptanceCriterion-text
     sh:minLength 5 ;
     sh:uniqueLang true ;
     sh:message  "An AcceptanceCriterion needs at least one arkreq:criterionText (min. 5 characters). sh:uniqueLang allows at most one arkreq:criterionText per non-empty language tag - two criterion texts sharing the same tag are not allowed, but DIFFERENT language tags are (a criterion's wording may be given in several languages)."@en , "AcceptanceCriterion braucht mindestens einen arkreq:criterionText (min. 5 Zeichen). sh:uniqueLang erlaubt hoechstens einen arkreq:criterionText je nicht-leerem Sprach-Tag - zwei Kriterientexte mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (der Wortlaut eines Kriteriums darf mehrsprachig vorliegen)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:AcceptanceCriterion-text-notBlank
+    a sh:PropertyShape ;
+    sh:path     arkreq:criterionText ;
+    sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
+    sh:message  "An AcceptanceCriterion arkreq:criterionText must contain a non-whitespace character."@en , "AcceptanceCriterion-arkreq:criterionText muss ein Zeichen ausser Leerraum enthalten."@de ;
     sh:severity sh:Violation .
 
 ##############################################################################
