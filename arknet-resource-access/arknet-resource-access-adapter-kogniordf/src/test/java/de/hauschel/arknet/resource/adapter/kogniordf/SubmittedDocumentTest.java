@@ -40,7 +40,6 @@ class SubmittedDocumentTest {
                 "https://w3id.org/arknet/requirements#UseCase",
                 "http://www.w3.org/2004/02/skos/core#Concept",
                 "https://w3id.org/arknet/architecture#ArchitectureDecisionRecord",
-                "https://w3id.org/arknet/process#Actor",
                 "https://w3id.org/arknet/process#HumanActor",
                 "https://w3id.org/arknet/process#SystemActor",
                 "https://w3id.org/arknet/process#LegalActor",
