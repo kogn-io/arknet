@@ -232,6 +232,16 @@ class DocumentApplicationStatusTest {
     }
 
     @Test
+    void aResourceStoredWithoutStatusCountsAsInTheInitialStatusForADelete() {
+        IRI ticket = storedTicket("TK-1", null);
+        delete(ticket);
+
+        assertDoesNotThrow(this::apply);
+
+        assertEquals(List.of(ticket), batch.deleted);
+    }
+
+    @Test
     void aTypeWithoutStatusRuleDataBehavesAsBefore() {
         BlankNode memo = create(MEMO);
         document.add(memo, NAME, literal("memo"));

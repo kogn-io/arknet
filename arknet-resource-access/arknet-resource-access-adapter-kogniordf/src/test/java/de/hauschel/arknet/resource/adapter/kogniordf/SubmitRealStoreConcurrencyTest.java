@@ -34,6 +34,7 @@ import io.kogn.rdf.terms.ReadableGraph;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ChildFragments;
+import de.hauschel.arknet.persistence.RdfNode;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.application.port.in.SubmitResult;
@@ -52,6 +53,11 @@ import de.hauschel.arknet.resource.domain.SubmitRejectedException;
  * the engine read the edges pointing at it and before the delete commits. The read happens inside
  * the write transaction, so the delete loses its commit, runs again, and the guard finds the new
  * edge.</p>
+ *
+ * <p>A third pins the condition of a status transition: the condition reads the edge target after
+ * the document inside the write transaction, so a concurrent writer that changes the target between
+ * that read and the commit costs the transition its commit, and the second run checks the condition
+ * against the new state.</p>
  */
 class SubmitRealStoreConcurrencyTest {
 
@@ -157,6 +163,58 @@ class SubmitRealStoreConcurrencyTest {
         assertEquals(2, attempts.get(), "the lost commit runs the document once more");
         assertFalse(reader.findByIdentifier(SubmitRealStoreTest.PROJECT, "TERM-1").isEmpty());
         assertFalse(reader.findByIdentifier(SubmitRealStoreTest.PROJECT, "FR-1").isEmpty());
+    }
+
+    @Test
+    void anEdgeTargetChangedAfterTheConditionReadItFailsTheTransitionOnItsSecondRun() throws Exception {
+        // given a done ticket replaced by a done ticket, over the ticket fixture's rule data
+        ResourceRepository tickets = StatusTransitionsRealStoreTest.repository(lifecycle);
+        SubmitService plain = StatusTransitionsRealStoreTest.service(lifecycle, tickets);
+        String replacement = doneTicket(plain, "New");
+        String old = doneTicket(plain, "Old");
+        plain.submit(StatusTransitionsRealStoreTest.PROJECT, StatusTransitionsRealStoreTest.PREFIXES
+                + "[] a arkres:Update ; arkres:object <" + old + "> ; arkres:set [ fx:replacedBy <" + replacement
+                + "> ] .\n");
+        CountDownLatch targetRead = new CountDownLatch(1);
+        CountDownLatch targetReopened = new CountDownLatch(1);
+        AtomicBoolean firstRead = new AtomicBoolean(true);
+        AtomicInteger attempts = new AtomicInteger();
+        ResourceRepository pausing = (projectId, writes) -> {
+            attempts.incrementAndGet();
+            tickets.writeAll(projectId, batch -> writes.accept(
+                    new PausingBatch(batch, replacement, false, firstRead, targetRead, targetReopened)));
+        };
+
+        // when the old ticket closes while the replacement is reopened between the read and the commit
+        Future<SubmitResult> closer = executor.submit(() -> StatusTransitionsRealStoreTest.service(lifecycle, pausing)
+                .submit(StatusTransitionsRealStoreTest.PROJECT, StatusTransitionsRealStoreTest.PREFIXES
+                        + "[] a arkres:Update ; arkres:object <" + old + "> ; arkres:set [ fx:state fx:Closed ] .\n"));
+        assertTrue(targetRead.await(WAIT_SECONDS, TimeUnit.SECONDS), "the engine never read the edge target");
+        executor.submit(() -> plain.submit(StatusTransitionsRealStoreTest.PROJECT,
+                StatusTransitionsRealStoreTest.PREFIXES + "[] a arkres:Update ; arkres:object <" + replacement
+                        + "> ; arkres:set [ fx:state fx:Open ] .\n")).get(WAIT_SECONDS, TimeUnit.SECONDS);
+        targetReopened.countDown();
+
+        // then
+        ExecutionException failure = assertThrows(ExecutionException.class,
+                () -> closer.get(WAIT_SECONDS, TimeUnit.SECONDS));
+        assertInstanceOf(SubmitRejectedException.class, failure.getCause());
+        assertTrue(failure.getCause().getMessage().contains("A ticket is closed only when a done ticket replaces it."),
+                failure.getCause().getMessage());
+        assertEquals(2, attempts.get(), "the lost commit runs the document once more");
+        assertTrue(reader.outgoing(StatusTransitionsRealStoreTest.PROJECT, old).stream()
+                .anyMatch(triple -> triple.predicate().equals(StatusTransitionsRealStoreTest.FX + "state")
+                        && triple.object().equals(new RdfNode.Resource(StatusTransitionsRealStoreTest.FX + "Done"))));
+    }
+
+    private static String doneTicket(final SubmitService service, final String title) {
+        String ticket = StatusTransitionsRealStoreTest.created(service.submit(StatusTransitionsRealStoreTest.PROJECT,
+                StatusTransitionsRealStoreTest.PREFIXES + "[] a arkres:Create ; arkres:object _:t .\n"
+                        + "_:t a fx:Ticket ; fx:title \"" + title + "\" .\n"));
+        service.submit(StatusTransitionsRealStoreTest.PROJECT, StatusTransitionsRealStoreTest.PREFIXES
+                + "[] a arkres:Update ; arkres:object <" + ticket + "> ;"
+                + " arkres:set [ fx:state fx:Done ; fx:note \"Fixed.\" ] .\n");
+        return ticket;
     }
 
     private SubmitService service(final ResourceRepository store) {

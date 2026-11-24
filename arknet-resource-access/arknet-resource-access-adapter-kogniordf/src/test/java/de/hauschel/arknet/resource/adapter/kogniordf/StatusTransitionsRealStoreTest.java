@@ -31,9 +31,11 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.RdfNode;
 import de.hauschel.arknet.persistence.StoreReader;
+import de.hauschel.arknet.resource.application.DescribeService;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.application.port.in.SubmitResult;
 import de.hauschel.arknet.resource.application.port.in.SubmittedChange;
+import de.hauschel.arknet.resource.application.port.out.ResourceRepository;
 import de.hauschel.arknet.resource.domain.PrefixBindings;
 import de.hauschel.arknet.resource.domain.ResourceSchema;
 import de.hauschel.arknet.resource.domain.SubmitRejectedException;
@@ -47,13 +49,13 @@ import de.hauschel.arknet.resource.domain.SubmitRejectedException;
  */
 class StatusTransitionsRealStoreTest {
 
-    private static final ProjectId PROJECT = new ProjectId("test-project");
-    private static final String FX = "https://example.org/tickets#";
+    static final ProjectId PROJECT = new ProjectId("test-project");
+    static final String FX = "https://example.org/tickets#";
     private static final String FXS = "https://example.org/tickets/shapes#";
-    private static final String PREFIXES = "@prefix arkres: <https://w3id.org/arknet/resource#> .\n"
+    static final String PREFIXES = "@prefix arkres: <https://w3id.org/arknet/resource#> .\n"
             + "@prefix fx: <" + FX + "> .\n";
 
-    private static final String SHAPES = """
+    static final String SHAPES = """
             @prefix arkres: <https://w3id.org/arknet/resource#> .
             @prefix fx:     <https://example.org/tickets#> .
             @prefix fxs:    <https://example.org/tickets/shapes#> .
@@ -72,8 +74,9 @@ class StatusTransitionsRealStoreTest {
 
             fxs:Ticket-state a sh:PropertyShape ;
                 sh:path fx:state ;
+                sh:minCount 1 ;
                 sh:maxCount 1 ;
-                sh:in ( fx:Open fx:Done fx:Closed ) ;
+                sh:in ( fx:Done fx:Open fx:Closed ) ;
                 arkres:initialStatus fx:Open ;
                 arkres:deletableIn fx:Open , fx:Done ;
                 arkres:transition [ arkres:fromStatus fx:Open ; arkres:toStatus fx:Done ;
@@ -100,12 +103,15 @@ class StatusTransitionsRealStoreTest {
                 sh:property [ sh:path fx:title ] , [ sh:path fx:state ] .
             """;
 
-    private static final String ONTOLOGY = """
+    static final String ONTOLOGY = """
             @prefix fx:   <https://example.org/tickets#> .
             @prefix owl:  <http://www.w3.org/2002/07/owl#> .
             fx:Ticket a owl:Class .
             fx:Memo a owl:Class .
             """;
+
+    private static final PrefixBindings BINDINGS = new PrefixBindings(
+            Map.of("arkres", "https://w3id.org/arknet/resource#", "fx", FX));
 
     @TempDir
     Path storageRoot;
@@ -280,6 +286,23 @@ class StatusTransitionsRealStoreTest {
         assertTrue(reader.findByIdentifier(PROJECT, "MM-1").isEmpty());
     }
 
+    @Test
+    void theDescribedExampleWritesTheInitialStatusNotTheFirstAllowedValue() {
+        // given
+        Graph shapes = turtle(SHAPES);
+        Graph ontology = turtle(ONTOLOGY);
+        DescribeService describer = new DescribeService(shapes, ontology, ResourceSchema.of(shapes, ontology),
+                BINDINGS, DisplayLocale.DEFAULT);
+
+        // when
+        String example = describer.describe("fx:Ticket", "en").example();
+
+        // then
+        assertTrue(example.contains("fx:state fx:Open"), example);
+        String ticket = created(service(DisplayLocale.DEFAULT).submit(PROJECT, example));
+        assertEquals(Set.of(FX + "Open"), field(ticket, FX + "state"));
+    }
+
     private String ticket(final String title, final String more) {
         return created(submit("[] a arkres:Create ; arkres:object _:t .\n_:t a fx:Ticket ; fx:title " + title
                 + (more.isEmpty() ? "" : " ; " + more) + " .\n"));
@@ -297,16 +320,24 @@ class StatusTransitionsRealStoreTest {
     }
 
     private SubmitService service(final DisplayLocale displayLocale) {
-        Graph shapes = turtle(SHAPES);
-        Graph ontology = turtle(ONTOLOGY);
-        return new SubmitService(ResourceSchema.of(shapes, ontology),
-                KognioRdfResourceRepositoryFactory.over(lifecycle, displayLocale, shapes, ontology),
-                KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
-                new PrefixBindings(Map.of("arkres", "https://w3id.org/arknet/resource#", "fx", FX)),
+        return service(lifecycle, KognioRdfResourceRepositoryFactory.over(lifecycle, displayLocale, turtle(SHAPES),
+                turtle(ONTOLOGY)));
+    }
+
+    /** The engine over the ticket fixture's rule data and the given store side. */
+    static SubmitService service(final DatasetLifecycle lifecycle, final ResourceRepository repository) {
+        return new SubmitService(ResourceSchema.of(turtle(SHAPES), turtle(ONTOLOGY)), repository,
+                KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(), BINDINGS,
                 KognioRdfResourceRepositoryFactory.handles(lifecycle));
     }
 
-    private static String created(final SubmitResult result) {
+    /** The store side over the ticket fixture's rule data. */
+    static ResourceRepository repository(final DatasetLifecycle lifecycle) {
+        return KognioRdfResourceRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT, turtle(SHAPES),
+                turtle(ONTOLOGY));
+    }
+
+    static String created(final SubmitResult result) {
         return result.changes().stream().filter(change -> change.kind() == SubmittedChange.Kind.CREATED)
                 .findFirst().orElseThrow().iri();
     }
@@ -321,7 +352,7 @@ class StatusTransitionsRealStoreTest {
                 .collect(Collectors.toSet());
     }
 
-    private static Graph turtle(final String text) {
+    static Graph turtle(final String text) {
         return KognioRdfResourceRepositoryFactory.parser()
                 .readTurtle(new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8)));
     }

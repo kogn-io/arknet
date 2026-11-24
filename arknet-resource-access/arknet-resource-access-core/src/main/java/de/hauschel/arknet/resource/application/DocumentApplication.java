@@ -86,7 +86,8 @@ import de.hauschel.arknet.resource.domain.SubmittedDocument.Update;
  * the changed resource alone, in its state after the document together with the slices it reaches
  * then ({@link ResourceBatch#violations}) - not on a resource merely referenced, and not later: once
  * taken, a transition is not undone by a condition that stops holding. A delete is rejected in a
- * status the field does not name as deletable. A type without a status field is not touched by any
+ * status the field does not name as deletable; a resource stored without status counts as in the
+ * initial status there. A type without a status field is not touched by any
  * of this.</p>
  *
  * <p><strong>Codes and children.</strong> A created resource of a type with a code prefix gets the
@@ -586,9 +587,13 @@ final class DocumentApplication {
         }
     }
 
-    /** Rejects the delete of a resource whose status the status field does not name as deletable. */
+    /**
+     * Rejects the delete of a resource whose status the status field does not name as deletable. A
+     * resource stored without status counts as in the initial status, as for an update.
+     */
     private void rejectDeleteInStatus(final IRI subject, final StatusField field, final Set<RDFTerm> status) {
-        if (field.deletable().isEmpty() || status.size() == 1 && field.deletableIn(status.iterator().next())) {
+        Set<RDFTerm> current = status.isEmpty() ? Set.of(field.initial()) : status;
+        if (field.deletable().isEmpty() || current.size() == 1 && field.deletableIn(current.iterator().next())) {
             return;
         }
         problems.add(subject.getIRIString() + " is not deleted: its status " + sorted(status) + " in "

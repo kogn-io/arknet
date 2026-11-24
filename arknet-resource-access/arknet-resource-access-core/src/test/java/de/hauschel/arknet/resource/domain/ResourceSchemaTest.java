@@ -234,6 +234,45 @@ class ResourceSchemaTest {
     }
 
     @Test
+    void twoStatusFieldsAcrossTheClassHierarchyFailTheSchema() {
+        Graph shapes = statusShapes();
+        IRI special = RDF_FACTORY.createIRI(SHAPES + "Special");
+        IRI specialState = RDF_FACTORY.createIRI(SHAPES + "Special-state");
+        shapes.add(special, RDF_FACTORY.createIRI(SHACL + "targetClass"), SPECIAL);
+        shapes.add(special, RDF_FACTORY.createIRI(SHACL + "property"), specialState);
+        shapes.add(specialState, PATH, UNRELATED_FIELD);
+        shapes.add(specialState, RDF_FACTORY.createIRI(ArkresVocabulary.INITIAL_STATUS), OPEN);
+        Graph ontology = RDF_FACTORY.createGraph();
+        ontology.add(SPECIAL, SUB_CLASS_OF, BASE);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, ontology));
+
+        assertTrue(failure.getMessage().contains(SPECIAL.getIRIString()), failure.getMessage());
+    }
+
+    @Test
+    void aStatusOfTheRuleDataOutsideTheFieldsShInFailsTheSchema() {
+        Graph shapes = statusShapes();
+        shapes.add(STATE_SHAPE, RDF_FACTORY.createIRI(SHACL + "in"), list(shapes, OPEN));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, RDF_FACTORY.createGraph()));
+
+        assertTrue(failure.getMessage().contains(DONE.getIRIString()), failure.getMessage());
+        assertTrue(failure.getMessage().contains("sh:in"), failure.getMessage());
+    }
+
+    @Test
+    void statusesWithinTheFieldsShInPassTheSchema() {
+        Graph shapes = statusShapes();
+        shapes.add(STATE_SHAPE, RDF_FACTORY.createIRI(SHACL + "in"), list(shapes, OPEN, DONE));
+
+        assertEquals(OPEN, ResourceSchema.of(shapes, RDF_FACTORY.createGraph()).statusField(Set.of(BASE))
+                .orElseThrow().initial());
+    }
+
+    @Test
     void twoStatusFieldsOnOneTypeFailTheSchema() {
         Graph shapes = statusShapes();
         IRI second = RDF_FACTORY.createIRI(SHAPES + "Base-other");
@@ -260,6 +299,22 @@ class ResourceSchemaTest {
         shapes.add(CONDITION_SHAPE, VocabRdf.TYPE, RDF_FACTORY.createIRI(SHACL + "NodeShape"));
         transition(shapes, DONE, OPEN);
         return shapes;
+    }
+
+    private static BlankNode list(final Graph shapes, final IRI... items) {
+        BlankNode head = RDF_FACTORY.createBlankNode();
+        BlankNode cell = head;
+        for (int index = 0; index < items.length; index++) {
+            shapes.add(cell, VocabRdf.FIRST, items[index]);
+            BlankNode next = RDF_FACTORY.createBlankNode();
+            if (index == items.length - 1) {
+                shapes.add(cell, VocabRdf.REST, VocabRdf.NIL);
+            } else {
+                shapes.add(cell, VocabRdf.REST, next);
+                cell = next;
+            }
+        }
+        return head;
     }
 
     private static void removeAll(final Graph graph, final IRI subject, final IRI predicate, final IRI object) {

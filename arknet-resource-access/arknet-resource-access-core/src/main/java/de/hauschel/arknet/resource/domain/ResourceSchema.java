@@ -57,8 +57,9 @@ import io.kogn.rdf.terms.vocab.VocabRdfs;
  * {@code arkres:condition} shapes, each a named shape) and {@code arkres:deletableIn} each status a
  * resource may be deleted in. Transition or deletability data on a shape that marks no status field,
  * a transition without exactly one source and one target status, a condition that is no IRI, no
- * shape the shapes declare, or a shape with a target of its own, and two status fields for one class
- * are defects of the rule data and fail construction.</p>
+ * shape the shapes declare, or a shape with a target of its own, a status the {@code sh:in} of the
+ * status field's shape does not allow, and two status fields reaching one class - on the class itself
+ * or across its superclasses - are defects of the rule data and fail construction.</p>
  */
 public final class ResourceSchema {
 
@@ -143,7 +144,9 @@ public final class ResourceSchema {
                         + " and " + field);
             }
         });
-        return new ResourceSchema(prefixes, owned, statusFields(shapes), shapes, ontology);
+        ResourceSchema schema = new ResourceSchema(prefixes, owned, statusFields(shapes), shapes, ontology);
+        schema.statusFieldByClass.keySet().forEach(type -> schema.statusField(Set.of(type)));
+        return schema;
     }
 
     /**
@@ -221,6 +224,15 @@ public final class ResourceSchema {
         if (pairs < distinct.size()) {
             throw new IllegalStateException(property + " declares one transition twice with different conditions");
         }
+        Set<RDFTerm> statuses = new LinkedHashSet<>(List.of(initial));
+        distinct.forEach(transition -> statuses.addAll(List.of(transition.from(), transition.to())));
+        statuses.addAll(deletable);
+        allowedValues(shapes, shape).ifPresent(allowed -> statuses.stream().filter(status -> !allowed.contains(status))
+                .findFirst()
+                .ifPresent(status -> {
+                    throw new IllegalStateException("the status rule data of " + property + " names " + status
+                            + ", which the sh:in of the status field does not allow: " + allowed);
+                }));
         return new StatusField(property, initial, distinct, deletable);
     }
 
@@ -242,6 +254,29 @@ public final class ResourceSchema {
                             + " it on the changed resource only");
                 });
         return condition;
+    }
+
+    /**
+     * The values the {@code sh:in} lists of a status field's shape allow, every list applying; empty
+     * if it names none.
+     */
+    private static Optional<Set<RDFTerm>> allowedValues(final ReadableGraph shapes, final BlankNodeOrIRI shape) {
+        IRI in = RDF_FACTORY.createIRI(SHACL + "in");
+        Set<RDFTerm> allowed = null;
+        for (RDFTerm head : shapes.stream(shape, in, null).map(Triple::getObject).toList()) {
+            Set<RDFTerm> items = new LinkedHashSet<>();
+            RDFTerm cell = head;
+            while (cell instanceof BlankNodeOrIRI node && !VocabRdf.NIL.equals(node)) {
+                single(shapes, node, VocabRdf.FIRST).ifPresent(items::add);
+                cell = single(shapes, node, VocabRdf.REST).orElse(VocabRdf.NIL);
+            }
+            if (allowed == null) {
+                allowed = items;
+            } else {
+                allowed.retainAll(items);
+            }
+        }
+        return Optional.ofNullable(allowed);
     }
 
     private static RDFTerm exactlyOne(final ReadableGraph shapes, final BlankNodeOrIRI subject, final String property) {
