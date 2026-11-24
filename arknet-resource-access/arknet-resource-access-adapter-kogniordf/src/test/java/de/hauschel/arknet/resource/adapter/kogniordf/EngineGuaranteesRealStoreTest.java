@@ -51,7 +51,8 @@ class EngineGuaranteesRealStoreTest {
     private static final String REQ = "https://w3id.org/arknet/requirements#";
 
     private static final String REQUIREMENT = "[] a arkres:Create ; arkres:object _:fr .\n"
-            + "_:fr a arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ; dcterms:description \"Writes it.\"@en ;"
+            + "_:fr a arkreq:FunctionalRequirement ; dcterms:title \"Write\"@en ;"
+            + " dcterms:description \"Writes it.\"@en ;"
             + " arkreq:acceptanceCriterion [ arkreq:position 1 ; arkreq:criterionText \"First one.\"@en ] ";
 
     @TempDir
@@ -170,6 +171,7 @@ class EngineGuaranteesRealStoreTest {
 
         // then
         assertTrue(rejected.getMessage().contains("upstream"), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("a class of resources"), rejected.getMessage());
     }
 
     // --- positions: the engine numbers children from 1 without gaps ---------------------------

@@ -29,7 +29,8 @@ How to read a row:
 - **Pinned by** names the test that submits a violating document and sees it rejected with a
   message naming the rule, as `Class#method`; for the one parametrised class
   `EdgeAndRequiredFieldRulesRealStoreTest#aDocumentBreakingAnEdgeOrRequiredFieldRuleIsRejectedWithTheField`
-  the case names are given in parentheses. Unqualified classes live in
+  the case names are given in parentheses. `RulesInventoryNamesShippedShapesTest` also fails when a
+  test named here does not exist. Unqualified classes live in
   `arknet-resource-access-adapter-kogniordf`; `app:` marks `arknet-app`, `core:` marks
   `arknet-resource-access-core`.
 - Shape names use the prefixes of the shapes files. `RulesInventoryNamesShippedShapesTest` in
@@ -39,14 +40,14 @@ How to read a row:
 
 | Kind | Rules in sections 1-5 |
 |---|---|
-| `shape` | 57 |
+| `shape` | 58 |
 | `rule data` | 15 |
 | `engine` | 31 |
 | `exception` | 5 |
-| **total** | **108** |
+| **total** | **109** |
 
 Section 6 holds 9 documented exceptions (the 5 rows above and 4 without a row of their own),
-section 7 holds 8 intended differences, section 8 holds 9 items that are no rule.
+section 7 holds 8 intended differences, section 8 holds 10 items that are no rule.
 
 ## 1. Product & Requirements (BC-1)
 
@@ -80,6 +81,7 @@ Shapes in `requirements-shapes.ttl`; tests in `ProductRequirementsRulesRealStore
 | A use case has a main step | `UseCase` constructor, read path joins it | `shape` | `rshapes:UseCase-mainStep` | `#aUseCaseWithoutAMainStepIsRejected` |
 | Step text is not blank | `Step` constructor | `shape` | `rshapes:Step-text-notBlank` | `#aUseCaseTitleGoalOrStepTextOfOnlyWhitespaceIsRejected` |
 | Step positions run from 1 without gaps | `UseCase` constructor, read path | `engine` | the engine numbers children | `EngineGuaranteesRealStoreTest#positionsADocumentGivesOnlyOrderTheChildrenAndTheStoreNumbersThemFromOne` |
+| A use case has exactly one primary role | `UseCase` constructor (`MissingPrimaryRoleException`) | `shape` | `rshapes:UseCase-primaryRole` (`sh:minCount 1`, `sh:maxCount 1`) | `EdgeAndRequiredFieldRulesRealStoreTest` (use case without primary role) |
 | A primary role is a role | `UseCaseService` resolves `ROLE-N` | `shape` | `rshapes:UseCase-primaryRole` | `EdgeAndRequiredFieldRulesRealStoreTest` (use case with a term as primary role) |
 | A supporting role is a role | `UseCaseService` resolves `ROLE-N` | `shape` | `rshapes:UseCase-supportingRole` | `#aSupportingRoleThatIsNoRoleIsRejected` |
 | Included and extended use cases are use cases | `UseCaseService` resolves `UCn` | `shape` | `rshapes:UseCase-includesUseCase`, `rshapes:UseCase-extendsUseCase` | `#anIncludedOrExtendedResourceThatIsNoUseCaseIsRejected` |
@@ -112,9 +114,9 @@ Shapes in `ul-shapes.ttl` and `arknet-shapes.ttl`; tests in `DomainModellingRule
 | The subdomain type is a known one | read path throws on another IRI | `shape` | `shapes:Subdomain-subdomainType` | `#aSubdomainOfAnUnknownTypeIsRejectedByTheShapes` (against the shapes) |
 | The subdomain classification is writable | `KognioRdfBoundedContextRepository` writes it as a fixed child | `exception` | section 6 | -- |
 | A context relationship joins two different contexts | `ContextRelationship` constructor | `shape` | `shapes:ContextRelationship-upstream` (`sh:disjoint`) | `#aContextRelationshipFromAContextToItselfIsRejected` |
-| Upstream and downstream are bounded contexts, one each | `ContextRelationship` constructor | `shape` | `shapes:ContextRelationship-upstream`, `shapes:ContextRelationship-downstream` | `EdgeAndRequiredFieldRulesRealStoreTest` (relationship without upstream; without downstream; upstream of a term) |
+| Upstream and downstream are bounded contexts, one each | `ContextRelationship` constructor | `shape` | `shapes:ContextRelationship-upstream`, `shapes:ContextRelationship-downstream` | `EdgeAndRequiredFieldRulesRealStoreTest` (relationship without upstream; without downstream; with two upstream contexts; with two downstream contexts; upstream of a term) |
 | The relationship type is one of eight | `RelationshipType` | `shape` | `shapes:ContextRelationship-relationshipType` | `EdgeAndRequiredFieldRulesRealStoreTest` (relationship of an unknown type) |
-| A context relationship is stored under an IRI | read path casts the subject to an IRI | `engine` | the store mints every resource IRI; no inline resource | `EngineGuaranteesRealStoreTest#anEdgeWithoutANodeKindRuleToAResourceWrittenInlineAsABlankNodeIsRejected` |
+| A context relationship is stored under an IRI | read path casts the subject to an IRI | `engine` | the store mints every resource IRI; no inline resource | section 5 (every resource is stored under its own IRI) |
 | Every term belongs to the one glossary scheme | `KognioRdfTermRepository` writes `skos:inScheme` | `exception` | section 6 | -- |
 
 ## 3. Architecture & Decisions (BC-3)
@@ -132,10 +134,10 @@ Shapes in `architecture-shapes.ttl`; tests in `ArchitectureDecisionsRulesRealSto
 | A record points at itself neither as related nor as successor | `Adr` constructor | `shape` | `ashapes:ADR-noSelfReference` | `#aDocumentBreakingAnEndStateRuleIsRejectedWithTheRule` |
 | The decision date is one `xsd:date` | read path turns an unparsable date into null | `shape` | `ashapes:ADR-decisionDate` | `#aDecisionDateTheDocumentNamesIsOneDate` |
 | Edges of a record point at a requirement, a bounded context, a term, a record | `AdrService` resolves the codes | `shape` | `ashapes:ADR-addressesRequirement`, `ashapes:ADR-affectsContext`, `ashapes:ADR-usesTerm`, `ashapes:ADR-relatedTo`, `ashapes:ADR-supersededBy` | `EdgeAndRequiredFieldRulesRealStoreTest` (decision addresses a term; affects a term; uses a requirement as term; related to a term; proposed decision superseded by a term) |
-| A successor edge goes with the Superseded status | `Adr` constructor | `shape` | `ashapes:ADR-supersededByRequiresSupersededStatus` | `EdgeAndRequiredFieldRulesRealStoreTest` (proposed decision superseded by a term) |
+| A successor edge goes with the Superseded status | `Adr` constructor | `shape` | `ashapes:ADR-supersededByRequiresSupersededStatus` | `EdgeAndRequiredFieldRulesRealStoreTest` (proposed decision superseded by a decision) |
 | Child positions run from 1 without gaps, within the range of an int | `Adr` constructor | `engine` | the engine numbers children; `ashapes:Consequence-position`, `ashapes:ConsideredOption-position` bound the range | `EngineGuaranteesRealStoreTest#positionsADocumentGivesOnlyOrderTheChildrenAndTheStoreNumbersThemFromOne` |
 | A record carries its code | `AdrCode`, read path joins it | `engine` | the store assigns the code | `EngineGuaranteesRealStoreTest#aCreateWritingItsOwnIdentifierIsRejected` |
-| A record is stored under an IRI | read path filters on IRIs | `engine` | the store mints every resource IRI | `EngineGuaranteesRealStoreTest#aCreatedResourceAndItsChildrenAreStoredUnderIris` |
+| A record is stored under an IRI | read path filters on IRIs | `engine` | the store mints every resource IRI | section 5 (every resource is stored under its own IRI) |
 | A record starts Proposed | `AdrService#add` | `rule data` | `ashapes:ADR-status` (`arkres:initialStatus`) | `#aDecisionStartsProposedAndUndated`, `#aDecisionIsNotCreatedDecided` |
 | A Proposed record carries no decision date | `AdrService#add`, nothing leads back to Proposed | `shape` | `ashapes:ADR-proposedUndated` | `#aProposedDecisionIsNotDatedWithoutBeingDecided`, `#aDocumentBreakingAnEndStateRuleIsRejectedWithTheRule` |
 | Proposed -> Accepted or Rejected, Accepted -> Deprecated or Superseded, Superseded -> Accepted; Rejected and Deprecated final | `Adr#accept`, `Adr#reject`, `Adr#deprecate`, `Adr#supersededBy`, `Adr#unsupersede` | `rule data` | `ashapes:ADR-status` (`arkres:transition`) | `#aStatusChangesOnlyAlongADeclaredTransition` |
@@ -228,6 +230,7 @@ Rules every typed core enforces for its own resources, enforced once by the engi
 | Placeholder for a requirement without criteria | read-side rendering; the shape requires a criterion |
 | `relatedTo` read in both directions | read-side merge of a symmetric property; written in one direction |
 | `adr_check` findings | review hints over the corpus, not write rules |
+| No duplicate entries in a list (`Requirement`: used terms, constraints; `Term`: related terms; `Adr`: `requireNoDuplicates` over its four reference lists) | RDF set semantics: a graph holds a triple once, so a document cannot store the same edge twice |
 | `arkreq:dependsOn` (requirement -> requirement) | Declared in the ontology with `rdfs:range`, read by the model analysis, written by no typed tool. Without a property shape it is no field, so `submit` rejects it as an unknown predicate; a stored edge still blocks deleting its target (`rdfs:range`). Shaping it would open a write path no typed tool has, not express a rule. |
 | `arkreq:scopedTo` (requirement -> bounded context) | Same as `arkreq:dependsOn`. |
 | `arkddd:hasContext` (domain -> bounded context) | Its domain `arkddd:Domain` is no resource type, so no document creates a holder; the inverse of `arkddd:partOf`, which the typed core keeps on the subdomain child (section 6). A stored edge still blocks deleting its target. |

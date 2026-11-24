@@ -36,9 +36,9 @@ import de.hauschel.arknet.resource.domain.SubmitRejectedException;
 /**
  * The edge and required-field shapes of every model context, driven through {@code submit} against
  * a real store: an edge that points at a stored resource of another class, or a resource or child
- * without a field its shape requires, is rejected with the field's path and leaves the store as it
- * was. The typed cores ensure the same by resolving a code to a resource of the expected type and
- * by the constructors of their records.
+ * without a field its shape requires, is rejected with the field's path (a rule over several fields:
+ * with its message) and leaves the store as it was. The typed cores ensure the same by resolving a
+ * code to a resource of the expected type and by the constructors of their records.
  *
  * <p>One store serves every case: a rejected document changes nothing, which each case checks.</p>
  */
@@ -90,14 +90,19 @@ class EdgeAndRequiredFieldRulesRealStoreTest {
         SubmitResult fixtures = submit.submit(PROJECT, PREFIXES
                 + "[] a arkres:Create ; arkres:object _:term .\n_:term " + TERM + " .\n"
                 + "[] a arkres:Create ; arkres:object _:fr .\n_:fr " + REQUIREMENT + CRITERION + " .\n"
-                + "[] a arkres:Create ; arkres:object _:role .\n_:role a arkproc:Role ; arknet:name \"Architect\"@en .\n"
+                + "[] a arkres:Create ; arkres:object _:role .\n"
+                + "_:role a arkproc:Role ; arknet:name \"Architect\"@en .\n"
                 + "[] a arkres:Create ; arkres:object _:up .\n_:up " + CONTEXT + " .\n"
-                + "[] a arkres:Create ; arkres:object _:down .\n_:down " + CONTEXT + " .\n");
+                + "[] a arkres:Create ; arkres:object _:down .\n_:down " + CONTEXT + " .\n"
+                + "[] a arkres:Create ; arkres:object _:third .\n_:third " + CONTEXT + " .\n"
+                + "[] a arkres:Create ; arkres:object _:adr .\n_:adr " + DECISION + " .\n");
         stored = Map.of("<TERM>", "<" + SubmitRealStoreTest.iriOf(fixtures, "TERM-1") + ">",
                 "<FR>", "<" + SubmitRealStoreTest.iriOf(fixtures, "FR-1") + ">",
                 "<ROLE>", "<" + SubmitRealStoreTest.iriOf(fixtures, "ROLE-1") + ">",
                 "<BC1>", "<" + SubmitRealStoreTest.iriOf(fixtures, "BC-1") + ">",
-                "<BC2>", "<" + SubmitRealStoreTest.iriOf(fixtures, "BC-2") + ">");
+                "<BC2>", "<" + SubmitRealStoreTest.iriOf(fixtures, "BC-2") + ">",
+                "<BC3>", "<" + SubmitRealStoreTest.iriOf(fixtures, "BC-3") + ">",
+                "<ADR>", "<" + SubmitRealStoreTest.iriOf(fixtures, "ADR-1") + ">");
     }
 
     @AfterAll
@@ -157,19 +162,27 @@ class EdgeAndRequiredFieldRulesRealStoreTest {
                 Arguments.of("decision related to a term", DECISION + " ; arkarch:relatedTo <TERM>",
                         ARCH + "relatedTo"),
                 Arguments.of("proposed decision superseded by a term", DECISION + " ; arkarch:supersededBy <TERM>",
-                        ARCH + "supersededBy"));
+                        ARCH + "supersededBy"),
+                Arguments.of("proposed decision superseded by a decision", DECISION + " ; arkarch:supersededBy <ADR>",
+                        "An ADR's status must be Superseded whenever its arkarch:supersededBy edge is set."),
+                // the required primary role and the single ends of a relationship
+                Arguments.of("use case without primary role", USE_CASE + STEP, REQ + "primaryRole"),
+                Arguments.of("relationship with two upstream contexts", relationship
+                        + " ; arkddd:upstream <BC1> , <BC3> ; arkddd:downstream <BC2>", DDD + "upstream"),
+                Arguments.of("relationship with two downstream contexts", relationship
+                        + " ; arkddd:upstream <BC1> ; arkddd:downstream <BC2> , <BC3>", DDD + "downstream"));
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("violatingDocuments")
     void aDocumentBreakingAnEdgeOrRequiredFieldRuleIsRejectedWithTheField(final String rule, final String resource,
-            final String path) {
+            final String expected) {
         // given
         String document = CREATE + resource + " .\n";
         for (Map.Entry<String, String> fixture : stored.entrySet()) {
             document = document.replace(fixture.getKey(), fixture.getValue());
         }
-        List<String> notCreated = List.of("TERM-2", "FR-2", "UC1", "BC-3", "ADR-1");
+        List<String> notCreated = List.of("TERM-2", "FR-2", "UC1", "BC-4", "ADR-2");
         String submitted = PREFIXES + document;
 
         // when
@@ -177,7 +190,7 @@ class EdgeAndRequiredFieldRulesRealStoreTest {
                 () -> submit.submit(PROJECT, submitted));
 
         // then
-        assertTrue(rejected.getMessage().contains(path), rule + ": " + rejected.getMessage());
+        assertTrue(rejected.getMessage().contains(expected), rule + ": " + rejected.getMessage());
         notCreated.forEach(code -> assertTrue(reader.findByIdentifier(PROJECT, code).isEmpty(), code));
         assertEquals(1, reader.history(PROJECT, stored.get("<TERM>").replaceAll("[<>]", "")).size());
     }
