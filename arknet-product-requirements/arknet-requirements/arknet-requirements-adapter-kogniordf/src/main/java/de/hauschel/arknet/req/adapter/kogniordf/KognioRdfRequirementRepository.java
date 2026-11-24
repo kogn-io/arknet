@@ -161,11 +161,12 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * value combination), it just returns a value combination the store cannot guarantee is "the"
  * one.</p>
  *
- * <p><strong>SHACL-legal but MVP-unsupported status.</strong> {@code requirements-shapes.ttl}'s
- * {@code Requirement-status} shape allows six status individuals via {@code sh:in}, but
- * {@link de.hauschel.arknet.req.domain.RequirementStatus} implements only two ({@code
- * PROPOSED}/{@code ACCEPTED}). A store-first requirement carrying one of the other four
- * is therefore SHACL-legal but cannot be decoded: {@link #findByCode}, {@link #findCurrentByCode}
+ * <p><strong>Status outside the shape.</strong> {@code requirements-shapes.ttl}'s
+ * {@code Requirement-status} shape allows exactly the two statuses {@link
+ * de.hauschel.arknet.req.domain.RequirementStatus} implements ({@code PROPOSED}/{@code
+ * ACCEPTED}) via {@code sh:in}. A requirement that reached the store past the gate (written
+ * before the shape narrowed, or straight into the graph) may still carry one of the other
+ * four vocabulary individuals and cannot be decoded: {@link #findByCode}, {@link #findCurrentByCode}
  * and {@link #findAll} all throw {@link
  * de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException} for it, naming the
  * requirement and the unsupported status, rather than silently filtering it out of the result (see
@@ -781,7 +782,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * NonFunctionalRequirement), the mandatory status join, and the two optional joins
      * (priority, qualityCategory). {@code status} is deliberately
      * <strong>not</strong> filtered the same way {@code type} is - see {@link #statusFromIri} for
-     * why a SHACL-legal but MVP-unsupported status fails loudly ({@link
+     * why a status outside the shape (stored past the gate) fails loudly ({@link
      * UnsupportedRequirementStatusException}) instead of being filtered into invisibility.
      * {@code identifierClause} supplies
      * the one join that differs per caller - a specific {@link RequirementCode} literal for
@@ -1953,15 +1954,15 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * <p>Unlike {@link #typeFromIri}, whose only two legal inputs are guaranteed by
      * {@link #requirementWhereClause}'s {@code FILTER} on {@code ?type}, {@code ?status} is
      * <strong>not</strong> filtered the same way: {@code requirements-shapes.ttl}'s
-     * {@code Requirement-status} shape SHACL-legally allows six status individuals, but
-     * {@link RequirementStatus} only implements two. Filtering the other four out here would
-     * silently make a SHACL-legal, store-first requirement invisible to
+     * {@code Requirement-status} shape allows only the two individuals {@link RequirementStatus} implements, but a requirement
+     * stored past the gate (before the shape narrowed) can still carry one of the other four.
+     * Filtering those out here would silently make such a requirement invisible to
      * {@code req_list}/{@code req_get} instead of failing loudly -
      * {@link UnsupportedRequirementStatusException} is thrown directly (never as a wrapped
      * {@link IllegalStateException}) so the caller sees which requirement and which unsupported
      * status, instead of every other requirement in the project becoming unreachable too.</p>
      *
-     * @throws UnsupportedRequirementStatusException if {@code iri} is SHACL-legal but not one of
+     * @throws UnsupportedRequirementStatusException if {@code iri} lies outside the shape (stored past the gate) and is not one of
      *                                                 the two individuals {@link RequirementStatus}
      *                                                 implements
      */
@@ -2005,7 +2006,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * a store-first value of the wrong RDF term kind - {@code requirements-shapes.ttl}'s
      * {@code Requirement-priority} shape has no {@code sh:nodeKind}, so a literal there is
      * SHACL-legal at {@code sh:Warning} severity and never rejected by the write gate. Unlike
-     * {@link #statusFromIri} (a mandatory field, so a SHACL-legal but undecodable value fails
+     * {@link #statusFromIri} (a mandatory field, so an undecodable value fails
      * loudly via {@link UnsupportedRequirementStatusException}), {@code priority} is already an
      * optional domain field: a type-mismatched value is logged at {@code WARN} and read as
      * "not set" instead of aborting the whole row, the same "stille Luege, sichtbar gemacht"

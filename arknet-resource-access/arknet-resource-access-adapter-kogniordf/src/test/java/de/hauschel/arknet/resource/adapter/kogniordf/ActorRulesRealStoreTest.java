@@ -162,4 +162,20 @@ class ActorRulesRealStoreTest {
         assertTrue(rejected.getMessage().contains("filledBy"), rejected.getMessage());
         assertTrue(reader.findByIdentifier(PROJECT, "ROLE-1").isEmpty());
     }
+
+    @Test
+    void theTypeOfAnActorStays() {
+        // given
+        SubmitResult created = submit.submit(PROJECT,
+                PREFIXES + CREATE + "a arkproc:HumanActor ; arknet:name \"Architect\"@en .\n");
+        String actor = SubmitRealStoreTest.iriOf(created, "ACTOR-1");
+
+        // when
+        SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class, () -> submit.submit(PROJECT,
+                PREFIXES + "[] a arkres:Update ; arkres:object <" + actor
+                        + "> ; arkres:set [ a arkproc:SystemActor ] .\n"));
+
+        // then
+        assertTrue(rejected.getMessage().contains("the type stays"), rejected.getMessage());
+    }
 }

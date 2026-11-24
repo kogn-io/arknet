@@ -208,7 +208,7 @@ public interface RequirementRepository {
      *                      {@code null} to use that preference unchanged
      * @return the requirement if present, otherwise {@link Optional#empty()}
      * @throws UnsupportedRequirementStatusException if the found requirement's stored status is
-     *                                                 SHACL-legal but not one of the MVP subset
+     *                                                 outside the shape (stored past the gate) and not one of the MVP subset
      *                                                 {@link de.hauschel.arknet.req.domain.RequirementStatus}
      *                                                 implements (only reachable via a store-first
      *                                                 edit)
@@ -255,7 +255,7 @@ public interface RequirementRepository {
      * @return the requirement and its current head, or {@link Optional#empty()} if no requirement
      *         with this code exists
      * @throws UnsupportedRequirementStatusException if the found requirement's stored status is
-     *                                                 SHACL-legal but not one of the MVP subset
+     *                                                 outside the shape (stored past the gate) and not one of the MVP subset
      *                                                 {@link de.hauschel.arknet.req.domain.RequirementStatus}
      *                                                 implements (only reachable via a store-first
      *                                                 edit)
@@ -342,7 +342,7 @@ public interface RequirementRepository {
      *                      override {@link #findByCode} already accepts (issue #281)
      * @return all requirements, never {@code null}
      * @throws UnsupportedRequirementStatusException if any requirement's stored status is
-     *                                                 SHACL-legal but not one of the MVP subset
+     *                                                 outside the shape (stored past the gate) and not one of the MVP subset
      *                                                 {@link de.hauschel.arknet.req.domain.RequirementStatus}
      *                                                 implements (only reachable via a store-first
      *                                                 edit) - one such requirement aborts
