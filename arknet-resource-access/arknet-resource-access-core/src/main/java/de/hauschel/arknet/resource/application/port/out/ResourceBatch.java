@@ -3,6 +3,8 @@
 
 package de.hauschel.arknet.resource.application.port.out;
 
+import java.util.List;
+
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.ReadableGraph;
 
@@ -49,6 +51,20 @@ public interface ResourceBatch {
      * @return the naming state
      */
     ChildFragments childFragments(IRI parent, ReadableGraph current);
+
+    /**
+     * The violations of one shape on one node: {@code shape} is checked as if it targeted
+     * {@code focus} alone, over {@code data} together with the ontology axioms the write gate reasons
+     * over, and reported in the gate's display language. Nothing is written. The engine checks the
+     * condition of a status transition with it; such a shape names no target of its own, so the write
+     * gate never checks it.
+     *
+     * @param shape the named shape, declared in the shapes the gate validates against
+     * @param focus the node the shape is checked on
+     * @param data  the state to check, after the document: the resource's slice and the slices it reaches
+     * @return one message per violation, empty if the shape holds
+     */
+    List<String> violations(IRI shape, IRI focus, ReadableGraph data);
 
     /**
      * Creates a resource.

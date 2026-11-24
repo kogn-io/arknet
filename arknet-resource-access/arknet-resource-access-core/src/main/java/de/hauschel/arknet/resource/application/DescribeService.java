@@ -57,11 +57,13 @@ import de.hauschel.arknet.resource.domain.ResourceSchema.OwnedField;
  *
  * <p>The example of a type creates one resource of it with every required field and one child in
  * every owned field. A required edge to a resource type gets a resource of its own in the same
- * document, so the example runs as it stands against an empty project.</p>
+ * document, so the example runs as it stands against an empty project. A required status field gets
+ * its initial status ({@code arkres:initialStatus}), not the first allowed value.</p>
  *
  * <p>The change examples name that resource by {@link ChangeExample#PLACEHOLDER} and run in their
  * order after the create example once it is replaced by the code or IRI submit returned: an update
- * sets the first text field, or else the first value or choice; a type with owned children adds a second child to its
+ * sets the first text field, or else the first value or choice other than the status field, which
+ * changes only along a transition; a type with owned children adds a second child to its
  * first owned field and removes the first; the delete comes last.</p>
  */
 public final class DescribeService implements DescribeResourceType {
@@ -85,7 +87,10 @@ public final class DescribeService implements DescribeResourceType {
     private static final IRI SPARQL = sh("sparql");
     private static final String LANG_STRING = "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString";
     private static final Set<String> RULE_DATA = Set.of(ArkresVocabulary.RESOURCE_TYPE,
-            ArkresVocabulary.CODE_PREFIX, ArkresVocabulary.CHILD_KIND, ArkresVocabulary.ORDERED_BY);
+            ArkresVocabulary.CODE_PREFIX, ArkresVocabulary.CHILD_KIND, ArkresVocabulary.ORDERED_BY,
+            ArkresVocabulary.INITIAL_STATUS, ArkresVocabulary.TRANSITION_CLASS, ArkresVocabulary.TRANSITION,
+            ArkresVocabulary.FROM_STATUS, ArkresVocabulary.TO_STATUS, ArkresVocabulary.CONDITION,
+            ArkresVocabulary.DELETABLE_IN);
     private static final String EXAMPLE_TEXT = "Example text";
     private static final String EXAMPLE_STRING = "example";
     private static final String DEFAULT_LANGUAGE = "en";
@@ -300,7 +305,7 @@ public final class DescribeService implements DescribeResourceType {
                 + " or <IRI>").orElse("<IRI>") + ", in angle brackets, as submit returned it for the resource of"
                 + " the create example.\n";
         List<ChangeExample> examples = new ArrayList<>();
-        updateValue(fields, language).ifPresent(set -> examples.add(change(ArkresVocabulary.UPDATE, note,
+        updateValue(type, fields, language).ifPresent(set -> examples.add(change(ArkresVocabulary.UPDATE, note,
                 activity(ArkresVocabulary.UPDATE, object) + " ;\n    " + abbreviated(ArkresVocabulary.SET)
                         + " [ " + set + " ] .\n")));
         fields.stream().filter(field -> field.kind() == Kind.CHILDREN).findFirst().ifPresent(owned -> {
@@ -317,7 +322,18 @@ public final class DescribeService implements DescribeResourceType {
         return examples;
     }
 
-    private Optional<String> updateValue(final List<FieldDescription> fields, final String language) {
+    /**
+     * The initial status, when {@code field} is the status field of {@code type}: a created resource
+     * starts there whatever its first allowed value is.
+     */
+    private Optional<String> initialStatus(final IRI type, final FieldDescription field) {
+        return schema.statusField(Set.of(type))
+                .filter(status -> status.property().getIRIString().equals(field.iri()))
+                .map(status -> turtle(status.initial()));
+    }
+
+    private Optional<String> updateValue(final IRI type, final List<FieldDescription> fields,
+            final String language) {
         Optional<FieldDescription> text = fields.stream()
                 .filter(field -> !field.assigned() && field.kind() == Kind.TEXT).findFirst();
         if (text.isPresent()) {
@@ -325,6 +341,7 @@ public final class DescribeService implements DescribeResourceType {
         }
         return fields.stream()
                 .filter(field -> !field.assigned() && (field.kind() == Kind.VALUE || field.kind() == Kind.CHOICE))
+                .filter(field -> initialStatus(type, field).isEmpty())
                 .findFirst()
                 .map(field -> field.name() + " " + (field.kind() == Kind.VALUE ? literal(field.datatype())
                         : field.allowedValues().get(field.allowedValues().size() - 1)));
@@ -386,7 +403,8 @@ public final class DescribeService implements DescribeResourceType {
                 if (field.assigned() || field.presence() != Presence.REQUIRED && field.kind() != Kind.CHILDREN) {
                     continue;
                 }
-                value(field, referenced).ifPresent(value -> lines.add(field.name() + " " + value));
+                Optional<String> value = initialStatus(type, field).or(() -> value(field, referenced));
+                value.ifPresent(written -> lines.add(field.name() + " " + written));
             }
             StringBuilder resource = new StringBuilder()
                     .append("[] a ").append(prefixes.abbreviate(ArkresVocabulary.CREATE)).append(" ; ")

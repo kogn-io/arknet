@@ -40,6 +40,8 @@ import de.hauschel.arknet.resource.application.port.out.ResourceBatch;
 import de.hauschel.arknet.resource.domain.ArkresVocabulary;
 import de.hauschel.arknet.resource.domain.ResourceSchema;
 import de.hauschel.arknet.resource.domain.ResourceSchema.OwnedField;
+import de.hauschel.arknet.resource.domain.ResourceSchema.StatusField;
+import de.hauschel.arknet.resource.domain.ResourceSchema.Transition;
 import de.hauschel.arknet.resource.domain.SubmitRejectedException;
 import de.hauschel.arknet.resource.domain.SubmittedDocument;
 import de.hauschel.arknet.resource.domain.SubmittedDocument.Activity;
@@ -76,6 +78,18 @@ import de.hauschel.arknet.resource.domain.SubmittedDocument.Update;
  * like a stored one, whether or not its shape names a {@code sh:class} the gate would check. The gate cannot catch this itself: it validates what is written, and the holder
  * of the edge is not.</p>
  *
+ * <p><strong>Status.</strong> A type whose shapes mark a status field ({@link ResourceSchema#statusField})
+ * moves only as its rule data says. A create that writes no status gets the initial one, a create
+ * writing another is rejected. An update changes the status only along a declared transition, from
+ * the single status before the document to the single status after it; writing the status a resource
+ * already has is no change and checks nothing. A transition's conditions are named shapes checked on
+ * the changed resource alone, in its state after the document together with the slices it reaches
+ * then ({@link ResourceBatch#violations}) - not on a resource merely referenced, and not later: once
+ * taken, a transition is not undone by a condition that stops holding. A delete is rejected in a
+ * status the field does not name as deletable; a resource stored without status counts as in the
+ * initial status there. A type without a status field is not touched by any
+ * of this.</p>
+ *
  * <p><strong>Codes and children.</strong> A created resource of a type with a code prefix gets the
  * next free code of that prefix, counted over living resources and codes kept by deleted ones. An
  * owned child is the fragment {@code <resource>#<kind>-<id>} of its resource and keeps that name
@@ -99,6 +113,7 @@ final class DocumentApplication {
     private final Map<IRI, Set<IRI>> deletedTypes = new HashMap<>();
     private final Map<Set<IRI>, Set<IRI>> fieldsByTypes = new HashMap<>();
     private final Map<String, Integer> nextNumber = new HashMap<>();
+    private final Map<IRI, Transition> transitions = new LinkedHashMap<>();
     private final List<String> problems = new ArrayList<>();
 
     DocumentApplication(final SubmittedDocument document, final ResourceSchema schema, final ResourceBatch batch,
@@ -120,7 +135,9 @@ final class DocumentApplication {
         List<IRI> created = new ArrayList<>();
         for (Create create : document.creates()) {
             IRI subject = minted.get(create.object());
-            after.put(subject, createdSlice(create, subject));
+            Graph slice = createdSlice(create, subject);
+            startInInitialStatus(subject, slice);
+            after.put(subject, slice);
             created.add(subject);
         }
         List<IRI> updated = new ArrayList<>();
@@ -131,15 +148,24 @@ final class DocumentApplication {
                 return;
             }
             codeOf(current, object).ifPresent(code -> codes.put(object, code));
+            Set<IRI> types = typesOf(current, object);
+            Optional<StatusField> status = schema.statusField(types);
+            Set<RDFTerm> statusBefore = status.map(field -> values(current, object, field.property()))
+                    .orElse(Set.of());
             if (activities.get(0) instanceof Delete) {
+                status.ifPresent(field -> rejectDeleteInStatus(object, field, statusBefore));
                 deleted.add(object);
-                deletedTypes.put(object, typesOf(current, object));
+                deletedTypes.put(object, types);
                 return;
             }
-            after.put(object, changedSlice(object, current, activities));
+            Graph changed = changedSlice(object, current, activities);
+            status.ifPresent(field -> checkTransition(object, field, statusBefore, values(changed, object,
+                    field.property())));
+            after.put(object, changed);
             updated.add(object);
         });
         deletedTypes.forEach(this::rejectEdgesLeftPointingAt);
+        transitions.forEach(this::checkConditions);
         if (!problems.isEmpty()) {
             throw new SubmitRejectedException(String.join("; ", problems));
         }
@@ -479,6 +505,110 @@ final class DocumentApplication {
                 + " their superclasses names it, so a document does not write it; describe lists the fields,"
                 + " and a stored value outside them can still be cleared");
         return false;
+    }
+
+    /**
+     * Gives a created resource of a type with a status field the initial status, and rejects a
+     * create that writes another one.
+     */
+    private void startInInitialStatus(final IRI subject, final Graph slice) {
+        schema.statusField(typesOf(slice, subject)).ifPresent(field -> {
+            Set<RDFTerm> written = values(slice, subject, field.property());
+            if (written.isEmpty()) {
+                slice.add(subject, field.property(), field.initial());
+                return;
+            }
+            if (!written.equals(Set.of(field.initial()))) {
+                problems.add("a created resource starts in the status " + field.initial() + " of "
+                        + field.property().getIRIString() + ", not " + sorted(written) + ": leave the status out or"
+                        + " write that one, and change it later with an update along an "
+                        + ArkresVocabulary.TRANSITION + " the status field declares");
+            }
+        });
+    }
+
+    /**
+     * Records the transition an update takes, or rejects a status change no transition allows. The
+     * same status before and after is no change; a resource stored without a status takes the
+     * initial status first.
+     */
+    private void checkTransition(final IRI subject, final StatusField field, final Set<RDFTerm> before,
+            final Set<RDFTerm> after) {
+        if (before.equals(after)) {
+            return;
+        }
+        String status = field.property().getIRIString() + " of " + subject.getIRIString();
+        if (after.size() != 1) {
+            problems.add(status + " is its status and holds exactly one value after the document, not "
+                    + sorted(after) + "; change it with a set of the new status");
+            return;
+        }
+        RDFTerm to = after.iterator().next();
+        if (before.isEmpty()) {
+            if (!to.equals(field.initial())) {
+                problems.add(status + " holds no status yet, so it takes the initial status " + field.initial()
+                        + " first, not " + to);
+            }
+            return;
+        }
+        RDFTerm from = before.size() == 1 ? before.iterator().next() : null;
+        Optional<Transition> transition = from == null ? Optional.empty() : field.transition(from, to);
+        if (transition.isEmpty()) {
+            List<String> reachable = field.transitions().stream()
+                    .filter(candidate -> candidate.from().equals(from))
+                    .map(candidate -> candidate.to().toString())
+                    .sorted()
+                    .toList();
+            problems.add(status + " does not change from " + sorted(before) + " to " + to + ": no "
+                    + ArkresVocabulary.TRANSITION + " of the status field allows it; from this status it leads to "
+                    + (reachable.isEmpty() ? "no other status" : String.join(", ", reachable)));
+            return;
+        }
+        if (!transition.get().conditions().isEmpty()) {
+            transitions.put(subject, transition.get());
+        }
+    }
+
+    /**
+     * Checks the conditions of a transition on the changed resource, in its state after the document
+     * together with every slice it reaches then.
+     */
+    private void checkConditions(final IRI subject, final Transition transition) {
+        Graph data = copy(after.get(subject));
+        context(subject).stream().forEach(data::add);
+        for (IRI condition : transition.conditions()) {
+            List<String> violations = batch.violations(condition, subject, data);
+            if (!violations.isEmpty()) {
+                problems.add(subject.getIRIString() + " does not change its status from " + transition.from() + " to "
+                        + transition.to() + ": the condition " + condition.getIRIString() + " of that "
+                        + ArkresVocabulary.TRANSITION + " does not hold after the document: "
+                        + String.join("; ", violations));
+            }
+        }
+    }
+
+    /**
+     * Rejects the delete of a resource whose status the status field does not name as deletable. A
+     * resource stored without status counts as in the initial status, as for an update.
+     */
+    private void rejectDeleteInStatus(final IRI subject, final StatusField field, final Set<RDFTerm> status) {
+        Set<RDFTerm> current = status.isEmpty() ? Set.of(field.initial()) : status;
+        if (field.deletable().isEmpty() || current.size() == 1 && field.deletableIn(current.iterator().next())) {
+            return;
+        }
+        String held = status.isEmpty() ? "it holds no status, so it counts as in the initial status "
+                + field.initial() + ", which" : "its status " + sorted(status);
+        problems.add(subject.getIRIString() + " is not deleted: " + held + " in "
+                + field.property().getIRIString() + " is none of the statuses it may be deleted in ("
+                + ArkresVocabulary.DELETABLE_IN + "): " + sorted(field.deletable()));
+    }
+
+    private static Set<RDFTerm> values(final ReadableGraph slice, final IRI subject, final IRI property) {
+        return slice.stream(subject, property, null).map(Triple::getObject).collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static List<String> sorted(final Set<RDFTerm> terms) {
+        return terms.stream().map(RDFTerm::toString).sorted().toList();
     }
 
     /**

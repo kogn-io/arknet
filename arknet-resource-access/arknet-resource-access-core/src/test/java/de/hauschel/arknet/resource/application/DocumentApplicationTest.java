@@ -9,10 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -22,16 +19,12 @@ import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.RDFTerm;
-import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabRdfs;
 import io.kogn.rdf.terms.vocab.VocabXsd;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.persistence.ChildFragments;
-import de.hauschel.arknet.persistence.ChildIdSource;
-import de.hauschel.arknet.resource.application.port.out.ResourceBatch;
 import de.hauschel.arknet.resource.domain.ArkresVocabulary;
 import de.hauschel.arknet.resource.domain.ResourceSchema;
 import de.hauschel.arknet.resource.domain.SubmitRejectedException;
@@ -398,61 +391,5 @@ class DocumentApplicationTest {
 
     private static RDFTerm literal(final String text) {
         return RDF_FACTORY.createLiteral(text);
-    }
-
-    /** An in-memory batch over one graph holding every stored resource with its fragment children. */
-    private static final class FakeBatch implements ResourceBatch {
-
-        private final Graph store = RDF_FACTORY.createGraph();
-        private final List<IRI> created = new ArrayList<>();
-        private final Map<IRI, ReadableGraph> updated = new HashMap<>();
-        private final List<IRI> deleted = new ArrayList<>();
-
-        private void add(final IRI subject, final IRI predicate, final RDFTerm object) {
-            store.add(subject, predicate, object);
-        }
-
-        @Override
-        public ReadableGraph slice(final IRI subject) {
-            Graph slice = RDF_FACTORY.createGraph();
-            store.stream()
-                    .filter(triple -> triple.getSubject() instanceof IRI iri
-                            && (iri.equals(subject) || iri.getIRIString().startsWith(subject.getIRIString() + "#")))
-                    .forEach(slice::add);
-            return slice;
-        }
-
-        @Override
-        public ReadableGraph pointingAt(final IRI resource) {
-            Graph triples = RDF_FACTORY.createGraph();
-            store.stream(null, null, resource).forEach(triples::add);
-            return triples;
-        }
-
-        @Override
-        public int highestRunningNumber(final String codePrefix) {
-            return 0;
-        }
-
-        @Override
-        public ChildFragments childFragments(final IRI parent, final ReadableGraph current) {
-            return ChildFragments.of(parent, current, ChildIdSource.random());
-        }
-
-        @Override
-        public void create(final IRI subject, final String code, final ReadableGraph slice,
-                final ReadableGraph context) {
-            created.add(subject);
-        }
-
-        @Override
-        public void update(final IRI subject, final ReadableGraph slice, final ReadableGraph context) {
-            updated.put(subject, slice);
-        }
-
-        @Override
-        public void delete(final IRI subject, final String code) {
-            deleted.add(subject);
-        }
     }
 }
