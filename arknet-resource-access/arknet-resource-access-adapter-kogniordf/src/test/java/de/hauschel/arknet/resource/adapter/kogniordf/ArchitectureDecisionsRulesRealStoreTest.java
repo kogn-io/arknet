@@ -23,6 +23,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
@@ -211,6 +213,27 @@ class ArchitectureDecisionsRulesRealStoreTest {
         // then
         assertTrue(rejected.getMessage().contains("A Proposed decision carries no arkarch:decisionDate"),
                 rejected.getMessage());
+    }
+
+    @Test
+    void aProposedRecordDatedBeforeTheRuleClearsItsDate() {
+        // given: a date stored past the gate, as written before the typed core stamped it at the transition
+        String adr = proposed("");
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <" + adr + "> <"
+                        + DECISION_DATE + "> \"2026-08-01\"^^<http://www.w3.org/2001/XMLSchema#date> } }");
+                return null;
+            });
+        }
+        assertEquals(Set.of("2026-08-01"), field(adr, DECISION_DATE));
+
+        // when
+        submit("[] a arkres:Update ; arkres:object <" + adr + "> ; arkres:clear arkarch:decisionDate .\n");
+
+        // then
+        assertEquals(Set.of(), field(adr, DECISION_DATE));
+        assertEquals(Set.of(ARKARCH + "Proposed"), field(adr, STATUS));
     }
 
     @ParameterizedTest
