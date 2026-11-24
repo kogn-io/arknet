@@ -5,11 +5,15 @@ package de.hauschel.arknet.resource.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -26,10 +30,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
+import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
+import io.kogn.rdf.shacl.ValidationOptions;
+import io.kogn.rdf.terms.Graph;
+import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.RdfNode;
+import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.domain.SubmitRejectedException;
@@ -153,7 +162,7 @@ class ProductRequirementsRulesRealStoreTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"Implemented", "Verified", "Rejected", "Deprecated"})
-    void aRequirementCannotMoveToAStatusBeyondProposedAndAccepted(final String status) {
+    void aRequirementCannotMoveToAStatusNoTransitionLeadsTo(final String status) {
         // given
         String requirement = storedRequirement();
 
@@ -161,18 +170,46 @@ class ProductRequirementsRulesRealStoreTest {
         SubmitRejectedException rejected = rejected(setStatus(requirement, status));
 
         // then
-        assertTrue(rejected.getMessage().contains(REQ + "status"), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("no https://w3id.org/arknet/resource#transition"),
+                rejected.getMessage());
         assertEquals(Set.of(REQ + "Proposed"), statusOf(requirement));
     }
 
     @Test
-    void aRequirementWithoutStatusIsRejectedByTheShape() {
+    void clearingTheStatusOfARequirementIsRejectedByTheEngine() {
         // when
         SubmitRejectedException rejected = rejected(
                 "[] a arkres:Update ; arkres:object <" + storedRequirement() + "> ; arkres:clear arkreq:status .\n");
 
         // then
-        assertTrue(rejected.getMessage().contains(REQ + "status"), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("is its status and holds exactly one value"),
+                rejected.getMessage());
+    }
+
+    /** The engine checks come first on submit; the shape itself is shown against the gate's own shapes. */
+    @Test
+    void theStatusShapeRequiresExactlyOneOfProposedAndAccepted() {
+        // given
+        ShaclWriteGate gate = new ShaclWriteGate(new ShaclValidationRdf4j(), KognioRdfResourceRepositoryFactory.shapes(),
+                new SimpleRdf().createGraph(), new ValidationOptions(true), DisplayLocale.DEFAULT);
+        String subject = "<https://example.org/fr> a <" + REQ + "Requirement> ; ";
+
+        // when / then
+        assertTrue(statusViolations(gate, subject + "<" + REQ + "status> <" + REQ + "Proposed> .").isEmpty());
+        assertTrue(statusViolations(gate, subject + "<" + REQ + "status> <" + REQ + "Accepted> .").isEmpty());
+        List<String> implemented = statusViolations(gate, subject + "<" + REQ + "status> <" + REQ
+                + "Implemented> .");
+        assertFalse(implemented.isEmpty(), implemented.toString());
+        assertFalse(statusViolations(gate, subject + "<" + REQ + "priority> <" + REQ + "MustHave> .").isEmpty());
+        assertFalse(statusViolations(gate, subject + "<" + REQ + "status> <" + REQ + "Proposed> , <" + REQ
+                + "Accepted> .").isEmpty());
+    }
+
+    private static List<String> statusViolations(final ShaclWriteGate gate, final String turtle) {
+        Graph candidate = KognioRdfResourceRepositoryFactory.parser()
+                .readTurtle(new ByteArrayInputStream(turtle.getBytes(StandardCharsets.UTF_8)));
+        return gate.violations(candidate, new SimpleRdf().createGraph()).stream()
+                .filter(violation -> violation.contains("status")).toList();
     }
 
     @ParameterizedTest

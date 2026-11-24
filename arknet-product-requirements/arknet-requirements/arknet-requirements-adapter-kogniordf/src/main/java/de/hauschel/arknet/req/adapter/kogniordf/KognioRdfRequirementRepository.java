@@ -161,11 +161,12 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * value combination), it just returns a value combination the store cannot guarantee is "the"
  * one.</p>
  *
- * <p><strong>SHACL-legal but MVP-unsupported status.</strong> {@code requirements-shapes.ttl}'s
- * {@code Requirement-status} shape allows six status individuals via {@code sh:in}, but
- * {@link de.hauschel.arknet.req.domain.RequirementStatus} implements only two ({@code
- * PROPOSED}/{@code ACCEPTED}). A store-first requirement carrying one of the other four
- * is therefore SHACL-legal but cannot be decoded: {@link #findByCode}, {@link #findCurrentByCode}
+ * <p><strong>Status outside the shape.</strong> {@code requirements-shapes.ttl}'s
+ * {@code Requirement-status} shape allows exactly the two statuses {@link
+ * de.hauschel.arknet.req.domain.RequirementStatus} implements ({@code PROPOSED}/{@code
+ * ACCEPTED}) via {@code sh:in}. A requirement that reached the store past the gate (written
+ * before the shape narrowed, or straight into the graph) may still carry one of the other
+ * four vocabulary individuals and cannot be decoded: {@link #findByCode}, {@link #findCurrentByCode}
  * and {@link #findAll} all throw {@link
  * de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException} for it, naming the
  * requirement and the unsupported status, rather than silently filtering it out of the result (see
@@ -1953,9 +1954,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * <p>Unlike {@link #typeFromIri}, whose only two legal inputs are guaranteed by
      * {@link #requirementWhereClause}'s {@code FILTER} on {@code ?type}, {@code ?status} is
      * <strong>not</strong> filtered the same way: {@code requirements-shapes.ttl}'s
-     * {@code Requirement-status} shape SHACL-legally allows six status individuals, but
-     * {@link RequirementStatus} only implements two. Filtering the other four out here would
-     * silently make a SHACL-legal, store-first requirement invisible to
+     * {@code Requirement-status} shape allows only the two individuals {@link RequirementStatus} implements, but a requirement
+     * stored past the gate (before the shape narrowed) can still carry one of the other four.
+     * Filtering those out here would silently make such a requirement invisible to
      * {@code req_list}/{@code req_get} instead of failing loudly -
      * {@link UnsupportedRequirementStatusException} is thrown directly (never as a wrapped
      * {@link IllegalStateException}) so the caller sees which requirement and which unsupported

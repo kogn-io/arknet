@@ -1093,11 +1093,10 @@ class KognioRdfRequirementRepositoryTest {
 
     /**
      * Store-first regression test for issue #160: {@code requirements-shapes.ttl}'s
-     * {@code Requirement-status} shape SHACL-legally allows six status individuals via
-     * {@code sh:in}, but {@link RequirementStatus} implements only two
-     * ({@code PROPOSED}/{@code ACCEPTED}) - {@code arkreq:Rejected} is unreachable via
-     * {@code req_add}/{@code req_set_status}, but a store-first edit can legally write
-     * it. Before the fix, {@code statusFromIri} threw a raw, uncaught {@link IllegalStateException}
+     * {@code Requirement-status} shape allows only the two statuses {@link RequirementStatus} implements
+     * ({@code PROPOSED}/{@code ACCEPTED}) via {@code sh:in} - {@code arkreq:Rejected} is
+     * unreachable via {@code req_add}/{@code req_set_status}, but a value written past the gate
+     * (before the shape narrowed) can still carry it. Before the fix, {@code statusFromIri} threw a raw, uncaught {@link IllegalStateException}
      * that named neither the requirement nor which method it broke; the dedicated exception must
      * name both.
      */
@@ -1151,7 +1150,7 @@ class KognioRdfRequirementRepositoryTest {
 
     /**
      * Writes an {@code arkreq:FunctionalRequirement} straight into the requirements graph with an
-     * arbitrary {@code arkreq:status} object - used to reach the four SHACL-legal status
+     * arbitrary {@code arkreq:status} object - used to reach the four vocabulary status
      * individuals ({@code Rejected}/{@code Implemented}/{@code Verified}/{@code Deprecated})
      * {@link RequirementStatus} does not implement, unreachable via {@code req_add}/
      * {@code req_set_status}.

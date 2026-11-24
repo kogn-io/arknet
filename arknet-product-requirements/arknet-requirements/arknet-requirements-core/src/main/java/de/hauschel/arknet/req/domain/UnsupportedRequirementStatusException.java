@@ -10,11 +10,11 @@ import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
- * Thrown when a requirement's persisted {@code arkreq:status} denotes a value the requirements
- * SHACL shapes accept (see {@code requirements-shapes.ttl}'s {@code Requirement-status} shape,
- * which enumerates six individuals via {@code sh:in}) but {@link RequirementStatus} - deliberately
- * limited to an MVP subset ({@link RequirementStatus#PROPOSED}/{@link RequirementStatus#ACCEPTED})
- * per its own Javadoc - does not implement.
+ * Thrown when a requirement's persisted {@code arkreq:status} denotes a vocabulary individual
+ * {@link RequirementStatus} ({@link RequirementStatus#PROPOSED}/{@link RequirementStatus#ACCEPTED})
+ * does not implement. The {@code Requirement-status} shape of {@code requirements-shapes.ttl}
+ * admits only those two via {@code sh:in}, so such a value reaches the store only past the gate
+ * (written before the shape narrowed, or straight into the graph).
  *
  * <p><strong>Adapter-boundary translation, not a domain outcome.</strong> A SHACL-legal status
  * this narrow can only reach a requirement store-first (no MCP tool writes one of the
