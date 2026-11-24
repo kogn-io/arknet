@@ -1255,7 +1255,7 @@ public class ArknetMcpConfiguration {
             return new SubmitService(KognioRdfResourceRepositoryFactory.schema(), resourceRepository,
                     KognioRdfResourceRepositoryFactory.parser(), resourceIdFactory,
                     KognioRdfResourceRepositoryFactory.prefixes(),
-                    KognioRdfResourceRepositoryFactory.handles(datasetLifecycle));
+                    KognioRdfResourceRepositoryFactory.handles(datasetLifecycle), Clock.systemDefaultZone());
         }
 
         @Bean

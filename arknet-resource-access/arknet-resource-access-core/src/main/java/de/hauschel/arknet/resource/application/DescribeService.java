@@ -64,7 +64,9 @@ import de.hauschel.arknet.resource.domain.ResourceSchema.OwnedField;
  * order after the create example once it is replaced by the code or IRI submit returned: an update
  * sets the first text field, or else the first value or choice other than the status field, which
  * changes only along a transition; a type with owned children adds a second child to its
- * first owned field and removes the first; the delete comes last.</p>
+ * first owned field and removes the first; the delete comes last. Neither picks a field that keeps
+ * the values its create wrote ({@code arkres:immutable}) or a field of a group not editable in the
+ * initial status ({@code arkres:fieldGroup}).</p>
  */
 public final class DescribeService implements DescribeResourceType {
 
@@ -90,7 +92,10 @@ public final class DescribeService implements DescribeResourceType {
             ArkresVocabulary.CODE_PREFIX, ArkresVocabulary.CHILD_KIND, ArkresVocabulary.ORDERED_BY,
             ArkresVocabulary.INITIAL_STATUS, ArkresVocabulary.TRANSITION_CLASS, ArkresVocabulary.TRANSITION,
             ArkresVocabulary.FROM_STATUS, ArkresVocabulary.TO_STATUS, ArkresVocabulary.CONDITION,
-            ArkresVocabulary.DELETABLE_IN);
+            ArkresVocabulary.DELETABLE_IN, ArkresVocabulary.FIELD_GROUP_CLASS, ArkresVocabulary.FIELD_GROUP,
+            ArkresVocabulary.GROUP_FIELD, ArkresVocabulary.EDITABLE_IN, ArkresVocabulary.IMMUTABLE,
+            ArkresVocabulary.DEFAULT_CLASS, ArkresVocabulary.DEFAULT, ArkresVocabulary.DEFAULT_FIELD,
+            ArkresVocabulary.DEFAULT_VALUE, ArkresVocabulary.TODAY);
     private static final String EXAMPLE_TEXT = "Example text";
     private static final String EXAMPLE_STRING = "example";
     private static final String DEFAULT_LANGUAGE = "en";
@@ -308,7 +313,8 @@ public final class DescribeService implements DescribeResourceType {
         updateValue(type, fields, language).ifPresent(set -> examples.add(change(ArkresVocabulary.UPDATE, note,
                 activity(ArkresVocabulary.UPDATE, object) + " ;\n    " + abbreviated(ArkresVocabulary.SET)
                         + " [ " + set + " ] .\n")));
-        fields.stream().filter(field -> field.kind() == Kind.CHILDREN).findFirst().ifPresent(owned -> {
+        fields.stream().filter(field -> field.kind() == Kind.CHILDREN && changeable(type, field)).findFirst()
+                .ifPresent(owned -> {
             ExampleWriter writer = new ExampleWriter(language, locale, ADDED_TEXT);
             String child = writer.child(owned.children().orElseThrow(), ADDED_POSITION);
             examples.add(change(ArkresVocabulary.ADD_TO, note, writer.text()
@@ -335,16 +341,30 @@ public final class DescribeService implements DescribeResourceType {
     private Optional<String> updateValue(final IRI type, final List<FieldDescription> fields,
             final String language) {
         Optional<FieldDescription> text = fields.stream()
-                .filter(field -> !field.assigned() && field.kind() == Kind.TEXT).findFirst();
+                .filter(field -> !field.assigned() && field.kind() == Kind.TEXT && changeable(type, field)).findFirst();
         if (text.isPresent()) {
             return text.map(field -> field.name() + " \"" + CHANGED_TEXT + "\"@" + language);
         }
         return fields.stream()
                 .filter(field -> !field.assigned() && (field.kind() == Kind.VALUE || field.kind() == Kind.CHOICE))
-                .filter(field -> initialStatus(type, field).isEmpty())
+                .filter(field -> initialStatus(type, field).isEmpty() && changeable(type, field))
                 .findFirst()
                 .map(field -> field.name() + " " + (field.kind() == Kind.VALUE ? literal(field.datatype())
                         : field.allowedValues().get(field.allowedValues().size() - 1)));
+    }
+
+    /**
+     * Whether a document changes {@code field} of a freshly created resource freely: it is not
+     * immutable, and no field group holds it that the initial status does not name as editable.
+     */
+    private boolean changeable(final IRI type, final FieldDescription field) {
+        IRI property = RDF_FACTORY.createIRI(field.iri());
+        if (schema.immutableFields(Set.of(type)).contains(property)) {
+            return false;
+        }
+        return schema.statusField(Set.of(type)).map(status -> status.groups().stream()
+                .noneMatch(group -> group.fields().contains(property) && !group.editableIn(status.initial())))
+                .orElse(true);
     }
 
     private ChangeExample change(final String activity, final String note, final String body) {

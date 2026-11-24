@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -328,7 +329,7 @@ class StatusTransitionsRealStoreTest {
     static SubmitService service(final DatasetLifecycle lifecycle, final ResourceRepository repository) {
         return new SubmitService(ResourceSchema.of(turtle(SHAPES), turtle(ONTOLOGY)), repository,
                 KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(), BINDINGS,
-                KognioRdfResourceRepositoryFactory.handles(lifecycle));
+                KognioRdfResourceRepositoryFactory.handles(lifecycle), Clock.systemDefaultZone());
     }
 
     /** The store side over the ticket fixture's rule data. */

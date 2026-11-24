@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.resource.application;
 
+import java.time.LocalDate;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -11,6 +12,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -39,6 +41,8 @@ import de.hauschel.arknet.resource.application.port.in.SubmittedChange;
 import de.hauschel.arknet.resource.application.port.out.ResourceBatch;
 import de.hauschel.arknet.resource.domain.ArkresVocabulary;
 import de.hauschel.arknet.resource.domain.ResourceSchema;
+import de.hauschel.arknet.resource.domain.ResourceSchema.DefaultValue;
+import de.hauschel.arknet.resource.domain.ResourceSchema.FieldGroup;
 import de.hauschel.arknet.resource.domain.ResourceSchema.OwnedField;
 import de.hauschel.arknet.resource.domain.ResourceSchema.StatusField;
 import de.hauschel.arknet.resource.domain.ResourceSchema.Transition;
@@ -90,6 +94,18 @@ import de.hauschel.arknet.resource.domain.SubmittedDocument.Update;
  * initial status there. A type without a status field is not touched by any
  * of this.</p>
  *
+ * <p><strong>Before and after.</strong> The gate sees only the state after the document; the rules
+ * that compare it with the state before are the engine's. A field group of the status field
+ * ({@link FieldGroup}) is checked when the status before the document is none it names as editable:
+ * its fields keep every value and take only values in a language none of them carried, and a list it
+ * holds keeps every child with its position and values, grows only after the last child, and a kept
+ * child takes only text in a language it did not carry. An immutable field
+ * ({@link ResourceSchema#immutableFields}) of the resource or a kept child keeps exactly its values.
+ * A transition writes its defaults into every field the document does not name for that resource,
+ * replacing what the field held, after these checks and before its conditions: the defaults are the
+ * rule data's own write, not the document's. A type without such rule data is not touched by any of
+ * this.</p>
+ *
  * <p><strong>Codes and children.</strong> A created resource of a type with a code prefix gets the
  * next free code of that prefix, counted over living resources and codes kept by deleted ones. An
  * owned child is the fragment {@code <resource>#<kind>-<id>} of its resource and keeps that name
@@ -105,6 +121,7 @@ final class DocumentApplication {
     private final ResourceSchema schema;
     private final ResourceBatch batch;
     private final ResourceIdFactory ids;
+    private final LocalDate today;
     private final ReadableGraph source;
     private final Map<BlankNode, IRI> minted = new HashMap<>();
     private final Map<IRI, Graph> after = new LinkedHashMap<>();
@@ -112,16 +129,18 @@ final class DocumentApplication {
     private final Set<IRI> deleted = new HashSet<>();
     private final Map<IRI, Set<IRI>> deletedTypes = new HashMap<>();
     private final Map<Set<IRI>, Set<IRI>> fieldsByTypes = new HashMap<>();
+    private final Map<Set<IRI>, Set<IRI>> immutableByTypes = new HashMap<>();
     private final Map<String, Integer> nextNumber = new HashMap<>();
     private final Map<IRI, Transition> transitions = new LinkedHashMap<>();
     private final List<String> problems = new ArrayList<>();
 
     DocumentApplication(final SubmittedDocument document, final ResourceSchema schema, final ResourceBatch batch,
-            final ResourceIdFactory ids) {
+            final ResourceIdFactory ids, final LocalDate today) {
         this.document = document;
         this.schema = schema;
         this.batch = batch;
         this.ids = ids;
+        this.today = today;
         this.source = document.graph();
     }
 
@@ -158,9 +177,13 @@ final class DocumentApplication {
                 deletedTypes.put(object, types);
                 return;
             }
+            Graph before = copy(current);
             Graph changed = changedSlice(object, current, activities);
-            status.ifPresent(field -> checkTransition(object, field, statusBefore, values(changed, object,
-                    field.property())));
+            Optional<Transition> taken = status.flatMap(field -> checkTransition(object, field, statusBefore,
+                    values(changed, object, field.property())));
+            rejectChangedImmutableFields(before, changed);
+            status.ifPresent(field -> rejectChangesOfFrozenGroups(object, field, statusBefore, before, changed));
+            taken.ifPresent(transition -> writeDefaults(object, changed, transition, activities));
             after.put(object, changed);
             updated.add(object);
         });
@@ -532,16 +555,16 @@ final class DocumentApplication {
      * same status before and after is no change; a resource stored without a status takes the
      * initial status first.
      */
-    private void checkTransition(final IRI subject, final StatusField field, final Set<RDFTerm> before,
-            final Set<RDFTerm> after) {
+    private Optional<Transition> checkTransition(final IRI subject, final StatusField field,
+            final Set<RDFTerm> before, final Set<RDFTerm> after) {
         if (before.equals(after)) {
-            return;
+            return Optional.empty();
         }
         String status = field.property().getIRIString() + " of " + subject.getIRIString();
         if (after.size() != 1) {
             problems.add(status + " is its status and holds exactly one value after the document, not "
                     + sorted(after) + "; change it with a set of the new status");
-            return;
+            return Optional.empty();
         }
         RDFTerm to = after.iterator().next();
         if (before.isEmpty()) {
@@ -549,7 +572,7 @@ final class DocumentApplication {
                 problems.add(status + " holds no status yet, so it takes the initial status " + field.initial()
                         + " first, not " + to);
             }
-            return;
+            return Optional.empty();
         }
         RDFTerm from = before.size() == 1 ? before.iterator().next() : null;
         Optional<Transition> transition = from == null ? Optional.empty() : field.transition(from, to);
@@ -562,11 +585,144 @@ final class DocumentApplication {
             problems.add(status + " does not change from " + sorted(before) + " to " + to + ": no "
                     + ArkresVocabulary.TRANSITION + " of the status field allows it; from this status it leads to "
                     + (reachable.isEmpty() ? "no other status" : String.join(", ", reachable)));
-            return;
+            return Optional.empty();
         }
         if (!transition.get().conditions().isEmpty()) {
             transitions.put(subject, transition.get());
         }
+        return transition;
+    }
+
+    /**
+     * Rejects every change of an immutable field of the resource or of a child it keeps: the values
+     * after the document are exactly those before it, none added, none removed.
+     */
+    private void rejectChangedImmutableFields(final ReadableGraph before, final ReadableGraph after) {
+        before.stream().map(Triple::getSubject).filter(IRI.class::isInstance).map(IRI.class::cast).distinct()
+                .forEach(node -> {
+                    Set<IRI> types = typesOf(before, node);
+                    if (types.isEmpty() || typesOf(after, node).isEmpty()) {
+                        return;
+                    }
+                    for (IRI field : immutableByTypes.computeIfAbsent(types, schema::immutableFields)) {
+                        Set<RDFTerm> was = values(before, node, field);
+                        Set<RDFTerm> now = values(after, node, field);
+                        if (!was.equals(now)) {
+                            problems.add(field.getIRIString() + " of " + node.getIRIString()
+                                    + " keeps the values its create wrote (" + ArkresVocabulary.IMMUTABLE
+                                    + "): it holds " + sorted(was) + ", and the document would leave " + sorted(now));
+                        }
+                    }
+                });
+    }
+
+    /**
+     * Rejects the changes of every field group the status before the document does not name as
+     * editable, beyond what a group takes outside those statuses: values in a language new to the
+     * group, new children after the last, and text in a language new to a kept child. A resource
+     * stored without status counts as in the initial status; one holding two counts as in none.
+     */
+    private void rejectChangesOfFrozenGroups(final IRI subject, final StatusField field,
+            final Set<RDFTerm> statusBefore, final ReadableGraph before, final ReadableGraph after) {
+        Set<RDFTerm> current = statusBefore.isEmpty() ? Set.of(field.initial()) : statusBefore;
+        for (FieldGroup group : field.groups()) {
+            if (current.size() == 1 && group.editableIn(current.iterator().next())) {
+                continue;
+            }
+            List<String> changes = new ArrayList<>();
+            List<IRI> plain = group.fields().stream().filter(property -> schema.ownedField(property).isEmpty())
+                    .toList();
+            List<Triple> held = plain.stream().flatMap(property -> before.stream(subject, property, null)).toList();
+            List<Triple> kept = plain.stream().flatMap(property -> after.stream(subject, property, null)).toList();
+            Set<String> groupLanguages = languages(held);
+            changes.addAll(grownOnly(held, kept, before, after, groupLanguages));
+            group.fields().stream().filter(property -> schema.ownedField(property).isPresent())
+                    .forEach(property -> before.stream(subject, property, null).map(Triple::getObject)
+                            .filter(IRI.class::isInstance).map(IRI.class::cast)
+                            .forEach(child -> {
+                                if (!after.contains(RDF_FACTORY.createTriple(subject, property, child))) {
+                                    changes.add("removes the child " + child.getIRIString() + " from "
+                                            + property.getIRIString());
+                                    return;
+                                }
+                                List<Triple> childBefore = before.stream(child, null, null).toList();
+                                changes.addAll(grownOnly(childBefore, after.stream(child, null, null).toList(),
+                                        before, after, languages(childBefore)));
+                            }));
+            if (!changes.isEmpty()) {
+                problems.add(subject.getIRIString() + " is in the status " + sorted(current) + ", in which its fields "
+                        + group.fields().stream().map(IRI::getIRIString).sorted().toList() + " only grow ("
+                        + ArkresVocabulary.FIELD_GROUP + ", " + ArkresVocabulary.EDITABLE_IN + " "
+                        + sorted(group.editable()) + "): they keep every value and take only values in a language"
+                        + " none of them carries yet (they carry " + new TreeSet<>(groupLanguages) + "), and a list"
+                        + " keeps every child with its position and values, takes new children after the last one,"
+                        + " and a kept child takes only text in a language that child does not carry yet; the"
+                        + " document " + String.join("; ", changes));
+            }
+        }
+    }
+
+    /**
+     * The changes from {@code was} to {@code now} beyond growth: a triple removed, or one added that
+     * is no literal in a language outside {@code languages}.
+     */
+    private static List<String> grownOnly(final List<Triple> was, final List<Triple> now, final ReadableGraph before,
+            final ReadableGraph after, final Set<String> languages) {
+        List<String> changes = new ArrayList<>();
+        was.stream().filter(triple -> !after.contains(triple)).forEach(triple -> changes.add("removes "
+                + triple.getObject() + " from " + triple.getPredicate().getIRIString() + " of "
+                + triple.getSubject()));
+        now.stream().filter(triple -> !before.contains(triple))
+                .filter(triple -> languageOf(triple.getObject()).map(tag -> languages.contains(normalized(tag)))
+                        .orElse(true))
+                .forEach(triple -> changes.add("adds " + triple.getObject() + " to "
+                        + triple.getPredicate().getIRIString() + " of " + triple.getSubject()));
+        return changes;
+    }
+
+    private static Set<String> languages(final List<Triple> triples) {
+        return triples.stream().map(Triple::getObject).map(DocumentApplication::languageOf).flatMap(Optional::stream)
+                .map(DocumentApplication::normalized).collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static String normalized(final String languageTag) {
+        return languageTag.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Writes the defaults of a transition into every field the document names nowhere for the
+     * resource, replacing what the field held.
+     */
+    private void writeDefaults(final IRI subject, final Graph slice, final Transition transition,
+            final List<Activity> activities) {
+        Set<IRI> named = namedFields(activities);
+        for (DefaultValue value : transition.defaults()) {
+            if (named.contains(value.field())) {
+                continue;
+            }
+            removeValues(slice, subject, value.field(), object -> true);
+            slice.add(subject, value.field(), value.today()
+                    ? RDF_FACTORY.createLiteral(today.toString(), VocabXsd.DATE) : value.value());
+        }
+    }
+
+    /** The fields the activities on one resource name: cleared, set, added to or removed from. */
+    private Set<IRI> namedFields(final List<Activity> activities) {
+        Set<IRI> named = new HashSet<>();
+        for (Activity activity : activities) {
+            switch (activity) {
+                case Update update -> {
+                    named.addAll(update.clears());
+                    update.sets().forEach(values -> source.stream(values, null, null)
+                            .forEach(triple -> named.add(triple.getPredicate())));
+                }
+                case AddTo addTo -> named.add(addTo.field());
+                case RemoveFrom removeFrom -> named.add(removeFrom.field());
+                default -> {
+                }
+            }
+        }
+        return named;
     }
 
     /**

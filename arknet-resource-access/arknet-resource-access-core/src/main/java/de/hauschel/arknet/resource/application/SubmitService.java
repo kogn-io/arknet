@@ -5,6 +5,8 @@ package de.hauschel.arknet.resource.application;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,6 +66,7 @@ public final class SubmitService implements SubmitDocument {
     private final ResourceIdFactory ids;
     private final PrefixBindings prefixes;
     private final HandleLookup handles;
+    private final Clock clock;
 
     /**
      * Creates the engine.
@@ -74,15 +77,18 @@ public final class SubmitService implements SubmitDocument {
      * @param ids        mints the IRIs of created resources
      * @param prefixes   the prefixes the shipped files bind, known to every document and declared in rejections
      * @param handles    finds the resource a handle names
+     * @param clock      supplies the day a default value {@code arkres:today} stands for, in its zone
      */
     public SubmitService(final ResourceSchema schema, final ResourceRepository repository, final GraphImport parser,
-            final ResourceIdFactory ids, final PrefixBindings prefixes, final HandleLookup handles) {
+            final ResourceIdFactory ids, final PrefixBindings prefixes, final HandleLookup handles,
+            final Clock clock) {
         this.schema = Objects.requireNonNull(schema, "schema");
         this.repository = Objects.requireNonNull(repository, "repository");
         this.parser = Objects.requireNonNull(parser, "parser");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
         this.handles = Objects.requireNonNull(handles, "handles");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     @Override
@@ -102,8 +108,9 @@ public final class SubmitService implements SubmitDocument {
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             try {
                 List<SubmittedChange> changes = new ArrayList<>();
+                LocalDate today = LocalDate.now(clock);
                 repository.writeAll(projectId,
-                        batch -> changes.addAll(new DocumentApplication(parsed, schema, batch, ids).apply()));
+                        batch -> changes.addAll(new DocumentApplication(parsed, schema, batch, ids, today).apply()));
                 return new SubmitResult(changes);
             } catch (SubmitConflictException e) {
                 lost = e;

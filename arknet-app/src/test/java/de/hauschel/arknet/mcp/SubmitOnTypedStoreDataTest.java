@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -591,7 +592,7 @@ class SubmitOnTypedStoreDataTest {
                     KognioRdfResourceRepositoryFactory.over(lifecycle, context.getBean(DisplayLocale.class)),
                     KognioRdfResourceRepositoryFactory.parser(), context.getBean(ResourceIdFactory.class),
                     KognioRdfResourceRepositoryFactory.prefixes(),
-                    KognioRdfResourceRepositoryFactory.handles(lifecycle));
+                    KognioRdfResourceRepositoryFactory.handles(lifecycle), Clock.systemDefaultZone());
         }
 
         <T> T bean(final Class<T> type) {

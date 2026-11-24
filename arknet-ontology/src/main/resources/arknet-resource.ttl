@@ -24,8 +24,11 @@
 #         and the prefix of their business codes, which edges own their
 #         children and by which property those are ordered, and which field
 #         carries a status with its initial value, its transitions and the
-#         statuses a resource may be deleted in. Shapes check a resource;
-#         these annotations say how a resource is built and how it moves.
+#         statuses a resource may be deleted in, which fields freeze outside
+#         some statuses or stay as created, and which values a transition
+#         writes by default. Shapes check a resource after a write; these
+#         annotations say how a resource is built, how it moves and what a
+#         write may change compared to the state before it.
 ##############################################################################
 
 @prefix arkres:  <https://w3id.org/arknet/resource#> .
@@ -174,3 +177,55 @@ arkres:condition a owl:ObjectProperty ;
 arkres:deletableIn a rdf:Property ;
     rdfs:label   "deletable in"@en , "loeschbar in"@de ;
     rdfs:comment "Set on the property shape of a status field: a status in which a resource may be deleted. A status field naming none leaves deletion open in every status; one naming some rejects a delete in any other status. A resource stored without status counts as in the initial status."@en , "An der Property-Shape eines Statusfelds gesetzt: ein Status, in dem eine Ressource geloescht werden darf. Ein Statusfeld, das keinen nennt, laesst das Loeschen in jedem Status offen; eines, das welche nennt, lehnt ein Loeschen in jedem anderen Status ab. Eine ohne Status gespeicherte Ressource gilt als im Anfangsstatus."@de .
+
+##############################################################################
+#  5. BEFORE/AFTER RULE DATA ON SHAPES
+##############################################################################
+
+arkres:FieldGroup a owl:Class ;
+    rdfs:label   "Field group"@en , "Feldgruppe"@de ;
+    rdfs:comment "Fields of a resource type that a document changes freely only in the statuses the group names as editable, judged by the status before the document. In any other status the group only grows: its fields keep every value and take only values in a language none of them carries yet. A field of the group that owns its children keeps every child, its position and its values; it takes new children after the last one, and a kept child takes only text in a language that child does not carry yet."@en , "Felder eines Ressourcentyps, die ein Dokument nur in den Status frei aendert, die die Gruppe als aenderbar nennt, gemessen am Status vor dem Dokument. In jedem anderen Status waechst die Gruppe nur: ihre Felder behalten jeden Wert und nehmen nur Werte in einer Sprache auf, die keines von ihnen schon traegt. Ein Feld der Gruppe, das seine Kinder besitzt, behaelt jedes Kind, dessen Position und dessen Werte; es nimmt neue Kinder nach dem letzten auf, und ein behaltenes Kind nimmt nur Text in einer Sprache auf, die dieses Kind noch nicht traegt."@de .
+
+arkres:fieldGroup a owl:ObjectProperty ;
+    rdfs:range   arkres:FieldGroup ;
+    rdfs:label   "field group"@en , "Feldgruppe"@de ;
+    rdfs:comment "Set on the property shape of a status field: one field group of the resource types that status field belongs to. A field belongs to at most one group, and the status field to none."@en , "An der Property-Shape eines Statusfelds gesetzt: eine Feldgruppe der Ressourcentypen, zu denen dieses Statusfeld gehoert. Ein Feld gehoert hoechstens einer Gruppe an, das Statusfeld keiner."@de .
+
+arkres:groupField a rdf:Property ;
+    rdfs:domain  arkres:FieldGroup ;
+    rdfs:label   "group field"@en , "Gruppenfeld"@de ;
+    rdfs:comment "A field of a field group, named by its property IRI; a field the shapes give the resource type."@en , "Ein Feld einer Feldgruppe, benannt mit der IRI seiner Property; ein Feld, das die Shapes dem Ressourcentyp geben."@de .
+
+arkres:editableIn a rdf:Property ;
+    rdfs:domain  arkres:FieldGroup ;
+    rdfs:label   "editable in"@en , "aenderbar in"@de ;
+    rdfs:comment "A status in which a document changes a field group freely. A group names at least one; a resource stored without status counts as in the initial status."@en , "Ein Status, in dem ein Dokument eine Feldgruppe frei aendert. Eine Gruppe nennt mindestens einen; eine ohne Status gespeicherte Ressource gilt als im Anfangsstatus."@de .
+
+arkres:immutable a owl:DatatypeProperty ;
+    rdfs:range   xsd:boolean ;
+    rdfs:label   "immutable"@en , "unveraenderlich"@de ;
+    rdfs:comment "Set to true on a property shape: the field keeps the values the create wrote, in every language, and no document changes, adds or removes one. Not on a field that owns its children, nor on a status field."@en , "An einer Property-Shape auf true gesetzt: das Feld behaelt die Werte, die das Anlegen geschrieben hat, in jeder Sprache, und kein Dokument aendert, ergaenzt oder entfernt einen. Nicht an einem Feld, das seine Kinder besitzt, und nicht an einem Statusfeld."@de .
+
+arkres:Default a owl:Class ;
+    rdfs:label   "Default"@en , "Standardwert"@de ;
+    rdfs:comment "A value the engine writes into a field when a transition is taken, unless the document names that field for the resource itself; it replaces what the field held. Written only at the transition that declares it: another transition into the same status keeps the field as it is."@en , "Ein Wert, den die Engine beim Nehmen eines Uebergangs in ein Feld schreibt, sofern das Dokument dieses Feld der Ressource nicht selbst nennt; er ersetzt, was das Feld hielt. Geschrieben nur bei dem Uebergang, der ihn deklariert: ein anderer Uebergang in denselben Status laesst das Feld, wie es ist."@de .
+
+arkres:default a owl:ObjectProperty ;
+    rdfs:domain  arkres:Transition ;
+    rdfs:range   arkres:Default ;
+    rdfs:label   "default"@en , "Standardwert"@de ;
+    rdfs:comment "One default value a transition writes."@en , "Ein Standardwert, den ein Uebergang schreibt."@de .
+
+arkres:defaultField a rdf:Property ;
+    rdfs:domain  arkres:Default ;
+    rdfs:label   "default field"@en , "Feld des Standardwerts"@de ;
+    rdfs:comment "The field a default value is written into: a field of the resource type that owns no children, is not immutable and is not the status field."@en , "Das Feld, in das ein Standardwert geschrieben wird: ein Feld des Ressourcentyps, das keine Kinder besitzt, nicht unveraenderlich und nicht das Statusfeld ist."@de .
+
+arkres:defaultValue a rdf:Property ;
+    rdfs:domain  arkres:Default ;
+    rdfs:label   "default value"@en , "Wert des Standardwerts"@de ;
+    rdfs:comment "The value a default writes: the term itself, or arkres:today for the day the document is applied."@en , "Der Wert, den ein Standardwert schreibt: der Term selbst, oder arkres:today fuer den Tag, an dem das Dokument angewendet wird."@de .
+
+arkres:today a owl:NamedIndividual ;
+    rdfs:label   "today"@en , "heute"@de ;
+    rdfs:comment "As the value of a default: the day the engine applies the document, written as an xsd:date in the time zone of the server."@en , "Als Wert eines Standardwerts: der Tag, an dem die Engine das Dokument anwendet, geschrieben als xsd:date in der Zeitzone des Servers."@de .

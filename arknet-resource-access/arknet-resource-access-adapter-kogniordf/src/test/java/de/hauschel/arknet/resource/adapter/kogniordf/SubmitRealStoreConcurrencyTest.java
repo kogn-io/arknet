@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -58,6 +59,11 @@ import de.hauschel.arknet.resource.domain.SubmitRejectedException;
  * the document inside the write transaction, so a concurrent writer that changes the target between
  * that read and the commit costs the transition its commit, and the second run checks the condition
  * against the new state.</p>
+ *
+ * <p>A fourth pins the rules that compare a resource before and after a document: the state before
+ * is the slice read inside the write transaction, so a concurrent writer that publishes a paper
+ * between that read and the commit costs an edit of its frozen title the commit, and the second run
+ * judges the edit by the published status.</p>
  */
 class SubmitRealStoreConcurrencyTest {
 
@@ -207,6 +213,48 @@ class SubmitRealStoreConcurrencyTest {
                         && triple.object().equals(new RdfNode.Resource(StatusTransitionsRealStoreTest.FX + "Done"))));
     }
 
+    @Test
+    void aStatusCommittedAfterTheSliceReadFreezesTheGroupOnTheSecondRun() throws Exception {
+        // given a draft paper, over the paper fixture's rule data
+        ResourceRepository papers = BeforeAfterRulesRealStoreTest.repository(lifecycle);
+        SubmitService plain = BeforeAfterRulesRealStoreTest.service(lifecycle, papers);
+        String paper = BeforeAfterRulesRealStoreTest.created(plain.submit(BeforeAfterRulesRealStoreTest.PROJECT,
+                BeforeAfterRulesRealStoreTest.PREFIXES + "[] a arkres:Create ; arkres:object _:p .\n"
+                        + "_:p a fx:Paper ; fx:title \"Title\"@en ; fx:acronym \"PP\"@en .\n"));
+        CountDownLatch sliceRead = new CountDownLatch(1);
+        CountDownLatch published = new CountDownLatch(1);
+        AtomicBoolean firstRead = new AtomicBoolean(true);
+        AtomicInteger attempts = new AtomicInteger();
+        ResourceRepository pausing = (projectId, writes) -> {
+            attempts.incrementAndGet();
+            papers.writeAll(projectId, batch -> writes.accept(
+                    new PausingBatch(batch, paper, false, firstRead, sliceRead, published)));
+        };
+
+        // when the title is edited while a concurrent writer publishes the paper
+        Future<SubmitResult> editor = executor.submit(() -> BeforeAfterRulesRealStoreTest.service(lifecycle, pausing)
+                .submit(BeforeAfterRulesRealStoreTest.PROJECT, BeforeAfterRulesRealStoreTest.PREFIXES
+                        + "[] a arkres:Update ; arkres:object <" + paper + "> ;"
+                        + " arkres:set [ fx:title \"Rewritten\"@en ] .\n"));
+        assertTrue(sliceRead.await(WAIT_SECONDS, TimeUnit.SECONDS), "the engine never read the paper");
+        executor.submit(() -> plain.submit(BeforeAfterRulesRealStoreTest.PROJECT,
+                BeforeAfterRulesRealStoreTest.PREFIXES + "[] a arkres:Update ; arkres:object <" + paper
+                        + "> ; arkres:set [ fx:state fx:Published ] .\n")).get(WAIT_SECONDS, TimeUnit.SECONDS);
+        published.countDown();
+
+        // then
+        ExecutionException failure = assertThrows(ExecutionException.class,
+                () -> editor.get(WAIT_SECONDS, TimeUnit.SECONDS));
+        assertInstanceOf(SubmitRejectedException.class, failure.getCause());
+        assertTrue(failure.getCause().getMessage().contains("https://w3id.org/arknet/resource#fieldGroup"),
+                failure.getCause().getMessage());
+        assertEquals(2, attempts.get(), "the lost commit runs the document once more");
+        assertTrue(reader.outgoing(BeforeAfterRulesRealStoreTest.PROJECT, paper).stream()
+                .anyMatch(triple -> triple.predicate().equals(BeforeAfterRulesRealStoreTest.FX + "title")
+                        && triple.object() instanceof RdfNode.Literal literal
+                        && literal.lexicalForm().equals("Title")));
+    }
+
     private static String doneTicket(final SubmitService service, final String title) {
         String ticket = StatusTransitionsRealStoreTest.created(service.submit(StatusTransitionsRealStoreTest.PROJECT,
                 StatusTransitionsRealStoreTest.PREFIXES + "[] a arkres:Create ; arkres:object _:t .\n"
@@ -220,7 +268,8 @@ class SubmitRealStoreConcurrencyTest {
     private SubmitService service(final ResourceRepository store) {
         return new SubmitService(KognioRdfResourceRepositoryFactory.schema(), store,
                 KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
-                KognioRdfResourceRepositoryFactory.prefixes(), KognioRdfResourceRepositoryFactory.handles(lifecycle));
+                KognioRdfResourceRepositoryFactory.prefixes(), KognioRdfResourceRepositoryFactory.handles(lifecycle),
+                Clock.systemDefaultZone());
     }
 
     /**
