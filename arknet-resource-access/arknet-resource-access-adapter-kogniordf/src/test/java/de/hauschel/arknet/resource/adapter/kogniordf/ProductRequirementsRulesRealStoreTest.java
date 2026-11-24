@@ -27,6 +27,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
@@ -486,6 +488,33 @@ class ProductRequirementsRulesRealStoreTest {
         // then
         assertTrue(rejected.getMessage().contains("must not carry the same arkreq:criterionText"),
                 rejected.getMessage());
+    }
+
+    @Test
+    void aCriterionAddedWithTheTextOfAStoredUntaggedCriterionIsRejected() {
+        // given: an untagged criterion text stored past the gate, as written before the tag was mandatory
+        String fr = storedRequirement();
+        String criterion = reader.outgoing(SubmitRealStoreTest.PROJECT, fr).stream()
+                .filter(triple -> (REQ + "acceptanceCriterion").equals(triple.predicate()))
+                .map(triple -> ((RdfNode.Resource) triple.object()).iri())
+                .findFirst().orElseThrow();
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(SubmitRealStoreTest.PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/content> { <" + criterion + "> <"
+                        + REQ + "criterionText> \"Legacy text.\" } }");
+                return null;
+            });
+        }
+
+        // when
+        SubmitRejectedException rejected = rejected("[] a arkres:AddTo ; arkres:object <" + fr + "> ;"
+                + " arkres:field arkreq:acceptanceCriterion ;"
+                + " arkres:value [ arkreq:criterionText \"Legacy text.\"@en ] .\n");
+
+        // then
+        assertTrue(rejected.getMessage().contains("must not carry the same arkreq:criterionText"),
+                rejected.getMessage());
+        assertEquals(1, reader.history(SubmitRealStoreTest.PROJECT, fr).size());
     }
 
     @Test

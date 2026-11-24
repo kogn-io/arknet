@@ -42,7 +42,9 @@ import org.junit.jupiter.api.Test;
  * <p>The tests the inventory names as pinning a rule must exist as well: a renamed test would leave a
  * rule without the fixture the inventory claims. A test is {@code Class#method} in the last column of
  * a rule table, a bare {@code #method} belonging to the class a section names as its default; the
- * class is looked up as a {@code src/test/java} source file anywhere in the reactor.</p>
+ * class is looked up as a {@code src/test/java} source file anywhere in the reactor. The case names
+ * given in parentheses after a parametrised test class must each be the first argument of one of its
+ * {@code Arguments.of} cases.</p>
  */
 class RulesInventoryNamesShippedShapesTest {
 
@@ -53,6 +55,12 @@ class RulesInventoryNamesShippedShapesTest {
     private static final Pattern TEST_NAME = Pattern.compile("`(?:app:|core:)?(\\w*)#(\\w+)`");
 
     private static final Pattern DEFAULT_CLASS = Pattern.compile("tests in `(\\w+)` unless named");
+
+    /** A parametrised test named by its class, followed by its case names in parentheses. */
+    private static final Pattern CASE_NAMES = Pattern.compile("`(\\w+Test)` \\(([^)`]+)\\)");
+
+    /** Fewer case names than this means the pattern no longer finds them. */
+    private static final int LEAST_EXPECTED_CASES = 20;
 
     /** Rule tables have five columns; the tests are in the last. */
     private static final int RULE_TABLE_CELLS = 5;
@@ -129,6 +137,32 @@ class RulesInventoryNamesShippedShapesTest {
         assertEquals(Set.of(), missing, "the inventory names tests that do not exist");
     }
 
+    @Test
+    void everyCaseTheInventoryNamesOfAParametrisedTestExists() {
+        // given
+        Map<String, List<Path>> testSources = testSources();
+
+        // when
+        Set<String> named = new TreeSet<>();
+        Set<String> missing = new TreeSet<>();
+        Matcher reference = CASE_NAMES.matcher(inventory());
+        while (reference.find()) {
+            String source = testSources.getOrDefault(reference.group(1), List.of()).stream()
+                    .map(RulesInventoryNamesShippedShapesTest::read).collect(Collectors.joining("\n"));
+            for (String name : reference.group(2).split("; ")) {
+                named.add(reference.group(1) + " (" + name + ")");
+                if (!source.contains("Arguments.of(\"" + name + "\"")) {
+                    missing.add(reference.group(1) + " (" + name + ")");
+                }
+            }
+        }
+
+        // then
+        assertTrue(named.size() >= LEAST_EXPECTED_CASES, "the inventory names only " + named.size()
+                + " cases: " + named);
+        assertEquals(Set.of(), missing, "the inventory names cases no parametrised test declares");
+    }
+
     private static Map<String, List<Path>> testSources() {
         Path root = reactorRoot();
         try (Stream<Path> files = Files.walk(root)) {
@@ -142,8 +176,12 @@ class RulesInventoryNamesShippedShapesTest {
     }
 
     private static boolean declares(final Path source, final String method) {
+        return Pattern.compile("void " + Pattern.quote(method) + "\\(").matcher(read(source)).find();
+    }
+
+    private static String read(final Path source) {
         try {
-            return Pattern.compile("void " + Pattern.quote(method) + "\\(").matcher(Files.readString(source)).find();
+            return Files.readString(source);
         } catch (IOException e) {
             throw new UncheckedIOException("failed to read " + source, e);
         }
