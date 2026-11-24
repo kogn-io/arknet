@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -232,7 +233,7 @@ class DocumentApplicationStatusTest {
 
         SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class,
                 () -> new DocumentApplication(SubmittedDocument.of(document, schema), schema, batch,
-                        () -> ResourceId.of(STORE + UUID.randomUUID())).apply());
+                        () -> ResourceId.of(STORE + UUID.randomUUID()), LocalDate.EPOCH).apply());
 
         assertTrue(rejected.getMessage().contains("initial status " + OPEN), rejected.getMessage());
         assertFalse(rejected.getMessage().contains("[]"), rejected.getMessage());
@@ -279,7 +280,7 @@ class DocumentApplicationStatusTest {
 
     private void apply() {
         new DocumentApplication(SubmittedDocument.of(document, SCHEMA), SCHEMA, batch,
-                () -> ResourceId.of(STORE + UUID.randomUUID())).apply();
+                () -> ResourceId.of(STORE + UUID.randomUUID()), LocalDate.EPOCH).apply();
     }
 
     private BlankNode create(final IRI type) {

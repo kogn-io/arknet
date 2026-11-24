@@ -40,6 +40,11 @@ final class FakeBatch implements ResourceBatch {
         store.add(subject, predicate, object);
     }
 
+    /** The stored triples themselves, for a fixture that takes one away. */
+    Graph store() {
+        return store;
+    }
+
     @Override
     public ReadableGraph slice(final IRI subject) {
         Graph slice = RDF_FACTORY.createGraph();

@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -308,7 +309,7 @@ class DocumentApplicationTest {
 
     private void apply() {
         new DocumentApplication(SubmittedDocument.of(document, SCHEMA), SCHEMA, batch,
-                () -> ResourceId.of(STORE + UUID.randomUUID())).apply();
+                () -> ResourceId.of(STORE + UUID.randomUUID()), LocalDate.EPOCH).apply();
     }
 
     private BlankNode create(final IRI type) {

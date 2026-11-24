@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -67,7 +68,8 @@ class DomainModellingRulesRealStoreTest {
         submit = new SubmitService(KognioRdfResourceRepositoryFactory.schema(),
                 KognioRdfResourceRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT),
                 KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
-                KognioRdfResourceRepositoryFactory.prefixes(), KognioRdfResourceRepositoryFactory.handles(lifecycle));
+                KognioRdfResourceRepositoryFactory.prefixes(), KognioRdfResourceRepositoryFactory.handles(lifecycle),
+                Clock.systemDefaultZone());
         reader = new StoreReader(lifecycle);
     }
 

@@ -70,7 +70,17 @@ class ResourceVocabularyMatchesOntologyTest {
                 ArkresVocabulary.FROM_STATUS,
                 ArkresVocabulary.TO_STATUS,
                 ArkresVocabulary.CONDITION,
-                ArkresVocabulary.DELETABLE_IN), declared,
+                ArkresVocabulary.DELETABLE_IN,
+                ArkresVocabulary.FIELD_GROUP_CLASS,
+                ArkresVocabulary.FIELD_GROUP,
+                ArkresVocabulary.GROUP_FIELD,
+                ArkresVocabulary.EDITABLE_IN,
+                ArkresVocabulary.IMMUTABLE,
+                ArkresVocabulary.DEFAULT_CLASS,
+                ArkresVocabulary.DEFAULT,
+                ArkresVocabulary.DEFAULT_FIELD,
+                ArkresVocabulary.DEFAULT_VALUE,
+                ArkresVocabulary.TODAY), declared,
                 "arknet-resource.ttl and ArkresVocabulary must describe the same vocabulary");
     }
 

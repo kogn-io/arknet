@@ -5,8 +5,10 @@ package de.hauschel.arknet.resource.domain;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +63,22 @@ import io.kogn.rdf.terms.vocab.VocabRdfs;
  * status field's shape does not allow, and two status fields reaching one class - on the class itself
  * or across its superclasses, including two superclasses of a class without a field of its own - are
  * defects of the rule data and fail construction.</p>
+ *
+ * <p>A fourth kind compares a resource before and after a document. On the property shape of a
+ * status field, {@code arkres:fieldGroup} names fields ({@code arkres:groupField}) a document changes
+ * freely only in the statuses the group names ({@code arkres:editableIn}); outside them the group only
+ * grows ({@link FieldGroup}). On any property shape, {@code arkres:immutable true} keeps a field as the
+ * create wrote it. On a transition, {@code arkres:default} names a field ({@code arkres:defaultField})
+ * and the value ({@code arkres:defaultValue}, or {@code arkres:today}) the engine writes when the
+ * transition is taken and the document does not name the field. A group or default on a shape that
+ * marks no status field, a group without a field or an editable status, a group or default field the
+ * shapes do not give the status field's classes, a field in two groups, the status field in a group,
+ * an editable status outside the status field's {@code sh:in}, an {@code arkres:immutable} that is not
+ * the boolean {@code true} or that sits on an owned field or a status field, and a default into an
+ * owned, an immutable or the status field, or without exactly one field and value, and a default
+ * value outside the {@code sh:datatype} or {@code sh:in} of its field ({@code arkres:today} being an
+ * {@code xsd:date}) fail construction as well. A default may go into a field of a group: the
+ * transition writes it, and the group freezes it afterwards.</p>
  */
 public final class ResourceSchema {
 
@@ -73,6 +91,10 @@ public final class ResourceSchema {
     private static final IRI OR = RDF_FACTORY.createIRI(SHACL + "or");
     private static final IRI SUB_CLASS_OF = RDF_FACTORY.createIRI(VocabRdfs.NAMESPACE + "subClassOf");
     private static final IRI RANGE = RDF_FACTORY.createIRI(VocabRdfs.NAMESPACE + "range");
+    private static final IRI IMMUTABLE = RDF_FACTORY.createIRI(ArkresVocabulary.IMMUTABLE);
+    private static final String XSD_BOOLEAN = "http://www.w3.org/2001/XMLSchema#boolean";
+    private static final String XSD_DATE = "http://www.w3.org/2001/XMLSchema#date";
+    private static final IRI DATATYPE = RDF_FACTORY.createIRI(SHACL + "datatype");
 
     private final Map<IRI, Optional<String>> codePrefixByType;
     private final Map<IRI, OwnedField> ownedFieldByProperty;
@@ -158,7 +180,114 @@ public final class ResourceSchema {
                         + reached.stream().map(field -> field.property().getIRIString()).sorted().toList());
             }
         });
+        checkImmutableMarkers(shapes, owned.keySet(), schema.statusFieldByClass.values());
+        schema.statusFieldByClass.forEach(schema::checkBeforeAfterRules);
         return schema;
+    }
+
+    /**
+     * Every {@code arkres:immutable} is the boolean {@code true} on a property shape with a path that
+     * is neither an owned field nor a status field.
+     */
+    private static void checkImmutableMarkers(final ReadableGraph shapes, final Set<IRI> ownedFields,
+            final Collection<StatusField> statusFields) {
+        Set<IRI> statusProperties = statusFields.stream().map(StatusField::property).collect(Collectors.toSet());
+        shapes.stream(null, IMMUTABLE, null).forEach(marker -> {
+            if (!(marker.getObject() instanceof Literal literal) || !XSD_BOOLEAN.equals(literal.getDatatype()
+                    .getIRIString()) || !"true".equals(literal.getLexicalForm())) {
+                throw new IllegalStateException(marker.getSubject() + " carries " + ArkresVocabulary.IMMUTABLE + " "
+                        + marker.getObject() + "; it takes the boolean true, or is left out");
+            }
+            IRI property = single(shapes, marker.getSubject(), PATH).filter(IRI.class::isInstance)
+                    .map(IRI.class::cast)
+                    .orElseThrow(() -> new IllegalStateException(marker.getSubject() + " carries "
+                            + ArkresVocabulary.IMMUTABLE + " but no sh:path"));
+            if (ownedFields.contains(property) || statusProperties.contains(property)) {
+                throw new IllegalStateException(property + " is marked " + ArkresVocabulary.IMMUTABLE + ", but it "
+                        + (ownedFields.contains(property) ? "owns its children; a field group freezes a list"
+                                : "is a status field; its transitions say how it changes"));
+            }
+        });
+    }
+
+    /**
+     * The fields the field groups and defaults of a status field name are fields of the class the
+     * status field belongs to: a group field owned by no group but this one and not the status itself,
+     * a default field neither owned, nor immutable, nor the status.
+     */
+    private void checkBeforeAfterRules(final IRI type, final StatusField status) {
+        Set<IRI> fields = fields(Set.of(type));
+        Set<IRI> immutable = immutableFields(Set.of(type));
+        Set<IRI> grouped = new HashSet<>();
+        for (FieldGroup group : status.groups()) {
+            for (IRI field : group.fields()) {
+                if (!fields.contains(field) || field.equals(status.property())) {
+                    throw new IllegalStateException("a field group of " + status.property() + " names " + field
+                            + (field.equals(status.property()) ? ", the status field itself; its transitions say"
+                                    + " how it changes" : ", which no shape gives " + type + " as a field"));
+                }
+                if (!grouped.add(field)) {
+                    throw new IllegalStateException(field + " belongs to two field groups of " + status.property()
+                            + "; a field belongs to at most one");
+                }
+            }
+        }
+        for (Transition transition : status.transitions()) {
+            for (DefaultValue value : transition.defaults()) {
+                IRI field = value.field();
+                String reason = !fields.contains(field) ? "no shape gives " + type + " this field"
+                        : ownedFieldByProperty.containsKey(field) ? "it owns its children"
+                        : immutable.contains(field) ? "it is " + ArkresVocabulary.IMMUTABLE
+                        : field.equals(status.property()) ? "it is the status field" : null;
+                if (reason == null) {
+                    reason = defaultValueBreaking(type, value);
+                }
+                if (reason != null) {
+                    throw new IllegalStateException("the transition from " + transition.from() + " to "
+                            + transition.to() + " of " + status.property() + " writes a default into " + field
+                            + ", but " + reason);
+                }
+            }
+        }
+    }
+
+    /**
+     * Why a default value breaks the {@code sh:datatype} or {@code sh:in} the property shapes of its
+     * field on {@code type} declare, null if it keeps both: {@code arkres:today} is an
+     * {@code xsd:date} and in no {@code sh:in} list; a literal carries the declared datatype
+     * ({@code rdf:langString} for one with a language tag).
+     */
+    private String defaultValueBreaking(final IRI type, final DefaultValue value) {
+        List<BlankNodeOrIRI> fieldShapes = nodeShapes(type).stream()
+                .flatMap(node -> shapes.stream(node, PROPERTY, null))
+                .map(Triple::getObject)
+                .filter(BlankNodeOrIRI.class::isInstance)
+                .map(BlankNodeOrIRI.class::cast)
+                .filter(shape -> shapes.stream(shape, PATH, value.field()).findAny().isPresent())
+                .toList();
+        String written = value.today() ? ArkresVocabulary.TODAY + " (an xsd:date)" : String.valueOf(value.value());
+        for (BlankNodeOrIRI shape : fieldShapes) {
+            Optional<String> datatype = single(shapes, shape, DATATYPE)
+                    .map(term -> term instanceof IRI iri ? iri.getIRIString() : term.toString());
+            Optional<String> actual = value.today() ? Optional.of(XSD_DATE) : datatypeOf(value.value());
+            if (datatype.isPresent() && !actual.equals(datatype)) {
+                return "the field's sh:datatype is " + datatype.get() + " and " + written + " is "
+                        + actual.orElse("no literal");
+            }
+            Optional<Set<RDFTerm>> allowed = allowedValues(shapes, shape);
+            if (allowed.isPresent() && (value.today() || !allowed.get().contains(value.value()))) {
+                return "the field's sh:in allows " + allowed.get() + ", not " + written;
+            }
+        }
+        return null;
+    }
+
+    private static Optional<String> datatypeOf(final RDFTerm term) {
+        if (!(term instanceof Literal literal)) {
+            return Optional.empty();
+        }
+        return Optional.of(literal.getLanguageTag().isPresent() ? VocabRdf.NAMESPACE + "langString"
+                : literal.getDatatype().getIRIString());
     }
 
     /**
@@ -167,14 +296,15 @@ public final class ResourceSchema {
      */
     private static Map<IRI, StatusField> statusFields(final ReadableGraph shapes) {
         IRI initialStatus = RDF_FACTORY.createIRI(ArkresVocabulary.INITIAL_STATUS);
-        for (String marker : List.of(ArkresVocabulary.TRANSITION, ArkresVocabulary.DELETABLE_IN)) {
+        for (String marker : List.of(ArkresVocabulary.TRANSITION, ArkresVocabulary.DELETABLE_IN,
+                ArkresVocabulary.FIELD_GROUP)) {
             shapes.stream(null, RDF_FACTORY.createIRI(marker), null).map(Triple::getSubject)
                     .filter(shape -> single(shapes, shape, initialStatus).isEmpty())
                     .findFirst()
                     .ifPresent(shape -> {
                         throw new IllegalStateException(shape + " carries " + marker + " but no "
-                                + ArkresVocabulary.INITIAL_STATUS + ": transitions and deletable statuses belong"
-                                + " to the property shape that marks the status field");
+                                + ArkresVocabulary.INITIAL_STATUS + ": transitions, deletable statuses and field"
+                                + " groups belong to the property shape that marks the status field");
                     });
         }
         Map<IRI, StatusField> byClass = new HashMap<>();
@@ -224,7 +354,8 @@ public final class ResourceSchema {
                             .sorted((a, b) -> a.getIRIString().compareTo(b.getIRIString()))
                             .toList();
                     return new Transition(exactlyOne(shapes, node, ArkresVocabulary.FROM_STATUS),
-                            exactlyOne(shapes, node, ArkresVocabulary.TO_STATUS), conditions);
+                            exactlyOne(shapes, node, ArkresVocabulary.TO_STATUS), conditions,
+                            defaults(shapes, property, node));
                 })
                 .toList();
         Set<Transition> distinct = Set.copyOf(transitions);
@@ -234,18 +365,74 @@ public final class ResourceSchema {
         long pairs = distinct.stream().map(transition -> List.of(transition.from(), transition.to())).distinct()
                 .count();
         if (pairs < distinct.size()) {
-            throw new IllegalStateException(property + " declares one transition twice with different conditions");
+            throw new IllegalStateException(property + " declares one transition twice with different conditions"
+                    + " or defaults");
         }
+        List<FieldGroup> groups = shapes.stream(shape, RDF_FACTORY.createIRI(ArkresVocabulary.FIELD_GROUP), null)
+                .map(Triple::getObject)
+                .map(group -> fieldGroup(shapes, property, group))
+                .toList();
         Set<RDFTerm> statuses = new LinkedHashSet<>(List.of(initial));
         distinct.forEach(transition -> statuses.addAll(List.of(transition.from(), transition.to())));
         statuses.addAll(deletable);
+        groups.forEach(group -> statuses.addAll(group.editable()));
         allowedValues(shapes, shape).ifPresent(allowed -> statuses.stream().filter(status -> !allowed.contains(status))
                 .findFirst()
                 .ifPresent(status -> {
                     throw new IllegalStateException("the status rule data of " + property + " names " + status
                             + ", which the sh:in of the status field does not allow: " + allowed);
                 }));
-        return new StatusField(property, initial, distinct, deletable);
+        return new StatusField(property, initial, distinct, deletable, groups);
+    }
+
+    private static FieldGroup fieldGroup(final ReadableGraph shapes, final IRI property, final RDFTerm group) {
+        if (!(group instanceof BlankNodeOrIRI node)) {
+            throw new IllegalStateException(property + " names the literal " + group + " as "
+                    + ArkresVocabulary.FIELD_GROUP);
+        }
+        Set<IRI> fields = shapes.stream(node, RDF_FACTORY.createIRI(ArkresVocabulary.GROUP_FIELD), null)
+                .map(Triple::getObject)
+                .map(field -> {
+                    if (field instanceof IRI named) {
+                        return named;
+                    }
+                    throw new IllegalStateException("a field group of " + property + " names " + field + " as "
+                            + ArkresVocabulary.GROUP_FIELD + "; a field is a property IRI");
+                })
+                .collect(Collectors.toUnmodifiableSet());
+        Set<RDFTerm> editable = shapes.stream(node, RDF_FACTORY.createIRI(ArkresVocabulary.EDITABLE_IN), null)
+                .map(Triple::getObject)
+                .collect(Collectors.toUnmodifiableSet());
+        if (fields.isEmpty() || editable.isEmpty()) {
+            throw new IllegalStateException("a field group of " + property + " names " + fields.size() + " "
+                    + ArkresVocabulary.GROUP_FIELD + " and " + editable.size() + " " + ArkresVocabulary.EDITABLE_IN
+                    + "; it takes at least one of each");
+        }
+        return new FieldGroup(fields, editable);
+    }
+
+    private static List<DefaultValue> defaults(final ReadableGraph shapes, final IRI property,
+            final BlankNodeOrIRI transition) {
+        List<DefaultValue> defaults = shapes.stream(transition, RDF_FACTORY.createIRI(ArkresVocabulary.DEFAULT), null)
+                .map(Triple::getObject)
+                .map(value -> {
+                    if (!(value instanceof BlankNodeOrIRI node)) {
+                        throw new IllegalStateException("a transition of " + property + " names the literal " + value
+                                + " as " + ArkresVocabulary.DEFAULT);
+                    }
+                    RDFTerm field = exactlyOne(shapes, node, ArkresVocabulary.DEFAULT_FIELD);
+                    if (!(field instanceof IRI named)) {
+                        throw new IllegalStateException("a default of a transition of " + property + " names " + field
+                                + " as " + ArkresVocabulary.DEFAULT_FIELD + "; a field is a property IRI");
+                    }
+                    return new DefaultValue(named, exactlyOne(shapes, node, ArkresVocabulary.DEFAULT_VALUE));
+                })
+                .sorted((a, b) -> a.field().getIRIString().compareTo(b.field().getIRIString()))
+                .toList();
+        if (defaults.stream().map(DefaultValue::field).distinct().count() < defaults.size()) {
+            throw new IllegalStateException("a transition of " + property + " writes two defaults into one field");
+        }
+        return defaults;
     }
 
     /**
@@ -295,7 +482,7 @@ public final class ResourceSchema {
         List<RDFTerm> values = shapes.stream(subject, RDF_FACTORY.createIRI(property), null).map(Triple::getObject)
                 .distinct().toList();
         if (values.size() != 1) {
-            throw new IllegalStateException("status rule data on " + subject + " names " + values.size()
+            throw new IllegalStateException("rule data on " + subject + " names " + values.size()
                     + " values of " + property + "; it takes exactly one");
         }
         return values.get(0);
@@ -351,6 +538,27 @@ public final class ResourceSchema {
                 .distinct()
                 .flatMap(node -> shapes.stream(node, PROPERTY, null))
                 .map(Triple::getObject)
+                .flatMap(property -> single(shapes, property, PATH).stream())
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * The fields of a node typed with {@code types} that stay as the create wrote them: those of
+     * {@link #fields} whose property shape carries {@code arkres:immutable true}.
+     *
+     * @param types the {@code rdf:type} values of a node
+     * @return the immutable field properties
+     */
+    public Set<IRI> immutableFields(final Set<IRI> types) {
+        return types.stream()
+                .flatMap(type -> nodeShapes(type).stream())
+                .distinct()
+                .flatMap(node -> shapes.stream(node, PROPERTY, null))
+                .map(Triple::getObject)
+                .filter(property -> property instanceof BlankNodeOrIRI node
+                        && shapes.stream(node, IMMUTABLE, null).findAny().isPresent())
                 .flatMap(property -> single(shapes, property, PATH).stream())
                 .filter(IRI.class::isInstance)
                 .map(IRI.class::cast)
@@ -517,15 +725,18 @@ public final class ResourceSchema {
      * @param initial     the status every created resource starts with
      * @param transitions the allowed changes
      * @param deletable   the statuses a resource may be deleted in; empty for deletion in every status
+     * @param groups      the field groups that freeze outside their editable statuses
      */
-    public record StatusField(IRI property, RDFTerm initial, Set<Transition> transitions, Set<RDFTerm> deletable) {
+    public record StatusField(IRI property, RDFTerm initial, Set<Transition> transitions, Set<RDFTerm> deletable,
+            List<FieldGroup> groups) {
 
         /**
-         * Copies the sets.
+         * Copies the collections.
          */
         public StatusField {
             transitions = Set.copyOf(transitions);
             deletable = Set.copyOf(deletable);
+            groups = List.copyOf(groups);
         }
 
         /**
@@ -557,14 +768,65 @@ public final class ResourceSchema {
      * @param from       the status it leaves
      * @param to         the status it reaches
      * @param conditions the named shapes the resource must satisfy after the document, sorted
+     * @param defaults   the values written when the transition is taken, sorted by field
      */
-    public record Transition(RDFTerm from, RDFTerm to, List<IRI> conditions) {
+    public record Transition(RDFTerm from, RDFTerm to, List<IRI> conditions, List<DefaultValue> defaults) {
 
         /**
-         * Copies the conditions.
+         * Copies the lists.
          */
         public Transition {
             conditions = List.copyOf(conditions);
+            defaults = List.copyOf(defaults);
+        }
+    }
+
+    /**
+     * Fields a document changes freely only in some statuses, judged by the status before the
+     * document. In any other status the group only grows: a field that owns no children keeps every
+     * value and takes only values in a language none of the group's fields carries yet; a field that
+     * owns its children keeps every child with its position and values, takes new children after the
+     * last, and a kept child takes only text in a language that child does not carry yet.
+     *
+     * @param fields   the fields of the group
+     * @param editable the statuses in which a document changes them freely, at least one
+     */
+    public record FieldGroup(Set<IRI> fields, Set<RDFTerm> editable) {
+
+        /**
+         * Copies the sets.
+         */
+        public FieldGroup {
+            fields = Set.copyOf(fields);
+            editable = Set.copyOf(editable);
+        }
+
+        /**
+         * Whether a document changes the group freely in {@code status}.
+         *
+         * @param status the status before the document
+         * @return true if the group names it as editable
+         */
+        public boolean editableIn(final RDFTerm status) {
+            return editable.contains(status);
+        }
+    }
+
+    /**
+     * A value a transition writes into a field unless the document names that field itself.
+     *
+     * @param field the field
+     * @param value the value, or {@code arkres:today} for the day the document is applied
+     */
+    public record DefaultValue(IRI field, RDFTerm value) {
+
+        /**
+         * Whether the value stands for the day the document is applied.
+         *
+         * @return true for {@code arkres:today}
+         */
+        public boolean today() {
+            return value instanceof IRI iri && ArkresVocabulary.TODAY.equals(iri.getIRIString());
         }
     }
 }

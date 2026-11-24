@@ -92,6 +92,36 @@ public final class ArkresVocabulary {
     /** {@code arkres:deletableIn} - a status in which a resource of a status field may be deleted. */
     public static final String DELETABLE_IN = NAMESPACE + "deletableIn";
 
+    /** {@code arkres:FieldGroup} - fields a document changes freely only in the statuses the group names. */
+    public static final String FIELD_GROUP_CLASS = NAMESPACE + "FieldGroup";
+
+    /** {@code arkres:fieldGroup} - one field group of a status field. */
+    public static final String FIELD_GROUP = NAMESPACE + "fieldGroup";
+
+    /** {@code arkres:groupField} - a field of a field group. */
+    public static final String GROUP_FIELD = NAMESPACE + "groupField";
+
+    /** {@code arkres:editableIn} - a status in which a document changes a field group freely. */
+    public static final String EDITABLE_IN = NAMESPACE + "editableIn";
+
+    /** {@code arkres:immutable} - marks a field whose values stay as the create wrote them. */
+    public static final String IMMUTABLE = NAMESPACE + "immutable";
+
+    /** {@code arkres:Default} - a value the engine writes into a field when a transition is taken. */
+    public static final String DEFAULT_CLASS = NAMESPACE + "Default";
+
+    /** {@code arkres:default} - one default value a transition writes. */
+    public static final String DEFAULT = NAMESPACE + "default";
+
+    /** {@code arkres:defaultField} - the field a default value is written into. */
+    public static final String DEFAULT_FIELD = NAMESPACE + "defaultField";
+
+    /** {@code arkres:defaultValue} - the value of a default: a term, or {@code arkres:today}. */
+    public static final String DEFAULT_VALUE = NAMESPACE + "defaultValue";
+
+    /** {@code arkres:today} - stands for the day the document is applied, written as an {@code xsd:date}. */
+    public static final String TODAY = NAMESPACE + "today";
+
     private ArkresVocabulary() {
     }
 }

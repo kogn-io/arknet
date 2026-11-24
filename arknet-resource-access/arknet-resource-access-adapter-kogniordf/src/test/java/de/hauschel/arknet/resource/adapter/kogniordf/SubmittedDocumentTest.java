@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -105,7 +106,7 @@ class SubmittedDocumentTest {
         }, KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
                 KognioRdfResourceRepositoryFactory.prefixes(), (projectId, handle) -> {
                     throw new AssertionError("an unparseable document names no handle");
-                });
+                }, Clock.systemDefaultZone());
 
         SubmitRejectedException rejected = assertThrows(SubmitRejectedException.class,
                 () -> service.submit(SubmitRealStoreTest.PROJECT, "[] a undeclared:Create ."));
