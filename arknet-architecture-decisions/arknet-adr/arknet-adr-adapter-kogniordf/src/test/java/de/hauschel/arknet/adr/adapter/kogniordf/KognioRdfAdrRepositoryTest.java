@@ -1661,7 +1661,8 @@ class KognioRdfAdrRepositoryTest {
 
     @Test
     void deleteRemovesEveryTripleOfTheDecision() {
-        Adr created = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.PROPOSED,
+        // ACCEPTED, the other deletable status: only a decided record carries a decision date
+        Adr created = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.ACCEPTED,
                 List.of(new Consequence(1, "Some consequences", ConsequenceType.NEUTRAL)),
                 List.of(new ConsideredOption(1, "Option", "Some alternatives", OptionOutcome.REJECTED)),
                 LocalDate.of(2026, 8, 23), List.of(), List.of(), null);

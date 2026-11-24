@@ -73,6 +73,9 @@ Gesetzt wird es ausschliesslich beim Uebergang nach `ACCEPTED`/`REJECTED` -- `Ad
 Ein erneutes `accept` auf einen bereits akzeptierten Record ist wie zuvor ein No-op und stempelt das Datum darum nicht neu; entschieden wird einmal.
 Vor #374 war die Regel nur eine Bitte in der Skill-Doku, und ein einmal gesetztes Platzhalter-Datum war nie wieder entfernbar (`adr_update` kann kein Feld leeren, ab `ACCEPTED` war es zusaetzlich eingefroren) -- der Befund kam aus dem Dogfooding, bei dem saemtliche Entwurfs-Records ihr Schreibdatum als Entscheidungsdatum trugen.
 Altbestand heilt sich beim naechsten `adr_set_status`: der Uebergang ueberschreibt, was am `PROPOSED`-Record stand.
+Seit kogn-io/arknet#742 verbietet `ashapes:ADR-proposedUndated` das Datum an einem `PROPOSED`-Record auch im Gate: ein Write, der einen solchen Altbestand in `PROPOSED` belaesst, scheitert dort; der Uebergang (`adr_set_status`) ersetzt das Datum und heilt ihn, `adr_delete` bleibt offen.
+`AdrServiceLegacyProposedDateRealStoreTest` haelt alle drei Faelle fest.
+Im `submit`-Pfad wirkt ein solcher Record weiter: die Engine validiert jeden ueber eine Kante erreichten Nachbarn mit, also blockiert er jedes Dokument, das ihn erreicht; die typgenauen Tools nicht, weil ihre Peer-Kopien kein `decisionDate` tragen.
 
 **Consequence/ConsideredOption sind eigene positionierte Ressourcen, kein flaches Feld** (`arkarch:Consequence`/`arkarch:ConsideredOption`, seit Issue #357, Bauart 1:1 zu `AcceptanceCriterion` der requirements-BC, Issue #266).
 Jede traegt `arknet:position` (1-basiert, luecken- und ordnungsfrei je Liste, von `Adr` durchgesetzt, nicht vom Value Object selbst) sowie ein eigenes Klassifikationsfeld: `Consequence#type` (`consequenceType`, POSITIVE/NEGATIVE/NEUTRAL, nie `null`), `ConsideredOption#outcome` (`optionOutcome`, CHOSEN/REJECTED, nur bei der Legacy-Literal-Synthese unten `null`).

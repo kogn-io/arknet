@@ -34,6 +34,7 @@ ashapes:ADRShape
     sh:property ashapes:ADR-identifier ;
     sh:property ashapes:ADR-name ;
     sh:property ashapes:ADR-decisionDate ;
+    sh:sparql   ashapes:ADR-proposedUndated ;
     sh:sparql   ashapes:ADR-noSelfReference ;
     sh:property ashapes:ADR-status ;
     sh:property ashapes:ADR-context ;
@@ -306,6 +307,22 @@ ashapes:ADR-decisionDate
     sh:message  "An ADR carries at most one arkarch:decisionDate, an xsd:date."@en , "Eine ADR traegt hoechstens ein arkarch:decisionDate, ein xsd:date."@de ;
     sh:severity sh:Violation .
 
+# A Proposed decision has not been made, so it names no day it was made on (kogn-io/arknet#742): the
+# typed core records the date only when accepting or rejecting, and no status leads back to Proposed.
+# With the field group of the rule data below this keeps the date the one the decision got.
+ashapes:ADR-proposedUndated
+    a sh:SPARQLConstraint ;
+    sh:message  "A Proposed decision carries no arkarch:decisionDate: the day is recorded when it is accepted or rejected. A record that already carries one (written before that rule): accept or reject it - the transition records the date and may keep this day (submit: name it in the same document; adr_set_status: decidedOn) - or delete it, or clear the field while it is Proposed (submit: arkres:clear; adr_update cannot clear it)."@en , "Eine Proposed-Entscheidung traegt kein arkarch:decisionDate: der Tag wird beim Annehmen oder Verwerfen festgehalten. Ein Record, der schon eines traegt (vor dieser Regel geschrieben): annehmen oder verwerfen - der Uebergang haelt das Datum fest und darf diesen Tag behalten (submit: im selben Dokument nennen; adr_set_status: decidedOn) -, oder loeschen, oder das Feld leeren, solange er Proposed ist (submit: arkres:clear; adr_update kann es nicht leeren)."@de ;
+    sh:severity sh:Violation ;
+    sh:select   """
+        PREFIX arkarch: <https://w3id.org/arknet/architecture#>
+        SELECT DISTINCT $this
+        WHERE {
+            $this arkarch:adrStatus arkarch:Proposed ;
+                  arkarch:decisionDate ?date .
+        }
+    """ .
+
 # An ADR never relates to or is superseded by itself (Adr's compact constructor refuses both).
 # $this-scoped, so a peer's validation-only copy in the same graph cannot trip it.
 ashapes:ADR-noSelfReference
@@ -434,5 +451,104 @@ arkarch:ArchitectureDecisionRecord a arkres:ResourceType ; arkres:codePrefix "AD
 
 ashapes:ADR-consequence-class      arkres:childKind "Consequence" ; arkres:orderedBy arknet:position .
 ashapes:ADR-consideredOption-class arkres:childKind "Option" ;      arkres:orderedBy arknet:position .
+
+# The life cycle of a decision (kogn-io/arknet#742), as the typed core runs it: created Proposed;
+# Proposed -> Accepted | Rejected, Accepted -> Deprecated | Superseded, Superseded -> Accepted (the
+# undo of a mistaken supersession); Rejected and Deprecated are final. Deletable only while Proposed
+# or Accepted; a reference to the record blocks the delete on its own (sh:class of relatedTo and
+# supersededBy).
+#
+# The record of the decision is frozen once it is decided: name, context, decision, the decision
+# date and the consequence and option lists change freely only while Proposed. In any other status
+# the texts take only a language none of name/context/decision carries yet, the lists keep every
+# child with its position, type or outcome and text and take new children after the last one, and a
+# kept child takes text only in a language new to it.
+#
+# The decision date is the day of Proposed -> Accepted | Rejected: written as today unless the
+# document names the day itself (a decision made earlier and only now recorded). An explicit clear
+# would beat the default, hence the condition. Superseding, deprecating and the undo keep the date.
+ashapes:ADR-status
+    arkres:initialStatus arkarch:Proposed ;
+    arkres:deletableIn   arkarch:Proposed , arkarch:Accepted ;
+    arkres:fieldGroup [
+        arkres:groupField arknet:name , arkarch:adrContext , arkarch:adrDecision , arkarch:decisionDate ,
+                          arkarch:consequence , arkarch:consideredOption ;
+        arkres:editableIn arkarch:Proposed
+    ] ;
+    arkres:transition
+        [ arkres:fromStatus arkarch:Proposed ; arkres:toStatus arkarch:Accepted ;
+          arkres:condition ashapes:ADR-oneChosenOption , ashapes:ADR-dated ;
+          arkres:default [ arkres:defaultField arkarch:decisionDate ; arkres:defaultValue arkres:today ] ] ,
+        [ arkres:fromStatus arkarch:Proposed ; arkres:toStatus arkarch:Rejected ;
+          arkres:condition ashapes:ADR-dated ;
+          arkres:default [ arkres:defaultField arkarch:decisionDate ; arkres:defaultValue arkres:today ] ] ,
+        [ arkres:fromStatus arkarch:Accepted ; arkres:toStatus arkarch:Deprecated ] ,
+        [ arkres:fromStatus arkarch:Accepted ; arkres:toStatus arkarch:Superseded ;
+          arkres:condition ashapes:ADR-supersededByAcceptedDecision ] ,
+        [ arkres:fromStatus arkarch:Superseded ; arkres:toStatus arkarch:Accepted ;
+          arkres:condition ashapes:ADR-notSuperseded ] .
+
+# Conditions of the transitions above: no target of their own, so the write gate never checks them
+# as end-state rules - a chain of supersessions stays legal, and so do rejected options appended to
+# an accepted decision.
+
+# Accepting is the act of choosing: a decision with considered options names exactly one of them as
+# chosen; one without options stays acceptable. $this-scoped SPARQL for the same reason as
+# ashapes:ADR-consideredOption-atMostOneChosen.
+ashapes:ADR-oneChosenOption
+    a sh:NodeShape ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message  "A decision with considered options is accepted only when exactly one arkarch:consideredOption has arkarch:optionOutcome arkarch:Chosen."@en , "Eine Entscheidung mit erwogenen Optionen wird nur angenommen, wenn genau eine arkarch:consideredOption arkarch:optionOutcome arkarch:Chosen traegt."@de ;
+        sh:select   """
+            PREFIX arkarch: <https://w3id.org/arknet/architecture#>
+            SELECT DISTINCT $this
+            WHERE {
+                {
+                    $this arkarch:consideredOption ?option .
+                    FILTER NOT EXISTS {
+                        $this arkarch:consideredOption ?chosen .
+                        ?chosen arkarch:optionOutcome arkarch:Chosen .
+                    }
+                } UNION {
+                    $this arkarch:consideredOption ?option1 .
+                    ?option1 arkarch:optionOutcome arkarch:Chosen .
+                    $this arkarch:consideredOption ?option2 .
+                    ?option2 arkarch:optionOutcome arkarch:Chosen .
+                    FILTER (?option1 != ?option2)
+                }
+            }
+        """
+    ] .
+
+ashapes:ADR-dated
+    a sh:NodeShape ;
+    sh:property [
+        sh:path     arkarch:decisionDate ;
+        sh:minCount 1 ;
+        sh:message  "An accepted or rejected decision carries its arkarch:decisionDate: name the day or leave the field to the default, but do not clear it."@en , "Eine angenommene oder verworfene Entscheidung traegt ihr arkarch:decisionDate: den Tag nennen oder das Feld dem Standardwert ueberlassen, aber nicht leeren."@de
+    ] .
+
+# Checked only when the record becomes Superseded: a successor superseded later keeps the chain legal.
+ashapes:ADR-supersededByAcceptedDecision
+    a sh:NodeShape ;
+    sh:property [
+        sh:path     arkarch:supersededBy ;
+        sh:minCount 1 ;
+        sh:node     ashapes:ADR-accepted ;
+        sh:message  "A decision becomes Superseded only together with its arkarch:supersededBy edge, and only by a decision that is Accepted."@en , "Eine Entscheidung wird nur zusammen mit ihrer arkarch:supersededBy-Kante Superseded, und nur durch eine Entscheidung, die Accepted ist."@de
+    ] .
+
+ashapes:ADR-accepted
+    a sh:NodeShape ;
+    sh:property [ sh:path arkarch:adrStatus ; sh:hasValue arkarch:Accepted ] .
+
+ashapes:ADR-notSuperseded
+    a sh:NodeShape ;
+    sh:property [
+        sh:path     arkarch:supersededBy ;
+        sh:maxCount 0 ;
+        sh:message  "Undoing a supersession clears arkarch:supersededBy in the same document."@en , "Wer eine Abloesung zuruecknimmt, leert arkarch:supersededBy im selben Dokument."@de
+    ] .
 
 # END OF ARCHITECTURE SHAPES
