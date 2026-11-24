@@ -482,8 +482,9 @@ final class DocumentApplication {
     }
 
     /**
-     * Records a rejection for every stored edge left pointing at {@code target} after the document:
-     * an edge to its class whose holder is neither deleted nor rid of it by the same document.
+     * Records a rejection for every edge left pointing at {@code target} after the document: a stored
+     * edge to its class whose holder is neither deleted nor rid of it by the same document, and an
+     * edge to its class the same document writes into a created or an updated resource.
      */
     private void rejectEdgesLeftPointingAt(final IRI target, final Set<IRI> types) {
         Set<IRI> edges = schema.edgesTo(types);
