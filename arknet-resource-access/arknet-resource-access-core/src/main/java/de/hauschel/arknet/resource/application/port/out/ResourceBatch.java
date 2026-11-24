@@ -24,6 +24,15 @@ public interface ResourceBatch {
     ReadableGraph slice(IRI subject);
 
     /**
+     * The stored triples, of any resource of the project, whose object is {@code resource} - what
+     * would point into nothing once it is deleted.
+     *
+     * @param resource the resource's IRI, without a {@code #}
+     * @return the triples, empty if nothing points at it
+     */
+    ReadableGraph pointingAt(IRI resource);
+
+    /**
      * The highest running number among the business codes starting with {@code codePrefix}, those of
      * living resources and those kept by deleted ones.
      *

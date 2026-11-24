@@ -115,7 +115,10 @@ public final class ResourceAccessMcpTools {
                     + " type lists them) whose arkres:object is the resource it acts on: a new resource as a"
                     + " blank node with its type and fields, an existing one by its IRI or by its business"
                     + " code as a relative IRI such as <FR-12>. The prefixes describe lists need no"
-                    + " declaration; declare any other prefix the document uses. The document is validated against the shapes of every resource it"
+                    + " declaration; declare any other prefix the document uses. A document writes only the"
+                    + " fields describe lists for a type; a stored value outside them can still be cleared. A"
+                    + " delete is rejected while a resource the document leaves in place still points at the"
+                    + " deleted one. The document is validated against the shapes of every resource it"
                     + " touches; a rejection names what failed, declares the namespaces it mentions and"
                     + " changes nothing. The answer lists every created, updated and deleted resource with"
                     + " its IRI and business code.")
