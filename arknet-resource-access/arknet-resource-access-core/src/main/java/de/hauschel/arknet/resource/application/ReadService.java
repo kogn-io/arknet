@@ -6,6 +6,7 @@ package de.hauschel.arknet.resource.application;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -66,6 +67,8 @@ import de.hauschel.arknet.resource.domain.SubmitRejectedException;
  * <li>An edge pointing at the resource whose property the ontology declares
  * {@code owl:SymmetricProperty}, or {@code owl:inverseOf} another, is merged into the resource's own
  * field; every other one is listed as incoming, from the resource owning its subject.</li>
+ * <li>Any other node of the resource's slice - a fragment or blank node an edge of the resource
+ * reaches without an owned field - renders in place under that edge, without a position.</li>
  * <li>Statements outside the shapes are kept as further statements, so a record from before a shape
  * change stays readable.</li>
  * </ul>
@@ -177,6 +180,7 @@ public final class ReadService implements ReadResources, ResourceHistory {
         private final DisplayLocale locale;
         private final boolean allLanguages;
         private final Map<IRI, RenderedValue.Reference> references = new HashMap<>();
+        private final Set<BlankNodeOrIRI> inProgress = new HashSet<>();
 
         private Rendering(final ResourceReader.Snapshot snapshot, final DisplayLocale locale,
                 final boolean allLanguages) {
@@ -221,8 +225,8 @@ public final class ReadService implements ReadResources, ResourceHistory {
             String iri = expanded.get();
             int fragment = iri.indexOf(FRAGMENT);
             if (fragment >= 0 && !snapshot.slice(RDF_FACTORY.createIRI(iri.substring(0, fragment))).isEmpty()) {
-                return Resolution.failed("<" + iri + "> is a child of <" + iri.substring(0, fragment)
-                        + ">; read that resource, it renders its children in place");
+                return Resolution.failed("<" + iri + "> is part of <" + iri.substring(0, fragment)
+                        + ">; read that resource, it renders the nodes of its slice in place");
             }
             return Resolution.of(RDF_FACTORY.createIRI(iri));
         }
@@ -301,6 +305,16 @@ public final class ReadService implements ReadResources, ResourceHistory {
          */
         private Fields fields(final BlankNodeOrIRI subject, final ReadableGraph graph, final Set<IRI> types,
                 final Map<IRI, Set<RDFTerm>> merged, final Set<IRI> skipped) {
+            inProgress.add(subject);
+            try {
+                return fieldsOf(subject, graph, types, merged, skipped);
+            } finally {
+                inProgress.remove(subject);
+            }
+        }
+
+        private Fields fieldsOf(final BlankNodeOrIRI subject, final ReadableGraph graph, final Set<IRI> types,
+                final Map<IRI, Set<RDFTerm>> merged, final Set<IRI> skipped) {
             Map<IRI, Set<RDFTerm>> values = new LinkedHashMap<>();
             graph.stream(subject, null, null)
                     .filter(triple -> !VocabRdf.TYPE.equals(triple.getPredicate()))
@@ -347,8 +361,25 @@ public final class ReadService implements ReadResources, ResourceHistory {
             } else {
                 literals.stream().map(literal -> text(literal, false)).forEach(rendered::add);
             }
-            held.stream().filter(term -> !(term instanceof Literal)).map(this::value).forEach(rendered::add);
+            held.stream().filter(term -> !(term instanceof Literal))
+                    .map(term -> inSlice(term, graph) ? inPlace((BlankNodeOrIRI) term, graph) : value(term))
+                    .forEach(rendered::add);
             return rendered.stream().sorted(VALUE_ORDER).toList();
+        }
+
+        /**
+         * Whether {@code term} is a further node of the graph being rendered - a fragment or blank node of
+         * the resource's slice that no owned field reaches - and not already being rendered higher up.
+         */
+        private boolean inSlice(final RDFTerm term, final ReadableGraph graph) {
+            return term instanceof BlankNodeOrIRI node && !inProgress.contains(node)
+                    && graph.stream(node, null, null).findAny().isPresent();
+        }
+
+        /** A node of the slice no owned field reaches, rendered in place under the edge pointing at it. */
+        private RenderedValue.Child inPlace(final BlankNodeOrIRI node, final ReadableGraph graph) {
+            Fields fields = fields(node, graph, typesOf(node, graph), Map.of(), Set.of());
+            return new RenderedValue.Child(term(node), Optional.empty(), fields.shaped(), fields.others());
         }
 
         private RenderedValue.Child child(final BlankNodeOrIRI child, final ReadableGraph graph,

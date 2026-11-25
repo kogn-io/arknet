@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
@@ -28,7 +29,8 @@ import de.hauschel.arknet.resource.application.port.out.ResourceReader;
 
 /**
  * An in-memory {@link ResourceReader}: the content graph, the history and the deletions are what the
- * test puts in. A slice is a subject and its {@code #} fragments, as in the store.
+ * test puts in. A slice is a subject, its {@code #} fragments and the blank nodes they reach, as in the
+ * store.
  */
 final class FakeReader implements ResourceReader {
 
@@ -55,6 +57,17 @@ final class FakeReader implements ResourceReader {
                     && (subject.equals(resource)
                             || subject.getIRIString().startsWith(resource.getIRIString() + "#")))
                     .forEach(slice::add);
+            List<BlankNode> pending = new ArrayList<>(slice.stream().map(Triple::getObject)
+                    .filter(BlankNode.class::isInstance).map(BlankNode.class::cast).toList());
+            while (!pending.isEmpty()) {
+                BlankNode node = pending.remove(pending.size() - 1);
+                content.stream(node, null, null).filter(triple -> !slice.contains(triple)).forEach(triple -> {
+                    slice.add(triple);
+                    if (triple.getObject() instanceof BlankNode next) {
+                        pending.add(next);
+                    }
+                });
+            }
             return slice;
         }
 

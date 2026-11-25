@@ -50,10 +50,12 @@ public sealed interface RenderedValue
     }
 
     /**
-     * A child the resource owns, rendered in place.
+     * A node of the resource's slice, rendered in place: a child an owned field holds, or another
+     * fragment or blank node an edge of the resource reaches.
      *
-     * @param iri             the child's IRI ({@code <resource>#<kind>-<id>})
-     * @param position        its position, empty if it carries none
+     * @param iri             the node's IRI ({@code <resource>#<kind>-<id>} for an owned child), or
+     *                        {@code _:} and a reference for a blank node
+     * @param position        its position, empty for a node outside an owned field or carrying none
      * @param fields          the fields its shapes give it, without the position
      * @param otherStatements the statements outside its shapes
      */

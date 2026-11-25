@@ -25,8 +25,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
+import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.terms.vocab.VocabDct;
+import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.StoreReader;
@@ -185,6 +188,37 @@ class ResourceReadRealStoreTest {
         // then
         assertEquals(1, adrs.size());
         assertEquals(1, hits);
+    }
+
+    @Test
+    void aFragmentNoOwnedFieldReachesIsRenderedInPlace() {
+        // given: a bounded context with its subdomain, written the way the typed adapter writes it
+        String ddd = "https://w3id.org/arknet/ddd#";
+        SimpleRdf rdf = new SimpleRdf();
+        IRI context = rdf.createIRI("https://w3id.org/arknet/id/0b6c1b70-4a39-4f0e-9d1a-5a7c3e1f2d11");
+        IRI subdomain = rdf.createIRI(context.getIRIString() + "#Subdomain");
+        Graph slice = rdf.createGraph();
+        slice.add(context, VocabRdf.TYPE, rdf.createIRI(ddd + "BoundedContext"));
+        slice.add(context, VocabDct.IDENTIFIER, rdf.createLiteral("BC-1"));
+        slice.add(context, rdf.createIRI("https://w3id.org/arknet/core#name"), rdf.createLiteral("Billing", "en"));
+        slice.add(context, rdf.createIRI(ddd + "domainVision"),
+                rdf.createLiteral("Bills every customer once a month.", "en"));
+        slice.add(context, rdf.createIRI(ddd + "partOf"), subdomain);
+        slice.add(subdomain, VocabRdf.TYPE, rdf.createIRI(ddd + "Subdomain"));
+        slice.add(subdomain, rdf.createIRI(ddd + "subdomainType"), rdf.createIRI(ddd + "CoreDomain"));
+        KognioRdfResourceRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT).writeAll(
+                SubmitRealStoreTest.PROJECT, batch -> batch.create(context, "BC-1", slice, rdf.createGraph()));
+
+        // when
+        RenderedResource resource = found("BC-1");
+
+        // then
+        RenderedValue.Child part = assertInstanceOf(RenderedValue.Child.class,
+                values(resource.fields(), ddd + "partOf").get(0));
+        assertEquals(subdomain.getIRIString(), part.iri());
+        assertEquals(ddd + "CoreDomain", ((RenderedValue.Reference) values(
+                Stream.concat(part.fields().stream(), part.otherStatements().stream()).toList(),
+                ddd + "subdomainType").get(0)).iri());
     }
 
     private RenderedResource found(final String handle) {

@@ -16,6 +16,7 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
@@ -70,6 +71,11 @@ class ReadServiceTest {
     private static final IRI SUPERSEDED_BY = fx("supersededBy");
     private static final IRI TARGET = fx("target");
     private static final IRI LEGACY = fx("legacy");
+    private static final IRI PART_OF = fx("partOf");
+    private static final IRI KIND_TYPE = fx("kindType");
+    private static final IRI CORE = fx("Core");
+    private static final IRI NOTE = fx("note");
+    private static final IRI NOTE_TEXT = fx("noteText");
 
     private static final IRI T1 = store("t1");
     private static final IRI T2 = store("t2");
@@ -260,6 +266,42 @@ class ReadServiceTest {
         assertTrue(((ResourceReading.Unresolved) readings.get(3)).reason().contains("several"));
         assertInstanceOf(ResourceReading.Unresolved.class, readings.get(4));
         assertEquals("T-2", ((ResourceReading.Found) readings.get(5)).resource().handle());
+    }
+
+    @Test
+    void aFragmentOrBlankNodeNoOwnedFieldReachesIsRenderedInPlace() {
+        storeT1();
+        IRI kind = RDF_FACTORY.createIRI(T1.getIRIString() + "#Kind");
+        reader.content.add(T1, PART_OF, kind);
+        reader.content.add(kind, KIND_TYPE, CORE);
+        BlankNode note = RDF_FACTORY.createBlankNode();
+        reader.content.add(T1, NOTE, note);
+        reader.content.add(note, NOTE_TEXT, RDF_FACTORY.createLiteral("inner"));
+
+        RenderedResource t1 = found("T-1");
+
+        RenderedValue.Child part = assertInstanceOf(RenderedValue.Child.class, values(t1.otherStatements(), PART_OF)
+                .get(0));
+        assertEquals(kind.getIRIString(), part.iri());
+        assertEquals(Optional.empty(), part.position());
+        assertEquals("fx:Core", ((RenderedValue.Reference) values(part.otherStatements(), KIND_TYPE).get(0)).handle());
+        RenderedValue.Child inner = assertInstanceOf(RenderedValue.Child.class, values(t1.otherStatements(), NOTE)
+                .get(0));
+        assertEquals("inner", ((RenderedValue.Text) values(inner.otherStatements(), NOTE_TEXT).get(0)).text());
+    }
+
+    @Test
+    void aHandleIsACodeAFullIriOrAPrefixedNameButNoBlankNodeAndNoFragment() {
+        storeT1();
+
+        List<ResourceReading> readings = service.read(PROJECT, List.of("_:b1", T1.getIRIString() + "#step-1",
+                "<" + T1.getIRIString() + ">", T1.getIRIString()), "en", false);
+
+        assertTrue(((ResourceReading.Unresolved) readings.get(0)).reason().contains("blank node"));
+        assertTrue(((ResourceReading.Unresolved) readings.get(1)).reason().contains("read that resource")
+                && ((ResourceReading.Unresolved) readings.get(1)).reason().contains("<" + T1.getIRIString() + ">"));
+        assertEquals("T-1", ((ResourceReading.Found) readings.get(2)).resource().handle());
+        assertEquals("T-1", ((ResourceReading.Found) readings.get(3)).resource().handle());
     }
 
     @Test
