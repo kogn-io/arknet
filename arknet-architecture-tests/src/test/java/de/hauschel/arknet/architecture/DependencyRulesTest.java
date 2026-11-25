@@ -68,7 +68,8 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
  * rule 14 by naming {@code VersionedWriteFunnel} there, rule 15 by calling
  * {@code importPublishedPastGate} from any class but the startup migration. Rule 16 is broken by
  * naming a type of a bounded context in a {@code de.hauschel.arknet.resource} class, rule 17 by naming a class of that package from any
- * bounded context, rule 18 by naming an RDF4J or Spring type in its core. Rule 12 is the one
+ * bounded context, rule 18 by naming an RDF4J or Spring type in its core, rule 19 by calling
+ * {@code Prefixes.defaults()} from one of its classes. Rule 12 is the one
  * rule that does not need the exercise: it turns red on any class in the kernel package whose
  * name is not on its list, which is the whole of what it claims.</p>
  *
@@ -577,6 +578,31 @@ class DependencyRulesTest {
                     .because("the core of generic resource access works on the neutral RDF ports; "
                             + "the store technology, the framework and the transport stay in its "
                             + "adapters");
+
+    private static final String PREFIXES = "de.hauschel.arknet.persistence.Prefixes";
+    private static final String STORE_RESOURCE = "de.hauschel.arknet.persistence.StoreResource";
+
+    /**
+     * Rule 19 -- generic resource access takes no context knowledge from the persistence support.
+     *
+     * <p>{@code arknet-persistence-support} serves the typed adapters too and carries knowledge of
+     * the bounded contexts the component must not borrow: {@code Prefixes#defaults()} binds their
+     * namespaces, {@code StoreResource#label}, {@code #status} and {@code #priority} read fixed
+     * predicates of their vocabularies. {@code ResourceAccessNamesNoModelNamespaceTest} scans only the
+     * class files of the component's own modules and cannot see such a call. Label, status and handles
+     * come from the shapes' rule data and the prefixes of the shipped files instead.</p>
+     */
+    @ArchTest
+    static final ArchRule resource_access_takes_no_context_knowledge_from_the_persistence_support =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.resource..")
+                    .should().callMethod(PREFIXES, "defaults")
+                    .orShould().callMethod(STORE_RESOURCE, "label", "de.hauschel.arknet.kernel.DisplayLocale")
+                    .orShould().callMethod(STORE_RESOURCE, "status")
+                    .orShould().callMethod(STORE_RESOURCE, "priority")
+                    .because("generic resource access reads label, status and handles from the shapes and "
+                            + "the shipped prefixes; the persistence support's defaults name the bounded "
+                            + "contexts (ADR-69)");
 
     /** Every module of a bounded context: its components' packages and the vocabulary modules. */
     private static String[] boundedContextModulePackages() {
