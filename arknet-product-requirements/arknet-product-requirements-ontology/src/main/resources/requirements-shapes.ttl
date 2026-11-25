@@ -56,6 +56,7 @@ rshapes:Requirement-identifier
 rshapes:Requirement-title
     a sh:PropertyShape ;
     sh:path     dcterms:title ;
+    arkres:labelField true ;
     sh:minCount 1 ;
     sh:minLength 2 ;
     sh:uniqueLang true ;
@@ -219,6 +220,7 @@ rshapes:ConstraintShape
 rshapes:Constraint-title
     a sh:PropertyShape ;
     sh:path     dcterms:title ;
+    arkres:labelField true ;
     sh:minCount 1 ;
     sh:minLength 2 ;
     sh:uniqueLang true ;
@@ -290,6 +292,7 @@ rshapes:UseCase-identifier
 rshapes:UseCase-title
     a sh:PropertyShape ;
     sh:path     dcterms:title ;
+    arkres:labelField true ;
     sh:minCount 1 ;
     sh:minLength 2 ;
     sh:uniqueLang true ;

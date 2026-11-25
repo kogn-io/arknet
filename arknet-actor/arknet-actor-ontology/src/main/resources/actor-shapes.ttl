@@ -61,6 +61,7 @@ actshapes:ActorShape
 actshapes:Actor-name
     a sh:PropertyShape ;
     sh:path     arknet:name ;
+    arkres:labelField true ;
     sh:minCount 1 ;
     sh:minLength 2 ;
     sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
@@ -103,6 +104,7 @@ actshapes:RoleShape
 actshapes:Role-name
     a sh:PropertyShape ;
     sh:path     arknet:name ;
+    arkres:labelField true ;
     sh:minCount 1 ;
     sh:minLength 2 ;
     sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;

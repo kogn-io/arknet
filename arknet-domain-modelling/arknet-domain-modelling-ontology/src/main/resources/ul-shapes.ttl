@@ -38,6 +38,7 @@ ulshapes:TermShape
 ulshapes:Term-prefLabel
     a sh:PropertyShape ;
     sh:path     skos:prefLabel ;
+    arkres:labelField true ;
     sh:minCount 1 ;
     sh:minLength 1 ;
     sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;

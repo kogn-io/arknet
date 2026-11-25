@@ -79,6 +79,15 @@ import io.kogn.rdf.terms.vocab.VocabRdfs;
  * value outside the {@code sh:datatype} or {@code sh:in} of its field ({@code arkres:today} being an
  * {@code xsd:date}) fail construction as well. A default may go into a field of a group: the
  * transition writes it, and the group freezes it afterwards.</p>
+ *
+ * <p>A fifth kind is a reading hint, which no write consults: on any property shape,
+ * {@code arkres:labelField true} makes its {@code sh:path} the label of every class its node shape
+ * targets and of their subclasses ({@link #labelField}). A class has at most one label path; the
+ * same path marked on several shapes of a class is one path. A type without a text field carries
+ * none. An {@code arkres:labelField} that is not the boolean {@code true} or that sits on an owned
+ * field, a property shape without {@code sh:path}, and two different label paths reaching one class
+ * - on the class itself or across its superclasses - are defects of the rule data and fail
+ * construction.</p>
  */
 public final class ResourceSchema {
 
@@ -92,6 +101,7 @@ public final class ResourceSchema {
     private static final IRI SUB_CLASS_OF = RDF_FACTORY.createIRI(VocabRdfs.NAMESPACE + "subClassOf");
     private static final IRI RANGE = RDF_FACTORY.createIRI(VocabRdfs.NAMESPACE + "range");
     private static final IRI IMMUTABLE = RDF_FACTORY.createIRI(ArkresVocabulary.IMMUTABLE);
+    private static final IRI LABEL_FIELD = RDF_FACTORY.createIRI(ArkresVocabulary.LABEL_FIELD);
     private static final IRI UNIQUE_LANG = RDF_FACTORY.createIRI(SHACL + "uniqueLang");
     private static final String XSD_BOOLEAN = "http://www.w3.org/2001/XMLSchema#boolean";
     private static final String XSD_DATE = "http://www.w3.org/2001/XMLSchema#date";
@@ -183,7 +193,46 @@ public final class ResourceSchema {
         });
         checkImmutableMarkers(shapes, owned.keySet(), schema.statusFieldByClass.values());
         schema.statusFieldByClass.forEach(schema::checkBeforeAfterRules);
+        schema.checkLabelFields(owned.keySet());
         return schema;
+    }
+
+    /**
+     * Every {@code arkres:labelField} is the boolean {@code true} on a property shape with a path that
+     * is no owned field, and no class reaches two different label paths.
+     */
+    private void checkLabelFields(final Set<IRI> ownedFields) {
+        shapes.stream(null, LABEL_FIELD, null).forEach(marker -> {
+            if (!(marker.getObject() instanceof Literal literal) || !XSD_BOOLEAN.equals(literal.getDatatype()
+                    .getIRIString()) || !"true".equals(literal.getLexicalForm())) {
+                throw new IllegalStateException(marker.getSubject() + " carries " + ArkresVocabulary.LABEL_FIELD
+                        + " " + marker.getObject() + "; it takes the boolean true, or is left out");
+            }
+            IRI property = single(shapes, marker.getSubject(), PATH).filter(IRI.class::isInstance)
+                    .map(IRI.class::cast)
+                    .orElseThrow(() -> new IllegalStateException(marker.getSubject() + " carries "
+                            + ArkresVocabulary.LABEL_FIELD + " but no sh:path"));
+            if (ownedFields.contains(property)) {
+                throw new IllegalStateException(property + " is marked " + ArkresVocabulary.LABEL_FIELD
+                        + ", but it owns its children; a label is a text field");
+            }
+        });
+        Set<IRI> classes = new LinkedHashSet<>();
+        shapes.stream(null, TARGET_CLASS, null).map(Triple::getObject)
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .forEach(classes::add);
+        ontology.stream(null, SUB_CLASS_OF, null).map(Triple::getSubject)
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .forEach(classes::add);
+        classes.forEach(type -> {
+            Set<IRI> reached = labelFieldsReachedBy(Set.of(type));
+            if (reached.size() > 1) {
+                throw new IllegalStateException(type + " reaches two label fields over itself and its superclasses: "
+                        + reached.stream().map(IRI::getIRIString).sorted().toList());
+            }
+        });
     }
 
     /**
@@ -560,6 +609,41 @@ public final class ResourceSchema {
                 .map(Triple::getObject)
                 .filter(property -> property instanceof BlankNodeOrIRI node
                         && shapes.stream(node, IMMUTABLE, null).findAny().isPresent())
+                .flatMap(property -> single(shapes, property, PATH).stream())
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * The label field of a node typed with {@code types}: the path of the property shape carrying
+     * {@code arkres:labelField true} on a shape of one of the types or a superclass. A hint for
+     * reading; no write consults it.
+     *
+     * @param types the {@code rdf:type} values of a node
+     * @return the label property, empty for a type without a text field
+     * @throws IllegalArgumentException if the types reach two different label fields - one class
+     *                                  never does, the schema build rejects that, so only a node typed
+     *                                  with several unrelated classes can
+     */
+    public Optional<IRI> labelField(final Set<IRI> types) {
+        Set<IRI> found = labelFieldsReachedBy(types);
+        if (found.size() > 1) {
+            throw new IllegalArgumentException("a resource has at most one label field, but one typed "
+                    + types.stream().map(IRI::getIRIString).sorted().toList() + " reaches "
+                    + found.stream().map(IRI::getIRIString).sorted().toList());
+        }
+        return found.stream().findFirst();
+    }
+
+    private Set<IRI> labelFieldsReachedBy(final Set<IRI> types) {
+        return types.stream()
+                .flatMap(type -> nodeShapes(type).stream())
+                .distinct()
+                .flatMap(node -> shapes.stream(node, PROPERTY, null))
+                .map(Triple::getObject)
+                .filter(property -> property instanceof BlankNodeOrIRI node
+                        && shapes.stream(node, LABEL_FIELD, null).findAny().isPresent())
                 .flatMap(property -> single(shapes, property, PATH).stream())
                 .filter(IRI.class::isInstance)
                 .map(IRI.class::cast)
