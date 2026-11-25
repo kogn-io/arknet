@@ -106,6 +106,19 @@ class ResourceSchemaLabelFieldTest {
     }
 
     @Test
+    void aMarkerWithoutAPathFailsTheSchema() {
+        Graph shapes = shapes();
+        IRI pathless = shape("Book-pathless");
+        shapes.add(shape("Book"), shacl("property"), pathless);
+        shapes.add(pathless, arkres(ArkresVocabulary.LABEL_FIELD), bool());
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> ResourceSchema.of(shapes, ontology()));
+
+        assertTrue(failure.getMessage().contains("no sh:path"), failure.getMessage());
+    }
+
+    @Test
     void aLabelOnAnOwnedFieldFailsTheSchema() {
         Graph shapes = shapes();
         shapes.add(CHAPTERS_SHAPE, arkres(ArkresVocabulary.LABEL_FIELD), bool());

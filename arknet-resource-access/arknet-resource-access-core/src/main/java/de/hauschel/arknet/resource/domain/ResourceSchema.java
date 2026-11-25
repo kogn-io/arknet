@@ -202,16 +202,7 @@ public final class ResourceSchema {
      * is no owned field, and no class reaches two different label paths.
      */
     private void checkLabelFields(final Set<IRI> ownedFields) {
-        shapes.stream(null, LABEL_FIELD, null).forEach(marker -> {
-            if (!(marker.getObject() instanceof Literal literal) || !XSD_BOOLEAN.equals(literal.getDatatype()
-                    .getIRIString()) || !"true".equals(literal.getLexicalForm())) {
-                throw new IllegalStateException(marker.getSubject() + " carries " + ArkresVocabulary.LABEL_FIELD
-                        + " " + marker.getObject() + "; it takes the boolean true, or is left out");
-            }
-            IRI property = single(shapes, marker.getSubject(), PATH).filter(IRI.class::isInstance)
-                    .map(IRI.class::cast)
-                    .orElseThrow(() -> new IllegalStateException(marker.getSubject() + " carries "
-                            + ArkresVocabulary.LABEL_FIELD + " but no sh:path"));
+        markedProperties(shapes, LABEL_FIELD).forEach(property -> {
             if (ownedFields.contains(property)) {
                 throw new IllegalStateException(property + " is marked " + ArkresVocabulary.LABEL_FIELD
                         + ", but it owns its children; a label is a text field");
@@ -242,22 +233,31 @@ public final class ResourceSchema {
     private static void checkImmutableMarkers(final ReadableGraph shapes, final Set<IRI> ownedFields,
             final Collection<StatusField> statusFields) {
         Set<IRI> statusProperties = statusFields.stream().map(StatusField::property).collect(Collectors.toSet());
-        shapes.stream(null, IMMUTABLE, null).forEach(marker -> {
-            if (!(marker.getObject() instanceof Literal literal) || !XSD_BOOLEAN.equals(literal.getDatatype()
-                    .getIRIString()) || !"true".equals(literal.getLexicalForm())) {
-                throw new IllegalStateException(marker.getSubject() + " carries " + ArkresVocabulary.IMMUTABLE + " "
-                        + marker.getObject() + "; it takes the boolean true, or is left out");
-            }
-            IRI property = single(shapes, marker.getSubject(), PATH).filter(IRI.class::isInstance)
-                    .map(IRI.class::cast)
-                    .orElseThrow(() -> new IllegalStateException(marker.getSubject() + " carries "
-                            + ArkresVocabulary.IMMUTABLE + " but no sh:path"));
+        markedProperties(shapes, IMMUTABLE).forEach(property -> {
             if (ownedFields.contains(property) || statusProperties.contains(property)) {
                 throw new IllegalStateException(property + " is marked " + ArkresVocabulary.IMMUTABLE + ", but it "
                         + (ownedFields.contains(property) ? "owns its children; a field group freezes a list"
                                 : "is a status field; its transitions say how it changes"));
             }
         });
+    }
+
+    /**
+     * The paths of the property shapes carrying a boolean marker; a marker that is not the boolean
+     * {@code true} or sits on a shape without {@code sh:path} fails the build.
+     */
+    private static List<IRI> markedProperties(final ReadableGraph shapes, final IRI marker) {
+        return shapes.stream(null, marker, null).map(triple -> {
+            if (!(triple.getObject() instanceof Literal literal) || !XSD_BOOLEAN.equals(literal.getDatatype()
+                    .getIRIString()) || !"true".equals(literal.getLexicalForm())) {
+                throw new IllegalStateException(triple.getSubject() + " carries " + marker.getIRIString() + " "
+                        + triple.getObject() + "; it takes the boolean true, or is left out");
+            }
+            return single(shapes, triple.getSubject(), PATH).filter(IRI.class::isInstance)
+                    .map(IRI.class::cast)
+                    .orElseThrow(() -> new IllegalStateException(triple.getSubject() + " carries " + marker.getIRIString()
+                            + " but no sh:path"));
+        }).toList();
     }
 
     /**
