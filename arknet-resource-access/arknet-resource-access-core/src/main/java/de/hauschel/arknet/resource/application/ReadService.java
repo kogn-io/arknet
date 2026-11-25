@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -181,6 +182,7 @@ public final class ReadService implements ReadResources, ResourceHistory {
         private final boolean allLanguages;
         private final Map<IRI, RenderedValue.Reference> references = new HashMap<>();
         private final Set<BlankNodeOrIRI> inProgress = new HashSet<>();
+        private final Map<ReadableGraph, Set<RDFTerm>> ownedNodesByGraph = new IdentityHashMap<>();
 
         private Rendering(final ResourceReader.Snapshot snapshot, final DisplayLocale locale,
                 final boolean allLanguages) {
@@ -373,7 +375,19 @@ public final class ReadService implements ReadResources, ResourceHistory {
          */
         private boolean inSlice(final RDFTerm term, final ReadableGraph graph) {
             return term instanceof BlankNodeOrIRI node && !inProgress.contains(node)
+                    && !ownedNodes(graph).contains(node)
                     && graph.stream(node, null, null).findAny().isPresent();
+        }
+
+        /**
+         * The nodes of {@code graph} an owned field holds, at any depth: they render in order under that
+         * field, so an edge reaching one of them otherwise renders it as a reference, not a second time.
+         */
+        private Set<RDFTerm> ownedNodes(final ReadableGraph graph) {
+            return ownedNodesByGraph.computeIfAbsent(graph, any -> graph.stream()
+                    .filter(triple -> schema.ownedField(triple.getPredicate()).isPresent())
+                    .map(Triple::getObject)
+                    .collect(Collectors.toUnmodifiableSet()));
         }
 
         /** A node of the slice no owned field reaches, rendered in place under the edge pointing at it. */

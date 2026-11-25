@@ -76,6 +76,9 @@ class ReadServiceTest {
     private static final IRI CORE = fx("Core");
     private static final IRI NOTE = fx("note");
     private static final IRI NOTE_TEXT = fx("noteText");
+    private static final IRI BACK = fx("back");
+    private static final IRI SELF = fx("self");
+    private static final IRI HIGHLIGHT = fx("highlight");
 
     private static final IRI T1 = store("t1");
     private static final IRI T2 = store("t2");
@@ -288,6 +291,36 @@ class ReadServiceTest {
         RenderedValue.Child inner = assertInstanceOf(RenderedValue.Child.class, values(t1.otherStatements(), NOTE)
                 .get(0));
         assertEquals("inner", ((RenderedValue.Text) values(inner.otherStatements(), NOTE_TEXT).get(0)).text());
+    }
+
+    @Test
+    void anEdgeBackToTheResourceOrToItselfRendersAsAReferenceNotAnEndlessNesting() {
+        storeT1();
+        IRI kind = RDF_FACTORY.createIRI(T1.getIRIString() + "#Kind");
+        reader.content.add(T1, PART_OF, kind);
+        reader.content.add(kind, BACK, T1);
+        reader.content.add(kind, SELF, kind);
+
+        RenderedValue.Child part = assertInstanceOf(RenderedValue.Child.class,
+                values(found("T-1").otherStatements(), PART_OF).get(0));
+
+        assertEquals("T-1", assertInstanceOf(RenderedValue.Reference.class,
+                values(part.otherStatements(), BACK).get(0)).handle());
+        assertEquals(kind.getIRIString(), assertInstanceOf(RenderedValue.Reference.class,
+                values(part.otherStatements(), SELF).get(0)).iri());
+    }
+
+    @Test
+    void anEdgeToAnOwnedChildRendersAsAReferenceNotASecondTime() {
+        storeT1();
+        IRI firstStep = RDF_FACTORY.createIRI(T1.getIRIString() + "#step-1");
+        reader.content.add(T1, HIGHLIGHT, firstStep);
+
+        RenderedResource t1 = found("T-1");
+
+        assertEquals(firstStep.getIRIString(), assertInstanceOf(RenderedValue.Reference.class,
+                values(t1.otherStatements(), HIGHLIGHT).get(0)).iri());
+        assertEquals(2, values(t1.fields(), STEPS).size());
     }
 
     @Test
