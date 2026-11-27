@@ -100,6 +100,10 @@ class AdrComparisonTest {
     private static final String SHAPE_ONE_CHOSEN = "exactly one arkarch:consideredOption";
     private static final String SHAPE_SUCCESSOR_ACCEPTED = "only by a decision that is Accepted";
     private static final String SHAPE_NO_SELF_REFERENCE = "must not point at itself";
+    private static final String CORE_TEXT_FROZEN = "can only be corrected while PROPOSED";
+    private static final String ENGINE_FIELDS_ONLY_GROW = "only grow (" + ArkresVocabulary.FIELD_GROUP;
+    private static final String ENGINE_NOT_DELETABLE = "none of the statuses it may be deleted in ("
+            + ArkresVocabulary.DELETABLE_IN;
     private static final String ENGINE_NO_TRANSITION = "no " + ArkresVocabulary.TRANSITION;
     private static final String ENGINE_REMOVES_CHILD = "removes the child";
     private static final String ENGINE_NO_CHILD_AT = "holds no child at position";
@@ -587,8 +591,8 @@ class AdrComparisonTest {
                         .with(ArkarchVocabulary.NAME, text("Use Turtle", EN))));
 
         // then
-        outcome.assertBothReject(Rejection.core(AdrTextImmutableException.class, null),
-                Rejection.submit(ArkresVocabulary.FIELD_GROUP));
+        outcome.assertBothReject(Rejection.core(AdrTextImmutableException.class, CORE_TEXT_FROZEN),
+                Rejection.submit(ENGINE_FIELDS_ONLY_GROW));
     }
 
     @Test
@@ -605,7 +609,7 @@ class AdrComparisonTest {
                 document().removeFrom(iri(adr.submit()), ArkarchVocabulary.CONSEQUENCE, 1));
 
         // then
-        outcome.assertBothReject(Rejection.core(AdrTextImmutableException.class, null),
+        outcome.assertBothReject(Rejection.core(AdrTextImmutableException.class, CORE_TEXT_FROZEN),
                 Rejection.submit(ENGINE_REMOVES_CHILD));
     }
 
@@ -627,7 +631,7 @@ class AdrComparisonTest {
                                 option(2, "JSON", "No links, ever.", ArkarchVocabulary.OPTION_REJECTED)));
 
         // then
-        outcome.assertBothReject(Rejection.core(AdrTextImmutableException.class, null),
+        outcome.assertBothReject(Rejection.core(AdrTextImmutableException.class, CORE_TEXT_FROZEN),
                 Rejection.submit(ENGINE_REMOVES_CHILD));
     }
 
@@ -876,7 +880,7 @@ class AdrComparisonTest {
 
         // then
         outcome.assertBothReject(Rejection.core(AdrNotDeletableException.class, null),
-                Rejection.submit(ArkresVocabulary.DELETABLE_IN));
+                Rejection.submit(ENGINE_NOT_DELETABLE));
     }
 
     @Test
