@@ -3,15 +3,18 @@
 
 package de.hauschel.arknet.resource.adapter.kogniordf.comparison;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.persistence.RdfNode;
@@ -33,9 +36,19 @@ import de.hauschel.arknet.resource.domain.ResourceSchema.OwnedField;
  *       {@code arkres:orderedBy} - so a child whose identity differs between the two writers
  *       (a text corrected in place by the core, removed and added by a document) still compares
  *       by what it says;</li>
+ *   <li>a resource of a type without a code prefix (a context relationship) becomes
+ *       {@code <type>{<its outgoing edges, renamed and sorted>}~<n>}: its content is its name, and
+ *       resources of identical content are numbered, never merged - so a duplicate shows as one
+ *       more resource on one side. Its edges to another resource without a code stay raw IRIs and
+ *       fail the comparison; no shipped type has such an edge;</li>
  *   <li>any other IRI that extends a resource IRI by a fragment becomes
  *       {@code <parent>#<fragment>}.</li>
  * </ul>
+ *
+ * <p>The renaming is checked to be one-to-one. Two resources with one code, two children at one
+ * position, a child with no or several positions, or a child owned by several edges fail the graph
+ * with an {@link AssertionError} naming the colliding IRIs: a set would otherwise merge them and
+ * hide exactly the duplicates a comparison has to find.</p>
  *
  * <p>Literals compare exactly: lexical form, datatype and language tag. A blank node fails the
  * graph: no writer stores one, and a label differs between stores, so it could only compare by
@@ -46,31 +59,66 @@ public final class CanonicalGraph {
     /** {@code dcterms:identifier} - the business code of a resource; not a namespace of a context. */
     static final String IDENTIFIER = "http://purl.org/dc/terms/identifier";
 
-    private static final String CODE_SCHEME = "code:";
+    /** The prefix of a resource name taken from its code. */
+    static final String CODE_SCHEME = "code:";
     private static final String BLANK_NODE_PREFIX = "_:";
     private static final char FRAGMENT = '#';
     private static final char POSITION = '@';
 
-    private final Set<String> statements;
+    private static final String TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    private static final String DUPLICATE = "~";
 
-    private CanonicalGraph(final Set<String> statements) {
+    private final Set<String> statements;
+    private final Map<String, String> resources;
+
+    private CanonicalGraph(final Set<String> statements, final Map<String, String> resources) {
         this.statements = Set.copyOf(statements);
+        this.resources = Map.copyOf(resources);
     }
 
     /**
      * Renames the given content-graph triples of one project.
      *
      * @param triples every triple of the project's content graph
-     * @param schema  the schema that names the owned fields and their position property
+     * @param schema  the schema that names the owned fields, their position property and the
+     *                resource types without a code
      * @return the canonical graph
      */
     static CanonicalGraph of(final List<Triple> triples, final ResourceSchema schema) {
         Map<String, String> names = resourceNames(triples);
+        Map<String, String> resources = new TreeMap<>();
+        names.forEach((iri, name) -> resources.put(name, iri));
         names.putAll(childNames(triples, schema, names));
+        Map<String, String> uncoded = uncodedNames(triples, schema, names);
+        uncoded.forEach((iri, name) -> resources.put(name, iri));
+        names.putAll(uncoded);
+        assertOneToOne(names);
         Set<String> statements = triples.stream()
                 .map(triple -> render(triple, names))
                 .collect(Collectors.toCollection(TreeSet::new));
-        return new CanonicalGraph(statements);
+        return new CanonicalGraph(statements, resources);
+    }
+
+    /**
+     * The resources of this graph - not their children - by canonical name, with the IRI each has
+     * in its project; what the history of a resource is read by.
+     *
+     * @return IRI by canonical name
+     */
+    Map<String, String> resources() {
+        return resources;
+    }
+
+    /**
+     * This graph with further statements about it, such as the history of its resources.
+     *
+     * @param more the statements to add, one canonical line each
+     * @return the extended graph
+     */
+    CanonicalGraph plus(final Set<String> more) {
+        Set<String> all = new TreeSet<>(statements);
+        all.addAll(more);
+        return new CanonicalGraph(all, resources);
     }
 
     /**
@@ -91,7 +139,7 @@ public final class CanonicalGraph {
      */
     public CanonicalGraph without(final Predicate<String> dropped) {
         return new CanonicalGraph(statements.stream().filter(dropped.negate())
-                .collect(Collectors.toCollection(TreeSet::new)));
+                .collect(Collectors.toCollection(TreeSet::new)), resources);
     }
 
     /**
@@ -128,33 +176,91 @@ public final class CanonicalGraph {
         Map<String, String> names = new HashMap<>();
         triples.stream()
                 .filter(triple -> IDENTIFIER.equals(triple.predicate()))
-                .forEach(triple -> names.put(triple.subject(),
-                        CODE_SCHEME + ((RdfNode.Literal) triple.object()).lexicalForm()));
+                .forEach(triple -> {
+                    String name = CODE_SCHEME + ((RdfNode.Literal) triple.object()).lexicalForm();
+                    String earlier = names.put(triple.subject(), name);
+                    if (earlier != null && !earlier.equals(name)) {
+                        throw new AssertionError(triple.subject() + " carries two codes: " + earlier + ", " + name);
+                    }
+                });
         return names;
     }
 
     private static Map<String, String> childNames(final List<Triple> triples, final ResourceSchema schema,
             final Map<String, String> resources) {
         SimpleRdf rdf = new SimpleRdf();
+        Map<String, List<Triple>> owners = triples.stream()
+                .filter(triple -> triple.object() instanceof RdfNode.Resource)
+                .filter(triple -> schema.ownedField(rdf.createIRI(triple.predicate())).isPresent())
+                .collect(Collectors.groupingBy(triple -> ((RdfNode.Resource) triple.object()).iri()));
         Map<String, String> children = new HashMap<>();
-        for (Triple triple : triples) {
-            Optional<OwnedField> owned = schema.ownedField(rdf.createIRI(triple.predicate()));
-            if (owned.isEmpty() || !(triple.object() instanceof RdfNode.Resource child)) {
-                continue;
+        owners.forEach((child, edges) -> {
+            if (edges.size() != 1) {
+                throw new AssertionError("child " + child + " is owned " + edges.size() + " times: " + edges);
             }
-            String parent = resources.getOrDefault(triple.subject(), triple.subject());
-            String position = position(triples, child.iri(), owned.get().orderedBy().getIRIString());
-            children.put(child.iri(), parent + FRAGMENT + owned.get().childKind() + POSITION + position);
-        }
+            Triple edge = edges.get(0);
+            OwnedField owned = schema.ownedField(rdf.createIRI(edge.predicate())).orElseThrow();
+            String parent = resources.getOrDefault(edge.subject(), edge.subject());
+            String position = position(triples, child, owned.orderedBy().getIRIString());
+            children.put(child, parent + FRAGMENT + owned.childKind() + POSITION + position);
+        });
         return children;
     }
 
     private static String position(final List<Triple> triples, final String child, final String orderedBy) {
-        return triples.stream()
+        List<String> positions = triples.stream()
                 .filter(triple -> child.equals(triple.subject()) && orderedBy.equals(triple.predicate()))
                 .map(triple -> ((RdfNode.Literal) triple.object()).lexicalForm())
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("child " + child + " carries no " + orderedBy));
+                .toList();
+        if (positions.size() != 1) {
+            throw new AssertionError("child " + child + " carries " + positions.size() + " values of " + orderedBy
+                    + ": " + positions);
+        }
+        return positions.get(0);
+    }
+
+    private static Map<String, String> uncodedNames(final List<Triple> triples, final ResourceSchema schema,
+            final Map<String, String> named) {
+        SimpleRdf rdf = new SimpleRdf();
+        Map<String, Set<IRI>> types = new HashMap<>();
+        triples.stream()
+                .filter(triple -> TYPE.equals(triple.predicate()) && triple.object() instanceof RdfNode.Resource)
+                .filter(triple -> !named.containsKey(triple.subject()))
+                .forEach(triple -> types.computeIfAbsent(triple.subject(), ignored -> new HashSet<>())
+                        .add(rdf.createIRI(((RdfNode.Resource) triple.object()).iri())));
+        Map<String, List<String>> byContent = new TreeMap<>();
+        types.forEach((iri, typeSet) -> schema.resourceTypeOf(typeSet)
+                .filter(type -> type.codePrefix().isEmpty())
+                .ifPresent(type -> byContent.computeIfAbsent(content(iri, type.type().getIRIString(), triples, named),
+                        ignored -> new ArrayList<>()).add(iri)));
+        Map<String, String> names = new HashMap<>();
+        byContent.forEach((content, iris) -> {
+            List<String> sorted = iris.stream().sorted().toList();
+            for (int index = 0; index < sorted.size(); index++) {
+                names.put(sorted.get(index), content + DUPLICATE + (index + 1));
+            }
+        });
+        return names;
+    }
+
+    private static String content(final String iri, final String type, final List<Triple> triples,
+            final Map<String, String> named) {
+        return "<" + type + ">{" + triples.stream()
+                .filter(triple -> iri.equals(triple.subject()) && !TYPE.equals(triple.predicate()))
+                .map(triple -> triple.predicate() + " " + node(triple.object(), named))
+                .sorted()
+                .collect(Collectors.joining("; ")) + "}";
+    }
+
+    private static void assertOneToOne(final Map<String, String> names) {
+        Map<String, List<String>> byName = names.entrySet().stream().collect(Collectors.groupingBy(
+                Map.Entry::getValue, TreeMap::new, Collectors.mapping(Map.Entry::getKey, Collectors.toList())));
+        byName.forEach((name, iris) -> {
+            if (iris.size() > 1) {
+                throw new AssertionError(iris.size() + " nodes would be renamed to " + name + ": " + iris.stream()
+                        .sorted().toList());
+            }
+        });
     }
 
     private static String render(final Triple triple, final Map<String, String> names) {

@@ -65,7 +65,7 @@ class ConstraintComparisonTest {
     private static final String SHAPE_STATEMENT = "needs at least one arkreq:constraintStatement";
     private static final String ENGINE_NO_RESOURCE = "No resource found for id";
 
-    private static final String NO_BREAK_SPACE = "  ";
+    private static final String NO_BREAK_SPACE = "\u00A0\u00A0";
 
     /**
      * Nothing differs for a constraint. The intended difference "Blank text" of

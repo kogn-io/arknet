@@ -6,6 +6,10 @@ package de.hauschel.arknet.resource.adapter.kogniordf.comparison;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -19,6 +23,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.persistence.StoreResource;
+import de.hauschel.arknet.persistence.VersionEntry;
 import de.hauschel.arknet.resource.adapter.kogniordf.KognioRdfResourceRepositoryFactory;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.domain.ResourceSchema;
@@ -29,17 +34,20 @@ import de.hauschel.arknet.resource.domain.ResourceSchema;
  * per case - so a class of many cases opens one store, not one per case.
  *
  * <p>The engine is built exactly as the composition root builds it, over the shipped shapes and
- * ontologies the test classpath carries. The comparison reads the content graph of each project;
- * the history the library keeps (revisions, creators) is not compared - one revision per write is
- * pinned elsewhere.</p>
+ * ontologies the test classpath carries. The comparison reads the content graph of each project
+ * and, per resource, the shape of its history (entry count, tombstone, retained code); creators,
+ * instants and comments of the history are not compared.</p>
  */
 public final class ComparisonStore implements AutoCloseable {
+
+    private static final String LEDGER = "ledger ";
 
     private final DatasetLifecycle lifecycle;
     private final SubmitService engine;
     private final StoreReader reader;
     private final ResourceSchema schema;
     private final AtomicInteger cases = new AtomicInteger();
+    private final Map<ProjectId, Map<String, String>> seen = new ConcurrentHashMap<>();
 
     private ComparisonStore(final DatasetLifecycle lifecycle) {
         this.lifecycle = lifecycle;
@@ -93,16 +101,33 @@ public final class ComparisonStore implements AutoCloseable {
     }
 
     /**
-     * The canonical content graph of a project.
+     * The canonical content graph of a project, together with the history of every resource the
+     * project has shown so far - also one deleted since: its number of history entries, whether the
+     * last one is a tombstone, and whether its code is retained. A delete that drops the content but
+     * writes no tombstone, or frees the code, thus differs from one that does. Children have no
+     * history of their own.
      *
      * @param project the project
      * @return the graph
      */
     CanonicalGraph graph(final ProjectId project) {
-        return CanonicalGraph.of(reader.readSnapshot(project).resources().stream()
+        CanonicalGraph graph = CanonicalGraph.of(reader.readSnapshot(project).resources().stream()
                 .map(StoreResource::outgoing)
                 .flatMap(List::stream)
                 .toList(), schema);
+        Map<String, String> known = seen.computeIfAbsent(project, ignored -> new ConcurrentHashMap<>());
+        known.putAll(graph.resources());
+        Set<String> ledger = new TreeSet<>();
+        known.forEach((name, iri) -> {
+            List<VersionEntry> history = reader.history(project, iri);
+            String last = history.isEmpty() ? "none" : history.getLast().tombstone() ? "tombstone" : "version";
+            ledger.add(LEDGER + name + " history " + history.size() + " last " + last);
+            if (name.startsWith(CanonicalGraph.CODE_SCHEME)) {
+                ledger.add(LEDGER + name + " retained "
+                        + reader.findDeletedByCode(project, name.substring(CanonicalGraph.CODE_SCHEME.length())).isPresent());
+            }
+        });
+        return graph.plus(ledger);
     }
 
     @Override

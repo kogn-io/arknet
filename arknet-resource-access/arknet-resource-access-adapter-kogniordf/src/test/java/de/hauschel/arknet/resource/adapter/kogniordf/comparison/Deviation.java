@@ -78,6 +78,10 @@ public record Deviation(String id, String source, String description, Kind kind,
     /**
      * Both accept, and the graphs differ exactly in the statements {@code dropped} matches.
      *
+     * <p>Keep the predicate narrow: it names the subject and the property of the statements that
+     * differ, never a property alone - a broad one would hide a new difference in the same field.
+     * A case fails when the predicate drops a statement both sides hold.</p>
+     *
      * @param id          short id
      * @param source      where it is recorded
      * @param description what differs

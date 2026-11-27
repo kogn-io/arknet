@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -190,6 +191,12 @@ public final class Comparison {
             assertAccepted("core", coreFailure);
             assertAccepted("submit", submitFailure);
             assertNotEquals(coreAfter, submitAfter, () -> "deviation " + deviation + " no longer occurs");
+            List<String> shared = coreAfter.statements().stream()
+                    .filter(deviation.dropped())
+                    .filter(submitAfter.statements()::contains)
+                    .toList();
+            assertTrue(shared.isEmpty(), () -> "deviation " + deviation.id()
+                    + " drops statements both sides hold, so it would hide a difference in them too: " + shared);
             CanonicalGraph core = coreAfter.without(deviation.dropped());
             CanonicalGraph submit = submitAfter.without(deviation.dropped());
             assertEquals(core, submit, () -> "the graphs differ beyond " + deviation.id() + ":"
