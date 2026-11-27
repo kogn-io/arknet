@@ -17,7 +17,9 @@ Der Kern darf die technologieneutralen kognio-rdf-Ports kennen, aber weder RDF4J
 Seine In-Ports tragen dennoch keine kognio-rdf-Typen, nur Strings, Records und Kernel-Typen: der treibende MCP-Adapter der Komponente sieht nur `..application.port.in..` und keine RDF-Technologie (`DependencyRulesTest` Regel 4).
 Die Out-Ports (`ResourceRepository`, `ResourceBatch`) sprechen dagegen Tripel.
 Kein Konstruktor eines Domaenentyps prueft die Invarianten einer ueber sie geschriebenen Ressource; was sich nicht als Shape oder als Regel in Daten ausdruecken laesst, hat hier keinen Platz.
-Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context, auch an keinem Ontologiemodul eines Kontexts (ADR-69, Folge 8): deren Ontologien und Shapes findet sie zur Laufzeit ueber den Index `META-INF/arknet/ontology.index`, den jedes Ontologiemodul ausliefert, und nur ihr Adapter-Test zieht die fuenf Ontologiemodule im Test-Scope; von den Klassen anderer Module darf nur die Composition Root sie nennen (Regel 17), auf Maven-Ebene haengen an ihren Modulen nur die Composition Root und, im Test-Scope, `arknet-architecture-tests`.
+Ihr Produktivcode haengt zur Build-Zeit an keinem Modul eines Bounded Context, auch an keinem Ontologiemodul eines Kontexts (ADR-69, Folge 8): deren Ontologien und Shapes findet sie zur Laufzeit ueber den Index `META-INF/arknet/ontology.index`, den jedes Ontologiemodul ausliefert.
+Im Test-Scope zieht der Adapter-Test die fuenf Ontologiemodule und, fuer den Vergleichstest (`..kogniordf.comparison`, kogn-io/arknet#744), die sechs `*-adapter-kogniordf` der typgenauen Kerne.
+Von den Klassen anderer Module darf nur die Composition Root sie nennen (Regel 17); auf Maven-Ebene haengen an ihren Modulen nur die Composition Root und, im Test-Scope, `arknet-architecture-tests`.
 
 ## Module
 

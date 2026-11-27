@@ -91,6 +91,45 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- The comparison tests of kogn-io/arknet#744 write the same change once through a typed
+             core and once through submit, over one dataset lifecycle. Test scope only: no class of
+             this module names a bounded context (ADR-69); the cores come in with their adapters. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-requirements-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-use-cases-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-ubiquitous-language-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-bounded-context-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-adr-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-actor-register-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
