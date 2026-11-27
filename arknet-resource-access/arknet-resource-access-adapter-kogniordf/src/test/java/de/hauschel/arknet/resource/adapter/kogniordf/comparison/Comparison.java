@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.resource.adapter.kogniordf.comparison.ComparisonStore.ProjectPair;
@@ -199,6 +200,14 @@ public final class Comparison {
                     .toList();
             assertTrue(shared.isEmpty(), () -> "deviation " + deviation.id()
                     + " drops statements both sides hold, so it would hide a difference in them too: " + shared);
+            List<String> unnamed = Stream.concat(coreAfter.statements().stream(), submitAfter.statements().stream())
+                    .filter(deviation.dropped())
+                    .filter(line -> line.contains(CanonicalGraph.NO_CODE_MARK))
+                    .distinct()
+                    .toList();
+            assertTrue(unnamed.isEmpty(), () -> "deviation " + deviation.id() + " drops statements of a resource"
+                    + " without a code (its name is its content, so dropping hides a second or missing one): "
+                    + unnamed);
             CanonicalGraph core = coreAfter.without(deviation.dropped());
             CanonicalGraph submit = submitAfter.without(deviation.dropped());
             assertEquals(core, submit, () -> "the graphs differ beyond " + deviation.id() + ":"

@@ -80,7 +80,9 @@ public record Deviation(String id, String source, String description, Kind kind,
      *
      * <p>Keep the predicate narrow: it names the subject and the property of the statements that
      * differ, never a property alone - a broad one would hide a new difference in the same field.
-     * A case fails when the predicate drops a statement both sides hold.</p>
+     * A case fails when the predicate drops a statement both sides hold, or a statement of a
+     * resource without a code (a context relationship, named by its content): dropping one would
+     * hide a second or a missing resource.</p>
      *
      * @param id          short id
      * @param source      where it is recorded
