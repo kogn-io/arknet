@@ -11,10 +11,6 @@ import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfContextRelationshipRepositoryFactory;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.persistence.ArkarchVocabulary;
-import de.hauschel.arknet.persistence.ArkdddVocabulary;
-import de.hauschel.arknet.persistence.ArkprocVocabulary;
-import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ChildFragments;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -115,18 +111,56 @@ public final class LegacyLayoutMigration {
     private static final String INVALIDATED_AT_TIME = "http://www.w3.org/ns/prov#invalidatedAtTime";
     private static final DatasetId SYSTEM_DATASET = new DatasetId(ProjectId.RESERVED_SYSTEM_DATASET);
 
+    // A migration step carries the vocabulary of the layout it reads: every class and property it
+    // recognises a stored resource, child, position or supertype by is spelled out below as the
+    // v0.12.0 layout stored it, never taken from the live Ark*Vocabulary constants. Those follow the
+    // current model; were one renamed, this step would stop recognising what an earlier store holds.
+    private static final String ARKREQ = "https://w3id.org/arknet/requirements#";
+    private static final String ARKARCH = "https://w3id.org/arknet/architecture#";
+    private static final String ARKDDD = "https://w3id.org/arknet/ddd#";
+    private static final String ARKPROC = "https://w3id.org/arknet/process#";
+    private static final String ARKNET = "https://w3id.org/arknet/core#";
+    private static final String SKOS = "http://www.w3.org/2004/02/skos/core#";
+
+    private static final String FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ + "FunctionalRequirement";
+    private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ + "NonFunctionalRequirement";
+    private static final String REQUIREMENT_TYPE = ARKREQ + "Requirement";
+    private static final String TECHNICAL_CONSTRAINT_TYPE = ARKREQ + "TechnicalConstraint";
+    private static final String BUSINESS_CONSTRAINT_TYPE = ARKREQ + "BusinessConstraint";
+    private static final String REGULATORY_CONSTRAINT_TYPE = ARKREQ + "RegulatoryConstraint";
+    private static final String CONSTRAINT_TYPE = ARKREQ + "Constraint";
+    private static final String USE_CASE_TYPE = ARKREQ + "UseCase";
+    private static final String ACCEPTANCE_CRITERION_TYPE = ARKREQ + "AcceptanceCriterion";
+    private static final String ACCEPTANCE_CRITERION = ARKREQ + "acceptanceCriterion";
+    private static final String CRITERION_TEXT = ARKREQ + "criterionText";
+    private static final String MAIN_STEP = ARKREQ + "mainStep";
+    private static final String EXTENSION_STEP = ARKREQ + "extensionStep";
+    private static final String REQUIREMENTS_POSITION = ARKREQ + "position";
+    private static final String CONCEPT_TYPE = SKOS + "Concept";
+    private static final String BOUNDED_CONTEXT_TYPE = ARKDDD + "BoundedContext";
+    private static final String CONTEXT_RELATIONSHIP_TYPE = ARKDDD + "ContextRelationship";
+    private static final String PART_OF = ARKDDD + "partOf";
+    private static final String ADR_TYPE = ARKARCH + "ArchitectureDecisionRecord";
+    private static final String CONSEQUENCE = ARKARCH + "consequence";
+    private static final String CONSIDERED_OPTION = ARKARCH + "consideredOption";
+    private static final String CORE_POSITION = ARKNET + "position";
+    private static final String ACTOR_TYPE = ARKPROC + "Actor";
+    private static final String HUMAN_ACTOR_TYPE = ARKPROC + "HumanActor";
+    private static final String SYSTEM_ACTOR_TYPE = ARKPROC + "SystemActor";
+    private static final String LEGAL_ACTOR_TYPE = ARKPROC + "LegalActor";
+    private static final String GROUP_ACTOR_TYPE = ARKPROC + "GroupActor";
+    private static final String ROLE_TYPE = ARKPROC + "Role";
+
     /**
      * The edges from a resource to its children, with the local-name prefix of the child fragment
      * a regular write names them with. A subdomain node is the one child with a fixed name.
      */
     static final Map<String, String> CHILD_KINDS = Map.of(
-            ArkreqVocabulary.ACCEPTANCE_CRITERION, KognioRdfRequirementRepository.CRITERION_KIND,
-            ArkreqVocabulary.MAIN_STEP, KognioRdfUseCaseRepository.STEP_KIND,
-            ArkreqVocabulary.EXTENSION_STEP, KognioRdfUseCaseRepository.EXTENSION_KIND,
-            ArkarchVocabulary.CONSEQUENCE, KognioRdfAdrRepository.CONSEQUENCE_KIND,
-            ArkarchVocabulary.CONSIDERED_OPTION, KognioRdfAdrRepository.OPTION_KIND);
-
-    private static final String SUBDOMAIN_EDGE = ArkdddVocabulary.PART_OF_PROPERTY;
+            ACCEPTANCE_CRITERION, KognioRdfRequirementRepository.CRITERION_KIND,
+            MAIN_STEP, KognioRdfUseCaseRepository.STEP_KIND,
+            EXTENSION_STEP, KognioRdfUseCaseRepository.EXTENSION_KIND,
+            CONSEQUENCE, KognioRdfAdrRepository.CONSEQUENCE_KIND,
+            CONSIDERED_OPTION, KognioRdfAdrRepository.OPTION_KIND);
 
     /**
      * Properties an earlier version wrote that the current model no longer has: a use case named
@@ -146,15 +180,15 @@ public final class LegacyLayoutMigration {
 
     /** Supertypes a referenced resource is asserted as for the gate, as the regular write paths do. */
     private static final Map<String, String> SUPERTYPES = Map.of(
-            ArkreqVocabulary.FUNCTIONAL_REQUIREMENT_TYPE, ArkreqVocabulary.REQUIREMENT_TYPE,
-            ArkreqVocabulary.NON_FUNCTIONAL_REQUIREMENT_TYPE, ArkreqVocabulary.REQUIREMENT_TYPE,
-            ArkreqVocabulary.TECHNICAL_CONSTRAINT_TYPE, ArkreqVocabulary.CONSTRAINT_TYPE,
-            ArkreqVocabulary.BUSINESS_CONSTRAINT_TYPE, ArkreqVocabulary.CONSTRAINT_TYPE,
-            ArkreqVocabulary.REGULATORY_CONSTRAINT_TYPE, ArkreqVocabulary.CONSTRAINT_TYPE,
-            ArkprocVocabulary.HUMAN_ACTOR_TYPE, ArkprocVocabulary.ACTOR_TYPE,
-            ArkprocVocabulary.SYSTEM_ACTOR_TYPE, ArkprocVocabulary.ACTOR_TYPE,
-            ArkprocVocabulary.LEGAL_ACTOR_TYPE, ArkprocVocabulary.ACTOR_TYPE,
-            ArkprocVocabulary.GROUP_ACTOR_TYPE, ArkprocVocabulary.ACTOR_TYPE);
+            FUNCTIONAL_REQUIREMENT_TYPE, REQUIREMENT_TYPE,
+            NON_FUNCTIONAL_REQUIREMENT_TYPE, REQUIREMENT_TYPE,
+            TECHNICAL_CONSTRAINT_TYPE, CONSTRAINT_TYPE,
+            BUSINESS_CONSTRAINT_TYPE, CONSTRAINT_TYPE,
+            REGULATORY_CONSTRAINT_TYPE, CONSTRAINT_TYPE,
+            HUMAN_ACTOR_TYPE, ACTOR_TYPE,
+            SYSTEM_ACTOR_TYPE, ACTOR_TYPE,
+            LEGAL_ACTOR_TYPE, ACTOR_TYPE,
+            GROUP_ACTOR_TYPE, ACTOR_TYPE);
 
     private final RDF rdf = new SimpleRdf();
     private final Map<String, VersionedWriteFunnel> funnelByType;
@@ -357,7 +391,7 @@ public final class LegacyLayoutMigration {
 
     private static boolean isLiteralCriterion(Triple triple) {
         return triple.getObject() instanceof Literal
-                && ArkreqVocabulary.ACCEPTANCE_CRITERION.equals(triple.getPredicate().getIRIString());
+                && ACCEPTANCE_CRITERION.equals(triple.getPredicate().getIRIString());
     }
 
     /** The dropped object in N-Triples form, an IRI followed by the code of what it names. */
@@ -383,7 +417,7 @@ public final class LegacyLayoutMigration {
         List<Literal> ordered = literals.stream()
                 .sorted(Comparator.comparing(Literal::getLexicalForm).thenComparing(Literal::ntriplesString))
                 .toList();
-        int position = childrenByPosition(kept, requirement, rdf.createIRI(ArkreqVocabulary.ACCEPTANCE_CRITERION))
+        int position = childrenByPosition(kept, requirement, rdf.createIRI(ACCEPTANCE_CRITERION))
                 .stream()
                 .mapToInt(child -> position(kept, child))
                 .filter(stored -> stored != Integer.MAX_VALUE)
@@ -394,11 +428,11 @@ public final class LegacyLayoutMigration {
             position++;
             IRI criterion = rdf.createIRI("urn:uuid:" + UUID.nameUUIDFromBytes(
                     (requirement.getIRIString() + " " + literal.ntriplesString()).getBytes(StandardCharsets.UTF_8)));
-            kept.add(requirement, rdf.createIRI(ArkreqVocabulary.ACCEPTANCE_CRITERION), criterion);
-            kept.add(criterion, VocabRdf.TYPE, rdf.createIRI(ArkreqVocabulary.ACCEPTANCE_CRITERION_TYPE));
-            kept.add(criterion, rdf.createIRI(ArkreqVocabulary.POSITION),
+            kept.add(requirement, rdf.createIRI(ACCEPTANCE_CRITERION), criterion);
+            kept.add(criterion, VocabRdf.TYPE, rdf.createIRI(ACCEPTANCE_CRITERION_TYPE));
+            kept.add(criterion, rdf.createIRI(REQUIREMENTS_POSITION),
                     rdf.createLiteral(Integer.toString(position), VocabXsd.INTEGER));
-            kept.add(criterion, rdf.createIRI(ArkreqVocabulary.CRITERION_TEXT), literal);
+            kept.add(criterion, rdf.createIRI(CRITERION_TEXT), literal);
             texts.add(position + ". " + literal.ntriplesString());
         }
         String code = code(legacy, requirement);
@@ -453,7 +487,7 @@ public final class LegacyLayoutMigration {
                 }
             }
         }
-        graph.stream(resource, rdf.createIRI(SUBDOMAIN_EDGE), null)
+        graph.stream(resource, rdf.createIRI(PART_OF), null)
                 .map(Triple::getObject)
                 .filter(IRI.class::isInstance)
                 .map(IRI.class::cast)
@@ -478,7 +512,7 @@ public final class LegacyLayoutMigration {
     }
 
     private int position(ReadableGraph graph, IRI child) {
-        for (String property : List.of(ArkreqVocabulary.POSITION, ArkarchVocabulary.POSITION)) {
+        for (String property : List.of(REQUIREMENTS_POSITION, CORE_POSITION)) {
             Optional<Integer> position = graph.stream(child, rdf.createIRI(property), null)
                     .map(Triple::getObject)
                     .filter(Literal.class::isInstance)
@@ -620,19 +654,19 @@ public final class LegacyLayoutMigration {
 
     private static Map<String, List<String>> orderedTypes() {
         Map<String, List<String>> types = new LinkedHashMap<>();
-        types.put("requirement", List.of(ArkreqVocabulary.FUNCTIONAL_REQUIREMENT_TYPE,
-                ArkreqVocabulary.NON_FUNCTIONAL_REQUIREMENT_TYPE, ArkreqVocabulary.REQUIREMENT_TYPE));
-        types.put("constraint", List.of(ArkreqVocabulary.TECHNICAL_CONSTRAINT_TYPE,
-                ArkreqVocabulary.BUSINESS_CONSTRAINT_TYPE, ArkreqVocabulary.REGULATORY_CONSTRAINT_TYPE,
-                ArkreqVocabulary.CONSTRAINT_TYPE));
-        types.put("use case", List.of(ArkreqVocabulary.USE_CASE_TYPE));
-        types.put("glossary term", List.of(ArkreqVocabulary.CONCEPT_TYPE));
-        types.put("bounded context", List.of(ArkdddVocabulary.BOUNDED_CONTEXT_TYPE));
-        types.put("context relationship", List.of(ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE));
-        types.put("architecture decision", List.of(ArkarchVocabulary.ADR_TYPE));
-        types.put("actor", List.of(ArkprocVocabulary.HUMAN_ACTOR_TYPE, ArkprocVocabulary.SYSTEM_ACTOR_TYPE,
-                ArkprocVocabulary.LEGAL_ACTOR_TYPE, ArkprocVocabulary.GROUP_ACTOR_TYPE, ArkprocVocabulary.ACTOR_TYPE));
-        types.put("role", List.of(ArkprocVocabulary.ROLE_TYPE));
+        types.put("requirement", List.of(FUNCTIONAL_REQUIREMENT_TYPE,
+                NON_FUNCTIONAL_REQUIREMENT_TYPE, REQUIREMENT_TYPE));
+        types.put("constraint", List.of(TECHNICAL_CONSTRAINT_TYPE,
+                BUSINESS_CONSTRAINT_TYPE, REGULATORY_CONSTRAINT_TYPE,
+                CONSTRAINT_TYPE));
+        types.put("use case", List.of(USE_CASE_TYPE));
+        types.put("glossary term", List.of(CONCEPT_TYPE));
+        types.put("bounded context", List.of(BOUNDED_CONTEXT_TYPE));
+        types.put("context relationship", List.of(CONTEXT_RELATIONSHIP_TYPE));
+        types.put("architecture decision", List.of(ADR_TYPE));
+        types.put("actor", List.of(HUMAN_ACTOR_TYPE, SYSTEM_ACTOR_TYPE,
+                LEGAL_ACTOR_TYPE, GROUP_ACTOR_TYPE, ACTOR_TYPE));
+        types.put("role", List.of(ROLE_TYPE));
         return Collections.unmodifiableMap(types);
     }
 }
