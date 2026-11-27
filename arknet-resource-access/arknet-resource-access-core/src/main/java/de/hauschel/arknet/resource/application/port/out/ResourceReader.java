@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
+import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.ReadableGraph;
 
@@ -53,6 +54,16 @@ public interface ResourceReader {
          * @return the triples, empty if nothing points at it
          */
         ReadableGraph pointingAt(IRI resource);
+
+        /**
+         * The IRI a stored blank node hangs under: the subject reached by following the edges that
+         * point at the node, through further blank nodes, up to the first IRI - the resource or the
+         * fragment child whose slice holds the node.
+         *
+         * @param node a blank node of a triple this snapshot returned
+         * @return that IRI, empty if no IRI reaches the node
+         */
+        Optional<IRI> holding(BlankNode node);
 
         /**
          * The living resources carrying a business code.

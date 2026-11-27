@@ -3,6 +3,8 @@
 
 package de.hauschel.arknet.resource.adapter.kogniordf;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -11,6 +13,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import io.kogn.rdf.dataset.DatasetTx;
+import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.BlankNodeOrIRI;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
@@ -69,6 +72,25 @@ final class KognioRdfResourceReader implements ResourceReader {
         @Override
         public ReadableGraph pointingAt(final IRI resource) {
             return copy(tx.match(CONTENT_GRAPH, null, null, resource));
+        }
+
+        @Override
+        public Optional<IRI> holding(final BlankNode node) {
+            Set<RDFTerm> visited = new HashSet<>();
+            List<RDFTerm> pending = new ArrayList<>(List.of(node));
+            while (!pending.isEmpty()) {
+                RDFTerm current = pending.remove(pending.size() - 1);
+                if (!visited.add(current)) {
+                    continue;
+                }
+                for (Triple triple : tx.match(CONTENT_GRAPH, null, null, current).stream().toList()) {
+                    if (triple.getSubject() instanceof IRI subject) {
+                        return Optional.of(subject);
+                    }
+                    pending.add(triple.getSubject());
+                }
+            }
+            return Optional.empty();
         }
 
         @Override

@@ -5,6 +5,7 @@ package de.hauschel.arknet.resource.application;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -18,6 +19,7 @@ import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.Triple;
@@ -76,6 +78,25 @@ final class FakeReader implements ResourceReader {
             Graph pointing = RDF_FACTORY.createGraph();
             content.stream(null, null, resource).forEach(pointing::add);
             return pointing;
+        }
+
+        @Override
+        public Optional<IRI> holding(final BlankNode node) {
+            Set<RDFTerm> visited = new HashSet<>();
+            List<RDFTerm> pending = new ArrayList<>(List.of(node));
+            while (!pending.isEmpty()) {
+                RDFTerm current = pending.remove(pending.size() - 1);
+                if (!visited.add(current)) {
+                    continue;
+                }
+                for (Triple triple : content.stream(null, null, current).toList()) {
+                    if (triple.getSubject() instanceof IRI subject) {
+                        return Optional.of(subject);
+                    }
+                    pending.add(triple.getSubject());
+                }
+            }
+            return Optional.empty();
         }
 
         @Override

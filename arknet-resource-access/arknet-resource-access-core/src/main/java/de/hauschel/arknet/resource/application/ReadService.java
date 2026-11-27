@@ -256,7 +256,7 @@ public final class ReadService implements ReadResources, ResourceHistory {
             Map<IRI, Set<RDFTerm>> merged = new LinkedHashMap<>();
             Map<IRI, Set<RDFTerm>> incoming = new LinkedHashMap<>();
             snapshot.pointingAt(iri).stream().forEach(triple -> {
-                RDFTerm from = owner(triple.getSubject());
+                RDFTerm from = owner(triple.getSubject(), snapshot);
                 if (from.equals(iri)) {
                     return;
                 }
@@ -351,12 +351,16 @@ public final class ReadService implements ReadResources, ResourceHistory {
                 final boolean multilingual) {
             Optional<OwnedField> owned = schema.ownedField(property);
             if (owned.isPresent()) {
-                return held.stream()
+                Stream<RenderedValue> children = held.stream()
                         .filter(BlankNodeOrIRI.class::isInstance)
-                        .map(child -> child((BlankNodeOrIRI) child, graph, owned.get()))
-                        .sorted(CHILD_ORDER)
-                        .map(RenderedValue.class::cast)
-                        .toList();
+                        .filter(child -> !inProgress.contains(child))
+                        .<RenderedValue>map(child -> child((BlankNodeOrIRI) child, graph, owned.get()))
+                        .sorted(CHILD_ORDER);
+                Stream<RenderedValue> backEdges = held.stream()
+                        .filter(BlankNodeOrIRI.class::isInstance)
+                        .filter(inProgress::contains)
+                        .map(this::value);
+                return Stream.concat(children, backEdges).toList();
             }
             List<RenderedValue> rendered = new ArrayList<>();
             List<Literal> literals = held.stream().filter(Literal.class::isInstance).map(Literal.class::cast)
@@ -612,13 +616,20 @@ public final class ReadService implements ReadResources, ResourceHistory {
         return abbreviated.startsWith("<") ? iri.getIRIString() : abbreviated;
     }
 
-    /** The resource an edge comes from: the subject itself, or the resource owning a child fragment. */
-    private static RDFTerm owner(final BlankNodeOrIRI subject) {
-        if (subject instanceof IRI iri) {
-            int fragment = iri.getIRIString().indexOf(FRAGMENT);
-            return fragment < 0 ? iri : RDF_FACTORY.createIRI(iri.getIRIString().substring(0, fragment));
+    /**
+     * The resource an edge comes from: the subject itself, the resource owning a child fragment, or the
+     * resource whose slice holds a blank node.
+     */
+    private static RDFTerm owner(final BlankNodeOrIRI subject, final ResourceReader.Snapshot snapshot) {
+        if (subject instanceof BlankNode blankNode) {
+            return snapshot.holding(blankNode).<RDFTerm>map(ReadService::withoutFragment).orElse(blankNode);
         }
-        return subject;
+        return withoutFragment((IRI) subject);
+    }
+
+    private static IRI withoutFragment(final IRI iri) {
+        int fragment = iri.getIRIString().indexOf(FRAGMENT);
+        return fragment < 0 ? iri : RDF_FACTORY.createIRI(iri.getIRIString().substring(0, fragment));
     }
 
     private static String term(final RDFTerm term) {

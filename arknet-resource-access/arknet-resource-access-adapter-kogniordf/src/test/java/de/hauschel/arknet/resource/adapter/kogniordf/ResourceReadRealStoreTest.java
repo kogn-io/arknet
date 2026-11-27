@@ -25,6 +25,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
+import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.SimpleRdf;
@@ -59,6 +60,7 @@ class ResourceReadRealStoreTest {
     private static final DescribeResourceType DESCRIBER =
             KognioRdfResourceRepositoryFactory.describer(DisplayLocale.DEFAULT);
     private static final ResourceSchema SCHEMA = KognioRdfResourceRepositoryFactory.schema();
+    private static final SimpleRdf RDF = new SimpleRdf();
     private static final String ARKARCH = "https://w3id.org/arknet/architecture#";
     private static final String ADR_CLASS = ARKARCH + "ArchitectureDecisionRecord";
     private static final String CONSEQUENCE = ARKARCH + "consequence";
@@ -219,6 +221,46 @@ class ResourceReadRealStoreTest {
         assertEquals(ddd + "CoreDomain", ((RenderedValue.Reference) values(
                 Stream.concat(part.fields().stream(), part.otherStatements().stream()).toList(),
                 ddd + "subdomainType").get(0)).iri());
+    }
+
+    @Test
+    void anIncomingEdgeFromABlankNodeIsAttributedToTheResourceHoldingIt() {
+        // given: BC-2 reaches BC-1 through a blank node of its own slice, BC-1 reaches itself through one
+        String ddd = "https://w3id.org/arknet/ddd#";
+        IRI note = RDF.createIRI("https://example.org/fixture#note");
+        IRI mentions = RDF.createIRI("https://example.org/fixture#mentions");
+        IRI first = RDF.createIRI("https://w3id.org/arknet/id/1d8b8e52-0c4b-4b8e-9a51-6f0b8f5c1a01");
+        IRI second = RDF.createIRI("https://w3id.org/arknet/id/2e9c9f63-1d5c-4c9f-8b62-7a1c9a6d2b02");
+        Graph firstSlice = context(first, "BC-1", ddd);
+        BlankNode own = RDF.createBlankNode();
+        firstSlice.add(first, note, own);
+        firstSlice.add(own, mentions, first);
+        Graph secondSlice = context(second, "BC-2", ddd);
+        BlankNode across = RDF.createBlankNode();
+        secondSlice.add(second, note, across);
+        secondSlice.add(across, mentions, first);
+        KognioRdfResourceRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT).writeAll(
+                SubmitRealStoreTest.PROJECT, batch -> {
+                    batch.create(first, "BC-1", firstSlice, RDF.createGraph());
+                    batch.create(second, "BC-2", secondSlice, RDF.createGraph());
+                });
+
+        // when
+        RenderedResource resource = found("BC-1");
+
+        // then
+        assertEquals(List.of("BC-2"), values(resource.incoming(), mentions.getIRIString()).stream()
+                .map(value -> assertInstanceOf(RenderedValue.Reference.class, value).handle())
+                .toList());
+    }
+
+    private static Graph context(final IRI context, final String code, final String ddd) {
+        Graph slice = RDF.createGraph();
+        slice.add(context, VocabRdf.TYPE, RDF.createIRI(ddd + "BoundedContext"));
+        slice.add(context, VocabDct.IDENTIFIER, RDF.createLiteral(code));
+        slice.add(context, RDF.createIRI("https://w3id.org/arknet/core#name"), RDF.createLiteral(code, "en"));
+        slice.add(context, RDF.createIRI(ddd + "domainVision"), RDF.createLiteral("Holds one part of the model.", "en"));
+        return slice;
     }
 
     private RenderedResource found(final String handle) {

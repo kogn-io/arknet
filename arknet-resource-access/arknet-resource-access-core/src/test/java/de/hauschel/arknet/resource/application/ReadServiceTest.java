@@ -311,6 +311,39 @@ class ReadServiceTest {
     }
 
     @Test
+    void anOwnedFieldLeadingBackToAChildBeingRenderedRendersAsAReferenceNotAnEndlessNesting() {
+        storeT1();
+        IRI firstStep = RDF_FACTORY.createIRI(T1.getIRIString() + "#step-1");
+        IRI secondStep = RDF_FACTORY.createIRI(T1.getIRIString() + "#step-2");
+        reader.content.add(firstStep, STEPS, secondStep);
+        reader.content.add(secondStep, STEPS, firstStep);
+
+        RenderedValue.Child first = assertInstanceOf(RenderedValue.Child.class,
+                values(found("T-1").fields(), STEPS).get(0));
+        RenderedValue.Child nested = assertInstanceOf(RenderedValue.Child.class,
+                values(first.otherStatements(), STEPS).get(0));
+
+        assertEquals(secondStep.getIRIString(), nested.iri());
+        assertEquals(firstStep.getIRIString(), assertInstanceOf(RenderedValue.Reference.class,
+                values(nested.otherStatements(), STEPS).get(0)).iri());
+    }
+
+    @Test
+    void anIncomingEdgeFromABlankNodeIsAttributedToTheResourceHoldingIt() {
+        storeT1();
+        BlankNode inT2 = RDF_FACTORY.createBlankNode("inT2");
+        reader.content.add(T2, LEGACY, inT2);
+        reader.content.add(inT2, MENTIONS, T1);
+        BlankNode inT1 = RDF_FACTORY.createBlankNode("inT1");
+        reader.content.add(T1, NOTE, inT1);
+        reader.content.add(inT1, MENTIONS, T1);
+
+        RenderedResource t1 = found("T-1");
+
+        assertEquals(List.of("T-2", "T-4"), handles(values(t1.incoming(), MENTIONS)));
+    }
+
+    @Test
     void anEdgeToAnOwnedChildRendersAsAReferenceNotASecondTime() {
         storeT1();
         IRI firstStep = RDF_FACTORY.createIRI(T1.getIRIString() + "#step-1");
