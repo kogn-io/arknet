@@ -155,9 +155,12 @@ public final class ReadService implements ReadResources, ResourceHistory {
                     .map(entry -> new HistoryReading.Entry(entry.sequence(), entry.tombstone(), entry.created(),
                             entry.version(), entry.comment()))
                     .toList();
-            Optional<ResourceReading.Deleted> deleted = snapshot.slice(iri).isEmpty()
-                    ? snapshot.deletion(iri).map(deletion -> rendering.deleted(handle, deletion))
-                    : Optional.empty();
+            boolean living = !snapshot.slice(iri).isEmpty();
+            Optional<ResourceReader.Deletion> deletion = living ? Optional.empty() : snapshot.deletion(iri);
+            if (!living && deletion.isEmpty() && entries.isEmpty()) {
+                throw new IllegalArgumentException("no resource " + iri.getIRIString());
+            }
+            Optional<ResourceReading.Deleted> deleted = deletion.map(found -> rendering.deleted(handle, found));
             return new HistoryReading(handle, iri.getIRIString(), snapshot.publishState(iri), entries, deleted);
         });
     }

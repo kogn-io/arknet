@@ -357,6 +357,20 @@ class ReadServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.history(PROJECT, "T-99", "en"));
     }
 
+    @Test
+    void theHistoryOfAnIriOrPrefixedNameNamingNoResourceIsRejectedLikeAnUnresolvedRead() {
+        storeT1();
+        String unknownIri = fx("nothing").getIRIString();
+
+        IllegalArgumentException byIri = assertThrows(IllegalArgumentException.class,
+                () -> service.history(PROJECT, unknownIri, "en"));
+        IllegalArgumentException byPrefixedName = assertThrows(IllegalArgumentException.class,
+                () -> service.history(PROJECT, "fx:nothing", "en"));
+
+        assertTrue(byIri.getMessage().contains("no resource " + unknownIri));
+        assertTrue(byPrefixedName.getMessage().contains("no resource " + unknownIri));
+    }
+
     private void storeT1() {
         thing(T1, "T-1", "Alpha", "en");
         reader.content.add(T1, NAME, RDF_FACTORY.createLiteral("Alpha-de", "de"));
