@@ -5,6 +5,12 @@ package de.hauschel.arknet.mcp.dataset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepositoryFactory;
+import de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepositoryFactory;
+import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
+import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfContextRelationshipRepositoryFactory;
+import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfUseCaseRepositoryFactory;
+import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.actor.application.RoleService;
 import de.hauschel.arknet.actor.application.port.in.RoleDetail;
 import de.hauschel.arknet.actor.domain.RoleCode;
@@ -41,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.Resource;
 import org.eclipse.rdf4j.model.Statement;
@@ -104,7 +111,7 @@ class LegacyLayoutMigrationReleaseDumpTest {
                 "context relationship", 1, "architecture decision", 3, "actor", 2, "role", 2));
         assertThat(report.droppedEdges()).isEmpty();
         assertThat(report.droppedSubjects()).singleElement().asString().contains(GLOSSARY_SCHEME);
-        // ADR-2 is related to ADR-1, which ADR-3 supersedes: the asserted context of ADR-2 holds the
+        // known bug, tracked in #779: ADR-2 is related to ADR-1, which ADR-3 supersedes: the asserted context of ADR-2 holds the
         // slice of ADR-1 but only the type of ADR-3, so the ADR shape rejects the bare ADR-3 and
         // ADR-2 is carried over past the gate although its own stored form is complete
         assertThat(report.carriedPastGate()).singleElement().asString()
@@ -183,6 +190,33 @@ class LegacyLayoutMigrationReleaseDumpTest {
             assertThat(context.getBean(TermService.class).get(PROJECT, new TermCode("TERM-1"), "de").orElseThrow()
                     .definition()).isEqualTo("Ein versiegeltes Paket, das zur Zustellung uebergeben wird.");
         });
+    }
+
+    /**
+     * The frozen {@link LegacyLayoutMigration#OBJECT_PROPERTIES} were the set the shapes declared
+     * when the step was frozen. Should the shapes name other properties one day, the frozen set
+     * stays as it is: the migration then has to map its names onto the new ones.
+     */
+    @Test
+    void theFrozenObjectPropertiesAreTheOnesTheShapesDeclaredWhenTheStepWasFrozen() {
+        DatasetLifecycle raw = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+        try {
+            DisplayLocale english = new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH);
+            Set<String> declared = Stream.of(
+                    KognioRdfRequirementRepositoryFactory.buildFunnel(raw, english),
+                    KognioRdfUseCaseRepositoryFactory.buildFunnel(raw, english),
+                    KognioRdfTermRepositoryFactory.buildFunnel(raw, english),
+                    KognioRdfBoundedContextRepositoryFactory.buildFunnel(raw, english),
+                    KognioRdfContextRelationshipRepositoryFactory.buildFunnel(raw, english),
+                    KognioRdfAdrRepositoryFactory.buildFunnel(raw, english),
+                    KognioRdfActorRepositoryFactory.buildFunnel(raw, english))
+                    .flatMap(funnel -> funnel.objectProperties().stream())
+                    .collect(Collectors.toSet());
+
+            assertThat(LegacyLayoutMigration.OBJECT_PROPERTIES).isEqualTo(declared);
+        } finally {
+            raw.shutDownAll();
+        }
     }
 
     // --- fixture ------------------------------------------------------------------------------

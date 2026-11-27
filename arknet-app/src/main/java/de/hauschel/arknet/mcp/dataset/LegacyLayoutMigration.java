@@ -190,9 +190,43 @@ public final class LegacyLayoutMigration {
             LEGAL_ACTOR_TYPE, ACTOR_TYPE,
             GROUP_ACTOR_TYPE, ACTOR_TYPE);
 
+    /**
+     * The properties whose object must be another resource, where a stored literal is dropped
+     * rather than carried over: the set the shapes declared (an {@code sh:nodeKind sh:IRI} or an
+     * {@code sh:class} on the property shape) when this step was frozen, kept here for the same
+     * reason as the IRIs above.
+     */
+    static final Set<String> OBJECT_PROPERTIES = Set.of(
+            "http://open-services.net/ns/rm#constrainedBy",
+            "http://open-services.net/ns/rm#satisfies",
+            SKOS + "broader",
+            SKOS + "inScheme",
+            SKOS + "related",
+            ARKARCH + "addressesRequirement",
+            ARKARCH + "affectsContext",
+            CONSEQUENCE,
+            CONSIDERED_OPTION,
+            ARKARCH + "relatedTo",
+            ARKARCH + "supersededBy",
+            ARKARCH + "usesTerm",
+            ARKDDD + "delimitsTerm",
+            ARKDDD + "downstream",
+            ARKDDD + "hasAggregate",
+            ARKDDD + "ubiquitousLanguageTerm",
+            ARKDDD + "upstream",
+            ARKPROC + "filledBy",
+            ACCEPTANCE_CRITERION,
+            ARKREQ + "extendsUseCase",
+            EXTENSION_STEP,
+            ARKREQ + "includesUseCase",
+            MAIN_STEP,
+            ARKREQ + "primaryRole",
+            ARKREQ + "stepRealises",
+            ARKREQ + "supportingRole",
+            ARKREQ + "usesTerm");
+
     private final RDF rdf = new SimpleRdf();
     private final Map<String, VersionedWriteFunnel> funnelByType;
-    private final Set<String> objectProperties;
 
     /**
      * @param funnelByType the funnel each resource type of {@link #RESOURCE_TYPES} is written
@@ -204,9 +238,6 @@ public final class LegacyLayoutMigration {
             Objects.requireNonNull(funnelByType.get(type), "no funnel for " + type);
         }
         this.funnelByType = Map.copyOf(funnelByType);
-        Set<String> properties = new HashSet<>();
-        funnelByType.values().forEach(funnel -> properties.addAll(funnel.objectProperties()));
-        this.objectProperties = Set.copyOf(properties);
     }
 
     /**
@@ -371,7 +402,7 @@ public final class LegacyLayoutMigration {
     /**
      * Whether an edge is dropped, and why: a blank node on any property, the versioned write path
      * cannot name it; a literal on a property whose shape requires another resource
-     * ({@link #objectProperties}, whatever the shape's severity), since no reference can be read
+     * ({@link #OBJECT_PROPERTIES}, whatever the shape's severity), since no reference can be read
      * from it; a property of {@link #RETIRED_PROPERTIES}. A literal acceptance criterion never gets
      * here, it is reshaped (see {@link #toCriterionResources}).
      */
@@ -383,7 +414,7 @@ public final class LegacyLayoutMigration {
         if (RETIRED_PROPERTIES.contains(property)) {
             return Optional.of(LegacyLayoutMigrationReport.DropReason.RETIRED_PROPERTY);
         }
-        if (triple.getObject() instanceof Literal && objectProperties.contains(property)) {
+        if (triple.getObject() instanceof Literal && OBJECT_PROPERTIES.contains(property)) {
             return Optional.of(LegacyLayoutMigrationReport.DropReason.LITERAL);
         }
         return Optional.empty();
