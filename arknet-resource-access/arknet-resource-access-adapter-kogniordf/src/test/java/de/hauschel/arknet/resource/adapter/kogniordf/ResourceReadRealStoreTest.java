@@ -34,6 +34,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.StoreReader;
+import de.hauschel.arknet.resource.application.ReadService;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
 import de.hauschel.arknet.resource.application.port.in.FieldDescription.Kind;
@@ -81,8 +82,9 @@ class ResourceReadRealStoreTest {
                 KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
                 KognioRdfResourceRepositoryFactory.prefixes(), KognioRdfResourceRepositoryFactory.handles(lifecycle),
                 Clock.systemDefaultZone());
-        read = KognioRdfResourceRepositoryFactory.readResources(lifecycle, DisplayLocale.DEFAULT);
-        history = KognioRdfResourceRepositoryFactory.resourceHistory(lifecycle, DisplayLocale.DEFAULT);
+        ReadService reading = KognioRdfResourceRepositoryFactory.reading(lifecycle, DisplayLocale.DEFAULT);
+        read = reading;
+        history = reading;
     }
 
     @AfterEach
