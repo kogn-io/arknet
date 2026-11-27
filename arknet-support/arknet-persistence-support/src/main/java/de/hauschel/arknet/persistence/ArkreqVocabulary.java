@@ -248,6 +248,9 @@ public final class ArkreqVocabulary {
     /** {@code arkreq:RegulatoryConstraint} - the type of a regulatory constraint. */
     public static final String REGULATORY_CONSTRAINT_TYPE = NAMESPACE + "RegulatoryConstraint";
 
+    /** {@code arkreq:constraintStatement} - the statement of a constraint, multilingual. */
+    public static final String CONSTRAINT_STATEMENT = NAMESPACE + "constraintStatement";
+
     private ArkreqVocabulary() {
     }
 }
