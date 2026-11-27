@@ -107,9 +107,12 @@ import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.resource.adapter.kogniordf.KognioRdfResourceRepositoryFactory;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceAccessMcpTools;
+import de.hauschel.arknet.resource.adapter.mcp.ResourceListMcpTools;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceReadMcpTools;
+import de.hauschel.arknet.resource.application.ReadService;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
+import de.hauschel.arknet.resource.application.port.in.ListResources;
 import de.hauschel.arknet.resource.application.port.in.ReadResources;
 import de.hauschel.arknet.resource.application.port.in.ResourceHistory;
 import de.hauschel.arknet.resource.application.port.out.ResourceRepository;
@@ -1231,22 +1234,18 @@ public class ArknetMcpConfiguration {
     // --- Generic resource access -------------------------------------------------
 
     /**
-     * The read in-port of the generic resource-access component (ADR-69, ADR-60): resources of
-     * every type by handle, rendered from shapes and ontology. Always wired, unlike
+     * The read side of the generic resource-access component (ADR-69, ADR-60): resources of every
+     * type by handle, their history and the listing of a type, rendered from shapes and ontology.
+     * One bean serves {@link ReadResources}, {@link ResourceHistory} and {@link ListResources}, so
+     * the resource schema is built once per daemon start and the three share it. Always wired, unlike
      * {@link ResourceAccessConfiguration}: its tools replace the store read tools every daemon
      * offered, and it writes nothing. Building it builds the resource schema from the shipped
      * shapes, so a defect in their rule data now stops every daemon at start, not only one with
      * {@value ResourceAccessMcpTools#ENABLED_PROPERTY} set.
      */
     @Bean
-    ReadResources resourceReader(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
-        return KognioRdfResourceRepositoryFactory.readResources(datasetLifecycle, displayLocale);
-    }
-
-    /** The history in-port of the generic resource-access component, always wired like {@link #resourceReader}. */
-    @Bean
-    ResourceHistory resourceHistory(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
-        return KognioRdfResourceRepositoryFactory.resourceHistory(datasetLifecycle, displayLocale);
+    ReadService resourceReadService(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfResourceRepositoryFactory.reading(datasetLifecycle, displayLocale);
     }
 
     /**
@@ -1257,6 +1256,13 @@ public class ArknetMcpConfiguration {
     ResourceReadMcpTools resourceReadMcpTools(final ReadResources resourceReader,
             final ResourceHistory resourceHistory, final ProjectResolver projectResolver) {
         return new ResourceReadMcpTools(resourceReader, resourceHistory, projectResolver);
+    }
+
+    /** {@code resource_list} of the generic resource-access component, offered like the read tools. */
+    @Bean
+    ResourceListMcpTools resourceListMcpTools(final ListResources resourceLister,
+            final ProjectResolver projectResolver) {
+        return new ResourceListMcpTools(resourceLister, projectResolver);
     }
 
     /**

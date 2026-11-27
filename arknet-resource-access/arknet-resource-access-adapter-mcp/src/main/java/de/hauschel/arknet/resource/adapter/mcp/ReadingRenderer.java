@@ -175,7 +175,7 @@ final class ReadingRenderer {
         };
     }
 
-    private static String text(final RenderedValue.Text text) {
+    static String text(final RenderedValue.Text text) {
         StringBuilder rendered = new StringBuilder("\"").append(text.text()).append('"');
         text.language().ifPresent(language -> rendered.append('@').append(language));
         Optional<String> datatype = text.datatype().filter(type -> !XSD_STRING.equals(type));
@@ -186,7 +186,7 @@ final class ReadingRenderer {
         return rendered.toString();
     }
 
-    private static String reference(final RenderedValue.Reference reference) {
+    static String reference(final RenderedValue.Reference reference) {
         if (reference.label().equals(reference.handle())) {
             return reference.handle();
         }

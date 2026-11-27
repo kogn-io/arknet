@@ -4,6 +4,7 @@
 package de.hauschel.arknet.resource.application;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,6 +18,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -39,11 +42,14 @@ import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.resource.application.port.in.FieldDescription;
 import de.hauschel.arknet.resource.application.port.in.HistoryReading;
+import de.hauschel.arknet.resource.application.port.in.ListResources;
+import de.hauschel.arknet.resource.application.port.in.ListedResource;
 import de.hauschel.arknet.resource.application.port.in.ReadResources;
 import de.hauschel.arknet.resource.application.port.in.RenderedField;
 import de.hauschel.arknet.resource.application.port.in.RenderedResource;
 import de.hauschel.arknet.resource.application.port.in.RenderedValue;
 import de.hauschel.arknet.resource.application.port.in.ResourceHistory;
+import de.hauschel.arknet.resource.application.port.in.ResourceListing;
 import de.hauschel.arknet.resource.application.port.in.ResourceReading;
 import de.hauschel.arknet.resource.application.port.out.ResourceReader;
 import de.hauschel.arknet.resource.domain.PrefixBindings;
@@ -74,9 +80,12 @@ import de.hauschel.arknet.resource.domain.SubmitRejectedException;
  * change stays readable.</li>
  * </ul>
  *
+ * <p>The same service lists resources of a type or of all, one line each or in full, in the order of
+ * their codes; the schema it is built over is built once and shared by the three ports.</p>
+ *
  * <p>Every read of one call runs in one read transaction of {@link ResourceReader}.</p>
  */
-public final class ReadService implements ReadResources, ResourceHistory {
+public final class ReadService implements ReadResources, ResourceHistory, ListResources {
 
     private static final RDF RDF_FACTORY = new SimpleRdf();
     private static final String OWL = "http://www.w3.org/2002/07/owl#";
@@ -84,6 +93,7 @@ public final class ReadService implements ReadResources, ResourceHistory {
     private static final IRI SYMMETRIC_PROPERTY = RDF_FACTORY.createIRI(OWL + "SymmetricProperty");
     private static final String LANG_STRING = "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString";
     private static final char FRAGMENT = '#';
+    private static final Pattern CODE_NUMBER = Pattern.compile("^(.*?)(\\d+)$");
     private static final String BLANK_NODE_PREFIX = "_:";
 
     private final ResourceReader reader;
@@ -143,6 +153,37 @@ public final class ReadService implements ReadResources, ResourceHistory {
     }
 
     @Override
+    public ResourceListing list(final ProjectId projectId, final String type, final String status,
+            final String displayLocale, final boolean full, final int offset) {
+        Objects.requireNonNull(projectId, "projectId");
+        if (offset < 0) {
+            throw new IllegalArgumentException("The offset is " + offset + "; it is 0 or more");
+        }
+        Set<IRI> types = listedTypes(type);
+        Optional<IRI> wantedStatus = listedStatus(status, types);
+        int limit = full ? FULL_LIMIT : COMPACT_LIMIT;
+        DisplayLocale locale = defaultLocale.withRequestedOverride(displayLocale);
+        return reader.read(projectId, snapshot -> {
+            Rendering rendering = new Rendering(snapshot, locale, false);
+            List<ListedResource> rows = snapshot.typedWith(types).stream()
+                    .map(rendering::row)
+                    .filter(row -> wantedStatus.isEmpty() || row.status()
+                            .map(RenderedValue.Reference::iri)
+                            .filter(wantedStatus.get().getIRIString()::equals)
+                            .isPresent())
+                    .sorted(ROW_ORDER)
+                    .toList();
+            int from = Math.min(offset, rows.size());
+            List<ListedResource> window = rows.subList(from, Math.min(from + limit, rows.size()));
+            List<ResourceReading> readings = full
+                    ? window.stream().map(row -> rendering.read(row.handle(), RDF_FACTORY.createIRI(row.iri())))
+                            .toList()
+                    : List.of();
+            return new ResourceListing(rows.size(), offset, limit, window, readings);
+        });
+    }
+
+    @Override
     public HistoryReading history(final ProjectId projectId, final String handle, final String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(handle, "handle");
@@ -163,6 +204,96 @@ public final class ReadService implements ReadResources, ResourceHistory {
             Optional<ResourceReading.Deleted> deleted = deletion.map(found -> rendering.deleted(handle, found));
             return new HistoryReading(handle, iri.getIRIString(), snapshot.publishState(iri), entries, deleted);
         });
+    }
+
+    /** The resource types a listing of {@code type} covers: the type itself and the types below it. */
+    private Set<IRI> listedTypes(final String type) {
+        Set<IRI> resourceTypes = schema.resourceTypes().stream().sorted().map(RDF_FACTORY::createIRI)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (type == null || type.isBlank()) {
+            return resourceTypes;
+        }
+        String wanted = type.strip();
+        Set<IRI> classes = resourceTypes.stream().flatMap(resourceType -> schema.superclasses(resourceType).stream())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        List<IRI> named = wanted.indexOf(':') >= 0
+                ? prefixes.expand(wanted).map(RDF_FACTORY::createIRI).filter(classes::contains).stream().toList()
+                : named(classes, wanted);
+        if (named.isEmpty()) {
+            throw new IllegalArgumentException("No resource class is named \"" + wanted + "\"; name a resource"
+                    + " type or a class above one by prefixed name or label: " + described(resourceTypes)
+                    + ". describe lists them");
+        }
+        if (named.size() > 1) {
+            throw new IllegalArgumentException("\"" + wanted + "\" names several classes: " + described(named)
+                    + "; pass the prefixed name of the one you mean");
+        }
+        return resourceTypes.stream().filter(resourceType -> schema.superclasses(resourceType).contains(named.get(0)))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /** The status a listing keeps, empty for any; rejected unless every listed type has that status. */
+    private Optional<IRI> listedStatus(final String status, final Set<IRI> types) {
+        if (status == null || status.isBlank()) {
+            return Optional.empty();
+        }
+        String wanted = status.strip();
+        List<IRI> withoutStatus = types.stream().filter(listed -> schema.statusField(Set.of(listed)).isEmpty())
+                .toList();
+        if (!withoutStatus.isEmpty()) {
+            throw new IllegalArgumentException("A status filter needs a type that has a status field; no status"
+                    + " rules on " + described(withoutStatus) + ". Pass a type, and see describe for the type's"
+                    + " status rules");
+        }
+        Set<IRI> known = types.stream().flatMap(listed -> schema.statusField(Set.of(listed)).stream())
+                .flatMap(field -> Stream.concat(Stream.of(field.initial()), Stream.concat(
+                        field.transitions().stream().flatMap(transition -> Stream.of(transition.from(),
+                                transition.to())),
+                        field.deletable().stream())))
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        List<IRI> named = wanted.indexOf(':') >= 0
+                ? prefixes.expand(wanted).map(RDF_FACTORY::createIRI).filter(known::contains).stream().toList()
+                : named(known, wanted);
+        if (named.size() != 1) {
+            throw new IllegalArgumentException((named.isEmpty() ? "No status is named \"" + wanted + "\""
+                    : "\"" + wanted + "\" names several statuses") + "; the statuses of " + described(types)
+                    + " are " + described(known) + ". describe shows the rules");
+        }
+        return Optional.of(named.get(0));
+    }
+
+    /** The terms a name means: those with that label, and only without one those with that local name. */
+    private List<IRI> named(final Collection<IRI> candidates, final String name) {
+        List<IRI> byLabel = candidates.stream().filter(term -> ontology.stream(term, VocabRdfs.LABEL, null)
+                .map(Triple::getObject)
+                .filter(Literal.class::isInstance)
+                .map(literal -> ((Literal) literal).getLexicalForm())
+                .anyMatch(name::equalsIgnoreCase)).toList();
+        return byLabel.isEmpty()
+                ? candidates.stream().filter(term -> localName(term).equalsIgnoreCase(name)).toList()
+                : byLabel;
+    }
+
+    private String described(final Collection<IRI> terms) {
+        return terms.stream().map(term -> iriHandle(term) + text(ontology, term, VocabRdfs.LABEL, defaultLocale)
+                .map(label -> " \"" + label + "\"").orElse("")).toList().toString();
+    }
+
+    private static final Comparator<ListedResource> ROW_ORDER = Comparator.comparing(ReadService::codePrefix)
+            .thenComparingLong(ReadService::codeNumber)
+            .thenComparing(ListedResource::handle)
+            .thenComparing(ListedResource::iri);
+
+    private static String codePrefix(final ListedResource row) {
+        Matcher code = CODE_NUMBER.matcher(row.handle());
+        return code.matches() ? code.group(1) : row.handle();
+    }
+
+    private static long codeNumber(final ListedResource row) {
+        Matcher code = CODE_NUMBER.matcher(row.handle());
+        return code.matches() && code.group(2).length() < 18 ? Long.parseLong(code.group(2)) : -1;
     }
 
     /** A handle resolved to an IRI, or why it resolves to none. */
@@ -199,13 +330,39 @@ public final class ReadService implements ReadResources, ResourceHistory {
             if (resolution.iri().isEmpty()) {
                 return new ResourceReading.Unresolved(handle, resolution.problem());
             }
-            IRI iri = resolution.iri().get();
+            return read(handle, resolution.iri().get());
+        }
+
+        ResourceReading read(final String handle, final IRI iri) {
             ReadableGraph slice = snapshot.slice(iri);
             if (!slice.isEmpty()) {
                 return new ResourceReading.Found(handle, resource(iri, slice));
             }
             return snapshot.deletion(iri).<ResourceReading>map(deletion -> deleted(handle, deletion))
                     .orElseGet(() -> new ResourceReading.Unresolved(handle, "no resource " + iri.getIRIString()));
+        }
+
+        /** One line of a listing; every part falls back like a reference does, nothing here fails the list. */
+        ListedResource row(final IRI iri) {
+            ReadableGraph slice = snapshot.slice(iri);
+            Set<IRI> types = typesOf(iri, slice);
+            Set<IRI> multilingual = schema.multilingualFields(types);
+            Optional<RenderedValue.Text> label = labelField(types).flatMap(field -> {
+                List<Literal> literals = slice.stream(iri, field, null).map(Triple::getObject)
+                        .filter(Literal.class::isInstance).map(Literal.class::cast).toList();
+                if (literals.isEmpty()) {
+                    return Optional.empty();
+                }
+                return multilingual.contains(field) ? Optional.of(selected(literals))
+                        : literals.stream().min(Comparator.comparing(Literal::getLexicalForm))
+                                .map(literal -> text(literal, false));
+            });
+            Optional<RenderedValue.Reference> status = statusField(types).flatMap(field -> slice
+                    .stream(iri, field, null).map(Triple::getObject)
+                    .filter(IRI.class::isInstance).map(IRI.class::cast)
+                    .map(this::reference)
+                    .min(Comparator.comparing(RenderedValue.Reference::handle)));
+            return new ListedResource(iri.getIRIString(), handleOf(iri, slice), typeLabel(types), label, status);
         }
 
         Resolution resolve(final String written) {
