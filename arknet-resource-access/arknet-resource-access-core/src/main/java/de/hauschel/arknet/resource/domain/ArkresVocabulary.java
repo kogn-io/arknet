@@ -107,6 +107,9 @@ public final class ArkresVocabulary {
     /** {@code arkres:immutable} - marks a field whose values stay as the create wrote them. */
     public static final String IMMUTABLE = NAMESPACE + "immutable";
 
+    /** {@code arkres:labelField} - marks the field that names a resource when it is read; a reading hint. */
+    public static final String LABEL_FIELD = NAMESPACE + "labelField";
+
     /** {@code arkres:Default} - a value the engine writes into a field when a transition is taken. */
     public static final String DEFAULT_CLASS = NAMESPACE + "Default";
 

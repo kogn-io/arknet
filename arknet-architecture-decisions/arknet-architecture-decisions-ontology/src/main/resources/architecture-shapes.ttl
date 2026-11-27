@@ -75,6 +75,7 @@ ashapes:ADR-identifier
 ashapes:ADR-name
     a sh:PropertyShape ;
     sh:path     arknet:name ;
+    arkres:labelField true ;
     sh:minCount 1 ;
     sh:pattern  "[^\\s\\p{Z}\\p{Cc}]" ;
     sh:uniqueLang true ;

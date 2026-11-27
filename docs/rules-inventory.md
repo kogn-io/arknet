@@ -47,7 +47,7 @@ How to read a row:
 | **total** | **109** |
 
 Section 6 holds 9 documented exceptions (the 4 rows above and 5 without a row of their own),
-section 7 holds 7 intended differences, section 8 holds 10 items that are no rule.
+section 7 holds 7 intended differences, section 8 holds 11 items that are no rule.
 
 ## 1. Product & Requirements (BC-1)
 
@@ -233,3 +233,4 @@ Rules every typed core enforces for its own resources, enforced once by the engi
 | `arkreq:dependsOn` (requirement -> requirement) | Declared in the ontology with `rdfs:range`, read by the model analysis, written by no typed tool. Without a property shape it is no field, so `submit` rejects it as an unknown predicate; a stored edge still blocks deleting its target (`rdfs:range`). Shaping it would open a write path no typed tool has, not express a rule. |
 | `arkreq:scopedTo` (requirement -> bounded context) | Same as `arkreq:dependsOn`. |
 | `arkddd:hasContext` (domain -> bounded context) | Its domain `arkddd:Domain` is no resource type, so no document creates a holder; the inverse of `arkddd:partOf`, which the typed core keeps on the subdomain child (section 6). A stored edge still blocks deleting its target. |
+| `arkres:labelField` (`rshapes:Requirement-title`, `rshapes:Constraint-title`, `rshapes:UseCase-title`, `ulshapes:Term-prefLabel`, `shapes:BoundedContext-name`, `ashapes:ADR-name`, `actshapes:Actor-name`, `actshapes:Role-name`) | A reading hint, not a rule: it names the field that labels a resource when read, so no write consults it. At most one path per class (the same path on several shapes counts once); a type without a text field, `arkddd:ContextRelationship`, carries none, and child classes need none. Two different paths reaching one class fail the schema build (`core:ResourceSchemaLabelFieldTest#twoDifferentPathsOnOneClassFailTheSchema`). |

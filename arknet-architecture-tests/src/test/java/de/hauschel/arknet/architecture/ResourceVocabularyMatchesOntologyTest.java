@@ -76,6 +76,7 @@ class ResourceVocabularyMatchesOntologyTest {
                 ArkresVocabulary.GROUP_FIELD,
                 ArkresVocabulary.EDITABLE_IN,
                 ArkresVocabulary.IMMUTABLE,
+                ArkresVocabulary.LABEL_FIELD,
                 ArkresVocabulary.DEFAULT_CLASS,
                 ArkresVocabulary.DEFAULT,
                 ArkresVocabulary.DEFAULT_FIELD,

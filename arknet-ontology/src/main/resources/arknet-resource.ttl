@@ -206,6 +206,11 @@ arkres:immutable a owl:DatatypeProperty ;
     rdfs:label   "immutable"@en , "unveraenderlich"@de ;
     rdfs:comment "Set to true on a property shape: the field keeps the values the create wrote, in every language, and no document changes, adds or removes one. Not on a field that owns its children, nor on a status field."@en , "An einer Property-Shape auf true gesetzt: das Feld behaelt die Werte, die das Anlegen geschrieben hat, in jeder Sprache, und kein Dokument aendert, ergaenzt oder entfernt einen. Nicht an einem Feld, das seine Kinder besitzt, und nicht an einem Statusfeld."@de .
 
+arkres:labelField a owl:DatatypeProperty ;
+    rdfs:range   xsd:boolean ;
+    rdfs:label   "label field"@en , "Bezeichnungsfeld"@de ;
+    rdfs:comment "Set to true on a property shape: the field names a resource of the shape's classes when it is read. A class has at most one label field, the same path marked on several shapes counts once. A type without a text field has none. A reading hint only; no write consults it. Not on a field that owns its children."@en , "An einer Property-Shape auf true gesetzt: das Feld benennt eine Ressource der Klassen der Shape beim Lesen. Eine Klasse hat hoechstens ein Bezeichnungsfeld, derselbe Pfad an mehreren Shapes zaehlt einmal. Ein Typ ohne Textfeld hat keines. Nur eine Leseangabe; kein Schreibpfad wertet sie aus. Nicht an einem Feld, das seine Kinder besitzt."@de .
+
 arkres:Default a owl:Class ;
     rdfs:label   "Default"@en , "Standardwert"@de ;
     rdfs:comment "A value the engine writes into a field when a transition is taken, unless the document names that field for the resource itself; it replaces what the field held. Written only at the transition that declares it: another transition into the same status keeps the field as it is."@en , "Ein Wert, den die Engine beim Nehmen eines Uebergangs in ein Feld schreibt, sofern das Dokument dieses Feld der Ressource nicht selbst nennt; er ersetzt, was das Feld hielt. Geschrieben nur bei dem Uebergang, der ihn deklariert: ein anderer Uebergang in denselben Status laesst das Feld, wie es ist."@de .
