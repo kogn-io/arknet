@@ -31,7 +31,9 @@ import de.hauschel.arknet.persistence.Triple;
  * <p>Pure and domain-agnostic: it consumes only a {@link StoreSnapshot} plus a
  * {@link Prefixes} resolver, so it is fully unit-testable and renders any bounded context's
  * data the same way. The handle it prints is never the label - see {@link ResourceHandles} for
- * the preference order, shared with {@code resource_get}'s incoming-neighbour lines.</p>
+ * the preference order, shared with {@code text_search}. A blank-node subject - written past the
+ * tools, with no IRI - gets no drill-down: {@code resource_get} reads resources by code or IRI
+ * only, so its line says so instead of promising a call that answers NOT FOUND.</p>
  *
  * <p><strong>Unlabeled, id-less resources are collapsed, not listed.</strong> A resource that
  * carries neither a {@link StoreResource#label(DisplayLocale)} nor a {@code dcterms:identifier}
@@ -44,6 +46,8 @@ import de.hauschel.arknet.persistence.Triple;
  * way to a future bounded context's own opaque children.</p>
  */
 public final class DigestRenderer {
+
+    private static final String BLANK_NODE_PREFIX = "_:";
 
     private final Prefixes prefixes;
 
@@ -88,8 +92,8 @@ public final class DigestRenderer {
         description.ifPresent(value -> out.append("# ").append(value).append('\n'));
 
         appendPrefixLegend(out, snapshot);
-        out.append("# Handle for resource_get: a CURIE, or a bare business id, or the full IRI"
-                + " when neither is unique. NEVER the label.\n\n");
+        out.append("# Handle for resource_get: the bare business id, or the full IRI when it has none or"
+                + " shares it. NEVER the label.\n\n");
 
         appendTypeCounts(out, snapshot);
         out.append('\n');
@@ -186,7 +190,7 @@ public final class DigestRenderer {
 
     private String renderResourceLine(StoreResource resource, Set<String> ambiguousIdentifiers,
             DisplayLocale displayLocale) {
-        String handle = ResourceHandles.of(prefixes, resource.iri(), resource.identifier(), ambiguousIdentifiers);
+        String handle = ResourceHandles.of(resource.iri(), resource.identifier(), ambiguousIdentifiers);
         StringBuilder line = new StringBuilder(handle);
         String types = String.join(",", resource.types().stream().map(StoreResource::localName).toList());
         if (!types.isEmpty()) {
@@ -195,6 +199,10 @@ public final class DigestRenderer {
         resource.label(displayLocale).ifPresent(label -> line.append(" \"").append(label).append('"'));
         resource.status().ifPresent(status -> line.append(' ').append(status));
         resource.priority().ifPresent(priority -> line.append(' ').append(priority));
+        if (handle.startsWith(BLANK_NODE_PREFIX)) {
+            line.append("  (blank node written past the tools: no handle resource_get reads)");
+            return line.toString();
+        }
         line.append("  -> resource_get(\"").append(handle).append("\")");
         return line.toString();
     }
@@ -220,8 +228,8 @@ public final class DigestRenderer {
 
     private void appendNextSteps(StringBuilder out) {
         out.append("# Next step (for the agent)\n");
-        out.append("- Details of ONE resource : resource_get(\"<curie-or-iri>\")"
-                + " -> all triples + in/out links\n");
+        out.append("- Details of resources  : resource_get(\"<code-or-iri>, ...\")"
+                + " -> fields, owned children, in/out links; several handles per call\n");
         out.append("- Neighbours / what points here: resource_get(...) also lists incoming refs\n");
         out.append("- Human view              : the written HTML report (path returned below)\n");
     }

@@ -107,8 +107,11 @@ import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.resource.adapter.kogniordf.KognioRdfResourceRepositoryFactory;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceAccessMcpTools;
+import de.hauschel.arknet.resource.adapter.mcp.ResourceReadMcpTools;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
+import de.hauschel.arknet.resource.application.port.in.ReadResources;
+import de.hauschel.arknet.resource.application.port.in.ResourceHistory;
 import de.hauschel.arknet.resource.application.port.out.ResourceRepository;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.adapter.mcp.UbiquitousLanguageMcpTools;
@@ -244,8 +247,9 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       boundary is crossed here.</li>
  * </ul>
  *
- * <p>The generic resource-access component ({@code describe}/{@code submit}, ADR-69) belongs to
- * no bounded context and is wired only when {@code arknet.resource-access.enabled=true} - see
+ * <p>The generic resource-access component (ADR-69) belongs to no bounded context. Its read tools
+ * ({@code resource_get}, {@code resource_history}) are always wired; its writing tools
+ * ({@code describe}/{@code submit}) only when {@code arknet.resource-access.enabled=true} - see
  * {@link ResourceAccessConfiguration}.</p>
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
@@ -1036,14 +1040,12 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The three read-only store tools ({@code store_overview}, {@code resource_get},
-     * {@code resource_history}). {@code store_overview}/{@code resource_get} read the project
-     * dataset through {@link StoreReader} - a single generic {@code SELECT ?s ?p ?o} - so no
-     * bounded context needs a read tool of its own; {@code resource_history} (issue #251) reads
-     * the same {@link StoreReader}, but via its own, deliberately separate query over the
-     * provenance graph. The agent's return value stays that domain-agnostic digest; the
+     * The read-only store overview ({@code store_overview}). It reads the project dataset through
+     * {@link StoreReader} - a single generic {@code SELECT ?s ?p ?o} - so no bounded context needs a
+     * tool of its own. The agent's return value stays that domain-agnostic digest; the
      * human-facing HTML additionally groups the model per bounded context through
-     * {@link ModelViews}, with the generic snapshot as its safety net. The HTML report is
+     * {@link ModelViews}, with the generic snapshot as its safety net. Single resources and their
+     * history are read through {@link #resourceReadMcpTools}. The HTML report is
      * written into {@code arknet.report.dir} (default: the launched project root / working
      * directory). {@code arknet.report.host-dir} is the host-reachable equivalent of that
      * directory when it is a container-internal mount point the calling agent cannot reach
@@ -1229,15 +1231,45 @@ public class ArknetMcpConfiguration {
     // --- Generic resource access -------------------------------------------------
 
     /**
-     * The generic resource-access component (ADR-69): {@code describe} and {@code submit} over the
-     * resources of every bounded context, wired over the same {@link DatasetLifecycle},
-     * {@link DisplayLocale} and {@link ResourceIdFactory} beans the type-specific hexagons use.
+     * The read in-port of the generic resource-access component (ADR-69, ADR-60): resources of
+     * every type by handle, rendered from shapes and ontology. Always wired, unlike
+     * {@link ResourceAccessConfiguration}: its tools replace the store read tools every daemon
+     * offered, and it writes nothing. Building it builds the resource schema from the shipped
+     * shapes, so a defect in their rule data now stops every daemon at start, not only one with
+     * {@value ResourceAccessMcpTools#ENABLED_PROPERTY} set.
+     */
+    @Bean
+    ReadResources resourceReader(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfResourceRepositoryFactory.readResources(datasetLifecycle, displayLocale);
+    }
+
+    /** The history in-port of the generic resource-access component, always wired like {@link #resourceReader}. */
+    @Bean
+    ResourceHistory resourceHistory(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfResourceRepositoryFactory.resourceHistory(datasetLifecycle, displayLocale);
+    }
+
+    /**
+     * {@code resource_get} and {@code resource_history} of the generic resource-access component,
+     * offered by every daemon whatever {@value ResourceAccessMcpTools#ENABLED_PROPERTY} says.
+     */
+    @Bean
+    ResourceReadMcpTools resourceReadMcpTools(final ReadResources resourceReader,
+            final ResourceHistory resourceHistory, final ProjectResolver projectResolver) {
+        return new ResourceReadMcpTools(resourceReader, resourceHistory, projectResolver);
+    }
+
+    /**
+     * The writing part of the generic resource-access component (ADR-69): {@code describe} and
+     * {@code submit} over the resources of every bounded context, wired over the same
+     * {@link DatasetLifecycle}, {@link DisplayLocale} and {@link ResourceIdFactory} beans the
+     * type-specific hexagons use.
      *
-     * <p><strong>Off by default.</strong> Every bean of the component sits behind
+     * <p><strong>Off by default.</strong> Every bean of this class sits behind
      * {@value ResourceAccessMcpTools#ENABLED_PROPERTY}{@code =true}; without it neither tool is
      * offered and the type-specific tools remain the only write surface. One condition on this
-     * class rather than one per bean, so no bean of the component can be left switched on by
-     * itself.</p>
+     * class rather than one per bean, so no bean of the writing part can be left switched on by
+     * itself. The read tools ({@link #resourceReadMcpTools}) are not part of it.</p>
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(name = ResourceAccessMcpTools.ENABLED_PROPERTY, havingValue = "true")

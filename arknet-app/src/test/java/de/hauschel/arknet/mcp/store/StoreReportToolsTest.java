@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,10 +30,6 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
-import io.kogn.rdf.terms.Graph;
-import io.kogn.rdf.terms.RDF;
-import io.kogn.rdf.terms.SimpleRdf;
-import io.kogn.rdf.versioning.EntryDetails;
 import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.dm.shared.TermCode;
@@ -56,10 +51,7 @@ import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.persistence.Prefixes;
-import de.hauschel.arknet.persistence.ResourceRenderer;
-import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.StoreReader;
-import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.domain.Anchor;
@@ -79,7 +71,6 @@ import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermId;
-import de.hauschel.arknet.persistence.ContentGraph;
 
 /**
  * End-to-end test of the generic store report against a real kognio-rdf store shared by
@@ -674,293 +665,5 @@ class StoreReportToolsTest {
         } finally {
             lifecycle.shutDown(new DatasetId(OTHER_PROJECT.value()));
         }
-    }
-
-    /**
-     * Since requirement identity became an opaque IRI, the {@code req:} CURIE prefix
-     * (bound to the old {@code .../model/requirement/} namespace) no longer aliases a freshly
-     * added requirement's subject - only the full IRI and the {@code dcterms:identifier}-based
-     * bare-id lookup do.
-     */
-    @Test
-    void resourceGetResolvesFullIriAndBareIdToTheSameResource() {
-        String viaIri = tools.resourceGet(null, FR_1_IRI, ANCHOR);
-        String viaBareId = tools.resourceGet(null, "FR-1", ANCHOR);
-
-        assertThat(viaBareId).isEqualTo(viaIri);
-        assertThat(viaIri).contains("dcterms:title").contains("\"Login\"");
-        assertThat(viaIri).contains("# Outgoing").contains("# Incoming");
-    }
-
-    /**
-     * "1nope" cannot be a syntactically valid RFC 3986 URI scheme (a scheme must start with a
-     * letter, not a digit), so this stays rejected as an unknown CURIE prefix. A scheme-shaped
-     * unknown prefix such as {@code urn} is a different case since issue #305 - see
-     * {@link #resourceGetResolvesAUrnHandleEvenThoughItIsNeverAKnownPrefix()}.
-     */
-    @Test
-    void resourceGetRejectsUnknownPrefixWithDidacticMessage() {
-        assertThatThrownBy(() -> tools.resourceGet(null, "1nope:X", ANCHOR))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unknown prefix")
-                .hasMessageContaining("Known prefixes");
-    }
-
-    /**
-     * Regression test for issue #305: a {@code urn:}/{@code mailto:}-style handle is a complete,
-     * self-authoritative IRI - its "prefix" is an RFC 3986 URI scheme, not a CURIE prefix - and
-     * must not be rejected as an unknown prefix. Nothing in the store carries this IRI, so
-     * {@code resourceGet} does not throw at all - it resolves the handle and then reports the
-     * ordinary not-found notice ({@link ResourceRenderer#notFoundMessage}), the same outcome a
-     * well-formed but absent full IRI already gets.
-     */
-    @Test
-    void resourceGetResolvesAUrnHandleEvenThoughItIsNeverAKnownPrefix() {
-        String urn = "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8";
-        assertThat(tools.resourceGet(null, urn, ANCHOR))
-                .isEqualTo(ResourceRenderer.notFoundMessage(Prefixes.defaults(), urn));
-    }
-
-    @Test
-    void resourceGetRejectsUnknownBareIdWithGuidance() {
-        assertThatThrownBy(() -> tools.resourceGet(null, "FR-999", ANCHOR))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("No resource found");
-    }
-
-    /**
-     * {@code resource_get} used to ignore its project parameter entirely and
-     * always read the default project, unlike {@code store_overview} which already honored one.
-     * Two projects each carry a requirement with the SAME business code ("FR-1") but different
-     * identities/titles - a caller passing the other project's anchor must get that project's
-     * resource back, not a silent hit in the one its transport would have selected.
-     *
-     * <p>The parameter carries an anchor rather than a raw project id, which is what
-     * keeps this convenience from being a second, unchecked way into any dataset on the machine:
-     * {@link #resolveTestAnchor} rejects anything unregistered, as the real registry does.</p>
-     */
-    @Test
-    void resourceGetHonorsExplicitProjectAnchorParameter() {
-        String otherFr1Iri = "https://w3id.org/arknet/id/store-report-test-fr-1-other";
-
-        RequirementRepository requirements =
-                KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        requirements.create(OTHER_PROJECT, new Requirement(
-                new RequirementId(ResourceId.of(otherFr1Iri)), new RequirementCode("FR-1"), "Andere Anmeldung",
-                "The system shall authenticate a user in the other project.", null,
-                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
-                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of()), null);
-
-        try {
-            String fromOtherProject = tools.resourceGet(null, "FR-1", OTHER_ANCHOR);
-            String fromDefaultProject = tools.resourceGet(null, "FR-1", ANCHOR);
-
-            assertThat(fromOtherProject).contains("dcterms:title").contains("\"Andere Anmeldung\"");
-            assertThat(fromOtherProject).doesNotContain("\"Login\"");
-            assertThat(fromDefaultProject).contains("dcterms:title").contains("\"Login\"");
-            assertThat(fromDefaultProject).doesNotContain("\"Andere Anmeldung\"");
-        } finally {
-            lifecycle.shutDown(new DatasetId(OTHER_PROJECT.value()));
-        }
-    }
-
-    /** An anchor no project is registered under is rejected, never quietly resolved. */
-    @Test
-    void resourceGetRejectsAnUnregisteredAnchor() {
-        assertThatThrownBy(() -> tools.resourceGet(null, "FR-1", "/never/registered"))
-                .isInstanceOf(UnresolvedProjectAnchorException.class)
-                .hasMessageContaining("/never/registered");
-    }
-
-    /**
-     * Issue #594, finding 3: an incoming neighbour whose own subject IRI shortens to no known
-     * {@link Prefixes} CURIE (an opaque, kernel-minted identity) used to appear in the
-     * {@code # Incoming} section as that raw IRI. It now falls back to the neighbour's own
-     * {@code dcterms:identifier} - the same handle {@code store_overview} already shows for it -
-     * via the {@link ResourceHandles} helper shared with {@link DigestRenderer}.
-     */
-    @Test
-    void resourceGetShowsAnIncomingNeighbourByItsBusinessIdWhenItsIriHasNoCurie() {
-        String referencingIri = "https://w3id.org/arknet/id/store-report-test-referencing-1";
-        seedReferenceToFr1(referencingIri, "REF-1");
-
-        String result = tools.resourceGet(null, FR_1_IRI, ANCHOR);
-
-        assertThat(result).contains("# Incoming").contains("REF-1");
-        assertThat(result).doesNotContain(referencingIri);
-    }
-
-    /**
-     * Issue #594: two incoming neighbours sharing the very same {@code dcterms:identifier}
-     * lexical value would promise an ambiguous {@code resource_get} drill-down (issue #150) if
-     * printed as that shared bare id - both fall back to their full, always-unique IRI instead,
-     * mirroring {@link DigestRendererTest#handleFallsBackToTheFullIriWhenTheDctermsIdentifierIsSharedByAnotherResource()}.
-     */
-    @Test
-    void resourceGetFallsBackToTheFullIriForAnIncomingNeighbourWithAnAmbiguousBusinessId() {
-        String first = "https://w3id.org/arknet/id/store-report-test-referencing-2";
-        String second = "https://w3id.org/arknet/id/store-report-test-referencing-3";
-        seedReferenceToFr1(first, "REF-2");
-        seedReferenceToFr1(second, "REF-2");
-
-        String result = tools.resourceGet(null, FR_1_IRI, ANCHOR);
-
-        assertThat(result).contains(first).contains(second);
-        assertThat(result).doesNotContain("REF-2  ");
-    }
-
-    /**
-     * Writes a single triple pointing at {@link #FR_1_IRI}, straight into a model graph. The
-     * predicate {@code arkreq:refinesTerm} is deliberately declared by no shipped ontology:
-     * {@code resource_get} must list an incoming reference without knowing the vocabulary it
-     * comes from.
-     */
-    private void seedReferenceToFr1(String subjectIri, String identifier) {
-        RDF rdf = new SimpleRdf();
-        Graph graph = rdf.createGraph();
-        graph.add(rdf.createIRI(subjectIri), rdf.createIRI("http://purl.org/dc/terms/identifier"),
-                rdf.createLiteral(identifier));
-        graph.add(rdf.createIRI(subjectIri), rdf.createIRI("https://w3id.org/arknet/requirements#refinesTerm"),
-                rdf.createIRI(FR_1_IRI));
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
-            handle.transactor().inTransaction(tx -> {
-                tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
-                return null;
-            });
-        }
-    }
-
-    /** Every write publishes: a freshly created resource already has its one version. */
-    @Test
-    void resourceHistoryOfAFreshlyCreatedResourceHoldsItsOneVersion() {
-        String result = tools.resourceHistory(null, "FR-1", ANCHOR);
-
-        assertThat(result).contains("Publish state: PUBLISHED_UNCHANGED").contains("# History (1)");
-    }
-
-    /** The create and a changing update are two entries; nothing stays unpublished. */
-    @Test
-    void resourceHistoryListsEveryPublishAndThePublishState() {
-        RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        RequirementRepository.CurrentRequirement current =
-                requirements.findCurrentByCode(PROJECT, fr1.code(), null).orElseThrow();
-        Requirement updated = new Requirement(
-                fr1.id(), fr1.code(), "Login v2", fr1.description(), null, fr1.type(), fr1.status(), fr1.priority(), null, null, fr1.acceptanceCriteria(), List.of());
-        requirements.compareAndUpdate(
-                PROJECT, current.head(), updated, null, null, null, noAcceptanceCriteriaLanguages(updated), null, null);
-
-        String result = tools.resourceHistory(null, "FR-1", ANCHOR);
-        assertThat(result).contains("Publish state: PUBLISHED_UNCHANGED").contains("# History (2)");
-        assertThat(result.lines().filter(line -> line.contains("  publish  ")).count()).isEqualTo(2);
-    }
-
-    /**
-     * A resource that exists but was written entirely store-first - straight into a
-     * model graph, bypassing every repository and therefore the funnel - has no revision to
-     * report: an empty, non-error history, not a "not found".
-     */
-    @Test
-    void resourceHistoryReportsNoRevisionsForAnExistingResourceWrittenOnlyStoreFirst() {
-        String storeFirstIri = "https://w3id.org/arknet/id/store-report-test-store-first-1";
-        seedStoreFirstResource(storeFirstIri);
-
-        String result = tools.resourceHistory(null, storeFirstIri, ANCHOR);
-
-        assertThat(result).contains("# History (0)");
-        assertThat(result).doesNotContain("not found");
-    }
-
-    /** Writes a single triple straight into a model graph, touching no repository or funnel. */
-    private void seedStoreFirstResource(String iri) {
-        RDF rdf = new SimpleRdf();
-        Graph graph = rdf.createGraph();
-        graph.add(rdf.createIRI(iri), rdf.createIRI("http://purl.org/dc/terms/title"),
-                rdf.createLiteral("Store-first resource"));
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
-            handle.transactor().inTransaction(tx -> {
-                tx.add(rdf.createIRI(ContentGraph.GRAPH_IRI), graph);
-                return null;
-            });
-        }
-    }
-
-    /** Issue #596: a deleted resource answers with what it was, not with "not found" - by code and by IRI. */
-    @Test
-    void resourceGetOfADeletedResourceSaysItWasDeletedAndWhatItWas() {
-        KognioRdfTermRepositoryFactory.over(lifecycle).delete(PROJECT, new TermCode("TERM-1"));
-
-        for (String handle : List.of("TERM-1", TERM_1_IRI)) {
-            String result = tools.resourceGet(null, handle, ANCHOR);
-
-            assertThat(result).as(handle).contains("# DELETED").contains("deleted at ")
-                    .contains("TERM-1 stays taken").contains("# Last version")
-                    .contains("\"Anmeldung\"").doesNotContain("not found");
-        }
-    }
-
-    /** Issue #596: the history of a deleted resource keeps the tombstone and names what was deleted. */
-    @Test
-    void resourceHistoryOfADeletedResourceShowsTheTombstoneAndTheDeletionRecord() {
-        KognioRdfTermRepositoryFactory.over(lifecycle).delete(PROJECT, new TermCode("TERM-1"));
-
-        String result = tools.resourceHistory(null, "TERM-1", ANCHOR);
-
-        assertThat(result).contains("Publish state: DELETED").contains("# DELETED").contains("\"Anmeldung\"")
-                .contains("# History (2)").doesNotContain("not found");
-        assertThat(result.lines().filter(line -> line.contains("  tombstone  ")).count()).isEqualTo(1);
-    }
-
-    /**
-     * Issue #596: a resource deleted without ever having been published has a tombstone with no
-     * version behind it - the deletion record says the content is not recorded.
-     */
-    @Test
-    void resourceGetOfAResourceDeletedWithoutAPublishSaysTheContentIsNotRecorded() {
-        String storeFirstIri = "https://w3id.org/arknet/id/store-report-test-store-first-2";
-        seedStoreFirstResource(storeFirstIri);
-        new VersionedWriteFunnel(lifecycle, mock(ShaclWriteGate.class), ContentGraph.GRAPH_IRI,
-                VersionedWriteFunnel.DEFAULT_WRITE_CONFLICT)
-                .delete(new DatasetId(PROJECT.value()), storeFirstIri, null, EntryDetails.NONE,
-                        IllegalStateException::new, IllegalStateException::new, tx -> { });
-
-        String result = tools.resourceGet(null, storeFirstIri, ANCHOR);
-
-        assertThat(result).contains("# DELETED").contains("deleted at ")
-                .contains("the content is not recorded: the resource was deleted without ever having been published")
-                .doesNotContain("# Last version").doesNotContain("not found");
-    }
-
-    /** A code that never existed is still reported as unknown, deleted codes do not widen the lookup. */
-    @Test
-    void anUnknownCodeIsStillRejectedAfterADelete() {
-        KognioRdfTermRepositoryFactory.over(lifecycle).delete(PROJECT, new TermCode("TERM-1"));
-
-        assertThatThrownBy(() -> tools.resourceGet(null, "TERM-99", ANCHOR))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("No resource found");
-    }
-
-    /** A syntactically valid but unknown IRI is reported identically to {@code resource_get}. */
-    @Test
-    void resourceHistoryReportsNotFoundForAWellFormedButUnknownIri() {
-        String unknownIri = "https://w3id.org/arknet/id/store-report-test-does-not-exist";
-
-        String result = tools.resourceHistory(null, unknownIri, ANCHOR);
-
-        assertThat(result).isEqualTo(ResourceRenderer.notFoundMessage(Prefixes.defaults(), unknownIri));
-    }
-
-    /** An anchor no project is registered under is rejected, never quietly resolved. */
-    @Test
-    void resourceHistoryRejectsAnUnregisteredAnchor() {
-        assertThatThrownBy(() -> tools.resourceHistory(null, "FR-1", "/never/registered"))
-                .isInstanceOf(UnresolvedProjectAnchorException.class)
-                .hasMessageContaining("/never/registered");
-    }
-
-    /** An untagged (all-{@code null}) map, covering every position {@code updated} carries. */
-    private static Map<Integer, String> noAcceptanceCriteriaLanguages(Requirement updated) {
-        Map<Integer, String> languages = new LinkedHashMap<>();
-        updated.acceptanceCriteria().forEach(criterion -> languages.put(criterion.position(), null));
-        return languages;
     }
 }

@@ -7,29 +7,19 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import de.hauschel.arknet.persistence.Prefixes;
-import de.hauschel.arknet.persistence.ResourceRenderer;
-
 /**
- * The display/drill-down handle for a resource, shared by {@link DigestRenderer} (every listed
- * resource of {@code store_overview}) and {@link StoreReportTools} (an incoming neighbour shown
- * by {@code resource_get}, resolved there and handed to {@link ResourceRenderer} as plain text) -
- * one place for the "how do I name this resource" rule instead of two drifting copies (issue
- * #594).
+ * The drill-down handle for a resource, shared by {@link DigestRenderer} (every listed resource of
+ * {@code store_overview}) and {@code text_search} (the resource a hit is reported under) - one
+ * place for the "how do I name this resource" rule instead of drifting copies (issue #594).
  *
- * <p>Public rather than package-private since {@code text_search} (kogn-io/arknet#594 Part 1, in
- * {@code de.hauschel.arknet.mcp.search}) reuses the very same rule for the resource a hit is
- * reported under, rather than growing a third copy.</p>
- *
- * <p>Preference order: (1) a CURIE, if the subject IRI shortens against a {@link Prefixes}
- * namespace, (2) else the resource's {@code dcterms:identifier} (a bare business id, e.g.
- * {@code FR-1}), if it carries one AND no other resource in scope carries the same lexical
- * identifier, (3) else the full IRI. Case (2) is what keeps opaque, kernel-minted identities (a
- * {@link de.hauschel.arknet.kernel.ResourceId} is not bound to any CURIE namespace)
- * human-readable; the uniqueness check matters because {@code resource_get} rejects a bare id
- * that resolves to more than one resource as ambiguous (issue #150) - printing it as a handle in
- * that case would promise a drill-down affordance guaranteed to fail, so callers fall back to the
- * (always unique) full IRI instead.</p>
+ * <p>The handle is one {@code resource_get} reads: (1) the resource's {@code dcterms:identifier}
+ * (its business code, e.g. {@code FR-1}), if it carries one AND no other resource in scope carries
+ * the same lexical identifier, (2) else the full IRI. The uniqueness check matters because
+ * {@code resource_get} answers a code naming more than one resource as unresolved (issue #150) -
+ * printing it as a handle in that case would promise a drill-down guaranteed to fail, so callers
+ * fall back to the always unique full IRI instead. A prefixed name is never chosen: the instance
+ * prefixes of earlier layouts ({@code req:}, {@code term:}, {@code act:}) are no prefixes
+ * {@code resource_get} expands, and every resource carrying a code is reached by it.</p>
  */
 public final class ResourceHandles {
 
@@ -37,24 +27,17 @@ public final class ResourceHandles {
     }
 
     /**
-     * @param prefixes             the CURIE resolver used to shorten {@code iri} for display
-     * @param iri                  the subject IRI to name
+     * @param iri                  the subject IRI to name, or a blank-node reference
      * @param identifier           the subject's {@code dcterms:identifier}, if it carries one
      * @param ambiguousIdentifiers every identifier value shared by more than one resource in the
      *                             scope the caller is naming resources within - see the class
      *                             Javadoc for why a shared identifier cannot be used as a handle
      * @return the handle to display for {@code iri}
      */
-    public static String of(Prefixes prefixes, String iri, Optional<String> identifier,
-            Set<String> ambiguousIdentifiers) {
-        Objects.requireNonNull(prefixes, "prefixes");
+    public static String of(String iri, Optional<String> identifier, Set<String> ambiguousIdentifiers) {
         Objects.requireNonNull(iri, "iri");
         Objects.requireNonNull(identifier, "identifier");
         Objects.requireNonNull(ambiguousIdentifiers, "ambiguousIdentifiers");
-        String curie = prefixes.toCurie(iri);
-        if (!curie.equals(iri)) {
-            return curie;
-        }
         return identifier.filter(value -> !ambiguousIdentifiers.contains(value)).orElse(iri);
     }
 }

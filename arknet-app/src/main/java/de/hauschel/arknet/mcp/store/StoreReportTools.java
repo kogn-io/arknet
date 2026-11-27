@@ -8,12 +8,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Supplier;
 
 import org.springframework.ai.mcp.annotation.McpTool;
@@ -28,25 +24,19 @@ import de.hauschel.arknet.mcp.report.SpecificationRenderer;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
-import de.hauschel.arknet.persistence.DeletedResource;
-import de.hauschel.arknet.persistence.HandleResolver;
 import de.hauschel.arknet.persistence.Prefixes;
-import de.hauschel.arknet.persistence.ResourceRenderer;
 import de.hauschel.arknet.persistence.StoreReader;
-import de.hauschel.arknet.persistence.StoreResource;
 import de.hauschel.arknet.persistence.StoreSnapshot;
-import de.hauschel.arknet.persistence.Triple;
-import de.hauschel.arknet.persistence.VersionEntry;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.domain.Project;
 
 /**
- * Read-only store tools exposed over MCP: {@code store_overview}, {@code resource_get} and
- * {@code resource_history}. The first two are fed by one generic {@code SELECT ?s ?p ?o}
- * ({@link StoreReader}), so no bounded context needs a read tool of its own and a new one
- * appears without a type-to-tool mapping. {@code resource_history} reads the
- * library versioning's history of one resource instead - the one place in this class that shows
- * the published versions rather than the draft model (see {@link StoreReader}).
+ * The read-only store overview exposed over MCP: {@code store_overview}. It is fed by one generic
+ * {@code SELECT ?s ?p ?o} ({@link StoreReader}), so no bounded context needs a tool of its own and
+ * a new one appears without a type-to-tool mapping. Reading single resources and their history
+ * ({@code resource_get}, {@code resource_history}) is generic resource access
+ * ({@code ResourceReadMcpTools} in arknet-resource-access, ADR-69); the digest's drill-down
+ * handles name what those tools read.
  *
  * <p><strong>Two audiences, two shapes.</strong> The tool's return value - what the agent
  * reads - stays the domain-agnostic text digest built from that one query. The HTML report -
@@ -61,7 +51,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * gateway role the Borrowed In-Port pattern grants a driving adapter. The rendering, CURIE
  * resolution and query
  * execution live in isolated, unit-testable collaborators ({@link StoreReader},
- * {@link DigestRenderer}, {@link ResourceRenderer}, {@link HistoryRenderer},
+ * {@link DigestRenderer},
  * {@link HtmlReportRenderer}, {@link ModelViews}, {@link Prefixes}); this class only
  * orchestrates them and declares the {@code @McpTool} surface.</p>
  */
@@ -77,10 +67,6 @@ public final class StoreReportTools {
     private final SpecificationRenderer specificationRenderer;
     private final ModelViews modelViews;
     private final DigestRenderer digestRenderer;
-    private final ResourceRenderer resourceRenderer;
-    private final HistoryRenderer historyRenderer;
-    private final HandleResolver handleResolver;
-    private final Prefixes prefixes;
     private final DisplayLocale displayLocale;
     private final ProjectResolver projects;
     private final FindProject findProject;
@@ -127,15 +113,11 @@ public final class StoreReportTools {
             final Path fallbackReportDir,
             final Path reportHostDir) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
-        this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.htmlRenderer = Objects.requireNonNull(htmlRenderer, "htmlRenderer");
         this.specificationRenderer = Objects.requireNonNull(specificationRenderer, "specificationRenderer");
         this.modelViews = Objects.requireNonNull(modelViews, "modelViews");
-        this.digestRenderer = new DigestRenderer(prefixes);
-        this.resourceRenderer = new ResourceRenderer(prefixes);
-        this.historyRenderer = new HistoryRenderer(prefixes);
-        this.handleResolver = new HandleResolver(storeReader, prefixes);
+        this.digestRenderer = new DigestRenderer(Objects.requireNonNull(prefixes, "prefixes"));
         this.projects = Objects.requireNonNull(projects, "projects");
         this.findProject = Objects.requireNonNull(findProject, "findProject");
         this.fallbackReportDir = Objects.requireNonNull(fallbackReportDir, "fallbackReportDir");
@@ -224,107 +206,6 @@ public final class StoreReportTools {
         final String html = htmlRenderer.render(projectId, label, description, snapshot, digest, views, effective);
         return new RenderedReport(projectId, digest, html,
                 () -> specificationRenderer.render(label, description, views, effective));
-    }
-
-    @McpTool(name = "resource_get",
-            description = "Fetch all statements of ONE resource as compact text: its outgoing statements plus"
-                    + " its incoming statements (neighbours). A deleted resource - or a retained code like"
-                    + " TERM-12 - answers with its deletion record: when it was deleted and the statements of"
-                    + " its last version; for a deletion from before versioning only that it was deleted and"
-                    + " that its code stays taken, its content is not recorded. The id is a CURIE (e.g."
-                    + " req:FR-1) or a full IRI;"
-                    + " as a convenience a bare business id (e.g. FR-1) is resolved via dcterms:identifier.",
-            annotations = @McpTool.McpAnnotations(readOnlyHint = true))
-    public String resourceGet(
-            final McpSyncRequestContext context,
-            @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, bare id (FR-1), or a"
-                    + " blank-node reference (_:...) exactly as shown by store_overview")
-            final String id,
-            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
-            final String projectAnchor) {
-        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
-        final String iri = handleResolver.resolve(projectId, id);
-        final List<Triple> outgoing = storeReader.outgoing(projectId, iri);
-        final List<Triple> incoming = storeReader.incoming(projectId, iri);
-        if (outgoing.isEmpty()) {
-            final Optional<DeletedResource> deleted = storeReader.findDeleted(projectId, iri);
-            if (deleted.isPresent()) {
-                return resourceRenderer.renderDeleted(deleted.get());
-            }
-        }
-        final Map<String, String> incomingHandles = incomingHandles(projectId, incoming);
-        return resourceRenderer.render(iri, outgoing, incoming, incomingHandles);
-    }
-
-    /**
-     * The {@link ResourceHandles} handle for every distinct incoming-neighbour subject in
-     * {@code incoming} (issue #594) - the same CURIE-or-unambiguous-business-id-or-IRI preference
-     * {@code store_overview} already applies to every listed resource, resolved here per
-     * neighbour rather than over the whole project the way {@link DigestRenderer} does, since
-     * {@code resource_get} otherwise reads only the two targeted queries this method's caller
-     * already runs.
-     */
-    private Map<String, String> incomingHandles(final ProjectId projectId, final List<Triple> incoming) {
-        final Map<String, String> handles = new LinkedHashMap<>();
-        for (final Triple triple : incoming) {
-            handles.computeIfAbsent(triple.subject(), subject -> incomingHandle(projectId, subject));
-        }
-        return handles;
-    }
-
-    /**
-     * A blank-node reference keeps its {@code "_:"}-prefixed form unchanged (it never had a
-     * mintable identity to look up). Otherwise: a CURIE needs no further store access; only when
-     * none applies is the neighbour's own {@code dcterms:identifier} looked up and checked for
-     * ambiguity against the whole project, exactly the check {@code resource_get}'s own handle
-     * resolution ({@link HandleResolver}) already performs when a caller passes a bare id.
-     */
-    private String incomingHandle(final ProjectId projectId, final String subjectIri) {
-        if (subjectIri.startsWith("_:")) {
-            return subjectIri;
-        }
-        final String curie = prefixes.toCurie(subjectIri);
-        if (!curie.equals(subjectIri)) {
-            return curie;
-        }
-        final Optional<String> identifier =
-                new StoreResource(subjectIri, storeReader.outgoing(projectId, subjectIri)).identifier();
-        final Set<String> ambiguous = identifier
-                .filter(value -> storeReader.findByIdentifier(projectId, value).size() > 1)
-                .map(Set::of)
-                .orElseGet(Set::of);
-        return ResourceHandles.of(prefixes, subjectIri, identifier, ambiguous);
-    }
-
-    @McpTool(name = "resource_history",
-            description = "History of ONE resource: its publish state and every entry the versioning recorded"
-                    + " for it, oldest first - a publish naming a content-addressed version, or the tombstone"
-                    + " of a delete; a deleted resource (or a retained code like TERM-12) shows what it was and"
-                    + " when it was deleted - for a deletion from before versioning only that it was deleted,"
-                    + " with no entries. Every write publishes a version at once; there is no separate publish"
-                    + " step. A resource written only store-first, bypassing the tools, has an empty history"
-                    + " - not an error. The id is a CURIE (e.g."
-                    + " req:FR-1) or a full IRI; as a convenience a bare business id (e.g. FR-1) is resolved"
-                    + " via dcterms:identifier.",
-            annotations = @McpTool.McpAnnotations(readOnlyHint = true))
-    public String resourceHistory(
-            final McpSyncRequestContext context,
-            @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, bare id (FR-1), or a"
-                    + " blank-node reference (_:...) exactly as shown by store_overview")
-            final String id,
-            @McpToolParam(description = ToolParameterDescriptions.PROJECT_ANCHOR_DESCRIPTION, required = false)
-            final String projectAnchor) {
-        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
-        final String iri = handleResolver.resolve(projectId, id);
-        final List<Triple> outgoing = storeReader.outgoing(projectId, iri);
-        final List<Triple> incoming = storeReader.incoming(projectId, iri);
-        final List<VersionEntry> history = storeReader.history(projectId, iri);
-        final Optional<DeletedResource> deleted =
-                outgoing.isEmpty() ? storeReader.findDeleted(projectId, iri) : Optional.empty();
-        if (outgoing.isEmpty() && incoming.isEmpty() && history.isEmpty() && deleted.isEmpty()) {
-            return ResourceRenderer.notFoundMessage(prefixes, iri);
-        }
-        return historyRenderer.render(iri, storeReader.publishState(projectId, iri), history, deleted);
     }
 
     /**

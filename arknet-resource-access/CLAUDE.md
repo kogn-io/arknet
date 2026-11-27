@@ -52,6 +52,8 @@ Zur Build-Zeit haengt sie an keinem Modul eines Bounded Context, auch an keinem 
 - `arknet-resource-access-adapter-mcp`: treibender Adapter mit den MCP-Werkzeugen; sieht vom Core nur `..application.port.in..` und keine RDF-Technologie, haengt an `arknet-mcp-support` fuer die Anker-Aufloesung.
   `ResourceAccessMcpTools` traegt `describe` und `submit` und rendert, was die In-Ports liefern.
   Die Klasse registriert sich nicht selbst; ob ihre Werkzeuge angeboten werden, entscheidet die Composition Root, die sie als Bean an die Property `arknet.resource-access.enabled` (`ResourceAccessMcpTools.ENABLED_PROPERTY`) bindet.
+  `ResourceReadMcpTools` traegt `resource_get` (ein bis 50 Handles je Aufruf) und `resource_history` ueber `ReadResources`/`ResourceHistory`; `ReadingRenderer` macht daraus Text und nennt keinen Ressourcentyp.
+  Diese Bean haengt an keiner Property: die Werkzeuge ersetzen die gleichnamigen Lese-Werkzeuge, die jeder Daemon anbot, und schreiben nichts. Dadurch baut jeder Daemon beim Start das `ResourceSchema`; ein Fehler in den Regeldaten stoppt ihn, nicht nur einen mit gesetzter Property.
   Die Bedingung gehoert an diese Bean, nicht ins Modul: ausser `arknet-app` traegt kein Modul eine Spring-Konfiguration.
 
 ## submit
