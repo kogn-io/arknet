@@ -64,14 +64,18 @@ import de.hauschel.arknet.ul.domain.Term;
  * canonical graph names a child by its position, so the different child identities compare equal
  * and need no entry. Where the core takes two calls and a document one - choosing the option while
  * accepting - the case runs the core's sequence against the one document; the content is the same,
- * the number of versions is not (G-4). Superseding by a successor created in the same document is
- * not compared: the harness's document names an existing resource only by its IRI, and a record is
- * never created decided.</p>
+ * the number of versions is not (G-4). Superseding by a new successor - accepting a Proposed record
+ * and superseding with it - runs the core's two calls against one document the same way (G-3).</p>
+ *
+ * <p>A child text in a new language on a decided record is the one step only the core takes
+ * (section 6): its corrections exempt a position written in a language it did not carry, while no
+ * activity changes a child in place and a document's remove + add removes a child of a decided
+ * record.</p>
  *
  * <p>Not compared, because the core has no operation that could express them: a decision date on a
- * Proposed record and re-dating a decided one (the core takes the date only with the transition), a
- * child text in a new language on a decided record (section 6), and legacy data
- * ({@code AdrServiceLegacyProposedDateRealStoreTest}, {@code EngineGuaranteesRealStoreTest} pin those).</p>
+ * Proposed record and re-dating a decided one (the core takes the date only with the transition), and
+ * legacy data ({@code AdrServiceLegacyProposedDateRealStoreTest}, {@code EngineGuaranteesRealStoreTest}
+ * pin those).</p>
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AdrComparisonTest {
@@ -85,7 +89,10 @@ class AdrComparisonTest {
     private static final LocalDate DECIDED_ON = LocalDate.of(2026, 11, 20);
 
     /** The rules the rejections name: core exception messages and engine or {@code sh:message} fragments. */
-    private static final String CORE_BLANK = "must not be blank";
+    private static final String CORE_BLANK_NAME = "name must not be blank";
+    private static final String CORE_BLANK_CONTEXT = "context must not be blank";
+    private static final String CORE_BLANK_DECISION = "decision must not be blank";
+    private static final String CORE_BLANK_STATEMENT = "statement must not be blank";
     private static final String CORE_ONE_CHOSEN = "exactly one of them";
     private static final String CORE_SUCCESSOR_ACCEPTED = "can only supersede another decision while ACCEPTED";
     private static final String CORE_SUPERSEDED_WHILE_ACCEPTED = "can only be superseded while ACCEPTED";
@@ -115,17 +122,24 @@ class AdrComparisonTest {
     private static final String X_3_CLEAR = "X-3-clear";
     private static final String X_3_REPOINT = "X-3-repoint";
     private static final String G_4 = "G-4";
+    private static final String CHILD_NEW_LANGUAGE = "child-new-language";
 
-    /** The ledger line {@link ComparisonStore} adds for the number of versions of a resource. */
-    private static final String HISTORY_OF_ADR_1 = "ledger code:ADR-1 history ";
+    /** The ledger lines {@link ComparisonStore} adds for the versions of ADR-1 in G-4: core, then submit. */
+    private static final Set<String> HISTORY_OF_ADR_1 = Set.of("ledger code:ADR-1 history 3 last version",
+            "ledger code:ADR-1 history 2 last version");
 
     /**
      * The successor edge of a Superseded record, {@code rules-inventory.md} section 6: the core
      * refuses to clear or to re-point it, {@code submit} allows both without a status change.
      * Clearing is an expected inequality until the reverse-direction shape lands
-     * (kogn-io/arknet#746); re-pointing stays an intended difference.
+     * (kogn-io/arknet#746); re-pointing stays an intended difference. A child text in a new language
+     * on a decided record is the reverse: only the core takes it, until a child-update activity lands.
      */
     private static final DeviationList DEVIATIONS = DeviationList.of(
+            Deviation.onlyCoreAccepts(CHILD_NEW_LANGUAGE, "rules-inventory.md section 6",
+                    "the core corrects a consequence of a decided record in a language it did not carry; no"
+                            + " activity changes a child in place, and remove + add removes a child of a decided"
+                            + " record"),
             Deviation.onlySubmitAccepts(X_3_CLEAR, "rules-inventory.md section 6 (kogn-io/arknet#746)",
                     "a document clears supersededBy of a Superseded record without a transition; the core's"
                             + " record refuses a Superseded status without the edge"),
@@ -135,7 +149,7 @@ class AdrComparisonTest {
             Deviation.inGraph(G_4, "rules-inventory.md section 7, 'Choosing the option when accepting'",
                     "the core corrects the outcome and accepts in two calls, two versions; one document does"
                             + " both, one version - the content is the same",
-                    statement -> statement.startsWith(HISTORY_OF_ADR_1)));
+                    HISTORY_OF_ADR_1::contains));
 
     @TempDir
     static Path storageRoot;
@@ -526,6 +540,30 @@ class AdrComparisonTest {
     }
 
     @Test
+    void supersedingByANewSuccessorWritesTheSameGraph() {
+        // given: the successor still Proposed
+        ProjectPair pair = store.pair("supersede-new-successor");
+        Given<AdrDetail> old = pair.given(AdrComparisonTest::accepted);
+        Given<AdrDetail> successor = pair.given(AdrComparisonTest::proposed);
+
+        // when: the core accepts the successor, then supersedes; one document does both (G-3)
+        Comparison.Outcome outcome = comparison.run(pair,
+                project -> {
+                    adrs.accept(project, code(successor), DECIDED_ON, EN);
+                    adrs.supersede(project, code(successor), code(old), EN);
+                },
+                document().update(iri(successor.submit()), Node.fields()
+                                .with(ArkarchVocabulary.ADR_STATUS, Document.iri(ArkarchVocabulary.ACCEPTED))
+                                .with(ArkarchVocabulary.DECISION_DATE, date(DECIDED_ON)))
+                        .update(iri(old.submit()), Node.fields()
+                                .with(ArkarchVocabulary.ADR_STATUS, Document.iri(ArkarchVocabulary.SUPERSEDED))
+                                .with(ArkarchVocabulary.SUPERSEDED_BY, Document.iri(iri(successor.submit())))));
+
+        // then
+        outcome.assertSameGraph();
+    }
+
+    @Test
     void undoingASupersessionWritesTheSameGraph() {
         // given
         ProjectPair pair = store.pair("unsupersede");
@@ -763,17 +801,19 @@ class AdrComparisonTest {
     @Test
     void aBlankNameIsRejectedByBoth() {
         assertBlankTextOnAddIsRejected("blank-name", "   ", "Links must be first-class.", "The store keeps RDF.",
-                SHAPE_NAME);
+                CORE_BLANK_NAME, SHAPE_NAME);
     }
 
     @Test
     void aBlankContextIsRejectedByBoth() {
-        assertBlankTextOnAddIsRejected("blank-context", "Use RDF", "\t\n", "The store keeps RDF.", SHAPE_CONTEXT);
+        assertBlankTextOnAddIsRejected("blank-context", "Use RDF", "\t\n", "The store keeps RDF.",
+                CORE_BLANK_CONTEXT, SHAPE_CONTEXT);
     }
 
     @Test
     void aBlankDecisionIsRejectedByBoth() {
-        assertBlankTextOnAddIsRejected("blank-decision", "Use RDF", "Links must be first-class.", "", SHAPE_DECISION);
+        assertBlankTextOnAddIsRejected("blank-decision", "Use RDF", "Links must be first-class.", "",
+                CORE_BLANK_DECISION, SHAPE_DECISION);
     }
 
     @Test
@@ -809,7 +849,7 @@ class AdrComparisonTest {
                         consequence(null, "     ", ArkarchVocabulary.POSITIVE)));
 
         // then
-        outcome.assertBothReject(Rejection.core(IllegalArgumentException.class, CORE_BLANK),
+        outcome.assertBothReject(Rejection.core(IllegalArgumentException.class, CORE_BLANK_STATEMENT),
                 Rejection.submit(SHAPE_STATEMENT));
     }
 
@@ -958,6 +998,34 @@ class AdrComparisonTest {
                 CORE_SUPERSEDED_WHILE_ACCEPTED));
     }
 
+    // -- a child text in a new language on a decided record (rules-inventory.md section 6) ---------
+
+    @Test
+    void translatingAConsequenceOfADecidedDecisionOnlyCoreAccepts() {
+        // given
+        ProjectPair pair = store.pair("translate-consequence-accepted");
+        Given<AdrDetail> adr = pair.given(AdrComparisonTest::withChildren);
+        pair.givenOnBoth(project -> adrs.accept(project, code(adr), DECIDED_ON, EN));
+
+        // when: no activity changes a child in place, so the document removes and adds it
+        Comparison.Outcome outcome = comparison.run(pair,
+                project -> adrs.update(project, code(adr), AdrCorrection.builder()
+                        .consequenceCorrections(List.of(new ConsequenceCorrection(1, "Verweise sind erstrangig.",
+                                ConsequenceType.POSITIVE)))
+                        .language(DE).build(), DE),
+                document().removeFrom(iri(adr.submit()), ArkarchVocabulary.CONSEQUENCE, 1)
+                        .addTo(iri(adr.submit()), ArkarchVocabulary.CONSEQUENCE, Node.fields()
+                                .with(ArkarchVocabulary.POSITION, integer(1))
+                                .with(ArkarchVocabulary.CONSEQUENCE_STATEMENT, text("Links are first-class.", EN))
+                                .with(ArkarchVocabulary.CONSEQUENCE_STATEMENT, text("Verweise sind erstrangig.", DE))
+                                .with(ArkarchVocabulary.CONSEQUENCE_TYPE_PROPERTY,
+                                        Document.iri(ArkarchVocabulary.POSITIVE))
+                                .value()));
+
+        // then
+        outcome.assertDeviation(CHILD_NEW_LANGUAGE, Rejection.submit(ENGINE_REMOVES_CHILD));
+    }
+
     @Test
     @Order(Integer.MAX_VALUE)
     void everyListedDeviationIsNamedByACase() {
@@ -967,7 +1035,7 @@ class AdrComparisonTest {
     // -- helpers -----------------------------------------------------------------------------------
 
     private static void assertBlankTextOnAddIsRejected(final String caseName, final String name,
-            final String context, final String decision, final String shape) {
+            final String context, final String decision, final String coreRule, final String shape) {
         // given
         ProjectPair pair = store.pair(caseName);
 
@@ -981,7 +1049,7 @@ class AdrComparisonTest {
                         .with(ArkarchVocabulary.ADR_DECISION, text(decision, EN))));
 
         // then
-        outcome.assertBothReject(Rejection.core(IllegalArgumentException.class, CORE_BLANK),
+        outcome.assertBothReject(Rejection.core(IllegalArgumentException.class, coreRule),
                 Rejection.submit(shape));
     }
 
