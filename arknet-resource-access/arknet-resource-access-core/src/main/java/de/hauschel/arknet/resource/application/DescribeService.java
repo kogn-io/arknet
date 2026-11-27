@@ -111,6 +111,13 @@ public final class DescribeService implements DescribeResourceType {
     private static final int ADDED_POSITION = 2;
     private static final int REMOVED_POSITION = 1;
 
+    /**
+     * The order fields are listed in: required, recommended, optional, then by prefixed name - shared
+     * by {@code describe} and the generic read.
+     */
+    static final Comparator<FieldDescription> FIELD_ORDER =
+            Comparator.comparing(FieldDescription::presence).thenComparing(FieldDescription::name);
+
     private final ReadableGraph shapes;
     private final ReadableGraph ontology;
     private final ResourceSchema schema;
@@ -222,7 +229,7 @@ public final class DescribeService implements DescribeResourceType {
         return schema.resourceTypeOf(Set.of(type)).flatMap(ResourceSchema.ResourceType::codePrefix);
     }
 
-    private List<FieldDescription> fields(final IRI type, final DisplayLocale locale) {
+    List<FieldDescription> fields(final IRI type, final DisplayLocale locale) {
         boolean coded = codePrefix(type).isPresent();
         Set<IRI> immutable = schema.immutableFields(Set.of(type));
         Map<IRI, List<BlankNodeOrIRI>> shapesByPath = new LinkedHashMap<>();
@@ -237,7 +244,7 @@ public final class DescribeService implements DescribeResourceType {
         return shapesByPath.entrySet().stream()
                 .map(entry -> field(entry.getKey(), entry.getValue(), coded, immutable.contains(entry.getKey()),
                         locale))
-                .sorted(Comparator.comparing(FieldDescription::presence).thenComparing(FieldDescription::name))
+                .sorted(FIELD_ORDER)
                 .toList();
     }
 

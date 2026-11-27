@@ -42,7 +42,10 @@ import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.resource.application.DescribeService;
+import de.hauschel.arknet.resource.application.ReadService;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
+import de.hauschel.arknet.resource.application.port.in.ReadResources;
+import de.hauschel.arknet.resource.application.port.in.ResourceHistory;
 import de.hauschel.arknet.resource.application.port.out.HandleLookup;
 import de.hauschel.arknet.resource.application.port.out.ResourceRepository;
 import de.hauschel.arknet.resource.domain.PrefixBindings;
@@ -129,7 +132,44 @@ public final class KognioRdfResourceRepositoryFactory {
      */
     public static HandleLookup handles(final DatasetLifecycle lifecycle) {
         Objects.requireNonNull(lifecycle, "lifecycle");
-        return new KognioRdfHandleLookup(new HandleResolver(new StoreReader(lifecycle), Prefixes.defaults()));
+        // no prefixes: the lookup lets a bare code through only, and the default bindings name the
+        // namespaces of the bounded contexts
+        return new KognioRdfHandleLookup(new HandleResolver(new StoreReader(lifecycle), new Prefixes(List.of())));
+    }
+
+    /**
+     * The generic read of resources by handle, over the same dataset lifecycle, shapes and ontologies
+     * as {@link #describer}.
+     *
+     * @param lifecycle     the dataset lifecycle every project dataset is acquired from
+     * @param displayLocale the display language when a call names none
+     * @return the reading in-port
+     */
+    public static ReadResources readResources(final DatasetLifecycle lifecycle, final DisplayLocale displayLocale) {
+        return readService(lifecycle, displayLocale);
+    }
+
+    /**
+     * The history of a resource of any type, over the same reads as {@link #readResources}.
+     *
+     * @param lifecycle     the dataset lifecycle every project dataset is acquired from
+     * @param displayLocale the display language when a call names none
+     * @return the history in-port
+     */
+    public static ResourceHistory resourceHistory(final DatasetLifecycle lifecycle,
+            final DisplayLocale displayLocale) {
+        return readService(lifecycle, displayLocale);
+    }
+
+    private static ReadService readService(final DatasetLifecycle lifecycle, final DisplayLocale displayLocale) {
+        Objects.requireNonNull(lifecycle, "lifecycle");
+        Objects.requireNonNull(displayLocale, "displayLocale");
+        ReadableGraph shapes = shapes();
+        ReadableGraph ontology = union(describedOntologies());
+        ResourceSchema schema = ResourceSchema.of(shapes, union(ontologyResources()));
+        PrefixBindings prefixes = prefixes();
+        return new ReadService(new KognioRdfResourceReader(new StoreReader(lifecycle)), schema, ontology, prefixes,
+                new DescribeService(shapes, ontology, schema, prefixes, displayLocale), displayLocale);
     }
 
     /**

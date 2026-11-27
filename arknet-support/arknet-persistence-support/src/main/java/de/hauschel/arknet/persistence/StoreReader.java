@@ -10,9 +10,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetTx;
+import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
@@ -20,6 +22,7 @@ import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDFTerm;
+import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.versioning.EntryKind;
@@ -195,17 +198,31 @@ public final class StoreReader {
     public List<String> findByIdentifier(ProjectId projectId, String identifier) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(identifier, "identifier");
-        String literal = "\"" + SparqlTerms.escape(identifier) + "\"";
-        String query = "SELECT DISTINCT ?s WHERE { " + inContentGraph("?s <" + DCTERMS_IDENTIFIER + "> " + literal)
-                + " }";
         try (DatasetHandle handle = acquire(projectId)) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> row.getValue("s").orElse(null))
-                    .map(StoreReader::subjectReference)
-                    .filter(Objects::nonNull)
-                    .distinct()
-                    .toList();
+            return findByIdentifier(handle.sparqlQuery(), identifier);
         }
+    }
+
+    /**
+     * {@link #findByIdentifier(ProjectId, String)} over a given query endpoint - a transaction of
+     * {@link #read}.
+     *
+     * @param query      the endpoint to ask, e.g. the read transaction
+     * @param identifier the {@code dcterms:identifier} lexical value
+     * @return the matching subject references (distinct)
+     */
+    public List<String> findByIdentifier(SparqlQuery query, String identifier) {
+        Objects.requireNonNull(query, "query");
+        Objects.requireNonNull(identifier, "identifier");
+        String literal = "\"" + SparqlTerms.escape(identifier) + "\"";
+        String select = "SELECT DISTINCT ?s WHERE { " + inContentGraph("?s <" + DCTERMS_IDENTIFIER + "> " + literal)
+                + " }";
+        return query.select(select)
+                .map(row -> row.getValue("s").orElse(null))
+                .map(StoreReader::subjectReference)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
     /**
@@ -237,16 +254,34 @@ public final class StoreReader {
         if (needle.isBlank()) {
             throw new IllegalArgumentException("needle must not be blank");
         }
-        String pattern = "?s ?p ?o . FILTER(isLiteral(?o) && CONTAINS(LCASE(STR(?o)), LCASE(?q)))";
-        String query = "SELECT DISTINCT ?s ?p ?o WHERE { " + inContentGraph(pattern) + " }";
-        Map<String, RDFTerm> bindings = Map.of("q", new SimpleRdf().createLiteral(needle));
         try (DatasetHandle handle = acquire(projectId)) {
-            return handle.sparqlQuery().select(query, bindings)
-                    .map(StoreReader::toTriple)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .toList();
+            return literalContaining(handle.sparqlQuery(), needle);
         }
+    }
+
+    /**
+     * {@link #literalContaining(ProjectId, String)} over a given query endpoint - a transaction of
+     * {@link #read}.
+     *
+     * @param query  the endpoint to ask, e.g. the read transaction
+     * @param needle the substring to search for; must not be blank
+     * @return every matching statement, in no particular order
+     * @throws IllegalArgumentException if {@code needle} is blank
+     */
+    public List<Triple> literalContaining(SparqlQuery query, String needle) {
+        Objects.requireNonNull(query, "query");
+        Objects.requireNonNull(needle, "needle");
+        if (needle.isBlank()) {
+            throw new IllegalArgumentException("needle must not be blank");
+        }
+        String pattern = "?s ?p ?o . FILTER(isLiteral(?o) && CONTAINS(LCASE(STR(?o)), LCASE(?q)))";
+        String select = "SELECT DISTINCT ?s ?p ?o WHERE { " + inContentGraph(pattern) + " }";
+        Map<String, RDFTerm> bindings = Map.of("q", new SimpleRdf().createLiteral(needle));
+        return query.select(select, bindings)
+                .map(StoreReader::toTriple)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .toList();
     }
 
     /**
@@ -325,12 +360,60 @@ public final class StoreReader {
         if (isBlankNodeReference(iri)) {
             return List.of();
         }
-        IRI subject = new SimpleRdf().createIRI(iri);
+        return read(projectId, tx -> history(tx, iri));
+    }
+
+    /**
+     * Runs {@code work} in one read transaction of the project's dataset, so that every read it
+     * makes through the transaction-scoped methods of this class ({@link #draft}, {@link
+     * #history(DatasetTx, String)}, {@link #publishState(DatasetTx, String)}, {@link
+     * #findDeleted(DatasetTx, String)}, {@link #findDeletedByCode(SparqlQuery, String)}, {@link
+     * #findByIdentifier(SparqlQuery, String)}, {@link #literalContaining(SparqlQuery, String)})
+     * sees the same state. A lost commit runs {@code work} again ({@link ReadTransactions}).
+     *
+     * @param projectId the project to read
+     * @param work      the reads; they must not write, since they may run more than once
+     * @param <T>       the result type
+     * @return what {@code work} returned in the attempt that committed
+     */
+    public <T> T read(ProjectId projectId, Function<DatasetTx, T> work) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(work, "work");
         try (DatasetHandle handle = acquire(projectId)) {
-            return ReadTransactions.read(handle, tx -> versioning.history(tx, subject)).stream()
-                    .map(StoreReader::toVersionEntry)
-                    .toList();
+            return ReadTransactions.read(handle, work);
         }
+    }
+
+    /**
+     * The current draft slice of a resource in {@code tx}: its own statements, those of its owned
+     * children and of the blank nodes it reaches - the slice a write replaces as a whole.
+     *
+     * @param tx  a read transaction from {@link #read}
+     * @param iri the resource's IRI, without a {@code #}
+     * @return the slice, empty if the resource has no draft
+     */
+    public ReadableGraph draft(DatasetTx tx, String iri) {
+        Objects.requireNonNull(tx, "tx");
+        Objects.requireNonNull(iri, "iri");
+        return versioning.readDraft(tx, new SimpleRdf().createIRI(iri)).triples();
+    }
+
+    /**
+     * {@link #history(ProjectId, String)} inside a transaction of {@link #read}.
+     *
+     * @param tx  the read transaction
+     * @param iri the resource's IRI; a blank-node reference yields an empty list
+     * @return the history entries, oldest first
+     */
+    public List<VersionEntry> history(DatasetTx tx, String iri) {
+        Objects.requireNonNull(tx, "tx");
+        Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return List.of();
+        }
+        return versioning.history(tx, new SimpleRdf().createIRI(iri)).stream()
+                .map(StoreReader::toVersionEntry)
+                .toList();
     }
 
     /**
@@ -352,17 +435,28 @@ public final class StoreReader {
         if (isBlankNodeReference(iri)) {
             return PublishState.NEVER_PUBLISHED.name();
         }
-        IRI subject = new SimpleRdf().createIRI(iri);
-        try (DatasetHandle handle = acquire(projectId)) {
-            return ReadTransactions.read(handle, tx -> {
-                PublishState state = versioning.publishState(tx, subject);
-                // a deletion before versioning left no history the library could read the state from
-                if (state == PublishState.NEVER_PUBLISHED && retainedBeforeVersioning(tx, iri).isPresent()) {
-                    return PublishState.DELETED;
-                }
-                return state;
-            }).name();
+        return read(projectId, tx -> publishState(tx, iri));
+    }
+
+    /**
+     * {@link #publishState(ProjectId, String)} inside a transaction of {@link #read}.
+     *
+     * @param tx  the read transaction
+     * @param iri the resource's IRI
+     * @return the publish state's name; {@code NEVER_PUBLISHED} for a blank-node handle
+     */
+    public String publishState(DatasetTx tx, String iri) {
+        Objects.requireNonNull(tx, "tx");
+        Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return PublishState.NEVER_PUBLISHED.name();
         }
+        PublishState state = versioning.publishState(tx, new SimpleRdf().createIRI(iri));
+        // a deletion before versioning left no history the library could read the state from
+        if (state == PublishState.NEVER_PUBLISHED && retainedBeforeVersioning(tx, iri).isPresent()) {
+            return PublishState.DELETED.name();
+        }
+        return state.name();
     }
 
     /**
@@ -383,28 +477,40 @@ public final class StoreReader {
         if (isBlankNodeReference(iri)) {
             return Optional.empty();
         }
-        IRI subject = new SimpleRdf().createIRI(iri);
-        try (DatasetHandle handle = acquire(projectId)) {
-            return ReadTransactions.read(handle, tx -> {
-                List<HistoryEntry> entries = versioning.history(tx, subject);
-                if (entries.isEmpty()) {
-                    return retainedBeforeVersioning(tx, iri);
-                }
-                HistoryEntry last = entries.get(entries.size() - 1);
-                if (last.kind() != EntryKind.TOMBSTONE) {
-                    return Optional.<DeletedResource>empty();
-                }
-                List<Triple> statements = last.cid()
-                        .flatMap(cid -> versioning.readVersionByCID(tx, cid).map(graph -> graph.stream()
-                                .filter(triple -> triple.getSubject().equals(cid))
-                                .map(triple -> new Triple(iri, triple.getPredicate().getIRIString(),
-                                        toNode(triple.getObject())))
-                                .toList()))
-                        .orElse(List.of());
-                return Optional.of(DeletedResource.fromTombstone(iri, last.created().toString(),
-                        last.comment().orElse(null), statements));
-            });
+        return read(projectId, tx -> findDeleted(tx, iri));
+    }
+
+    /**
+     * {@link #findDeleted(ProjectId, String)} inside a transaction of {@link #read}.
+     *
+     * @param tx  the read transaction
+     * @param iri the resource's IRI; a blank-node reference yields empty
+     * @return the deleted resource, or empty if the resource is not currently deleted
+     */
+    public Optional<DeletedResource> findDeleted(DatasetTx tx, String iri) {
+        Objects.requireNonNull(tx, "tx");
+        Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return Optional.empty();
         }
+        IRI subject = new SimpleRdf().createIRI(iri);
+        List<HistoryEntry> entries = versioning.history(tx, subject);
+        if (entries.isEmpty()) {
+            return retainedBeforeVersioning(tx, iri);
+        }
+        HistoryEntry last = entries.get(entries.size() - 1);
+        if (last.kind() != EntryKind.TOMBSTONE) {
+            return Optional.empty();
+        }
+        List<Triple> statements = last.cid()
+                .flatMap(cid -> versioning.readVersionByCID(tx, cid).map(graph -> graph.stream()
+                        .filter(triple -> triple.getSubject().equals(cid))
+                        .map(triple -> new Triple(iri, triple.getPredicate().getIRIString(),
+                                toNode(triple.getObject())))
+                        .toList()))
+                .orElse(List.of());
+        return Optional.of(DeletedResource.fromTombstone(iri, last.created().toString(),
+                last.comment().orElse(null), statements));
     }
 
     /**
@@ -421,17 +527,31 @@ public final class StoreReader {
     public Optional<String> findDeletedByCode(ProjectId projectId, String code) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        String query = "SELECT DISTINCT ?holder ?s WHERE { GRAPH <" + VersionedWriteFunnel.RETAINED_CODES_GRAPH
+        try (DatasetHandle handle = acquire(projectId)) {
+            return findDeletedByCode(handle.sparqlQuery(), code);
+        }
+    }
+
+    /**
+     * {@link #findDeletedByCode(ProjectId, String)} over a given query endpoint - a transaction of
+     * {@link #read}.
+     *
+     * @param query the endpoint to ask, e.g. the read transaction
+     * @param code  the business code
+     * @return the IRI of the deleted resource (or of its retained code's record), or empty
+     */
+    public Optional<String> findDeletedByCode(SparqlQuery query, String code) {
+        Objects.requireNonNull(query, "query");
+        Objects.requireNonNull(code, "code");
+        String select = "SELECT DISTINCT ?holder ?s WHERE { GRAPH <" + VersionedWriteFunnel.RETAINED_CODES_GRAPH
                 + "> { ?holder <" + DCTERMS_IDENTIFIER + "> \"" + SparqlTerms.escape(code) + "\" }"
                 + " OPTIONAL { GRAPH <" + VersioningGraphs.HISTORY.getIRIString() + "> { ?s <"
                 + VocabVersioning.ENTRY.getIRIString() + "> ?holder } } }";
-        try (DatasetHandle handle = acquire(projectId)) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> row.getValue("s").or(() -> row.getValue("holder")).orElse(null))
-                    .filter(IRI.class::isInstance)
-                    .map(term -> ((IRI) term).getIRIString())
-                    .findFirst();
-        }
+        return query.select(select)
+                .map(row -> row.getValue("s").or(() -> row.getValue("holder")).orElse(null))
+                .filter(IRI.class::isInstance)
+                .map(term -> ((IRI) term).getIRIString())
+                .findFirst();
     }
 
     /**
