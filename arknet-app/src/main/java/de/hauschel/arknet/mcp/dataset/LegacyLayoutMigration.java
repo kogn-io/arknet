@@ -11,7 +11,10 @@ import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfContextRelationshipRepositoryFactory;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.mcp.version.ServerVersion;
 import de.hauschel.arknet.persistence.ChildFragments;
+import de.hauschel.arknet.persistence.MigrationBackup;
+import de.hauschel.arknet.persistence.StorageFolderBackup;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepository;
@@ -99,6 +102,13 @@ import org.slf4j.LoggerFactory;
  * earlier layout untouched, and {@link LegacyLayoutRefusingDatasetLifecycle} keeps refusing it.
  * A dataset without old graphs is left alone, so a second start does nothing. The reserved system
  * dataset of the project registry is outside the versioning and is never migrated.</p>
+ *
+ * <p><strong>Backed up first.</strong> A dataset found in the earlier layout is backed up through
+ * the {@link MigrationBackup} the migration was built with before anything in it changes; the
+ * daemon's migration takes a {@link StorageFolderBackup}, a copy of the dataset directory under the
+ * storage root. A backup that fails leaves the dataset unmigrated: the report says {@code FAILED}
+ * with the cause, the dataset keeps its earlier layout, and the guard refuses it. A dataset that
+ * needs no migration is not backed up.</p>
  */
 public final class LegacyLayoutMigration {
 
@@ -110,6 +120,7 @@ public final class LegacyLayoutMigration {
     private static final String PROVENANCE_GRAPH = "https://w3id.org/arknet/model/provenance";
     private static final String INVALIDATED_AT_TIME = "http://www.w3.org/ns/prov#invalidatedAtTime";
     private static final DatasetId SYSTEM_DATASET = new DatasetId(ProjectId.RESERVED_SYSTEM_DATASET);
+    private static final String BACKUP_STEP = "legacy layout migration (storage layout up to v0.12.0)";
 
     // A migration step carries the vocabulary of the layout it reads: every class and property it
     // recognises a stored resource, child, position or supertype by is spelled out below as the
@@ -227,17 +238,38 @@ public final class LegacyLayoutMigration {
 
     private final RDF rdf = new SimpleRdf();
     private final Map<String, VersionedWriteFunnel> funnelByType;
+    private final MigrationBackup backup;
 
     /**
      * @param funnelByType the funnel each resource type of {@link #RESOURCE_TYPES} is written
      *                     through, keyed by the type's label; every label must be present
+     * @param backup       the backup taken of a dataset before it is migrated
      */
-    LegacyLayoutMigration(Map<String, VersionedWriteFunnel> funnelByType) {
+    LegacyLayoutMigration(Map<String, VersionedWriteFunnel> funnelByType, MigrationBackup backup) {
         Objects.requireNonNull(funnelByType, "funnelByType");
+        this.backup = Objects.requireNonNull(backup, "backup");
         for (String type : RESOURCE_TYPES.keySet()) {
             Objects.requireNonNull(funnelByType.get(type), "no funnel for " + type);
         }
         this.funnelByType = Map.copyOf(funnelByType);
+    }
+
+    /**
+     * The daemon's migration over its storage root: every dataset is backed up as a
+     * {@link StorageFolderBackup} under {@link LockConflictReportingDatasetLifecycle#storageDir()}
+     * before it is migrated.
+     *
+     * <p>The daemon version recorded with each backup is {@code ARKNET_VERSION}, the variable the
+     * container image sets and {@code arknet.version} reads first, or {@link ServerVersion#UNKNOWN}
+     * without it.</p>
+     *
+     * @param store         the daemon's lifecycle over its storage root
+     * @param displayLocale the display-language preference for SHACL violation messages
+     * @return the migration
+     */
+    public static LegacyLayoutMigration over(LockConflictReportingDatasetLifecycle store, DisplayLocale displayLocale) {
+        Objects.requireNonNull(store, "store");
+        return over(store, displayLocale, new StorageFolderBackup(store.storageDir(), daemonVersion()));
     }
 
     /**
@@ -247,11 +279,14 @@ public final class LegacyLayoutMigration {
      * @param lifecycle     the lifecycle the funnels are built over; the migration itself only
      *                      writes inside the transaction it opens
      * @param displayLocale the display-language preference for SHACL violation messages
+     * @param backup        the backup taken of a dataset before it is migrated
      * @return the migration
      */
-    public static LegacyLayoutMigration over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
+    public static LegacyLayoutMigration over(DatasetLifecycle lifecycle, DisplayLocale displayLocale,
+            MigrationBackup backup) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
+        Objects.requireNonNull(backup, "backup");
         VersionedWriteFunnel requirements = KognioRdfRequirementRepositoryFactory.buildFunnel(lifecycle, displayLocale);
         VersionedWriteFunnel actors = KognioRdfActorRepositoryFactory.buildFunnel(lifecycle, displayLocale);
         Map<String, VersionedWriteFunnel> funnels = new HashMap<>();
@@ -265,18 +300,24 @@ public final class LegacyLayoutMigration {
         funnels.put("architecture decision", KognioRdfAdrRepositoryFactory.buildFunnel(lifecycle, displayLocale));
         funnels.put("actor", actors);
         funnels.put("role", actors);
-        return new LegacyLayoutMigration(funnels);
+        return new LegacyLayoutMigration(funnels, backup);
     }
 
     /**
      * Migrates every dataset {@code lifecycle} knows except the system dataset, logging one summary
-     * per migrated or failed dataset and one line per dropped item.
+     * per migrated or failed dataset and one line per dropped item. Removes the remains of an
+     * interrupted earlier backup first.
      *
      * @param lifecycle the unguarded lifecycle of the storage root
      * @return one report per dataset, in dataset-id order
      */
     public List<LegacyLayoutMigrationReport> migrateAll(DatasetLifecycle lifecycle) {
         Objects.requireNonNull(lifecycle, "lifecycle");
+        try {
+            backup.discardIncomplete();
+        } catch (RuntimeException e) {
+            LOG.warn("legacy layout migration: cannot remove an interrupted backup: {}", describe(e));
+        }
         List<LegacyLayoutMigrationReport> reports = new ArrayList<>();
         lifecycle.list().stream()
                 .filter(id -> !SYSTEM_DATASET.equals(id))
@@ -298,17 +339,37 @@ public final class LegacyLayoutMigration {
         if (SYSTEM_DATASET.equals(id)) {
             return LegacyLayoutMigrationReport.notNeeded(id.value());
         }
-        LegacyLayoutMigrationReport report;
+        LegacyLayoutMigrationReport report = backedUpMigration(lifecycle, id);
+        log(report);
+        return report;
+    }
+
+    private LegacyLayoutMigrationReport backedUpMigration(DatasetLifecycle lifecycle, DatasetId id) {
         try (DatasetHandle handle = lifecycle.acquire(id)) {
             if (!LegacyLayoutRefusingDatasetLifecycle.holdsLegacyLayout(handle.sparqlQuery())) {
                 return LegacyLayoutMigrationReport.notNeeded(id.value());
             }
-            report = handle.transactor().inTransaction(tx -> migrate(tx, id.value()));
         } catch (RuntimeException e) {
-            report = LegacyLayoutMigrationReport.failed(id.value(), describe(e));
+            return LegacyLayoutMigrationReport.failed(id.value(), describe(e));
         }
-        log(report);
-        return report;
+        try {
+            MigrationBackup.Copy copy = backup.backUp(lifecycle, id, List.of(BACKUP_STEP));
+            LOG.info("legacy layout migration: dataset '{}': backed up to {} ({} bytes)",
+                    id.value(), copy.directory(), copy.bytes());
+        } catch (RuntimeException e) {
+            return LegacyLayoutMigrationReport.failed(id.value(),
+                    "not migrated, the backup before the migration failed: " + describe(e));
+        }
+        try (DatasetHandle handle = lifecycle.acquire(id)) {
+            return handle.transactor().inTransaction(tx -> migrate(tx, id.value()));
+        } catch (RuntimeException e) {
+            return LegacyLayoutMigrationReport.failed(id.value(), describe(e));
+        }
+    }
+
+    private static String daemonVersion() {
+        String version = System.getenv("ARKNET_VERSION");
+        return version == null || version.isBlank() ? ServerVersion.UNKNOWN : version;
     }
 
     private LegacyLayoutMigrationReport migrate(DatasetTx tx, String dataset) {

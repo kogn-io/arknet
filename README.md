@@ -513,8 +513,21 @@ carries the report under `legacy layout migration`: one summary line per project
 gate, reshaped criteria) and one line per listed item. A project whose
 migration fails for a technical reason is rolled back to its old layout, its
 tools refuse it with a message pointing to that log, and the next start retries. The
-registry's system dataset is not versioned and not migrated. Keep a copy of the
-storage directory before the first start of a version that migrates.
+registry's system dataset is not versioned and not migrated.
+
+Before it changes a project, the daemon backs it up: a byte-exact copy of the
+project's directory in `.arknet-backups/` inside the storage directory
+(`~/.arknet/rdf/.arknet-backups/` with the documented mount, `/data/rdf/.arknet-backups/`
+inside the container), one directory per project and backup time, with a
+`backup.txt` next to the copy naming the project id, the daemon version and the
+due steps. The log names the path and size of each backup. A project whose
+backup fails (disk full, no write permission) is not migrated and is refused
+until a later start backs it up and migrates it; the log says why. Only a
+project with a migration due is backed up. To restore one, stop the daemon,
+replace the project's directory in the storage directory with the copy, and
+start the previous image or wait for a corrected one - a daemon that still
+carries the migration migrates the restored copy again. arknet never deletes a
+backup; delete old ones by hand.
 
 The formerly tolerated file-based `arknet_*` tools
 (`arknet_load`/`arknet_validate`/`arknet_query`/`arknet_generate` from a `.ttl`)

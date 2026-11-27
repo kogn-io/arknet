@@ -23,6 +23,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.ArknetMcpConfiguration;
 import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.StorageFolderBackup;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.uc.application.UseCaseService;
@@ -265,7 +266,8 @@ class LegacyLayoutMigrationReleaseDumpTest {
     private LegacyLayoutMigrationReport migrateDirectly() {
         DatasetLifecycle raw = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
         try {
-            return LegacyLayoutMigration.over(raw, new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH))
+            return LegacyLayoutMigration.over(raw, new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH),
+                            new StorageFolderBackup(storageDir, "test"))
                     .migrate(raw, DATASET);
         } finally {
             raw.shutDownAll();

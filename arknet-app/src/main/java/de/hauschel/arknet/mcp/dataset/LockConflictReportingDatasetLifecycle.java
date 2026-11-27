@@ -118,6 +118,11 @@ public final class LockConflictReportingDatasetLifecycle implements DatasetLifec
         this.isLockConflict = Objects.requireNonNull(isLockConflict, "isLockConflict");
     }
 
+    /** @return the storage directory the wrapped lifecycle keeps its datasets in */
+    public Path storageDir() {
+        return storageDir;
+    }
+
     @Override
     public DatasetHandle acquire(DatasetId id) {
         Objects.requireNonNull(id, "id");
