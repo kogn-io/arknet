@@ -191,6 +191,8 @@ public final class Comparison {
             assertAccepted("core", coreFailure);
             assertAccepted("submit", submitFailure);
             assertNotEquals(coreAfter, submitAfter, () -> "deviation " + deviation + " no longer occurs");
+            assertEquals(coreAfter.resourcesPerType(), submitAfter.resourcesPerType(), () -> "deviation "
+                    + deviation.id() + " cannot cover a resource only one side holds; resources per type differ");
             List<String> shared = coreAfter.statements().stream()
                     .filter(deviation.dropped())
                     .filter(submitAfter.statements()::contains)

@@ -123,8 +123,8 @@ public final class ComparisonStore implements AutoCloseable {
             String last = history.isEmpty() ? "none" : history.getLast().tombstone() ? "tombstone" : "version";
             ledger.add(LEDGER + name + " history " + history.size() + " last " + last);
             if (name.startsWith(CanonicalGraph.CODE_SCHEME)) {
-                ledger.add(LEDGER + name + " retained "
-                        + reader.findDeletedByCode(project, name.substring(CanonicalGraph.CODE_SCHEME.length())).isPresent());
+                String code = name.substring(CanonicalGraph.CODE_SCHEME.length());
+                ledger.add(LEDGER + name + " retained " + reader.findDeletedByCode(project, code).isPresent());
             }
         });
         return graph.plus(ledger);

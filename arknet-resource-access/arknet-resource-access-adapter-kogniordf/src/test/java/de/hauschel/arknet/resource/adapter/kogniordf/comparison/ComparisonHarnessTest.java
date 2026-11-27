@@ -282,6 +282,45 @@ class ComparisonHarnessTest {
 
         // then
         assertEquals(single.statements().size() + 4, doubled.statements().size(), doubled::toString);
+        assertTrue(doubled.statements().stream().anyMatch(line -> line.contains("}~2 ")), doubled::toString);
+    }
+
+    @Test
+    void aSubjectWithTwoCodesFailsTheCanonicalGraph() {
+        // given
+        List<Triple> triples = List.of(
+                new Triple(ID + "a1", CanonicalGraph.IDENTIFIER, literal("FR-1")),
+                new Triple(ID + "a1", CanonicalGraph.IDENTIFIER, literal("FR-2")));
+
+        // when / then
+        AssertionError failure = assertThrows(AssertionError.class,
+                () -> CanonicalGraph.of(triples, KognioRdfResourceRepositoryFactory.schema()));
+        assertTrue(failure.getMessage().contains("carries two codes"), failure.getMessage());
+    }
+
+    @Test
+    void aGraphDeviationDoesNotHideAResourceOnlyOneSideHolds() {
+        // given: the relationship type is a listed difference; submit also writes a second relationship
+        Comparison comparison = new Comparison(store, DeviationList.of(Deviation.inGraph("T-4", "harness test",
+                "the relationship type differs",
+                line -> line.contains(" " + ArkdddVocabulary.RELATIONSHIP_TYPE_PROPERTY + " "))));
+        ProjectPair pair = store.pair("extra-relationship");
+        Given<BoundedContext> upstream = pair.given(project -> addContext(project, "Ordering"));
+        Given<BoundedContext> downstream = pair.given(project -> addContext(project, "Billing"));
+        Node sharedKernel = Node.typed(ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE)
+                .with(ArkdddVocabulary.UPSTREAM, Document.iri(upstream.submit().id().value().value()))
+                .with(ArkdddVocabulary.DOWNSTREAM, Document.iri(downstream.submit().id().value().value()))
+                .with(ArkdddVocabulary.RELATIONSHIP_TYPE_PROPERTY, Document.iri(ArkdddVocabulary.SHARED_KERNEL));
+
+        // when
+        Comparison.Outcome outcome = comparison.run(pair,
+                project -> contexts.linkContext(project, upstream.core().code(), downstream.core().code(),
+                        RelationshipType.PARTNERSHIP),
+                document().create(sharedKernel).create(sharedKernel));
+
+        // then
+        AssertionError failure = assertThrows(AssertionError.class, () -> outcome.assertDeviation("T-4", null));
+        assertTrue(failure.getMessage().contains("resources per type"), failure.getMessage());
     }
 
     @Test

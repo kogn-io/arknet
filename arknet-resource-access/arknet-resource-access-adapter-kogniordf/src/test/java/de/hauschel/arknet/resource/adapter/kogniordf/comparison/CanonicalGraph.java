@@ -4,6 +4,7 @@
 package de.hauschel.arknet.resource.adapter.kogniordf.comparison;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -70,10 +71,13 @@ public final class CanonicalGraph {
 
     private final Set<String> statements;
     private final Map<String, String> resources;
+    private final Map<String, Long> resourcesPerType;
 
-    private CanonicalGraph(final Set<String> statements, final Map<String, String> resources) {
+    private CanonicalGraph(final Set<String> statements, final Map<String, String> resources,
+            final Map<String, Long> resourcesPerType) {
         this.statements = Set.copyOf(statements);
         this.resources = Map.copyOf(resources);
+        this.resourcesPerType = Map.copyOf(resourcesPerType);
     }
 
     /**
@@ -96,7 +100,17 @@ public final class CanonicalGraph {
         Set<String> statements = triples.stream()
                 .map(triple -> render(triple, names))
                 .collect(Collectors.toCollection(TreeSet::new));
-        return new CanonicalGraph(statements, resources);
+        return new CanonicalGraph(statements, resources, countPerType(triples, resources.values()));
+    }
+
+    /**
+     * How many resources - not children - of each type this graph holds, keyed by their sorted
+     * {@code rdf:type} values; unaffected by any statement a deviation drops.
+     *
+     * @return resource count by type
+     */
+    Map<String, Long> resourcesPerType() {
+        return resourcesPerType;
     }
 
     /**
@@ -118,7 +132,7 @@ public final class CanonicalGraph {
     CanonicalGraph plus(final Set<String> more) {
         Set<String> all = new TreeSet<>(statements);
         all.addAll(more);
-        return new CanonicalGraph(all, resources);
+        return new CanonicalGraph(all, resources, resourcesPerType);
     }
 
     /**
@@ -139,7 +153,7 @@ public final class CanonicalGraph {
      */
     public CanonicalGraph without(final Predicate<String> dropped) {
         return new CanonicalGraph(statements.stream().filter(dropped.negate())
-                .collect(Collectors.toCollection(TreeSet::new)), resources);
+                .collect(Collectors.toCollection(TreeSet::new)), resources, resourcesPerType);
     }
 
     /**
@@ -250,6 +264,18 @@ public final class CanonicalGraph {
                 .map(triple -> triple.predicate() + " " + node(triple.object(), named))
                 .sorted()
                 .collect(Collectors.joining("; ")) + "}";
+    }
+
+    private static Map<String, Long> countPerType(final List<Triple> triples, final Collection<String> resources) {
+        Set<String> subjects = Set.copyOf(resources);
+        Map<String, Set<String>> types = new HashMap<>();
+        triples.stream()
+                .filter(triple -> TYPE.equals(triple.predicate()) && subjects.contains(triple.subject()))
+                .forEach(triple -> types.computeIfAbsent(triple.subject(), ignored -> new TreeSet<>())
+                        .add(((RdfNode.Resource) triple.object()).iri()));
+        return subjects.stream().collect(Collectors.groupingBy(
+                subject -> String.join(" ", types.getOrDefault(subject, Set.of())), TreeMap::new,
+                Collectors.counting()));
     }
 
     private static void assertOneToOne(final Map<String, String> names) {
