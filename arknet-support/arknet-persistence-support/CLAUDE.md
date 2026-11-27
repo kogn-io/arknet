@@ -68,6 +68,13 @@ Anders als jede andere Vokabular-Klasse dieses Moduls wird davon nichts geschrie
 Eigene arknet-Terme deklariert sie keine: PROV-O (`prov:Activity`/`SoftwareAgent`/`endedAtTime`/`wasAssociatedWith`/`used`), `owl:Ontology`/`owl:versionInfo` und `dcterms:created` decken es ab -- dieselbe Wiederverwendungs-vor-Deklaration-Regel, der `ArkprjVocabulary`s `DESCRIPTION` folgt, weshalb es zu dieser Klasse auch keine `.ttl`-Seite und keinen beidseitigen Architecture-Test gibt: es gibt keinen arknet-Term zu dokumentieren.
 Die PROV-IRIs stehen in der Klasse selbst: eine Envelope, die nie in ein Dataset gelangt, teilt mit dem Modell kein Vokabular.
 
+**Die Sicherung vor einer Migration.**
+`MigrationBackup` ist die Schnittstelle, ueber die eine Migration ein Projekt-Dataset sichert, bevor sie daran etwas aendert: aufgerufen einmal je Dataset, nachdem ein Schritt faellig ist und vor dem ersten Schritt; wirft sie (`MigrationBackupException`), wird das Dataset nicht migriert.
+`StorageFolderBackup` setzt sie als byte-genaue Kopie des Dataset-Verzeichnisses um: Dataset per `shutDown` schliessen (noch offen, also `STILL_LEASED`: keine Kopie), kopieren nach `<storage>/.arknet-backups/<Verzeichnisname>/<Zeitstempel UTC>/<Verzeichnisname>`, daneben `backup.txt` mit Projekt-ID, Daemon-Version, faelligen Schritten, Zeit und Rueckweg.
+Geschrieben wird unter `<Zeitstempel>.incomplete` und erst am Ende umbenannt; `discardIncomplete` entfernt solche Reste beim naechsten Lauf, eine fertige Sicherung loescht nichts automatisch.
+Der Ort liegt im Storage-Root, weil nur er sicher existiert, beschreibbar ist und einen Container ueberlebt (im Image `/data/rdf`); der Punkt im Namen liegt ausserhalb des Base64url-Alphabets, darum uebergeht die Bibliothek den Ordner beim Auflisten.
+Den Verzeichnisnamen eines Datasets (Projekt-ID, UTF-8, Base64url ohne Padding) nennt der neutrale Port nicht; `directoryName` wiederholt die Kodierung der Bibliothek, `StorageFolderBackupTest` haelt beide gleich und prueft gegen einen echten `NativeStore`, dass die Kopie eines geschlossenen Datasets mit denselben Daten oeffnet.
+
 ## Der typunabhaengige Lesepfad
 
 Neben dem Schreibpfad liegt hier der eine Lesepfad, der kein Modellwissen braucht, und zwar weil ihn mehr als ein Modul liest: die Composition Root fuer `store_overview`/`project_export`/`text_search`, der Out-Adapter von arknet-resource-access fuer `resource_get`/`resource_history` (`KognioRdfResourceReader`) und der Out-Adapter des Bounded Context Modellanalyse fuer seine Auswertungen und `store_check`.

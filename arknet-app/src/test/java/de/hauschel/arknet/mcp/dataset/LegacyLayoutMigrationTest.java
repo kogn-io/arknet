@@ -29,6 +29,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.ArknetMcpConfiguration;
 import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.StorageFolderBackup;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
 import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
@@ -68,6 +69,9 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.versioning.PublishState;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
@@ -76,6 +80,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -571,7 +576,102 @@ class LegacyLayoutMigrationTest {
         }
     }
 
+    @Test
+    void theDaemonBacksTheDatasetUpInItsEarlierLayoutBeforeItMigrates(@TempDir Path restoreDir) throws Exception {
+        legacyStore();
+        DatasetLifecycle raw = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+        long legacy;
+        try {
+            legacy = tripleCount(raw, DATASET);
+        } finally {
+            raw.shutDownAll();
+        }
+
+        inDaemon(context -> {
+        });
+
+        Path datasetBackups = storageDir.resolve(StorageFolderBackup.BACKUP_DIRECTORY)
+                .resolve(StorageFolderBackup.directoryName(DATASET));
+        List<Path> backups;
+        try (Stream<Path> entries = Files.list(datasetBackups)) {
+            backups = entries.toList();
+        }
+        assertThat(backups).hasSize(1);
+        assertThat(Files.readString(backups.get(0).resolve(StorageFolderBackup.NOTE_FILE)))
+                .contains("project id: " + DATASET.value());
+        Path copy = backups.get(0).resolve(StorageFolderBackup.directoryName(DATASET));
+        try (Stream<Path> tree = Files.walk(copy)) {
+            for (Path entry : tree.toList()) {
+                Path to = restoreDir.resolve(StorageFolderBackup.directoryName(DATASET))
+                        .resolve(copy.relativize(entry).toString());
+                if (Files.isDirectory(entry)) {
+                    Files.createDirectories(to);
+                } else {
+                    Files.copy(entry, to);
+                }
+            }
+        }
+        DatasetLifecycle restored = KognioRdfRequirementRepositoryFactory.persistentLifecycle(restoreDir);
+        try {
+            assertThat(tripleCount(restored, DATASET)).isEqualTo(legacy);
+            try (DatasetHandle handle = restored.acquire(DATASET)) {
+                assertThat(LegacyLayoutRefusingDatasetLifecycle.holdsLegacyLayout(handle.sparqlQuery())).isTrue();
+            }
+        } finally {
+            restored.shutDownAll();
+        }
+    }
+
+    @Test
+    void aDatasetWhoseBackupFailsIsNotMigratedAndStaysRefused() throws Exception {
+        legacyStore();
+        Files.writeString(storageDir.resolve(StorageFolderBackup.BACKUP_DIRECTORY), "not a directory");
+        DatasetLifecycle raw = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+        try {
+            long legacy = tripleCount(raw, DATASET);
+
+            LegacyLayoutMigrationReport report = migration(raw).migrate(raw, DATASET);
+
+            assertThat(report.outcome()).isEqualTo(LegacyLayoutMigrationReport.Outcome.FAILED);
+            assertThat(report.failure()).contains("backup").contains(StorageFolderBackup.BACKUP_DIRECTORY);
+            assertThat(tripleCount(raw, DATASET)).isEqualTo(legacy);
+            try (DatasetHandle handle = raw.acquire(DATASET)) {
+                assertThat(LegacyLayoutRefusingDatasetLifecycle.holdsLegacyLayout(handle.sparqlQuery())).isTrue();
+            }
+        } finally {
+            raw.shutDownAll();
+        }
+    }
+
+    @Test
+    void aDatasetThatNeedsNoMigrationIsNotBackedUp() {
+        legacyStore();
+        DatasetLifecycle raw = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+        try {
+            migration(raw).migrate(raw, DATASET);
+            Path datasetBackups = storageDir.resolve(StorageFolderBackup.BACKUP_DIRECTORY)
+                    .resolve(StorageFolderBackup.directoryName(DATASET));
+            long first = countEntries(datasetBackups);
+
+            LegacyLayoutMigrationReport second = migration(raw).migrate(raw, DATASET);
+
+            assertThat(second.outcome()).isEqualTo(LegacyLayoutMigrationReport.Outcome.NOT_NEEDED);
+            assertThat(first).isEqualTo(1);
+            assertThat(countEntries(datasetBackups)).isEqualTo(first);
+        } finally {
+            raw.shutDownAll();
+        }
+    }
+
     // --- fixture ------------------------------------------------------------------------------
+
+    private static long countEntries(Path directory) {
+        try (Stream<Path> entries = Files.list(directory)) {
+            return entries.count();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
 
     /**
      * Writes one resource of every type, with every child kind, through this version's services,
@@ -709,8 +809,9 @@ class LegacyLayoutMigrationTest {
         });
     }
 
-    private static LegacyLayoutMigration migration(DatasetLifecycle raw) {
-        return LegacyLayoutMigration.over(raw, new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH));
+    private LegacyLayoutMigration migration(DatasetLifecycle raw) {
+        return LegacyLayoutMigration.over(raw, new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH),
+                new StorageFolderBackup(storageDir, "test"));
     }
 
     private static List<String> resourceIris(DatasetLifecycle lifecycle) {
