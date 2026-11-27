@@ -5,10 +5,12 @@ package de.hauschel.arknet.resource.adapter.kogniordf.comparison;
 
 import static de.hauschel.arknet.resource.adapter.kogniordf.comparison.Document.document;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterAll;
@@ -23,6 +25,7 @@ import de.hauschel.arknet.bc.application.BoundedContextService;
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.ContextRelationship;
 import de.hauschel.arknet.bc.domain.ContextRelationshipNotFoundException;
 import de.hauschel.arknet.bc.domain.RelationshipType;
@@ -51,6 +54,9 @@ class ContextRelationshipComparisonTest {
     private static final String VISION = "Keeps the model consistent.";
     private static final String SHAPE_UPSTREAM = "must not be its 'arkddd:downstream'";
     private static final String ENGINE_NO_RESOURCE = "No resource found for id";
+    private static final String CORE_SAME_CONTEXT = "must not be the same bounded context";
+    /** The name suffix of the second of two context relationships of identical content. */
+    private static final String SECOND_RELATIONSHIP = CanonicalGraph.NO_CODE_MARK + "2";
 
     private static final DeviationList DEVIATIONS = DeviationList.of();
 
@@ -146,7 +152,8 @@ class ContextRelationshipComparisonTest {
                 createRelationship(context.submit(), context.submit(), ArkdddVocabulary.PARTNERSHIP));
 
         // then
-        outcome.assertBothReject(Rejection.core(RuntimeException.class, null), Rejection.submit(SHAPE_UPSTREAM));
+        outcome.assertBothReject(Rejection.core(IllegalArgumentException.class, CORE_SAME_CONTEXT),
+                Rejection.submit(SHAPE_UPSTREAM));
     }
 
     @Test
@@ -166,7 +173,7 @@ class ContextRelationshipComparisonTest {
                                 Document.iri(ArkdddVocabulary.PARTNERSHIP))));
 
         // then
-        outcome.assertBothReject(Rejection.core(RuntimeException.class, null),
+        outcome.assertBothReject(Rejection.core(BoundedContextNotFoundException.class, null),
                 Rejection.submit(ENGINE_NO_RESOURCE));
     }
 
@@ -214,12 +221,20 @@ class ContextRelationshipComparisonTest {
 
         // then
         assertThrows(AssertionError.class, outcome::assertSameGraph);
-        assertEquals(before, store.graph(pair.core()), "the core links an existing triple again");
-        assertNotEquals(store.graph(pair.core()), store.graph(pair.submit()));
-        Map<String, Long> coreResources = store.graph(pair.core()).resourcesPerType();
-        Map<String, Long> submitResources = store.graph(pair.submit()).resourcesPerType();
+        CanonicalGraph coreGraph = store.graph(pair.core());
+        CanonicalGraph submitGraph = store.graph(pair.submit());
+        assertEquals(before, coreGraph, "the core links an existing triple again");
+        Map<String, Long> coreResources = coreGraph.resourcesPerType();
+        Map<String, Long> submitResources = submitGraph.resourcesPerType();
         assertEquals(1L, coreResources.get(ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE));
         assertEquals(2L, submitResources.get(ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE));
+        assertTrue(submitGraph.statements().containsAll(coreGraph.statements()), "submit keeps every core statement");
+        List<String> onlySubmit = submitGraph.statements().stream()
+                .filter(line -> !coreGraph.statements().contains(line))
+                .toList();
+        assertFalse(onlySubmit.isEmpty(), "submit writes a second relationship");
+        assertTrue(onlySubmit.stream().allMatch(line -> line.contains(SECOND_RELATIONSHIP)),
+                () -> "submit differs beyond the second relationship: " + onlySubmit);
     }
 
     private static Document createRelationship(final BoundedContext upstream, final BoundedContext downstream,

@@ -54,6 +54,7 @@ class TermComparisonTest {
     private static final String SKOS = "http://www.w3.org/2004/02/skos/core#";
     private static final String PREF_LABEL = SKOS + "prefLabel";
     private static final String IN_SCHEME = SKOS + "inScheme";
+    private static final String ENGINE_HOLDS_NO = "holds no";
     private static final String FIRST_TERM = CanonicalGraph.CODE_SCHEME + "TERM-1";
     private static final String SECOND_TERM = CanonicalGraph.CODE_SCHEME + "TERM-2";
 
@@ -295,7 +296,7 @@ class TermComparisonTest {
                 document().removeFrom(iri(second.submit()), ArkreqVocabulary.RELATED, Document.iri(iri(first.submit()))));
 
         // then
-        outcome.assertDeviation("G-10", Rejection.submit("related"));
+        outcome.assertDeviation("G-10", Rejection.submit(ENGINE_HOLDS_NO));
     }
 
     @Test
@@ -399,7 +400,7 @@ class TermComparisonTest {
 
         // then
         outcome.assertBothReject(Rejection.core(TermNotRelatedException.class, null),
-                Rejection.submit("related"));
+                Rejection.submit(ENGINE_HOLDS_NO));
     }
 
     @Test

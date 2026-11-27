@@ -5,8 +5,6 @@ package de.hauschel.arknet.resource.adapter.kogniordf.comparison;
 
 import static de.hauschel.arknet.resource.adapter.kogniordf.comparison.Document.document;
 import static de.hauschel.arknet.resource.adapter.kogniordf.comparison.Document.text;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -19,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.io.TempDir;
 
+import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfContextRelationshipRepositoryFactory;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfTermLookup;
@@ -53,7 +52,7 @@ import de.hauschel.arknet.ul.domain.Term;
  * (kogn-io/arknet#744).
  *
  * <p>Every case is without a subdomain: {@code submit} cannot write one ({@code rules-inventory.md}
- * section 6, X-1); the one case with a subdomain states that difference itself.</p>
+ * section 6, X-1); the one case with a subdomain lists that difference as a graph deviation.</p>
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class BoundedContextComparisonTest {
@@ -64,6 +63,8 @@ class BoundedContextComparisonTest {
 
     private static final String CORE_BLANK_NAME = "name must not be blank";
     private static final String SHAPE_NAME = "needs at least one 'arknet:name'";
+    private static final String SHAPE_DISJOINT_TERM = "must not carry the same term as both";
+    private static final String ENGINE_HOLDS_NO = "holds no";
 
     /**
      * G-9 (intended difference): linking a term the context already carries is idempotent in the
@@ -72,7 +73,22 @@ class BoundedContextComparisonTest {
     private static final Deviation LINKING_TWICE = Deviation.onlyCoreAccepts("G-9",
             "rules-inventory.md section 7; DA submit AddTo", "linking an already linked term: core idempotent");
 
-    private static final DeviationList DEVIATIONS = DeviationList.of(LINKING_TWICE);
+    private static final String CONTEXT = CanonicalGraph.CODE_SCHEME + "BC-1";
+    private static final String SUBDOMAIN = CONTEXT + "#" + KognioRdfBoundedContextRepository.SUBDOMAIN_FRAGMENT;
+
+    /**
+     * X-1: the core writes a subdomain as a fragment child of the context
+     * ({@code <context>#Subdomain}, typed {@code arkddd:Subdomain}, with its {@code arkddd:subdomainType})
+     * and links it by {@code arkddd:partOf}; {@code submit} has no way to create that node. The node
+     * is no resource type, so its name is {@code <context>#Subdomain}, not its content, and the
+     * difference stays narrow. To flip with kogn-io/arknet#745.
+     */
+    private static final Deviation SUBDOMAIN_ONLY_FROM_CORE = Deviation.inGraph("X-1",
+            "rules-inventory.md section 6", "the subdomain node and its partOf edge are written by the typed core only",
+            line -> line.startsWith(SUBDOMAIN + " ")
+                    || line.equals(CONTEXT + " " + ArkdddVocabulary.PART_OF_PROPERTY + " " + SUBDOMAIN));
+
+    private static final DeviationList DEVIATIONS = DeviationList.of(LINKING_TWICE, SUBDOMAIN_ONLY_FROM_CORE);
 
     @TempDir
     static Path storageRoot;
@@ -136,10 +152,8 @@ class BoundedContextComparisonTest {
     }
 
     /**
-     * X-1 as a finding of the harness: the document accepts {@code arkddd:partOf} with any value but
-     * cannot create the subdomain node the core derives, and the node's name is its content, which
-     * a graph deviation must not drop. The case therefore states the difference itself, and flips
-     * with kogn-io/arknet#745.
+     * X-1: the document cannot create the subdomain node the core derives, so the graphs differ by
+     * exactly that node and its {@code arkddd:partOf} edge.
      */
     @Test
     void addingABoundedContextWithASubdomainLeavesNoSubdomainThroughSubmit() {
@@ -155,11 +169,7 @@ class BoundedContextComparisonTest {
                         .with(ArkdddVocabulary.DOMAIN_VISION, text(VISION, EN))));
 
         // then
-        assertThrows(AssertionError.class, outcome::assertSameGraph);
-        assertTrue(store.graph(pair.core()).statements().stream()
-                .anyMatch(line -> line.contains(ArkdddVocabulary.SUBDOMAIN_TYPE_PROPERTY)), "the core writes it");
-        assertTrue(store.graph(pair.submit()).statements().stream()
-                .noneMatch(line -> line.contains(ArkdddVocabulary.SUBDOMAIN_TYPE_PROPERTY)), "submit cannot");
+        outcome.assertDeviation("X-1", null);
     }
 
     @Test
@@ -325,7 +335,7 @@ class BoundedContextComparisonTest {
 
         // then
         outcome.assertBothReject(Rejection.core(TermRelationConflictException.class, null),
-                Rejection.submit("delimitsTerm"));
+                Rejection.submit(SHAPE_DISJOINT_TERM));
     }
 
     @Test
@@ -344,7 +354,7 @@ class BoundedContextComparisonTest {
 
         // then
         outcome.assertBothReject(Rejection.core(TermNotLinkedException.class, null),
-                Rejection.submit("ubiquitousLanguageTerm"));
+                Rejection.submit(ENGINE_HOLDS_NO));
     }
 
     @Test
