@@ -152,7 +152,7 @@ public final class ResourceReadMcpTools {
         return handles;
     }
 
-    private static String locale(final String displayLocale, final ResolvedProject project) {
+    static String locale(final String displayLocale, final ResolvedProject project) {
         return displayLocale != null && !displayLocale.isBlank() ? displayLocale : project.defaultLanguage();
     }
 }

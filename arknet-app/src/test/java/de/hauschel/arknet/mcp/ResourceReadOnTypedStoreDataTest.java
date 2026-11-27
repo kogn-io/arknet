@@ -45,6 +45,7 @@ import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.resource.adapter.mcp.ResourceListMcpTools;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceReadMcpTools;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
@@ -69,6 +70,8 @@ class ResourceReadOnTypedStoreDataTest {
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     /** A requirement of an earlier layout: an IRI under the instance namespace, an untagged title. */
     private static final String LEGACY_FR = "https://w3id.org/arknet/model/requirement/FR-7";
+    /** A requirement of an earlier layout without a business code, label or any other field. */
+    private static final String LEGACY_NO_CODE = "https://w3id.org/arknet/model/requirement/no-code";
 
     @TempDir
     Path storageDir;
@@ -178,6 +181,45 @@ class ResourceReadOnTypedStoreDataTest {
             assertThat(byIri).isEqualTo(byCode);
             assertThat(byInstancePrefix).startsWith("# req:FR-7 NOT FOUND\n").contains("is not bound");
             assertThat(store.history("FR-7")).contains("## History (0)").contains("never published");
+        });
+    }
+
+    /**
+     * {@code resource_list} over a store holding typed data and data of an earlier layout: the older
+     * resources get a line each, with the type label and the handle standing in for what they lack.
+     */
+    @Test
+    void resourceListShowsTypedAndEarlierLayoutResourcesWithoutFailingOnTheLatter() {
+        onStore(store -> {
+            // given
+            store.addRequirement();
+            store.addTerm("Order", "A customer's request to buy.");
+            store.seed(graph -> {
+                graph.add(store.iri(LEGACY_FR), store.iri(RDF_TYPE), store.iri(ARKREQ + "FunctionalRequirement"));
+                graph.add(store.iri(LEGACY_FR), store.iri(DCTERMS + "identifier"), store.rdf.createLiteral("FR-7"));
+                graph.add(store.iri(LEGACY_FR), store.iri(DCTERMS + "title"), store.rdf.createLiteral("Old login"));
+                graph.add(store.iri(LEGACY_NO_CODE), store.iri(RDF_TYPE),
+                        store.iri(ARKREQ + "FunctionalRequirement"));
+            });
+
+            // when
+            String requirements = store.list("Requirement", null, null, null);
+            String proposed = store.list("arkreq:Requirement", "Proposed", null, null);
+            String everyType = store.list(null, null, null, null);
+            String full = store.list("Requirement", null, true, null);
+
+            // then
+            assertThat(requirements).startsWith("# Resources 1-3 of 3, in code order\n")
+                    .contains("- FR-1 [Functional Requirement] \"Customer can order\"@en - Status: arkreq:Proposed"
+                            + " \"Proposed\"\n")
+                    .contains("- FR-7 [Functional Requirement] \"Old login\" [fallback: untagged]\n")
+                    .contains("- " + LEGACY_NO_CODE + " [Functional Requirement]\n")
+                    .doesNotContain("NOT SHOWN");
+            assertThat(proposed).startsWith("# Resources 1-1 of 1").contains("FR-1").doesNotContain("FR-7");
+            assertThat(everyType).contains("- FR-1 [", "- TERM-1 [").contains("of 4,");
+            assertThat(full).contains("# FR-1 [", "# FR-7 [", "## Fields").doesNotContain(" NOT FOUND");
+            assertThatThrownBy(() -> store.list(null, "Proposed", null, null))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("describe");
         });
     }
 
@@ -361,6 +403,10 @@ class ResourceReadOnTypedStoreDataTest {
 
         String get(final String handles) {
             return bean(ResourceReadMcpTools.class).resourceGet(null, handles, null, null, anchor);
+        }
+
+        String list(final String type, final String status, final Boolean full, final Integer offset) {
+            return bean(ResourceListMcpTools.class).resourceList(null, type, status, full, offset, null, anchor);
         }
 
         String history(final String handle) {
