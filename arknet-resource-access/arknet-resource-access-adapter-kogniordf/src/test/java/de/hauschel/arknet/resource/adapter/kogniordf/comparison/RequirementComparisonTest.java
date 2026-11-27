@@ -107,9 +107,9 @@ class RequirementComparisonTest {
 
     /** What differs on purpose: the core links a target the requirement already has idempotently, submit rejects it. */
     private static final DeviationList DEVIATIONS = DeviationList.of(
-            Deviation.onlyCoreAccepts("G-9a", "docs/rules-inventory.md section 2 (usesTerm)",
+            Deviation.onlyCoreAccepts("G-9a", "docs/rules-inventory.md section 1 (usesTerm)",
                     "linking a term the requirement already uses is idempotent in the core, rejected by submit"),
-            Deviation.onlyCoreAccepts("G-9b", "docs/rules-inventory.md section 5 (constrainedBy)",
+            Deviation.onlyCoreAccepts("G-9b", "docs/rules-inventory.md section 1 (constrainedBy)",
                     "linking a constraint the requirement already has is idempotent in the core, rejected by "
                             + "submit"));
 

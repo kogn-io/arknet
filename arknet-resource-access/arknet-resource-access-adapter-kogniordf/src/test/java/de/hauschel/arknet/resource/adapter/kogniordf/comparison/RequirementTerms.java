@@ -8,7 +8,7 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
 /**
  * The requirement terms {@code ArkreqVocabulary} does not carry as constants (rationale, priority,
  * status, quality category and the individuals of the two value sets), derived from the namespace
- * of a constant it does carry, so an edit of that namespace in kogn-io/arknet#745 reaches them too.
+ * of a constant it does carry, so the namespace is named once.
  * A rename of a local name must be repeated here until the vocabulary holds these terms.
  */
 final class RequirementTerms {
