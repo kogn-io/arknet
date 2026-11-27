@@ -15,7 +15,6 @@ import java.util.Set;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.persistence.HandleResolver;
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.persistence.RdfNode;
 import de.hauschel.arknet.persistence.StoreResource;
@@ -210,7 +209,8 @@ public final class DigestRenderer {
     /**
      * Every {@code dcterms:identifier} lexical form carried by more than one resource in
      * {@code snapshot} - printing one of those as a handle would promise a
-     * {@code resource_get} drill-down that {@link HandleResolver} rejects as ambiguous.
+     * {@code resource_get} drill-down that the bare-code rule of {@code resource_get} rejects as
+     * ambiguous (a code held by several resources names none of them).
      */
     private static Set<String> ambiguousIdentifiers(StoreSnapshot snapshot) {
         Map<String, Integer> counts = new HashMap<>();

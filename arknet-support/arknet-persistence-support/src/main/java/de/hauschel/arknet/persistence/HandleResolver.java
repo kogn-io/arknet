@@ -15,9 +15,12 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p>Extracted out of {@code StoreReportTools} so {@code impact_analysis} - one of the five
  * traceability tools in package {@code de.hauschel.arknet.analysis.adapter.mcp} ({@code trace_matrix},
  * {@code orphan_check}, {@code impact_analysis}, {@code role_usecase_matrix},
- * {@code term_cooccurrence}), and the only one of them that takes a resource handle - shares
- * the exact same handle contract {@code resource_get} uses, instead of a second, drifting
- * implementation growing next to it.</p>
+ * {@code term_cooccurrence}), and the only one of them that takes a resource handle - has one
+ * resolver of its own instead of a copy inside the tool. {@code resource_get} no longer uses this
+ * class: it resolves through the resource-access core ({@code ReadService}), which refuses
+ * blank-node references and unbound prefixes. For a bare business code both apply the same rule
+ * (unique {@code dcterms:identifier}, ambiguity rejected); for the other handle forms they may
+ * differ.</p>
  *
  * <p>Resolution order: (1) a blank-node reference ({@code "_:" + label}, as {@link StoreReader}
  * renders a store-first resource with no minted IRI - into {@code store_overview}'s

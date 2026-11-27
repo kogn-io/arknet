@@ -33,9 +33,9 @@ import de.hauschel.arknet.persistence.Prefixes;
  * <p>This is the driving adapter of the model-analysis hexagon (ADR-54): it reads nothing
  * itself, but calls {@link ReadTraceabilityGraph} and {@link ResolveResourceHandle}, which the
  * component's own store adapter serves over the published language of every other context. It
- * differs from {@code store_overview}/{@code resource_get} - which stay in the composition root
- * as its type-agnostic exception (ADR-55) - by traversing a graph rather than digesting a
- * snapshot or fetching a single resource. Query logic and rendering live in the isolated,
+ * differs from {@code store_overview} (which stays in the composition root as its type-agnostic
+ * exception, ADR-55) and from {@code resource_get} (component arknet-resource-access) by
+ * traversing a graph rather than digesting a snapshot or fetching single resources. Query logic and rendering live in the isolated,
  * unit-testable {@link TraceabilityGraph}/{@link TraceabilityRenderer}; this class only
  * orchestrates them and declares the {@code @McpTool} surface.</p>
  */
