@@ -50,10 +50,12 @@ Von den Klassen anderer Module darf nur die Composition Root sie nennen (Regel 1
   `KognioRdfResourceRepository` setzt `ResourceRepository` auf `VersionedWriteFunnel#writeAll` um.
   `TransitionConditions` prueft fuer `ResourceBatch#violations` eine Uebergangsbedingung und meldet jede Verletzung einzeln, gerendert von `ShaclWriteGate#violations`: die Shapes des Gates ohne jede Zieldeklaration, die Bedingung mit dem Fokusknoten als einzigem Ziel, dieselben Axiome, Reasoning und Anzeigesprache wie das Gate.
   Fuer Tests mit eigenen Regeldaten nimmt `over` paketintern Shapes und Ontologien direkt statt aus den Indizes.
-  `KognioRdfHandleLookup` (aus `handles`) setzt `HandleLookup` mit dem `HandleResolver` aus `arknet-persistence-support` um, demselben, den `resource_get` und `impact_analysis` nutzen; es laesst nur einen nackten Code durch und lehnt einen Handle mit `:`, `/` oder `#` ab, weil der Resolver Praefixnamen, IRIs und Blank-Node-Namen ungeprueft zurueckgaebe.
+  `KognioRdfHandleLookup` (aus `handles`) setzt `HandleLookup` mit dem `HandleResolver` aus `arknet-persistence-support` um, demselben, den `impact_analysis` nutzt (fuer einen nackten Code dieselbe Regel, die auch `resource_get` anwendet); es laesst nur einen nackten Code durch und lehnt einen Handle mit `:`, `/` oder `#` ab, weil der Resolver Praefixnamen, IRIs und Blank-Node-Namen ungeprueft zurueckgaebe.
 - `arknet-resource-access-adapter-mcp`: treibender Adapter mit den MCP-Werkzeugen; sieht vom Core nur `..application.port.in..` und keine RDF-Technologie, haengt an `arknet-mcp-support` fuer die Anker-Aufloesung.
   `ResourceAccessMcpTools` traegt `describe` und `submit` und rendert, was die In-Ports liefern.
   Die Klasse registriert sich nicht selbst; ob ihre Werkzeuge angeboten werden, entscheidet die Composition Root, die sie als Bean an die Property `arknet.resource-access.enabled` (`ResourceAccessMcpTools.ENABLED_PROPERTY`) bindet.
+  `ResourceReadMcpTools` traegt `resource_get` (ein bis 50 Handles je Aufruf) und `resource_history` ueber `ReadResources`/`ResourceHistory`; `ReadingRenderer` macht daraus Text und nennt keinen Ressourcentyp.
+  Diese Bean haengt an keiner Property: die Werkzeuge ersetzen die gleichnamigen Lese-Werkzeuge, die jeder Daemon anbot, und schreiben nichts. Dadurch baut jeder Daemon beim Start das `ResourceSchema`; ein Fehler in den Regeldaten stoppt ihn, nicht nur einen mit gesetzter Property.
   Die Bedingung gehoert an diese Bean, nicht ins Modul: ausser `arknet-app` traegt kein Modul eine Spring-Konfiguration.
 
 ## submit

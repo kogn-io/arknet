@@ -51,14 +51,49 @@ class DigestRendererTest {
         assertThat(digest).contains("# Project sample-project -- 2 resources, 6 triples, 2 types");
         assertThat(digest).contains("# Prefixes:");
         assertThat(digest).contains("req:").contains(REQ);
-        assertThat(digest).contains("# Handle for resource_get: a CURIE, or a bare business id, or the"
-                + " full IRI when neither is unique. NEVER the label.");
+        assertThat(digest).contains("# Handle for resource_get: the bare business id, or the full IRI when it"
+                + " has none or shares it. NEVER the label.");
         assertThat(digest).contains("1 arkreq:FunctionalRequirement");
         assertThat(digest).contains("1 skos:Concept");
-        assertThat(digest).contains("req:FR-1 [FunctionalRequirement] \"Login\" Proposed MustHave"
-                + "  -> resource_get(\"req:FR-1\")");
-        assertThat(digest).contains("term:login [Concept] \"Anmeldung\"  -> resource_get(\"term:login\")");
+        assertThat(digest).contains(REQ + "FR-1 [FunctionalRequirement] \"Login\" Proposed MustHave"
+                + "  -> resource_get(\"" + REQ + "FR-1\")");
+        assertThat(digest).contains(TERM + "login [Concept] \"Anmeldung\"  -> resource_get(\"" + TERM + "login\")");
         assertThat(digest).contains("- no dangling references");
+    }
+
+    /**
+     * A resource of an earlier layout still sits at its old IRI under an instance prefix
+     * ({@code req:}) that {@code resource_get} does not expand; its business code is the handle
+     * the drill-down reads, not the prefixed name.
+     */
+    @Test
+    void handleOfALegacyIriIsItsCodeNotTheInstancePrefixedName() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(REQ + "FR-1", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(REQ + "FR-1", TITLE, "Login"),
+                lit(REQ + "FR-1", IDENTIFIER, "FR-1")));
+
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(digest).contains("FR-1 [FunctionalRequirement] \"Login\"  -> resource_get(\"FR-1\")");
+        assertThat(digest).doesNotContain("resource_get(\"req:FR-1\")");
+    }
+
+    /**
+     * A blank-node subject written past the tools has neither IRI nor a handle
+     * {@code resource_get} reads: its line names it without promising a drill-down.
+     */
+    @Test
+    void aBlankNodeSubjectGetsNoDrillDown() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri("_:b1", RDF_TYPE, SKOS + "Concept"),
+                lit("_:b1", SKOS + "prefLabel", "Lose")));
+
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(digest).contains("_:b1 [Concept] \"Lose\"  (blank node written past the tools: no handle"
+                + " resource_get reads)");
+        assertThat(digest).doesNotContain("resource_get(\"_:b1\")");
     }
 
     /**

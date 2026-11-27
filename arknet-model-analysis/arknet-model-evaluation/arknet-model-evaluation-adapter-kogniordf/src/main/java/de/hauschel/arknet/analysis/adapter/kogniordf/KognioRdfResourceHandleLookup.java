@@ -14,9 +14,10 @@ import de.hauschel.arknet.persistence.HandleResolver;
  * resolved from the prefix bindings alone, a bare business code costs one {@code
  * dcterms:identifier} query against the project's dataset.
  *
- * <p>Deliberately the same resolver the composition root's {@code resource_get} uses rather than
- * a second reading of the same contract, so {@code impact_analysis} and {@code resource_get}
- * never disagree about what {@code FR-1} means.</p>
+ * <p>A bare code follows the same rule {@code resource_get} applies (unique {@code
+ * dcterms:identifier}, ambiguity rejected), so {@code impact_analysis} and {@code resource_get}
+ * never disagree about what {@code FR-1} means. The other handle forms are not shared: this
+ * resolver also accepts a blank-node reference, which {@code resource_get} refuses.</p>
  */
 public final class KognioRdfResourceHandleLookup implements ResourceHandleLookup {
 

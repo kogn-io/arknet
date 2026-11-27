@@ -15,7 +15,6 @@ import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.adr.application.AdrService;
 import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
-import de.hauschel.arknet.adr.application.port.in.AdrDetail;
 import de.hauschel.arknet.adr.domain.ConsequenceType;
 import de.hauschel.arknet.adr.domain.NewConsequence;
 import de.hauschel.arknet.adr.domain.NewConsideredOption;
@@ -31,7 +30,6 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.ArknetMcpConfiguration;
 import de.hauschel.arknet.persistence.ContentGraph;
 import de.hauschel.arknet.persistence.VersionedWriteFunnel;
-import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.pr.shared.RequirementCode;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.ConstraintService;
@@ -52,6 +50,7 @@ import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.analysis.adapter.mcp.StoreCheckMcpTools;
 import de.hauschel.arknet.analysis.adapter.mcp.TraceabilityMcpTools;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
+import de.hauschel.arknet.resource.adapter.mcp.ResourceReadMcpTools;
 import de.hauschel.arknet.prj.application.ProjectService;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
@@ -184,19 +183,19 @@ class LegacyLayoutMigrationTest {
             assertThat(context).hasNotFailed();
             context.getBean(ProjectService.class).adopt(PROJECT, "Legacy migration",
                     new Anchor(anchor.toString(), AnchorType.PATH));
-            StoreReportTools tools = context.getBean(StoreReportTools.class);
+            ResourceReadMcpTools tools = context.getBean(ResourceReadMcpTools.class);
 
-            String get = tools.resourceGet(null, "FR-3", anchor.toString());
-            String history = tools.resourceHistory(null, "FR-3", anchor.toString());
+            String get = tools.resourceGet(null, "FR-3", null, null, anchor.toString());
+            String history = tools.resourceHistory(null, "FR-3", null, anchor.toString());
 
             for (String result : List.of(get, history)) {
-                assertThat(result).contains("# DELETED").contains("FR-3 stays taken")
+                assertThat(result).contains("DELETED\n").contains("FR-3 stays taken")
                         .contains("deleted before versioning").contains("content is not recorded")
-                        .doesNotContain("deleted at ").doesNotContain("# Last version")
-                        .doesNotContain("not found");
+                        .doesNotContain("deleted at ").doesNotContain("## Last version")
+                        .doesNotContain("NOT FOUND");
             }
-            assertThatThrownBy(() -> tools.resourceGet(null, "FR-99", anchor.toString()))
-                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("No resource found");
+            assertThat(tools.resourceGet(null, "FR-99", null, null, anchor.toString()))
+                    .startsWith("# FR-99 NOT FOUND\n");
         });
     }
 

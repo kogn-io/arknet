@@ -75,7 +75,7 @@ final class SearchHitResolver {
                 .filter(id -> storeReader.findByIdentifier(projectId, id).size() > 1)
                 .map(Set::of)
                 .orElse(Set.of());
-        String ownerHandle = ResourceHandles.of(prefixes, owner, ownerIdentifier, ambiguous);
+        String ownerHandle = ResourceHandles.of(owner, ownerIdentifier, ambiguous);
         return new SearchHit(ownerHandle, field, Optional.ofNullable(viaEdge), languageTag, snippet);
     }
 

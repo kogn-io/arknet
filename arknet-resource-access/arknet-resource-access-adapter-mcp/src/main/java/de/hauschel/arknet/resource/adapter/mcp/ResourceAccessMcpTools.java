@@ -10,8 +10,6 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
-import io.modelcontextprotocol.common.McpTransportContext;
-
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
@@ -137,17 +135,7 @@ public final class ResourceAccessMcpTools {
     }
 
     private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
-        String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
-        return projects.resolve(explicit != null ? explicit : contextAnchor(context));
-    }
-
-    private static String contextAnchor(final McpSyncRequestContext context) {
-        if (context == null) {
-            return null;
-        }
-        McpTransportContext transport = context.transportContext();
-        Object anchor = transport == null ? null : transport.get(ProjectResolver.ANCHOR_KEY);
-        return anchor == null ? null : anchor.toString();
+        return ProjectAnchors.resolve(projects, context, projectAnchor);
     }
 
     static String render(final ResourceCatalog catalog) {

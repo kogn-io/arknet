@@ -27,6 +27,7 @@ import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceAccessMcpTools;
+import de.hauschel.arknet.resource.adapter.mcp.ResourceReadMcpTools;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.application.port.in.ChangeExample;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
@@ -34,10 +35,11 @@ import de.hauschel.arknet.resource.application.port.out.ResourceRepository;
 import de.hauschel.arknet.ul.adapter.mcp.UbiquitousLanguageMcpTools;
 
 /**
- * The composition root's wiring of generic resource access: {@code describe} and {@code submit}
- * are offered only with {@value ResourceAccessMcpTools#ENABLED_PROPERTY}{@code =true}, and once
- * offered, a document taken from {@code describe} runs through {@code submit} and is read back
- * through the type-specific read tools.
+ * The composition root's wiring of generic resource access: {@code resource_get} and
+ * {@code resource_history} are offered by every daemon; {@code describe} and {@code submit} only
+ * with {@value ResourceAccessMcpTools#ENABLED_PROPERTY}{@code =true}, and once offered, a document
+ * taken from {@code describe} runs through {@code submit} and is read back through the
+ * type-specific read tools and through {@code resource_get}.
  *
  * <p>Which tools a context offers is asked the way the Spring AI annotation scanner asks it: every
  * bean with an {@link McpTool} method goes through {@link SyncMcpToolProvider}. The full MCP
@@ -82,6 +84,22 @@ class ResourceAccessWiringTest {
                             .as("the type-specific tools are offered, describe and submit are not")
                             .contains("req_add", "term_get")
                             .doesNotContain("describe", "submit");
+                });
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "true"})
+    void offersTheReadToolsOnceWhateverTheProperty(final String value) {
+        contextRunner
+                .withPropertyValues("arknet.rdf.storage=" + storageDir,
+                        ResourceAccessMcpTools.ENABLED_PROPERTY + "=" + value)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(ResourceReadMcpTools.class);
+                    assertThat(toolNames(context).stream()
+                            .filter(name -> name.equals("resource_get") || name.equals("resource_history")))
+                            .as("resource_get and resource_history are offered by exactly one bean")
+                            .containsExactlyInAnyOrder("resource_get", "resource_history");
                 });
     }
 
@@ -146,6 +164,8 @@ class ResourceAccessWiringTest {
             String code = code(created, "FR");
             assertThat(context.getBean(RequirementMcpTools.class).get(null, code, null, anchor))
                     .contains(code, EXAMPLE_TEXT);
+            assertThat(context.getBean(ResourceReadMcpTools.class).resourceGet(null, code, null, null, anchor))
+                    .contains("# " + code + " [", EXAMPLE_TEXT);
         });
     }
 
