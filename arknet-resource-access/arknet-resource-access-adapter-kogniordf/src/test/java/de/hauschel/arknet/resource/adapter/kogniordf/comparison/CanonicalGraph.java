@@ -67,6 +67,8 @@ public final class CanonicalGraph {
     private static final char POSITION = '@';
 
     private static final String TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    /** Marks the name of a resource without a code: {@code <type>{...}~<n>}. */
+    static final String NO_CODE_MARK = "}~";
     private static final String DUPLICATE = "~";
 
     private final Set<String> statements;

@@ -270,6 +270,30 @@ class ComparisonHarnessTest {
     }
 
     @Test
+    void aGraphDeviationDroppingAStatementOfAResourceWithoutACodeFailsTheCase() {
+        // given: the type differs, so the graphs differ by it; an entry that drops it would hide a
+        // second or a missing relationship just as well
+        Comparison comparison = new Comparison(store, DeviationList.of(Deviation.inGraph("T-5", "harness test",
+                "hides a context relationship",
+                line -> line.contains(" " + ArkdddVocabulary.RELATIONSHIP_TYPE_PROPERTY + " "))));
+        ProjectPair pair = store.pair("relationship-guard");
+        Given<BoundedContext> upstream = pair.given(project -> addContext(project, "Ordering"));
+        Given<BoundedContext> downstream = pair.given(project -> addContext(project, "Billing"));
+        Comparison.Outcome outcome = comparison.run(pair,
+                project -> contexts.linkContext(project, upstream.core().code(), downstream.core().code(),
+                        RelationshipType.PARTNERSHIP),
+                document().create(Node.typed(ArkdddVocabulary.CONTEXT_RELATIONSHIP_TYPE)
+                        .with(ArkdddVocabulary.UPSTREAM, Document.iri(upstream.submit().id().value().value()))
+                        .with(ArkdddVocabulary.DOWNSTREAM, Document.iri(downstream.submit().id().value().value()))
+                        .with(ArkdddVocabulary.RELATIONSHIP_TYPE_PROPERTY,
+                                Document.iri(ArkdddVocabulary.SHARED_KERNEL))));
+
+        // when / then
+        AssertionError failure = assertThrows(AssertionError.class, () -> outcome.assertDeviation("T-5", null));
+        assertTrue(failure.getMessage().contains("resource without a code"), failure.getMessage());
+    }
+
+    @Test
     void twoIdenticalResourcesWithoutACodeStayTwo() {
         // given
         List<Triple> one = relationship("urn:cr:a");
