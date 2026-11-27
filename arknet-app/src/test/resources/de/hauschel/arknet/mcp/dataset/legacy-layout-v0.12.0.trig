@@ -1,0 +1,592 @@
+# Frozen fixture of the legacy layout migration: a synthetic project written through the MCP
+# tools of arknet v0.12.0 (image ghcr.io/kogn-io/arknet:v0.12.0) and exported with project_export.
+# Every resource type with its children and edges, a superseded and a related decision, a German
+# variant, and a term deleted again (TERM-4), whose code survives only in the provenance graph.
+# It is the storage layout as that release wrote it; never regenerate it with a later version.
+
+
+<https://w3id.org/arknet/model/project-identity> {
+  <https://w3id.org/arknet/project/4b9f893b-8f34-4a34-8bd9-ee9d5a8e1eae> a <https://w3id.org/arknet/project#Project>;
+    <http://purl.org/dc/terms/identifier> "legacy-fixture";
+    <https://w3id.org/arknet/project#anchor> <https://w3id.org/arknet/anchor/fbc587cfa6061fa92bb9521f6b4350924e94a703ba602f134abaf4db4085c424> .
+  
+  <https://w3id.org/arknet/anchor/fbc587cfa6061fa92bb9521f6b4350924e94a703ba602f134abaf4db4085c424>
+    a <https://w3id.org/arknet/project#Anchor>;
+    <https://w3id.org/arknet/project#anchorValue> "/fixture/legacy-v0-12-0";
+    <https://w3id.org/arknet/project#anchorType> <https://w3id.org/arknet/project#PathAnchor> .
+}
+
+<https://w3id.org/arknet/model/ubiquitous-language> {
+  <https://w3id.org/arknet/id/75db2185-7cd7-417d-a1e2-6d971906ef27> a <http://www.w3.org/2004/02/skos/core#Concept>;
+    <http://purl.org/dc/terms/identifier> "TERM-1";
+    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Parcel"@en;
+    <http://www.w3.org/2004/02/skos/core#definition> "A sealed package handed over for delivery."@en,
+      "Ein versiegeltes Paket, das zur Zustellung uebergeben wird."@de .
+  
+  <https://w3id.org/arknet/model/glossary> a <http://www.w3.org/2004/02/skos/core#ConceptScheme> .
+  
+  <https://w3id.org/arknet/id/2bd1e6d6-ae3a-4692-a83c-486af9b790d2> a <http://www.w3.org/2004/02/skos/core#Concept>;
+    <http://purl.org/dc/terms/identifier> "TERM-2";
+    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Courier"@en;
+    <http://www.w3.org/2004/02/skos/core#definition> "A person who carries parcels to their recipients."@en .
+  
+  <https://w3id.org/arknet/id/2f75031c-504e-40c0-9214-5191a4f70341> a <http://www.w3.org/2004/02/skos/core#Concept>;
+    <http://purl.org/dc/terms/identifier> "TERM-3";
+    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Express Parcel"@en;
+    <http://www.w3.org/2004/02/skos/core#definition> "A parcel delivered on the same day."@en;
+    <http://www.w3.org/2004/02/skos/core#broader> <https://w3id.org/arknet/id/75db2185-7cd7-417d-a1e2-6d971906ef27>;
+    <http://www.w3.org/2004/02/skos/core#related> <https://w3id.org/arknet/id/2bd1e6d6-ae3a-4692-a83c-486af9b790d2> .
+}
+
+<https://w3id.org/arknet/model/provenance> {
+  <https://w3id.org/arknet/id/75db2185-7cd7-417d-a1e2-6d971906ef27> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/324ded33-c57e-44d8-88bb-1653bbaa299e> .
+  
+  <https://w3id.org/arknet/activity/4f8fd458-e405-4ffd-8ebf-92623cc27fe4> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/9cd19f83-02e7-470b-b602-edd70d4363fe> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/75db2185-7cd7-417d-a1e2-6d971906ef27>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/4f8fd458-e405-4ffd-8ebf-92623cc27fe4>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:13:56.011291770Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/2bd1e6d6-ae3a-4692-a83c-486af9b790d2> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/5592026a-57e0-4b65-ac6d-153e57329a6f> .
+  
+  <https://w3id.org/arknet/activity/b4fee7b5-0aba-41b6-9fdc-388d3ddbae00> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/5592026a-57e0-4b65-ac6d-153e57329a6f> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/2bd1e6d6-ae3a-4692-a83c-486af9b790d2>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b4fee7b5-0aba-41b6-9fdc-388d3ddbae00>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:13:56.139726246Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/2f75031c-504e-40c0-9214-5191a4f70341> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/644a5e8d-550b-42f8-87c0-e6390829f439> .
+  
+  <https://w3id.org/arknet/activity/13201d44-6d9e-4e20-acf8-3ddbd29700b1> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/644a5e8d-550b-42f8-87c0-e6390829f439> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/2f75031c-504e-40c0-9214-5191a4f70341>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/13201d44-6d9e-4e20-acf8-3ddbd29700b1>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:13:56.260074040Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/8d5d382f-4745-4138-9897-4e38120e44e3> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/324ded33-c57e-44d8-88bb-1653bbaa299e> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/75db2185-7cd7-417d-a1e2-6d971906ef27>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/8d5d382f-4745-4138-9897-4e38120e44e3>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:13:56.434293408Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/9cd19f83-02e7-470b-b602-edd70d4363fe> .
+  
+  <https://w3id.org/arknet/activity/9fe0f68f-e426-471b-9e78-9f11a4a4429f> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/a6ce3bd1-2b4a-4277-b97c-738f2db88bc0> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://purl.org/dc/terms/identifier> "TERM-4";
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/448fa00d-4697-4118-8d0b-0a1565a02561>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/9fe0f68f-e426-471b-9e78-9f11a4a4429f>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:13:56.538893153Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#invalidatedAtTime> "2026-11-27T17:13:56.602383480Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/7cfb887e-9798-4e60-92a6-4bc400a5ead5> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/cb34e551-1cda-4158-bc65-d6b9a118161c> .
+  
+  <https://w3id.org/arknet/activity/d7c94623-712f-4ad6-b3f9-7ebcfef4fba8> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/cb34e551-1cda-4158-bc65-d6b9a118161c> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/7cfb887e-9798-4e60-92a6-4bc400a5ead5>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/d7c94623-712f-4ad6-b3f9-7ebcfef4fba8>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:13:57.068290768Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/1ff53391-0470-4266-9816-fb8f30561a39> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/4b3d1f3f-2c71-40a3-a85f-35ca2a5dbf7b> .
+  
+  <https://w3id.org/arknet/activity/bdfe75d3-3633-461a-9ecf-a75b6503ae9c> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/4b3d1f3f-2c71-40a3-a85f-35ca2a5dbf7b> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/1ff53391-0470-4266-9816-fb8f30561a39>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/bdfe75d3-3633-461a-9ecf-a75b6503ae9c>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:13:57.427893593Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/09da3aaf-57f5-4335-a337-c9e17324ae4c> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/d5294353-03fc-48b6-8c62-8155897114c9> .
+  
+  <https://w3id.org/arknet/activity/a778a71d-a36f-40bc-bb36-2e8e2ce5bf97> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/96fb71dd-4264-490f-be98-82b0c38ec24b> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/09da3aaf-57f5-4335-a337-c9e17324ae4c>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/a778a71d-a36f-40bc-bb36-2e8e2ce5bf97>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:13:57.721801216Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/9cce6f3e-92ad-4fe5-bab7-5f1b38e7404a> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/c028de57-1b94-4b35-8f90-e9cd4505f4d7> .
+  
+  <https://w3id.org/arknet/activity/48df3038-4aea-4a7b-8f0c-2158ad5110da> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/def58028-324b-4b2e-94f0-8bc5d23eaa6d> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/9cce6f3e-92ad-4fe5-bab7-5f1b38e7404a>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/48df3038-4aea-4a7b-8f0c-2158ad5110da>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:13:57.938977632Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/d75f50f9-4d40-48f9-bbfb-c1311e25c932> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/d5294353-03fc-48b6-8c62-8155897114c9> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/09da3aaf-57f5-4335-a337-c9e17324ae4c>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/d75f50f9-4d40-48f9-bbfb-c1311e25c932>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:03.127071245Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/96fb71dd-4264-490f-be98-82b0c38ec24b> .
+  
+  <https://w3id.org/arknet/activity/b1dcc7ac-069b-4516-86d3-6203e08d08a6> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/c028de57-1b94-4b35-8f90-e9cd4505f4d7> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/9cce6f3e-92ad-4fe5-bab7-5f1b38e7404a>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b1dcc7ac-069b-4516-86d3-6203e08d08a6>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:03.350543772Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/def58028-324b-4b2e-94f0-8bc5d23eaa6d> .
+  
+  <https://w3id.org/arknet/id/f385d2ca-0162-436d-a65f-7b31a6f7f728> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/37b254bd-2ecb-4c49-bc0e-1817d1b0e499> .
+  
+  <https://w3id.org/arknet/activity/69a03f77-b6b3-456b-b33c-c70425636119> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/37b254bd-2ecb-4c49-bc0e-1817d1b0e499> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/f385d2ca-0162-436d-a65f-7b31a6f7f728>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/69a03f77-b6b3-456b-b33c-c70425636119>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:03.429108562Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/1b7f1426-048c-4179-9fb4-958796939b09> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/38ce84fe-3fce-405a-bf02-25f7b7e7140d> .
+  
+  <https://w3id.org/arknet/activity/03e24877-cbcd-450e-a322-16e3aa08576d> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/38ce84fe-3fce-405a-bf02-25f7b7e7140d> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/1b7f1426-048c-4179-9fb4-958796939b09>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/03e24877-cbcd-450e-a322-16e3aa08576d>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:03.488365392Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/cc4c2420-a27b-437f-9109-a964067f92e8> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/a9deec36-f79a-4f62-9d73-a4c9d503c2fb> .
+  
+  <https://w3id.org/arknet/activity/ce2aec0d-9c34-4e6f-aab0-37f26007716e> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/a9deec36-f79a-4f62-9d73-a4c9d503c2fb> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/cc4c2420-a27b-437f-9109-a964067f92e8>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/ce2aec0d-9c34-4e6f-aab0-37f26007716e>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:03.571296179Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/a6bc107c-c254-4d3e-b460-fcdb77fe475f> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/e181c6c0-ed22-4a9e-a667-f028953cb75e> .
+  
+  <https://w3id.org/arknet/activity/12270666-4dd5-4cb1-a694-93d607da2340> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/e181c6c0-ed22-4a9e-a667-f028953cb75e> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/a6bc107c-c254-4d3e-b460-fcdb77fe475f>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/12270666-4dd5-4cb1-a694-93d607da2340>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:03.643745218Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/f21fa8b7-23f8-4395-9af5-40acf8dbba38> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/67d17e63-3d75-46b4-819b-f7e2750e0b74> .
+  
+  <https://w3id.org/arknet/activity/c58e5bcb-b5a1-4ccb-9ae0-e385d794fe28> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/57eb298e-72c3-47e0-9e86-edf28aab6147> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/f21fa8b7-23f8-4395-9af5-40acf8dbba38>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/c58e5bcb-b5a1-4ccb-9ae0-e385d794fe28>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:03.772375004Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/55405968-3663-4518-a1c9-c455c77b19b5> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/972f41c9-7030-4721-97f5-3e8755b6b905> .
+  
+  <https://w3id.org/arknet/activity/046ea3e5-923e-4426-a070-be9d8575dfb5> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/7b541a7a-76d2-4f16-a93e-a18791db0658> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/55405968-3663-4518-a1c9-c455c77b19b5>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/046ea3e5-923e-4426-a070-be9d8575dfb5>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:03.925640336Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/cb15719d-0614-47a3-8c44-ec53faccbc96> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/126460e2-2b48-44a2-8b9d-c89b42d78861> .
+  
+  <https://w3id.org/arknet/activity/45045467-e2b5-4a01-bed6-0952a76b84b5> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/6ee6bbc2-f9dc-4464-86d8-7aa17ce71f4b> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/cb15719d-0614-47a3-8c44-ec53faccbc96>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/45045467-e2b5-4a01-bed6-0952a76b84b5>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:03.989327546Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/cae49705-45ba-460f-b7fc-8f8b27f86651> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/af1d40b9-1378-40ac-ad96-ee330cf40aff> .
+  
+  <https://w3id.org/arknet/activity/b5928dc4-6004-476d-b9f6-ae8c8fccce19> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/af1d40b9-1378-40ac-ad96-ee330cf40aff> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/cae49705-45ba-460f-b7fc-8f8b27f86651>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/b5928dc4-6004-476d-b9f6-ae8c8fccce19>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:04.062214564Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/cde5a7bb-0165-46fe-b0fd-586df7ee113e> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/972f41c9-7030-4721-97f5-3e8755b6b905> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/55405968-3663-4518-a1c9-c455c77b19b5>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/cde5a7bb-0165-46fe-b0fd-586df7ee113e>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:04.163286791Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/7b541a7a-76d2-4f16-a93e-a18791db0658> .
+  
+  <https://w3id.org/arknet/activity/bade86a2-f3c6-47ff-94e0-8cd3ee085f26> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/126460e2-2b48-44a2-8b9d-c89b42d78861> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/cb15719d-0614-47a3-8c44-ec53faccbc96>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/bade86a2-f3c6-47ff-94e0-8cd3ee085f26>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:04.247956991Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/6ee6bbc2-f9dc-4464-86d8-7aa17ce71f4b> .
+  
+  <https://w3id.org/arknet/id/8ffacc5e-321f-4f8e-b5cf-0bb458f7ee68> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/c43c883c-e4c8-47e2-82fa-fe51c97f59d4> .
+  
+  <https://w3id.org/arknet/activity/bab533fe-2de8-47a3-86b5-eecd4070c093> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/599582db-27e9-4361-b09f-6b33e1cab89d> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/8ffacc5e-321f-4f8e-b5cf-0bb458f7ee68>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/bab533fe-2de8-47a3-86b5-eecd4070c093>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:04.492888049Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/4f4cc01e-85a2-43d3-b972-b277d07d88f3> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/5aebf733-18a6-4305-a8c3-8344a916619f> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/8ffacc5e-321f-4f8e-b5cf-0bb458f7ee68>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/4f4cc01e-85a2-43d3-b972-b277d07d88f3>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:04.797822841Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/599582db-27e9-4361-b09f-6b33e1cab89d> .
+  
+  <https://w3id.org/arknet/id/dc39b18d-4fe1-445c-b61d-2a19d18df7ed> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/01bdbd55-d66b-44c6-9f26-22b51abe5b38> .
+  
+  <https://w3id.org/arknet/activity/4be1632c-1e1d-44b1-8484-7f5d61487988> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/01bdbd55-d66b-44c6-9f26-22b51abe5b38> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/dc39b18d-4fe1-445c-b61d-2a19d18df7ed>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/4be1632c-1e1d-44b1-8484-7f5d61487988>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:04.978605416Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/bd7e8039-0a9b-4403-83c6-90bb2fe3a186> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/494609c2-7e67-4da9-ac67-99320970e6be> .
+  
+  <https://w3id.org/arknet/activity/f6476fef-6d57-4686-8cb3-e9f2d3e72c09> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/63654aea-bf7c-42cc-8284-07cb7c62b46d> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/bd7e8039-0a9b-4403-83c6-90bb2fe3a186>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/f6476fef-6d57-4686-8cb3-e9f2d3e72c09>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:05.122451063Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/a1908e56-7186-476f-a0f6-db639eedb753> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/494609c2-7e67-4da9-ac67-99320970e6be> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/bd7e8039-0a9b-4403-83c6-90bb2fe3a186>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/a1908e56-7186-476f-a0f6-db639eedb753>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:05.332070159Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/63654aea-bf7c-42cc-8284-07cb7c62b46d> .
+  
+  <https://w3id.org/arknet/activity/79157353-96b1-4734-b17a-415d5c8aa412> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/c43c883c-e4c8-47e2-82fa-fe51c97f59d4> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/8ffacc5e-321f-4f8e-b5cf-0bb458f7ee68>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/79157353-96b1-4734-b17a-415d5c8aa412>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:05.611684047Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/5aebf733-18a6-4305-a8c3-8344a916619f> .
+  
+  <https://w3id.org/arknet/activity/7eb421e8-61a8-4bb1-b9a7-cc7c3af26127> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/ee61fb3d-e51e-4216-bb30-08d93f86867c> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/f21fa8b7-23f8-4395-9af5-40acf8dbba38>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/7eb421e8-61a8-4bb1-b9a7-cc7c3af26127>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:09.812185009Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/57eb298e-72c3-47e0-9e86-edf28aab6147> .
+  
+  <https://w3id.org/arknet/activity/5f2945d7-1452-4741-8c98-876f47cc506a> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/67d17e63-3d75-46b4-819b-f7e2750e0b74> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/f21fa8b7-23f8-4395-9af5-40acf8dbba38>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/5f2945d7-1452-4741-8c98-876f47cc506a>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-11-27T17:14:09.949980840Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/ee61fb3d-e51e-4216-bb30-08d93f86867c> .
+}
+
+<https://w3id.org/arknet/model/constraints> {
+  <https://w3id.org/arknet/id/7cfb887e-9798-4e60-92a6-4bc400a5ead5> a <https://w3id.org/arknet/requirements#RegulatoryConstraint>;
+    <http://purl.org/dc/terms/identifier> "RCON-1";
+    <http://purl.org/dc/terms/title> "EU hosting"@en;
+    <https://w3id.org/arknet/requirements#constraintStatement> "Parcel data must stay in the EU (regulator)."@en .
+  
+  <https://w3id.org/arknet/id/1ff53391-0470-4266-9816-fb8f30561a39> a <https://w3id.org/arknet/requirements#TechnicalConstraint>;
+    <http://purl.org/dc/terms/identifier> "TCON-1";
+    <http://purl.org/dc/terms/title> "JVM platform"@en;
+    <https://w3id.org/arknet/requirements#constraintStatement> "Must run on the JVM (customer platform standard)."@en .
+}
+
+<https://w3id.org/arknet/model/requirements> {
+  <https://w3id.org/arknet/id/09da3aaf-57f5-4335-a337-c9e17324ae4c> a <https://w3id.org/arknet/requirements#FunctionalRequirement>;
+    <http://purl.org/dc/terms/identifier> "FR-1";
+    <http://purl.org/dc/terms/title> "Track parcel"@en;
+    <http://purl.org/dc/terms/description> "The system shall show the current location of a parcel."@en;
+    <https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed>;
+    <https://w3id.org/arknet/requirements#rationale> "So that a recipient can plan to be at home."@en;
+    <https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#MustHave>;
+    <https://w3id.org/arknet/requirements#usesTerm> <https://w3id.org/arknet/id/75db2185-7cd7-417d-a1e2-6d971906ef27>;
+    <https://w3id.org/arknet/requirements#acceptanceCriterion> <https://w3id.org/arknet/id/08687d46-875b-482c-9650-e913b18a6653>,
+      <https://w3id.org/arknet/id/65755fab-178c-41cd-b73f-246887e0ea63>;
+    <http://open-services.net/ns/rm#constrainedBy> <https://w3id.org/arknet/id/7cfb887e-9798-4e60-92a6-4bc400a5ead5> .
+  
+  <https://w3id.org/arknet/id/9cce6f3e-92ad-4fe5-bab7-5f1b38e7404a> a <https://w3id.org/arknet/requirements#NonFunctionalRequirement>;
+    <http://purl.org/dc/terms/identifier> "NFR-1";
+    <http://purl.org/dc/terms/title> "Fast lookup"@en;
+    <http://purl.org/dc/terms/description> "The system shall answer a tracking lookup within one second."@en;
+    <https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed>;
+    <https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#ShouldHave>;
+    <https://w3id.org/arknet/requirements#usesTerm> <https://w3id.org/arknet/id/75db2185-7cd7-417d-a1e2-6d971906ef27>,
+      <https://w3id.org/arknet/id/2f75031c-504e-40c0-9214-5191a4f70341>;
+    <https://w3id.org/arknet/requirements#acceptanceCriterion> <https://w3id.org/arknet/id/70087334-9fb0-422c-b1ea-356ffeafcea6>;
+    <https://w3id.org/arknet/requirements#qualityCategory> "performance";
+    <http://open-services.net/ns/rm#constrainedBy> <https://w3id.org/arknet/id/1ff53391-0470-4266-9816-fb8f30561a39> .
+  
+  <https://w3id.org/arknet/id/08687d46-875b-482c-9650-e913b18a6653> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 1;
+    <https://w3id.org/arknet/requirements#criterionText> "Done when the location is shown within one click."@en .
+  
+  <https://w3id.org/arknet/id/65755fab-178c-41cd-b73f-246887e0ea63> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 2;
+    <https://w3id.org/arknet/requirements#criterionText> "Done when an unknown code is reported."@en .
+  
+  <https://w3id.org/arknet/id/70087334-9fb0-422c-b1ea-356ffeafcea6> a <https://w3id.org/arknet/requirements#AcceptanceCriterion>;
+    <https://w3id.org/arknet/requirements#position> 1;
+    <https://w3id.org/arknet/requirements#criterionText> "Done when the 95th percentile stays below one second."@en .
+}
+
+<https://w3id.org/arknet/model/actors> {
+  <https://w3id.org/arknet/id/f385d2ca-0162-436d-a65f-7b31a6f7f728> a <https://w3id.org/arknet/process#HumanActor>;
+    <http://purl.org/dc/terms/identifier> "ACTOR-1";
+    <https://w3id.org/arknet/core#name> "Recipient"@en;
+    <https://w3id.org/arknet/core#description> "A person waiting for a parcel."@en .
+  
+  <https://w3id.org/arknet/id/1b7f1426-048c-4179-9fb4-958796939b09> a <https://w3id.org/arknet/process#SystemActor>;
+    <http://purl.org/dc/terms/identifier> "ACTOR-2";
+    <https://w3id.org/arknet/core#name> "Courier App"@en;
+    <https://w3id.org/arknet/core#description> "The handheld app of a courier."@en .
+}
+
+<https://w3id.org/arknet/model/roles> {
+  <https://w3id.org/arknet/id/cc4c2420-a27b-437f-9109-a964067f92e8> a <https://w3id.org/arknet/process#Role>;
+    <http://purl.org/dc/terms/identifier> "ROLE-1";
+    <https://w3id.org/arknet/core#name> "Parcel Recipient"@en;
+    <https://w3id.org/arknet/core#description> "Receives and tracks parcels."@en;
+    <https://w3id.org/arknet/process#filledBy> <https://w3id.org/arknet/id/f385d2ca-0162-436d-a65f-7b31a6f7f728> .
+  
+  <https://w3id.org/arknet/id/a6bc107c-c254-4d3e-b460-fcdb77fe475f> a <https://w3id.org/arknet/process#Role>;
+    <http://purl.org/dc/terms/identifier> "ROLE-2";
+    <https://w3id.org/arknet/core#name> "Delivery Reporter"@en;
+    <https://w3id.org/arknet/core#description> "Reports delivery events."@en;
+    <https://w3id.org/arknet/process#filledBy> <https://w3id.org/arknet/id/1b7f1426-048c-4179-9fb4-958796939b09> .
+}
+
+<https://w3id.org/arknet/model/use-cases> {
+  <https://w3id.org/arknet/id/f21fa8b7-23f8-4395-9af5-40acf8dbba38> a <https://w3id.org/arknet/requirements#UseCase>;
+    <http://purl.org/dc/terms/identifier> "UC1";
+    <http://purl.org/dc/terms/title> "Track a parcel"@en;
+    <https://w3id.org/arknet/requirements#usesTerm> <https://w3id.org/arknet/id/75db2185-7cd7-417d-a1e2-6d971906ef27>;
+    <http://open-services.net/ns/rm#constrainedBy> <https://w3id.org/arknet/id/7cfb887e-9798-4e60-92a6-4bc400a5ead5>;
+    <https://w3id.org/arknet/requirements#useCaseGoal> "The recipient learns where the parcel is."@en,
+      "Der Empfaenger erfaehrt, wo das Paket ist."@de;
+    <https://w3id.org/arknet/requirements#designScope> "Tracking service"@en;
+    <https://w3id.org/arknet/requirements#trigger> "The recipient enters a tracking code."@en;
+    <https://w3id.org/arknet/requirements#useCasePrecondition> "The parcel has been handed over."@en;
+    <https://w3id.org/arknet/requirements#useCasePostcondition> "The location is shown."@en;
+    <https://w3id.org/arknet/requirements#primaryRole> <https://w3id.org/arknet/id/cc4c2420-a27b-437f-9109-a964067f92e8>;
+    <https://w3id.org/arknet/requirements#supportingRole> <https://w3id.org/arknet/id/a6bc107c-c254-4d3e-b460-fcdb77fe475f>;
+    <https://w3id.org/arknet/requirements#mainStep> <https://w3id.org/arknet/id/11fa3957-6d1d-4c7c-b8ae-be2d5d2b17e6>,
+      <https://w3id.org/arknet/id/77966b20-3ee5-4da6-91cd-4be9844b2279>;
+    <http://open-services.net/ns/rm#satisfies> <https://w3id.org/arknet/id/09da3aaf-57f5-4335-a337-c9e17324ae4c>;
+    <https://w3id.org/arknet/requirements#extensionStep> <https://w3id.org/arknet/id/952bdf8b-e8f0-48c7-a0de-63a99b52f55b> .
+  
+  <https://w3id.org/arknet/id/11fa3957-6d1d-4c7c-b8ae-be2d5d2b17e6> a <https://w3id.org/arknet/requirements#Step>;
+    <https://w3id.org/arknet/requirements#position> 1;
+    <https://w3id.org/arknet/requirements#stepText> "The recipient enters the tracking code."@en .
+  
+  <https://w3id.org/arknet/id/77966b20-3ee5-4da6-91cd-4be9844b2279> a <https://w3id.org/arknet/requirements#Step>;
+    <https://w3id.org/arknet/requirements#position> 2;
+    <https://w3id.org/arknet/requirements#stepText> "The system shows the location."@en;
+    <https://w3id.org/arknet/requirements#stepRealises> <https://w3id.org/arknet/id/09da3aaf-57f5-4335-a337-c9e17324ae4c> .
+  
+  <https://w3id.org/arknet/id/952bdf8b-e8f0-48c7-a0de-63a99b52f55b> a <https://w3id.org/arknet/requirements#Step>;
+    <https://w3id.org/arknet/requirements#position> 1;
+    <https://w3id.org/arknet/requirements#stepText> "2a. Unknown code -> the system reports it and the use case ends."@en .
+}
+
+<https://w3id.org/arknet/model/bounded-context> {
+  <https://w3id.org/arknet/id/55405968-3663-4518-a1c9-c455c77b19b5> a <https://w3id.org/arknet/ddd#BoundedContext>;
+    <http://purl.org/dc/terms/identifier> "BC-1";
+    <https://w3id.org/arknet/core#name> "Tracking"@en;
+    <https://w3id.org/arknet/ddd#domainVision> "Tells recipients where their parcels are."@en;
+    <https://w3id.org/arknet/ddd#partOf> <https://w3id.org/arknet/id/2591b16a-876f-4c79-bf13-a56a0b5dcf27>;
+    <https://w3id.org/arknet/ddd#ownedBy> "Team Blue";
+    <https://w3id.org/arknet/ddd#ubiquitousLanguageTerm> <https://w3id.org/arknet/id/75db2185-7cd7-417d-a1e2-6d971906ef27> .
+  
+  <https://w3id.org/arknet/id/cb15719d-0614-47a3-8c44-ec53faccbc96> a <https://w3id.org/arknet/ddd#BoundedContext>;
+    <http://purl.org/dc/terms/identifier> "BC-2";
+    <https://w3id.org/arknet/core#name> "Dispatch"@en;
+    <https://w3id.org/arknet/ddd#domainVision> "Assigns parcels to couriers for delivery."@en;
+    <https://w3id.org/arknet/ddd#partOf> <https://w3id.org/arknet/id/21304fef-be28-41d1-926a-c3990a209b91>;
+    <https://w3id.org/arknet/ddd#delimitsTerm> <https://w3id.org/arknet/id/2bd1e6d6-ae3a-4692-a83c-486af9b790d2> .
+  
+  <https://w3id.org/arknet/id/cae49705-45ba-460f-b7fc-8f8b27f86651> a <https://w3id.org/arknet/ddd#ContextRelationship>;
+    <https://w3id.org/arknet/ddd#upstream> <https://w3id.org/arknet/id/cb15719d-0614-47a3-8c44-ec53faccbc96>;
+    <https://w3id.org/arknet/ddd#downstream> <https://w3id.org/arknet/id/55405968-3663-4518-a1c9-c455c77b19b5>;
+    <https://w3id.org/arknet/ddd#relationshipType> <https://w3id.org/arknet/ddd#CustomerSupplier> .
+  
+  <https://w3id.org/arknet/id/2591b16a-876f-4c79-bf13-a56a0b5dcf27> a <https://w3id.org/arknet/ddd#Subdomain>;
+    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#CoreDomain> .
+  
+  <https://w3id.org/arknet/id/21304fef-be28-41d1-926a-c3990a209b91> a <https://w3id.org/arknet/ddd#Subdomain>;
+    <https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#SupportingDomain> .
+}
+
+<https://w3id.org/arknet/model/adr> {
+  <https://w3id.org/arknet/id/8ffacc5e-321f-4f8e-b5cf-0bb458f7ee68> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
+    <http://purl.org/dc/terms/identifier> "ADR-1";
+    <https://w3id.org/arknet/core#name> "Store tracking events append-only"@en;
+    <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Superseded>;
+    <https://w3id.org/arknet/architecture#adrContext> "Tracking needs the full event history of a parcel."@en;
+    <https://w3id.org/arknet/architecture#adrDecision> "Tracking events are stored append-only."@en;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/004c1512-46ff-43b7-b532-6a9396556640>,
+      <https://w3id.org/arknet/id/b230d115-e2e4-44bb-b7c7-88a8cfdd01e2>;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/9c1a10cd-757a-4e8c-b924-661756229174>,
+      <https://w3id.org/arknet/id/60ac45f6-b35d-44e2-980f-7dc7316027e2>;
+    <https://w3id.org/arknet/architecture#addressesRequirement> <https://w3id.org/arknet/id/09da3aaf-57f5-4335-a337-c9e17324ae4c>;
+    <https://w3id.org/arknet/architecture#affectsContext> <https://w3id.org/arknet/id/55405968-3663-4518-a1c9-c455c77b19b5>;
+    <https://w3id.org/arknet/architecture#usesTerm> <https://w3id.org/arknet/id/75db2185-7cd7-417d-a1e2-6d971906ef27>;
+    <https://w3id.org/arknet/architecture#decisionDate> "2026-01-15"^^<http://www.w3.org/2001/XMLSchema#date>;
+    <https://w3id.org/arknet/architecture#supersededBy> <https://w3id.org/arknet/id/bd7e8039-0a9b-4403-83c6-90bb2fe3a186> .
+  
+  <https://w3id.org/arknet/id/dc39b18d-4fe1-445c-b61d-2a19d18df7ed> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
+    <http://purl.org/dc/terms/identifier> "ADR-2";
+    <https://w3id.org/arknet/core#name> "Cache the latest location"@en;
+    <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Proposed>;
+    <https://w3id.org/arknet/architecture#adrContext> "Lookups must answer within one second."@en;
+    <https://w3id.org/arknet/architecture#adrDecision> "The latest location of each parcel is cached."@en;
+    <https://w3id.org/arknet/architecture#consequence> <https://w3id.org/arknet/id/f757b5b7-06c3-49fa-873b-b16230f420a3>;
+    <https://w3id.org/arknet/architecture#addressesRequirement> <https://w3id.org/arknet/id/9cce6f3e-92ad-4fe5-bab7-5f1b38e7404a>;
+    <https://w3id.org/arknet/architecture#relatedTo> <https://w3id.org/arknet/id/8ffacc5e-321f-4f8e-b5cf-0bb458f7ee68> .
+  
+  <https://w3id.org/arknet/id/f757b5b7-06c3-49fa-873b-b16230f420a3> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Lookups are fast."@en .
+  
+  <https://w3id.org/arknet/id/bd7e8039-0a9b-4403-83c6-90bb2fe3a186> a <https://w3id.org/arknet/architecture#ArchitectureDecisionRecord>;
+    <http://purl.org/dc/terms/identifier> "ADR-3";
+    <https://w3id.org/arknet/core#name> "Store tracking events in a time-series store"@en;
+    <https://w3id.org/arknet/architecture#adrStatus> <https://w3id.org/arknet/architecture#Accepted>;
+    <https://w3id.org/arknet/architecture#adrContext> "The append-only store grew too large."@en;
+    <https://w3id.org/arknet/architecture#adrDecision> "Tracking events move to a time-series store."@en;
+    <https://w3id.org/arknet/architecture#consideredOption> <https://w3id.org/arknet/id/aef5300e-e959-447e-8ca2-de888f22bf57>;
+    <https://w3id.org/arknet/architecture#affectsContext> <https://w3id.org/arknet/id/55405968-3663-4518-a1c9-c455c77b19b5>;
+    <https://w3id.org/arknet/architecture#decisionDate> "2026-03-01"^^<http://www.w3.org/2001/XMLSchema#date> .
+  
+  <https://w3id.org/arknet/id/aef5300e-e959-447e-8ca2-de888f22bf57> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Time-series store"@en;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Compacts old events."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/004c1512-46ff-43b7-b532-6a9396556640> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Positive>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "The history is never lost."@en .
+  
+  <https://w3id.org/arknet/id/b230d115-e2e4-44bb-b7c7-88a8cfdd01e2> a <https://w3id.org/arknet/architecture#Consequence>;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#consequenceType> <https://w3id.org/arknet/architecture#Negative>;
+    <https://w3id.org/arknet/architecture#consequenceStatement> "Storage grows without bound."@en .
+  
+  <https://w3id.org/arknet/id/9c1a10cd-757a-4e8c-b924-661756229174> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Append-only log"@en;
+    <https://w3id.org/arknet/core#position> 1;
+    <https://w3id.org/arknet/architecture#optionRationale> "Keeps every event."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#Chosen> .
+  
+  <https://w3id.org/arknet/id/60ac45f6-b35d-44e2-980f-7dc7316027e2> a <https://w3id.org/arknet/architecture#ConsideredOption>;
+    <https://w3id.org/arknet/core#name> "Overwrite current state"@en;
+    <https://w3id.org/arknet/core#position> 2;
+    <https://w3id.org/arknet/architecture#optionRationale> "Loses the history."@en;
+    <https://w3id.org/arknet/architecture#optionOutcome> <https://w3id.org/arknet/architecture#OptionRejected> .
+}
+
+<https://w3id.org/arknet/model/export-metadata> {
+    <https://w3id.org/arknet/export/737336e4-09fc-4732-bf08-d1aa35dd3e1a>
+        <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#Activity> ;
+        <http://www.w3.org/ns/prov#endedAtTime> "2026-11-27T17:14:10Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
+        <http://www.w3.org/ns/prov#wasAssociatedWith> <https://w3id.org/arknet/agent/arknet> ;
+        <http://www.w3.org/ns/prov#used> <https://w3id.org/arknet/core> , <https://w3id.org/arknet/ddd> , <https://w3id.org/arknet/process> , <https://w3id.org/arknet/requirements> , <https://w3id.org/arknet/architecture> , <https://w3id.org/arknet/provenance> , <https://w3id.org/arknet/project> .
+
+    <https://w3id.org/arknet/agent/arknet>
+        <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#SoftwareAgent> ;
+        <http://www.w3.org/2002/07/owl#versionInfo> "v0.12.0" ;
+        <http://purl.org/dc/terms/created> "2026-11-22T09:24:48Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+
+    <https://w3id.org/arknet/core>
+        <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ;
+        <http://www.w3.org/2002/07/owl#versionInfo> "0.2.0" .
+
+    <https://w3id.org/arknet/ddd>
+        <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ;
+        <http://www.w3.org/2002/07/owl#versionInfo> "0.2.0" .
+
+    <https://w3id.org/arknet/process>
+        <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ;
+        <http://www.w3.org/2002/07/owl#versionInfo> "0.3.0" .
+
+    <https://w3id.org/arknet/requirements>
+        <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ;
+        <http://www.w3.org/2002/07/owl#versionInfo> "0.2.0" .
+
+    <https://w3id.org/arknet/architecture>
+        <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ;
+        <http://www.w3.org/2002/07/owl#versionInfo> "0.1.0" .
+
+    <https://w3id.org/arknet/provenance>
+        <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ;
+        <http://www.w3.org/2002/07/owl#versionInfo> "0.1.0" .
+
+    <https://w3id.org/arknet/project>
+        <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ;
+        <http://www.w3.org/2002/07/owl#versionInfo> "0.1.0" .
+
+}
