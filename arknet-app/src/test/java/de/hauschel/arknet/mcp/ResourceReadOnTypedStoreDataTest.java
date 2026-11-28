@@ -47,6 +47,7 @@ import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceListMcpTools;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceReadMcpTools;
+import de.hauschel.arknet.resource.adapter.mcp.TextSearchMcpTools;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.domain.Term;
@@ -409,12 +410,28 @@ class ResourceReadOnTypedStoreDataTest {
             return bean(ResourceListMcpTools.class).resourceList(null, type, status, full, offset, null, anchor);
         }
 
+        String search(final String query, final String type) {
+            return bean(TextSearchMcpTools.class).textSearch(null, query, type, anchor);
+        }
+
         String history(final String handle) {
             return bean(ResourceReadMcpTools.class).resourceHistory(null, handle, null, anchor);
         }
 
         io.kogn.rdf.terms.IRI iri(final String value) {
             return rdf.createIRI(value);
+        }
+
+        io.kogn.rdf.terms.Literal literal(final String value) {
+            return rdf.createLiteral(value);
+        }
+
+        BlankNode blank() {
+            return rdf.createBlankNode();
+        }
+
+        ProjectId project() {
+            return project;
         }
 
         /** Writes triples straight into the content graph, past every repository and the versioning. */

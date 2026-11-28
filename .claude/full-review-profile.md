@@ -22,8 +22,8 @@ the skill's generic methodology.
   `de.hauschel.arknet.mcp..` too — but that coverage is only as good as the module actually being
   on the classpath, so before trusting this module's silence on a given package as "verified
   clean", check its `pom.xml` actually depends on that package's module.
-- `arknet-app` is the composition root and additionally carries three cross-cutting,
-  BC-spanning read paths (`mcp/store`, `mcp/search`, and `mcp/report`; the model-analysis component
+- `arknet-app` is the composition root and additionally carries two cross-cutting,
+  BC-spanning read paths (`mcp/store` and `mcp/report`; the model-analysis component
   is its own component under `arknet-model-analysis`, not part of `arknet-app`) -- a
   contract hole there distorts all six hexagons at once. Weight it above the individual BC
   modules.
@@ -286,7 +286,7 @@ and are out of scope for this skill entirely — not listed.
 - Write funnel, library draft token as concurrency token — relevant whenever a review
   touches a write path's transaction/concurrency behavior (Phase 2).
 - Generic store read path / Borrowed In-Port pattern —
-  relevant whenever a review touches `arknet-app`'s `mcp/store`/`mcp/search`/`mcp/report`, since
+  relevant whenever a review touches `arknet-app`'s `mcp/store`/`mcp/report`, since
   those packages exist entirely because of these two decisions; the model-analysis component
   reads through the same generic store read path (`StoreReader` via `KognioRdfModelSnapshots`).
 
