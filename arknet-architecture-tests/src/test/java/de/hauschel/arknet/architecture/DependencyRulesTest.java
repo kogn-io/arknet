@@ -261,7 +261,7 @@ class DependencyRulesTest {
      * {@code TraceabilityGraph}; #185).
      *
      * <p>Unlike rules 3 and 4, this does not ban {@code io.kogn} wholesale: the composition
-     * root's remaining generic store-read path ({@code mcp/store}, {@code mcp/search})
+     * root's remaining generic store-read path ({@code mcp/store})
      * deliberately reads the technology-neutral kognio-rdf ports directly, so only {@link
      * #RDF4J_PACKAGES} -- RDF4J itself and kognio-rdf's RDF4J-backed implementations -- is
      * checked here.</p>

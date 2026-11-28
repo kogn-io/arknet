@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.mcp.search;
+package de.hauschel.arknet.resource.application;
 
 import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Builds the short excerpt a {@code text_search} hit shows around its match (kogn-io/arknet#594
- * Part 1): about {@link #RADIUS} characters before and after, newlines collapsed to spaces so a
- * multi-paragraph field still renders as one report line.
+ * The short excerpt a text hit shows around its match: about {@link #RADIUS} characters before and
+ * after, newlines collapsed to spaces so a multi-paragraph field still renders as one report line.
  */
 final class Snippet {
 
@@ -22,18 +21,19 @@ final class Snippet {
     }
 
     /**
+     * Cuts the excerpt.
+     *
      * @param text   the full literal text the match was found in
      * @param needle the search string that matched, case-insensitively
      * @return an excerpt around the first case-insensitive occurrence of {@code needle} in
-     *         {@code text}, or a leading excerpt of {@code text} itself if the two backends'
-     *         case-folding ever disagree (the SPARQL engine's {@code LCASE} vs. this method's
-     *         {@link String#toLowerCase(Locale)}) so this method never throws over a match the
-     *         query itself already found
+     *         {@code text}, or a leading excerpt of {@code text} itself if the case-folding of the
+     *         store and of this method ever disagree, so it never throws over a match the store
+     *         already found
      */
-    static String around(String text, String needle) {
+    static String around(final String text, final String needle) {
         Objects.requireNonNull(text, "text");
         Objects.requireNonNull(needle, "needle");
-        String normalized = collapseNewlines(text);
+        String normalized = text.replace('\n', ' ').replace('\r', ' ');
         int index = normalized.toLowerCase(Locale.ROOT).indexOf(needle.toLowerCase(Locale.ROOT));
         if (index < 0) {
             return excerpt(normalized, 0, Math.min(normalized.length(), 2 * RADIUS + needle.length()));
@@ -43,14 +43,9 @@ final class Snippet {
         return excerpt(normalized, start, end);
     }
 
-    private static String excerpt(String normalized, int start, int end) {
-        String body = normalized.substring(start, end);
+    private static String excerpt(final String normalized, final int start, final int end) {
         String prefix = start > 0 ? ELLIPSIS : "";
         String suffix = end < normalized.length() ? ELLIPSIS : "";
-        return prefix + body + suffix;
-    }
-
-    private static String collapseNewlines(String text) {
-        return text.replace('\n', ' ').replace('\r', ' ');
+        return prefix + normalized.substring(start, end) + suffix;
     }
 }

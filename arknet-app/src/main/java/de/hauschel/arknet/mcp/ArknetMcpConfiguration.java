@@ -86,7 +86,6 @@ import de.hauschel.arknet.persistence.HandleResolver;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreReportController;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
-import de.hauschel.arknet.mcp.search.TextSearchMcpTools;
 import de.hauschel.arknet.analysis.adapter.mcp.TraceabilityMcpTools;
 import de.hauschel.arknet.analysis.application.ModelAnalysisService;
 import de.hauschel.arknet.analysis.application.port.out.ModelSnapshots;
@@ -109,9 +108,11 @@ import de.hauschel.arknet.resource.adapter.kogniordf.KognioRdfResourceRepository
 import de.hauschel.arknet.resource.adapter.mcp.ResourceAccessMcpTools;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceListMcpTools;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceReadMcpTools;
+import de.hauschel.arknet.resource.adapter.mcp.TextSearchMcpTools;
 import de.hauschel.arknet.resource.application.ReadService;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
+import de.hauschel.arknet.resource.application.port.in.FindText;
 import de.hauschel.arknet.resource.application.port.in.ListResources;
 import de.hauschel.arknet.resource.application.port.in.ReadResources;
 import de.hauschel.arknet.resource.application.port.in.ResourceHistory;
@@ -1219,25 +1220,13 @@ public class ArknetMcpConfiguration {
                 projectResolver, displayLocale);
     }
 
-    /**
-     * The one free-text search tool ({@code text_search}, kogn-io/arknet#594 Part 1). Wired here
-     * rather than into any hexagon for the same reason {@link #storeCheckMcpTools} is: it reads
-     * whatever the seven bounded contexts wrote, through the very same {@link #storeReader}/
-     * {@link #storeReportPrefixes} beans, and has no domain of its own.
-     */
-    @Bean
-    TextSearchMcpTools textSearchMcpTools(
-            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projectResolver) {
-        return new TextSearchMcpTools(storeReader, prefixes, projectResolver);
-    }
-
     // --- Generic resource access -------------------------------------------------
 
     /**
      * The read side of the generic resource-access component (ADR-69, ADR-60): resources of every
      * type by handle, their history and the listing of a type, rendered from shapes and ontology.
-     * One bean serves {@link ReadResources}, {@link ResourceHistory} and {@link ListResources}, so
-     * the resource schema is built once per daemon start and the three share it. Always wired, unlike
+     * One bean serves {@link ReadResources}, {@link ResourceHistory}, {@link ListResources} and
+     * {@link FindText}, so the resource schema is built once per daemon start and they share it. Always wired, unlike
      * {@link ResourceAccessConfiguration}: its tools replace the store read tools every daemon
      * offered, and it writes nothing. Building it builds the resource schema from the shipped
      * shapes, so a defect in their rule data now stops every daemon at start, not only one with
@@ -1263,6 +1252,15 @@ public class ArknetMcpConfiguration {
     ResourceListMcpTools resourceListMcpTools(final ListResources resourceLister,
             final ProjectResolver projectResolver) {
         return new ResourceListMcpTools(resourceLister, projectResolver);
+    }
+
+    /**
+     * {@code text_search} of the generic resource-access component, offered like the read tools. It
+     * searches over the one read service, so it shares the resource schema with them.
+     */
+    @Bean
+    TextSearchMcpTools textSearchMcpTools(final FindText textFinder, final ProjectResolver projectResolver) {
+        return new TextSearchMcpTools(textFinder, projectResolver);
     }
 
     /**

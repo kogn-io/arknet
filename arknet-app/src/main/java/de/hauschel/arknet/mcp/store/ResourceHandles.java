@@ -8,9 +8,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The drill-down handle for a resource, shared by {@link DigestRenderer} (every listed resource of
- * {@code store_overview}) and {@code text_search} (the resource a hit is reported under) - one
- * place for the "how do I name this resource" rule instead of drifting copies (issue #594).
+ * The drill-down handle for a resource, used by {@link DigestRenderer} (every listed resource of
+ * {@code store_overview}) - one place for the "how do I name this resource" rule instead of
+ * drifting copies (issue #594).
  *
  * <p>The handle is one {@code resource_get} reads: (1) the resource's {@code dcterms:identifier}
  * (its business code, e.g. {@code FR-1}), if it carries one AND no other resource in scope carries

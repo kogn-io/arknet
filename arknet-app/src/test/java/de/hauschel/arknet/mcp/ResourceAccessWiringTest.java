@@ -29,10 +29,12 @@ import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceAccessMcpTools;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceListMcpTools;
 import de.hauschel.arknet.resource.adapter.mcp.ResourceReadMcpTools;
+import de.hauschel.arknet.resource.adapter.mcp.TextSearchMcpTools;
 import de.hauschel.arknet.resource.application.ReadService;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.application.port.in.ChangeExample;
 import de.hauschel.arknet.resource.application.port.in.DescribeResourceType;
+import de.hauschel.arknet.resource.application.port.in.FindText;
 import de.hauschel.arknet.resource.application.port.in.ListResources;
 import de.hauschel.arknet.resource.application.port.in.ReadResources;
 import de.hauschel.arknet.resource.application.port.in.ResourceHistory;
@@ -102,20 +104,22 @@ class ResourceAccessWiringTest {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(ResourceReadMcpTools.class);
                     assertThat(context).hasSingleBean(ResourceListMcpTools.class);
+                    assertThat(context).hasSingleBean(TextSearchMcpTools.class);
                     assertThat(toolNames(context).stream()
                             .filter(name -> name.equals("resource_get") || name.equals("resource_history")
-                                    || name.equals("resource_list")))
+                                    || name.equals("resource_list") || name.equals("text_search")))
                             .as("the read tools are offered by exactly one bean each")
-                            .containsExactlyInAnyOrder("resource_get", "resource_history", "resource_list");
+                            .containsExactlyInAnyOrder("resource_get", "resource_history", "resource_list",
+                                    "text_search");
                 });
     }
 
     /**
-     * One read service serves all three read ports, so the resource schema it is built over is built
+     * One read service serves all four read ports, so the resource schema it is built over is built
      * once per daemon start: a second bean for any port would build it a second time.
      */
     @Test
-    void theThreeReadPortsAreOneObjectAndSoShareOneSchema() {
+    void theFourReadPortsAreOneObjectAndSoShareOneSchema() {
         contextRunner
                 .withPropertyValues("arknet.rdf.storage=" + storageDir)
                 .run(context -> {
@@ -125,6 +129,7 @@ class ResourceAccessWiringTest {
                     assertThat(context.getBean(ReadResources.class)).isSameAs(service);
                     assertThat(context.getBean(ResourceHistory.class)).isSameAs(service);
                     assertThat(context.getBean(ListResources.class)).isSameAs(service);
+                    assertThat(context.getBean(FindText.class)).isSameAs(service);
                 });
     }
 

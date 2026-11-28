@@ -41,6 +41,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.resource.application.port.in.FieldDescription;
+import de.hauschel.arknet.resource.application.port.in.FindText;
 import de.hauschel.arknet.resource.application.port.in.HistoryReading;
 import de.hauschel.arknet.resource.application.port.in.ListResources;
 import de.hauschel.arknet.resource.application.port.in.ListedResource;
@@ -51,6 +52,8 @@ import de.hauschel.arknet.resource.application.port.in.RenderedValue;
 import de.hauschel.arknet.resource.application.port.in.ResourceHistory;
 import de.hauschel.arknet.resource.application.port.in.ResourceListing;
 import de.hauschel.arknet.resource.application.port.in.ResourceReading;
+import de.hauschel.arknet.resource.application.port.in.TextHit;
+import de.hauschel.arknet.resource.application.port.in.TextSearchResult;
 import de.hauschel.arknet.resource.application.port.out.ResourceReader;
 import de.hauschel.arknet.resource.domain.PrefixBindings;
 import de.hauschel.arknet.resource.domain.ResourceSchema;
@@ -85,7 +88,7 @@ import de.hauschel.arknet.resource.domain.SubmitRejectedException;
  *
  * <p>Every read of one call runs in one read transaction of {@link ResourceReader}.</p>
  */
-public final class ReadService implements ReadResources, ResourceHistory, ListResources {
+public final class ReadService implements ReadResources, ResourceHistory, ListResources, FindText {
 
     private static final RDF RDF_FACTORY = new SimpleRdf();
     private static final String OWL = "http://www.w3.org/2002/07/owl#";
@@ -203,6 +206,29 @@ public final class ReadService implements ReadResources, ResourceHistory, ListRe
             }
             Optional<ResourceReading.Deleted> deleted = deletion.map(found -> rendering.deleted(handle, found));
             return new HistoryReading(handle, iri.getIRIString(), snapshot.publishState(iri), entries, deleted);
+        });
+    }
+
+    @Override
+    public TextSearchResult find(final ProjectId projectId, final String query, final String type) {
+        Objects.requireNonNull(projectId, "projectId");
+        if (query == null || query.isBlank()) {
+            throw new IllegalArgumentException(
+                    "query must not be blank - pass a non-empty substring to search for, e.g. \"login\"");
+        }
+        Optional<Set<IRI>> wanted = type == null || type.isBlank() ? Optional.empty() : Optional.of(listedTypes(type));
+        return reader.read(projectId, snapshot -> {
+            TextFinder finder = new TextFinder(snapshot, schema, this::handleOf, this::iriHandle);
+            List<Triple> matches = TextFinder.matches(snapshot, query);
+            // a type filter has to know every owner before it can count; without one only the shown
+            // window is resolved
+            List<Triple> kept = wanted.isPresent() ? matches.stream()
+                    .filter(match -> finder.typesOf(finder.locate(match).owner()).stream()
+                            .anyMatch(wanted.get()::contains))
+                    .toList() : matches;
+            List<TextHit> hits = kept.stream().limit(LIMIT)
+                    .map(match -> finder.hit(match, finder.locate(match), query)).toList();
+            return new TextSearchResult(query, kept.size(), LIMIT, hits);
         });
     }
 
@@ -749,7 +775,7 @@ public final class ReadService implements ReadResources, ResourceHistory, ListRe
         return locale.select(candidates).map(LocalizedLiteral::value);
     }
 
-    private static Set<IRI> typesOf(final BlankNodeOrIRI subject, final ReadableGraph graph) {
+    static Set<IRI> typesOf(final BlankNodeOrIRI subject, final ReadableGraph graph) {
         return graph.stream(subject, VocabRdf.TYPE, null)
                 .map(Triple::getObject)
                 .filter(IRI.class::isInstance)

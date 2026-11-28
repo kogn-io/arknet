@@ -30,7 +30,7 @@ import de.hauschel.arknet.persistence.Triple;
  * <p>Pure and domain-agnostic: it consumes only a {@link StoreSnapshot} plus a
  * {@link Prefixes} resolver, so it is fully unit-testable and renders any bounded context's
  * data the same way. The handle it prints is never the label - see {@link ResourceHandles} for
- * the preference order, shared with {@code text_search}. A blank-node subject - written past the
+ * the preference order. A blank-node subject - written past the
  * tools, with no IRI - gets no drill-down: {@code resource_get} reads resources by code or IRI
  * only, so its line says so instead of promising a call that answers NOT FOUND.</p>
  *
