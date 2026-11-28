@@ -124,3 +124,20 @@ Der Compiler sieht die Grenze eines Bounded Context fuer diese Komponente nicht;
 `ResourceVocabularyMatchesOntologyTest` gleicht `ArkresVocabulary` beidseitig gegen `arknet-resource.ttl` ab.
 Welche Regel der typgenauen Kerne als Shape, als Regeldatum, als Garantie der Engine oder als festgehaltene Ausnahme gilt, fuehrt `docs/rules-inventory.md` samt dem Test, der sie festhaelt; `RulesInventoryNamesShippedShapesTest` prueft jede dort genannte Shape gegen die ausgelieferten Dateien.
 Die Garantien der Engine, fuer die es keine Shape gibt (Code und IRI vergibt der Store, der Typ bleibt, keine Ressource inline, Positionen nummeriert die Engine), haelt `EngineGuaranteesRealStoreTest` fest, die Kanten- und Pflichtfeld-Shapes aller vier Kontexte `EdgeAndRequiredFieldRulesRealStoreTest`.
+
+Die Verschraenkungen zweier Schreiber, die die typgenauen Kerne in ihren `*RealStoreConcurrencyTest` festnageln, haelt `submit` in eigenen Tests fest: ein Schreiber pausiert hinter einem gewaehlten Read in seiner Schreibtransaktion (`PausingBatch`), bis der andere committet hat (`SubmitRace`); geprueft wird die Invariante, kein Graphvergleich.
+
+| Kern-Test (Klasse#Methode) | Invariante | submit-Test |
+|---|---|---|
+| `Actor`/`Role`/`BoundedContext`/`Term`/`Requirement`/`UseCaseServiceRealStoreConcurrencyTest#concurrentAddCalls..._bothGetDistinctCodes` | verschiedene Codes | `SubmitCodeAssignmentRealStoreConcurrencyTest#twoCreatesRacingForTheNextCodeGetDistinctCodes` (je Typ ein Fall) |
+| `ActorServiceRealStoreConcurrencyTest#updateRetriesAndKeepsBothCorrections...` | kein verlorenes Update | `SubmitLostUpdateRealStoreConcurrencyTest#anActorNameAndDescriptionUpdatedByTwoRacersKeepBoth` |
+| `ActorServiceRealStoreConcurrencyTest#updateOfNameInGerman...DoesNotLoseEitherLanguage` | keine Sprache verloren | `SubmitLostUpdateRealStoreConcurrencyTest#aGermanNameAndAnEnglishDescriptionWrittenByTwoRacersLoseNoLanguage` |
+| `RoleServiceRealStoreConcurrencyTest#updateRetriesAndKeepsBothCorrections...` | kein verlorenes Update | `SubmitLostUpdateRealStoreConcurrencyTest#aRoleNameAndDescriptionUpdatedByTwoRacersKeepBoth` |
+| `UseCaseServiceRealStoreConcurrencyTest#updateRetriesAndKeepsBothChanges...` | kein verlorenes Update | `SubmitLostUpdateRealStoreConcurrencyTest#aUseCaseTitleAndGoalUpdatedByTwoRacersKeepBoth` |
+| `BoundedContextServiceRealStoreConcurrencyTest#linkTermRetriesAndKeepsBothEdges...` | beide Kanten bleiben | `SubmitLostUpdateRealStoreConcurrencyTest#twoTermsLinkedToABoundedContextByTwoRacersKeepBothEdges` |
+| `BoundedContextServiceRealStoreConcurrencyTest#updateOfNameAndUpdateOfDomainVision...` | beide Felder bleiben | `SubmitLostUpdateRealStoreConcurrencyTest#aBoundedContextNameAndDomainVisionUpdatedByTwoRacersKeepBoth` |
+| `BoundedContextServiceRealStoreConcurrencyTest#concurrentLinkContextCallsWithTheSameTriple..._loserGetsWinnersRelationship` | eine Beziehung je Tripel | Abweichung F-bc-1: `SubmitLostUpdateRealStoreConcurrencyTest#theSameTripleLinkedByTwoRacersLeavesTwoRelationshipsFindingFbc1` haelt zwei Beziehungen fest und kippt mit der Shape |
+| `TermServiceRealStoreConcurrencyTest#concurrentRenameAndStaleTranslationWrite...` | veraltete Uebersetzung abgelehnt | `SubmitTermRealStoreConcurrencyTest#aTranslationOfAWordRenamedMeanwhileIsRejectedOnTheSecondRun` (`Term-prefLabel-oneWord`) |
+| `TermServiceRealStoreConcurrencyTest#concurrentUpdatesRacingToCloseATwoTermCycle...` | ein Schreiber abgelehnt (Write-Skew) | `SubmitTermRealStoreConcurrencyTest#twoRacersClosingATwoTermCycleLeaveTheSecondRejected` (`Term-broader-noCycle`) |
+| `TermServiceRealStoreConcurrencyTest#deleteRacing...`, `RequirementServiceRealStoreConcurrencyTest#deleteRacing...` | keine haengende Kante | `SubmitRealStoreConcurrencyTest#anEdgeCommittedAfterTheDeleteReadTheEdgesKeepsTheResource` |
+| `AdrServiceRealStoreConcurrencyTest#updateRejectsRatherThanWritingADanglingRelatedToEdge...` | keine haengende Kante | `SubmitRealStoreConcurrencyTest#aNeighbourDeletedAfterTheEngineReadItIsNotReferencedByTheCommit` |
