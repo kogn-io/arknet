@@ -122,5 +122,5 @@ Der `orphan_check`-Alias bleibt vorerst bestehen, weil das arknet-plugin-Repo ih
 ## Was nicht hier liegt
 
 Der HTML-Report gehoert diesem Kontext (ADR-54) und nicht in die Composition Root (ADR-70), liegt bis kogn-io/arknet#642 aber in `arknet-app` und ist dort beschrieben.
-`resource_get`, `resource_history` und `text_search` liegen in `arknet-app`; ihr Ziel ist die Komponente fuer generischen Zugriff ausserhalb jedes Bounded Context (ADR-69, kogn-io/arknet#743).
+`resource_get`, `resource_history`, `resource_list` und `text_search` liegen in der Komponente fuer generischen Zugriff ausserhalb jedes Bounded Context (ADR-69, kogn-io/arknet#743).
 `store_overview` und `project_export` liegen ebenfalls in `arknet-app`; fuer sie ist kein Zielort entschieden.

@@ -148,7 +148,7 @@ Outside every Bounded Context:
 
 | Role in the schema                 | Module                          | Note |
 |------------------------------------|---------------------------------|------|
-| Application (composition root)     | arknet-app                      | Spring Boot daemon; carries the type-independent tool `text_search`, whose target is the Component for generic resource access that belongs to no Bounded Context (ADR-69, ADR-70, #743); `resource_get` and `resource_history` already live there. It also carries `store_overview` and `project_export`; no target is decided for them. The HTML report lives here and composes the in-ports of every context; its target is Model Analysis (ADR-54, #642) |
+| Application (composition root)     | arknet-app                      | Spring Boot daemon; carries the type-independent tools `store_overview` and `project_export`; no target is decided for them. The HTML report lives here and composes the in-ports of every context; its target is Model Analysis (ADR-54, #642) |
 | Shared Kernel                      | arknet-shared-kernel            | ADR-56: ProjectId, ResourceId + factory, CodeCounter/CodeAssignment, LanguageTag, DisplayLocale, LocalizedLiteral. `DependencyRulesTest` rule 12 lists the admitted terms, so a new type in the package turns a test red |
 | Technical library                  | arknet-persistence-support      | Under the `arknet-support` aggregator. SHACL gate, the versioned write path VersionedWriteFunnel (draft, publish and tombstone over kognio-rdf rdf-versioning, one content graph per project dataset), vocabulary constants and the type-independent read path over a project's dataset (StoreReader, the triple read model, Prefixes, HandleResolver, ResourceRenderer) -- no model term, hence neither Shared Kernel nor vocabulary |
 | Technical library                  | arknet-mcp-support              | Under the `arknet-support` aggregator. Support of the driving MCP adapters and the composition root: ProjectResolver/ResolvedProject, StaleTranslationHint/FieldLanguageLookup, WriteResponse, ToolParameterDescriptions. No core and no vocabulary module depends on it (rule 11) |
@@ -204,7 +204,7 @@ its own core only; no module of a Component depends on a module of another.
 | `core` per Component, framework-free          | present                                              |
 | one adapter per technology per Component      | present (kogniordf, mcp)                             |
 | `<bc>-shared` once ownerless identities exist | built for both contexts that need one: `arknet-product-requirements-shared` (RequirementCode, ConstraintCode, TermRef) and `arknet-domain-modelling-shared` (TermCode) |
-| Application outside every Bounded Context     | present (arknet-app); it holds no evaluation; besides the wiring it carries the type-independent tools, of which `text_search` moves to the Component for generic resource access (ADR-69), where `resource_get` and `resource_history` already are, and the HTML report, which moves to Model Analysis (ADR-54) |
+| Application outside every Bounded Context     | present (arknet-app); it holds no evaluation; besides the wiring it carries the type-independent tools, `store_overview` and `project_export`, and the HTML report, which moves to Model Analysis (ADR-54) |
 | dependency rules as a checker                 | partial: ArchUnit carries the rule that no module of a Component depends on a module of another for Product & Requirements and Domain Modelling, plus that a driving adapter sees only in-ports and domain types, that a `<bc>-shared` hangs on nothing but the Shared Kernel, that no core or vocabulary module reaches into `arknet-mcp-support`, that the Shared Kernel holds exactly the terms ADR-56 admits, and that Model Analysis names no module of the contexts it reads; the other contexts still borrow in-ports (ADR-49); generic resource access names no module of a context, only the composition root names it, and its core stays free of RDF4J and Spring, with a scan of its class files for any namespace of the model |
 | extension stages (starter, bom, adapter-events) | no trigger met -- correctly absent                 |
 
@@ -231,9 +231,8 @@ its own core only; no module of a Component depends on a module of another.
   MCP tools for both and their wiring in the composition root
   (`ArknetMcpConfiguration.ResourceAccessConfiguration`) exist. That wiring is conditional on
   `arknet.resource-access.enabled=true`, which is off by default, so `describe` and `submit`
-  are not offered before #746. The component's read tools `resource_get` and
-  `resource_history` are wired unconditionally; #743 still moves `text_search` out of the
-  composition root (ADR-69).
+  are not offered before #746. The component's read tools `resource_get`,
+  `resource_history`, `resource_list` and `text_search` are wired unconditionally.
 - #77: the building-block view moves into the store; this file goes away. Before
   that, a successor of ADR-46 (components move from "outside" to "not yet built"),
   see the comment on #77.
