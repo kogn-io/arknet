@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.time.Clock;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -29,17 +28,13 @@ import org.junit.jupiter.api.io.TempDir;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
-import io.kogn.rdf.terms.IRI;
-import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.persistence.ChildFragments;
 import de.hauschel.arknet.persistence.RdfNode;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.resource.application.SubmitService;
 import de.hauschel.arknet.resource.application.port.in.SubmitResult;
-import de.hauschel.arknet.resource.application.port.out.ResourceBatch;
 import de.hauschel.arknet.resource.application.port.out.ResourceRepository;
 import de.hauschel.arknet.resource.domain.SubmitRejectedException;
 
@@ -105,7 +100,7 @@ class SubmitRealStoreConcurrencyTest {
         ResourceRepository pausing = (projectId, writes) -> {
             attempts.incrementAndGet();
             repository.writeAll(projectId, batch -> writes.accept(
-                    new PausingBatch(batch, term, false, firstRead, termRead, termDeleted)));
+                    new PausingBatch(batch, PausingBatch.Read.SLICE, term, firstRead, termRead, termDeleted)));
         };
 
         // when
@@ -145,7 +140,7 @@ class SubmitRealStoreConcurrencyTest {
         ResourceRepository pausing = (projectId, writes) -> {
             attempts.incrementAndGet();
             repository.writeAll(projectId, batch -> writes.accept(
-                    new PausingBatch(batch, term, true, firstRead, edgesRead, edgeCommitted)));
+                    new PausingBatch(batch, PausingBatch.Read.EDGES, term, firstRead, edgesRead, edgeCommitted)));
         };
 
         // when
@@ -188,7 +183,8 @@ class SubmitRealStoreConcurrencyTest {
         ResourceRepository pausing = (projectId, writes) -> {
             attempts.incrementAndGet();
             tickets.writeAll(projectId, batch -> writes.accept(
-                    new PausingBatch(batch, replacement, false, firstRead, targetRead, targetReopened)));
+                    new PausingBatch(batch, PausingBatch.Read.SLICE, replacement, firstRead, targetRead,
+                            targetReopened)));
         };
 
         // when the old ticket closes while the replacement is reopened between the read and the commit
@@ -228,7 +224,7 @@ class SubmitRealStoreConcurrencyTest {
         ResourceRepository pausing = (projectId, writes) -> {
             attempts.incrementAndGet();
             papers.writeAll(projectId, batch -> writes.accept(
-                    new PausingBatch(batch, paper, false, firstRead, sliceRead, published)));
+                    new PausingBatch(batch, PausingBatch.Read.SLICE, paper, firstRead, sliceRead, published)));
         };
 
         // when the title is edited while a concurrent writer publishes the paper
@@ -270,92 +266,5 @@ class SubmitRealStoreConcurrencyTest {
                 KognioRdfResourceRepositoryFactory.parser(), new UuidResourceIdFactory(),
                 KognioRdfResourceRepositoryFactory.prefixes(), KognioRdfResourceRepositoryFactory.handles(lifecycle),
                 Clock.systemDefaultZone());
-    }
-
-    /**
-     * Pauses the first read of one resource - its slice, or the edges pointing at it - until a
-     * concurrent writer has committed.
-     */
-    private static final class PausingBatch implements ResourceBatch {
-
-        private final ResourceBatch delegate;
-        private final String pauseOn;
-        private final boolean onEdges;
-        private final AtomicBoolean firstRead;
-        private final CountDownLatch read;
-        private final CountDownLatch resume;
-
-        private PausingBatch(final ResourceBatch delegate, final String pauseOn, final boolean onEdges,
-                final AtomicBoolean firstRead, final CountDownLatch read, final CountDownLatch resume) {
-            this.delegate = delegate;
-            this.pauseOn = pauseOn;
-            this.onEdges = onEdges;
-            this.firstRead = firstRead;
-            this.read = read;
-            this.resume = resume;
-        }
-
-        @Override
-        public ReadableGraph slice(final IRI subject) {
-            ReadableGraph slice = delegate.slice(subject);
-            if (!onEdges) {
-                pauseOnFirstRead(subject);
-            }
-            return slice;
-        }
-
-        @Override
-        public ReadableGraph pointingAt(final IRI resource) {
-            ReadableGraph edges = delegate.pointingAt(resource);
-            if (onEdges) {
-                pauseOnFirstRead(resource);
-            }
-            return edges;
-        }
-
-        private void pauseOnFirstRead(final IRI subject) {
-            if (subject.getIRIString().equals(pauseOn) && firstRead.getAndSet(false)) {
-                read.countDown();
-                try {
-                    if (!resume.await(WAIT_SECONDS, TimeUnit.SECONDS)) {
-                        throw new IllegalStateException("the concurrent write never finished");
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new IllegalStateException(e);
-                }
-            }
-        }
-
-        @Override
-        public int highestRunningNumber(final String codePrefix) {
-            return delegate.highestRunningNumber(codePrefix);
-        }
-
-        @Override
-        public ChildFragments childFragments(final IRI parent, final ReadableGraph current) {
-            return delegate.childFragments(parent, current);
-        }
-
-        @Override
-        public List<String> violations(final IRI shape, final IRI focus, final ReadableGraph data) {
-            return delegate.violations(shape, focus, data);
-        }
-
-        @Override
-        public void create(final IRI subject, final String code, final ReadableGraph slice,
-                final ReadableGraph context) {
-            delegate.create(subject, code, slice, context);
-        }
-
-        @Override
-        public void update(final IRI subject, final ReadableGraph slice, final ReadableGraph context) {
-            delegate.update(subject, slice, context);
-        }
-
-        @Override
-        public void delete(final IRI subject, final String code) {
-            delegate.delete(subject, code);
-        }
     }
 }
