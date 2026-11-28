@@ -46,8 +46,8 @@ How to read a row:
 | `exception` | 4 |
 | **total** | **109** |
 
-Section 6 holds 9 documented exceptions (the 4 rows above and 5 without a row of their own),
-section 7 holds 7 intended differences, section 8 holds 11 items that are no rule.
+Section 6 holds 10 documented exceptions (the 4 rows above and 6 without a row of their own),
+section 7 holds 6 intended differences, section 8 holds 11 items that are no rule.
 
 ## 1. Product & Requirements (BC-1)
 
@@ -201,6 +201,7 @@ Rules every typed core enforces for its own resources, enforced once by the engi
 | Subdomain classification of a bounded context | The typed core keeps it as a single child with a fixed name (`#Subdomain`); the engine knows only ordered child lists, so no document can write it. Its value is still checked: `shapes:Subdomain-subdomainType`. | kogn-io/arknet#745, as a flat field `subdomainType` on the bounded context |
 | A Superseded record keeps its successor edge | The core refuses to clear or re-point `supersededBy` of a Superseded record. `submit` allows both without a status change: no transition is taken, so no condition runs, and a field group cannot hold the edge because undoing the supersession must clear it. An end-state shape for "Superseded needs the edge" would trip the typed adapter's peer copies (kogn-io/arknet#359). A record whose edge was cleared drops out of the typed read path (`KognioRdfAdrRepository` skips it with a warning). | kogn-io/arknet#744 / kogn-io/arknet#747 |
 | Legacy Proposed records with a decision date | Written only by releases before the date rule (kogn-io/arknet#374). `ashapes:ADR-proposedUndated` rejects every write that leaves such a record Proposed, and in `submit` every document that reaches it, since the engine validates reached neighbours. Ways out: accept, reject, delete or clear the date while Proposed. Pinned on the typed side by `AdrServiceLegacyProposedDateRealStoreTest` (`arknet-adr-adapter-kogniordf`). | kogn-io/arknet#745 (migration) |
+| A legacy actor breaking the actor shapes | Written before the actor shapes held (for example two names in one language, `actshapes:Actor-name`). Both sides validate the full occupant slice of a role: the typed core through `KognioRdfRoleRepository#occupantContext`, `submit` as a reached neighbour. A role add or update that names such an actor is rejected on both sides; a delete is not covered. Way out: repair the actor. Pinned by `RoleComparisonTest#aRoleFilledByAnActorBreakingTheActorShapesIsRejectedByBoth`. | kogn-io/arknet#745 (migration) |
 | Legacy flat `arkarch:adrConsequences` / `arkarch:adrAlternatives` | No tool writes them; they stay outside the frozen field group. | kogn-io/arknet#745 (migration) |
 | A kept child of a decided record takes text only in a new language | The engine compares a kept child's text by language, but no activity changes a child in place (an update on a child IRI is rejected), so the branch is unreachable and untested. The observable rule -- no child of a decided record changes or disappears -- is pinned by `ArchitectureDecisionsRulesRealStoreTest#theChildListsOfADecidedRecordKeepEveryChild`. | test due with a child-update activity |
 | Stored literals without a language tag | The cores never write one (`LanguageTag#resolveWriteLanguage` rejects a write without a tag), but older data holds some (constraints, actors and roles written before the tag was mandatory), and a typed write under another tag leaves them in place. `submit` rejects an untagged literal in the document only; a stored one stays and blocks no write, which is why there is no end-state shape for the tag. | kogn-io/arknet#745 (migration of the stored untagged literals), then an end-state shape |
@@ -217,7 +218,6 @@ Rules every typed core enforces for its own resources, enforced once by the engi
 | Choosing the option when accepting | `adr_update` corrects the outcome, then `adr_set_status` accepts | one document may do both |
 | Consequence type and option outcome | `Adr#with*Corrections` lets a Proposed record correct them | the same, through remove and add; frozen outside Proposed by the field group, not by `arkres:immutable` |
 | Requirement status | `req_update` never changes it, `req_accept`/`req_propose` do | an update changes it along the two transitions |
-| A legacy actor breaking the actor shapes | blocks no role write | blocks every role write that reaches it (neighbour validation) |
 
 ## 8. Not rule subjects
 
