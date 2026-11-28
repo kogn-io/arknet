@@ -41,7 +41,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <p>Domain-agnostic by construction - it never mentions a requirement, term or any type,
  * so it feeds the store report for every bounded context alike. It is also the only class on
- * this model read path that touches the kognio-rdf dataset API ({@code StoreExporter} touches
+ * this model read path that touches the kognio-rdf dataset API ({@code KognioRdfProjectDatasets} touches
  * it too, but for the backup/export path, not for reading the model); every result term is
  * mapped onto the neutral {@link Triple} / {@link RdfNode} model so the snapshot and renderers
  * stay free of backend types. This class depends solely on the technology-neutral kognio-rdf

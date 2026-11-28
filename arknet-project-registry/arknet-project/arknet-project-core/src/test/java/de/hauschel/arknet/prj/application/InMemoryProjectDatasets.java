@@ -3,6 +3,10 @@
 
 package de.hauschel.arknet.prj.application;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -92,5 +96,15 @@ final class InMemoryProjectDatasets implements ProjectDatasets {
         resources.remove(projectId);
         historyEntries.remove(projectId);
         deleted.add(projectId);
+    }
+
+    /** Writes a one-line marker naming the project, so a test can tell which dataset was backed up. */
+    @Override
+    public synchronized void export(ProjectId projectId, OutputStream out) {
+        try {
+            out.write(("# backup of " + projectId.value() + "\n").getBytes(StandardCharsets.UTF_8));
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
     }
 }

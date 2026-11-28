@@ -3,14 +3,15 @@
 
 package de.hauschel.arknet.prj.application.port.out;
 
+import java.io.OutputStream;
 import java.util.Map;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.DatasetInUseException;
 
 /**
- * Driven port: what a project's own dataset holds, and its removal - the two things deleting a
- * project needs to know and do beyond the registry.
+ * Driven port: what a project's own dataset holds, its removal and its backup - what deleting and
+ * exporting a project need to know and do beyond the registry.
  *
  * <p><strong>Why not {@link DatasetInventory}.</strong> That port is deliberately read-only and
  * returns identities only, so it can never become a second way into other projects' data. Deleting
@@ -19,10 +20,12 @@ import de.hauschel.arknet.prj.domain.DatasetInUseException;
  * the inventory would widen exactly the port that promises to stay narrow, so the capability gets
  * a port of its own, consulted by one use case only.</p>
  *
- * <p>Neither method creates a dataset that is not there. That matters because the store's own way
- * into a dataset creates it on first access: a count or a delete against a project that never
- * wrote anything must leave the store as it found it, not with an empty dataset that then shows up
- * as adoptable.</p>
+ * <p>Counting and deleting never create a dataset that is not there. That matters because the
+ * store's own way into a dataset creates it on first access: a count or a delete against a project
+ * that never wrote anything must leave the store as it found it, not with an empty dataset that
+ * then shows up as adoptable. {@link #export} reads the dataset like any other read; it is only
+ * asked for registered projects, whose dataset registration created with the
+ * self-description.</p>
  */
 public interface ProjectDatasets {
 
@@ -59,4 +62,14 @@ public interface ProjectDatasets {
      *                               short wait; the dataset is then left untouched
      */
     void delete(ProjectId projectId);
+
+    /**
+     * Writes every statement of every graph in a project's dataset to {@code out} as TriG text -
+     * the version history and the self-description included, since a backup exists to restore
+     * them too - followed by an export-metadata graph that is output only and never stored.
+     *
+     * @param projectId the project whose dataset is backed up
+     * @param out       the stream the TriG text is written to; not closed by this method
+     */
+    void export(ProjectId projectId, OutputStream out);
 }

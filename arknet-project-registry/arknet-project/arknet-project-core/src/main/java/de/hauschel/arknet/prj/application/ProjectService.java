@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.prj.application;
 
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 import de.hauschel.arknet.prj.application.port.in.AdoptProject;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
 import de.hauschel.arknet.prj.application.port.in.DeleteProject;
+import de.hauschel.arknet.prj.application.port.in.ExportProject;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.application.port.in.ListAdoptableDatasets;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
@@ -117,7 +119,7 @@ import de.hauschel.arknet.prj.domain.UnknownProjectException;
  */
 public class ProjectService
         implements RegisterProject, AdoptProject, AttachAnchor, RenameProject, ListProjects,
-        ListAdoptableDatasets, ResolveProject, FindProject, UpdateProject, DeleteProject {
+        ListAdoptableDatasets, ResolveProject, FindProject, UpdateProject, DeleteProject, ExportProject {
 
     /**
      * Bound shared by {@link #updateWithOptimisticRetry} and {@link #register}'s retry loop,
@@ -309,6 +311,13 @@ public class ProjectService
     public Optional<Project> findById(ProjectId id) {
         Objects.requireNonNull(id, "id");
         return registry.findById(id);
+    }
+
+    @Override
+    public void export(ProjectId projectId, OutputStream out) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(out, "out");
+        projectDatasets.export(projectId, out);
     }
 
     /**

@@ -3,12 +3,17 @@
 
 package de.hauschel.arknet.prj.adapter.kogniordf;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
 import io.kogn.rdf.dataset.BindingSet;
+import io.kogn.rdf.dataset.RdfFormat;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
@@ -21,16 +26,17 @@ import io.kogn.rdf.versioning.VocabVersioning;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ContentGraph;
+import de.hauschel.arknet.persistence.ExportMetadata;
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.prj.application.port.out.ProjectDatasets;
 import de.hauschel.arknet.prj.domain.DatasetInUseException;
 
 /**
- * kognio-rdf-backed {@link ProjectDatasets}: counts the typed resources in a project's dataset and
- * removes the dataset through {@link DatasetLifecycle#delete}.
+ * kognio-rdf-backed {@link ProjectDatasets}: counts the typed resources in a project's dataset,
+ * removes the dataset through {@link DatasetLifecycle#delete} and writes its backup.
  *
  * <p><strong>Nothing is created by looking.</strong> {@link DatasetLifecycle#acquire} opens a
- * dataset by creating it if it is missing. Both methods therefore ask {@link DatasetLifecycle#list}
+ * dataset by creating it if it is missing. Counting and deleting therefore ask {@link DatasetLifecycle#list}
  * first and leave a dataset that is not there alone - a project that never wrote anything must not
  * gain an empty dataset by being counted, which {@code project_list} would then offer for
  * adoption.</p>
@@ -57,6 +63,25 @@ import de.hauschel.arknet.prj.domain.DatasetInUseException;
  * it would let an attach, rename or adopt of that project slip in between the registry removal and
  * the dataset removal. An interrupt during the wait ends it
  * early with the same report, the interrupt flag left set.</p>
+ *
+ * <p><strong>The backup hides nothing.</strong> {@link #export} serialises the complete dataset -
+ * default graph and every named graph alike - unlike {@code StoreReader}, which excludes the
+ * provenance and project-identity graphs because it feeds a view of the current model, not of its
+ * own machinery. A backup exists precisely to restore both the model and that machinery, so
+ * excluding either graph here would silently drop data from the backup rather than declutter a
+ * view of it. Serialisation itself is {@link DatasetHandle#datasetExport()} (kognio-rdf 0.2.2): a
+ * spec-compliant, RDF4J-Rio-backed writer, not a hand-rolled one - an earlier hand-rolled version
+ * fell back to {@code RDFTerm#ntriplesString()} for literal objects, which the RDF4J-backed term
+ * implementation resolves to {@code Value#toString()}, and that method does not escape an embedded
+ * {@code "}, {@code \} or newline in the lexical form. Any requirement/term/use-case text
+ * containing one produced syntactically invalid TriG that still reported as a successful
+ * export.</p>
+ *
+ * <p><strong>One graph the store does not hold.</strong> Every dump ends with
+ * {@link ExportMetadata}'s envelope (issue #194) - which server version, built when, exported
+ * when, against which ontology module versions - in a named graph of its own. It is appended to
+ * the serialised text and never written into the dataset, so the store keeps exactly the triples
+ * it had; a reader who wants the store alone drops that one graph.</p>
  */
 public final class KognioRdfProjectDatasets implements ProjectDatasets {
 
@@ -75,24 +100,32 @@ public final class KognioRdfProjectDatasets implements ProjectDatasets {
             + "> ?sequence } }";
 
     private final DatasetLifecycle lifecycle;
+    private final ExportMetadata exportMetadata;
     private final Prefixes prefixes = Prefixes.defaults();
     private final int deleteAttempts;
     private final Duration deletePause;
 
     /**
-     * @param lifecycle the shared dataset lifecycle every project dataset is acquired through
+     * @param lifecycle      the shared dataset lifecycle every project dataset is acquired through
+     * @param exportMetadata the envelope appended to every backup (must not be {@code null}) - not
+     *                       optional, because a dump that sometimes states its origin and sometimes
+     *                       does not is worse than one that never does: the absence would read as a
+     *                       fact about the exporting server rather than about the wiring
      */
-    public KognioRdfProjectDatasets(final DatasetLifecycle lifecycle) {
-        this(lifecycle, DEFAULT_DELETE_ATTEMPTS, DEFAULT_DELETE_PAUSE);
+    public KognioRdfProjectDatasets(final DatasetLifecycle lifecycle, final ExportMetadata exportMetadata) {
+        this(lifecycle, exportMetadata, DEFAULT_DELETE_ATTEMPTS, DEFAULT_DELETE_PAUSE);
     }
 
     /**
      * @param lifecycle      the shared dataset lifecycle every project dataset is acquired through
+     * @param exportMetadata the envelope appended to every backup
      * @param deleteAttempts how often {@link #delete} tries before reporting an open lease, at least 1
      * @param deletePause    the wait between two attempts
      */
-    KognioRdfProjectDatasets(final DatasetLifecycle lifecycle, final int deleteAttempts, final Duration deletePause) {
+    KognioRdfProjectDatasets(final DatasetLifecycle lifecycle, final ExportMetadata exportMetadata,
+            final int deleteAttempts, final Duration deletePause) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
+        this.exportMetadata = Objects.requireNonNull(exportMetadata, "exportMetadata");
         if (deleteAttempts < 1) {
             throw new IllegalArgumentException("deleteAttempts must be at least 1");
         }
@@ -150,6 +183,23 @@ public final class KognioRdfProjectDatasets implements ProjectDatasets {
             }
         }
         throw new DatasetInUseException(projectId, lastRefusal);
+    }
+
+    @Override
+    public void export(final ProjectId projectId, final OutputStream out) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(out, "out");
+        try (DatasetHandle handle = lifecycle.acquire(datasetOf(projectId))) {
+            handle.datasetExport().export(out, RdfFormat.TRIG);
+        }
+        // After the dataset export, not before: the envelope states when the export ended, and
+        // appending keeps it out of the way of a reader that only skims the first graph blocks.
+        try {
+            out.write(exportMetadata.trigBlock().getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        } catch (final IOException failure) {
+            throw new UncheckedIOException("failed to append the export metadata graph", failure);
+        }
     }
 
     private Map.Entry<String, Long> toEntry(final BindingSet row) {

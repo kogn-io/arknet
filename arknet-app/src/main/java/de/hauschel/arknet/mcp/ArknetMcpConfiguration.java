@@ -39,10 +39,10 @@ import de.hauschel.arknet.mcp.report.RoleCards;
 import de.hauschel.arknet.mcp.report.SpecificationRenderer;
 import de.hauschel.arknet.mcp.report.TermCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
-import de.hauschel.arknet.mcp.store.ExportMetadata;
 import de.hauschel.arknet.analysis.adapter.kogniordf.KognioRdfModelSnapshots;
 import de.hauschel.arknet.analysis.adapter.kogniordf.KognioRdfResourceHandleLookup;
 import de.hauschel.arknet.analysis.adapter.mcp.StoreCheckMcpTools;
+import de.hauschel.arknet.persistence.ExportMetadata;
 import de.hauschel.arknet.persistence.Prefixes;
 import de.hauschel.arknet.mcp.version.OntologyVersions;
 import de.hauschel.arknet.mcp.version.ServerVersion;
@@ -73,14 +73,13 @@ import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfDatasetInventory;
 import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfProjectDatasets;
 import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfProjectRepositoryFactory;
+import de.hauschel.arknet.prj.adapter.mcp.ProjectExportMcpTools;
 import de.hauschel.arknet.prj.adapter.mcp.ProjectMcpTools;
 import de.hauschel.arknet.prj.application.ProjectService;
 import de.hauschel.arknet.prj.application.port.out.DatasetInventory;
 import de.hauschel.arknet.prj.application.port.out.ProjectDatasets;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
-import de.hauschel.arknet.mcp.store.StoreExportTools;
-import de.hauschel.arknet.mcp.store.StoreExporter;
 import de.hauschel.arknet.mcp.store.StoreFieldLanguageLookup;
 import de.hauschel.arknet.persistence.HandleResolver;
 import de.hauschel.arknet.persistence.StoreReader;
@@ -924,8 +923,8 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * Inspects and removes a project's own dataset - what {@code project_delete} needs beyond the
-     * registry. A bean of its own rather than a widening of {@link #datasetInventory}, which
+     * Inspects, removes and backs up a project's own dataset - what {@code project_delete} and
+     * {@code project_export} need beyond the registry. A bean of its own rather than a widening of {@link #datasetInventory}, which
      * promises to stay read-only and identity-only.
      *
      * <p>Over the same shared {@link DatasetLifecycle} as everything else: a removal waits briefly
@@ -933,8 +932,8 @@ public class ArknetMcpConfiguration {
      * every such lease is taken from.</p>
      */
     @Bean
-    ProjectDatasets projectDatasets(final DatasetLifecycle datasetLifecycle) {
-        return new KognioRdfProjectDatasets(datasetLifecycle);
+    ProjectDatasets projectDatasets(final DatasetLifecycle datasetLifecycle, final ExportMetadata exportMetadata) {
+        return new KognioRdfProjectDatasets(datasetLifecycle, exportMetadata);
     }
 
     @Bean
@@ -1089,16 +1088,6 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The backup read path: a complete {@code SELECT ?g ?s ?p ?o} spanning every named graph of a
-     * project's dataset, unlike {@link #storeReader} it hides neither the provenance nor the
-     * project-identity graph, because a backup exists to restore both.
-     */
-    @Bean
-    StoreExporter storeExporter(final DatasetLifecycle datasetLifecycle, final ExportMetadata exportMetadata) {
-        return new StoreExporter(datasetLifecycle, exportMetadata);
-    }
-
-    /**
      * The build this daemon runs, as one string three places state (issue #194): the MCP
      * {@code initialize} handshake, every backup dump's envelope, and the suffix on every failing
      * tool call.
@@ -1126,11 +1115,14 @@ public class ArknetMcpConfiguration {
     /**
      * The metadata graph appended to every {@code project_export} dump. Reads the shipped ontology
      * modules' {@code owl:versionInfo} once, at wiring time: they are classpath resources of a
-     * running server and cannot change under it.
+     * running server and cannot change under it. Handed over as finished values, so the project
+     * registry's store adapter that appends the envelope names neither {@link ServerVersion} nor
+     * any other context's ontology.
      */
     @Bean
     ExportMetadata exportMetadata(final ServerVersion serverVersion) {
-        return new ExportMetadata(serverVersion, OntologyVersions.onClasspath(), Clock.systemUTC());
+        return new ExportMetadata(serverVersion.version(), serverVersion.buildTime(),
+                OntologyVersions.onClasspath(), Clock.systemUTC());
     }
 
     /**
@@ -1145,9 +1137,9 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The one backup tool ({@code project_export}). Project-scoped only on request: by default it
-     * exports every project {@link ProjectService} (as its {@code ListProjects} in-port) reports as
-     * registered, in one call, and narrows to this call's own project - resolved through
+     * The one backup tool ({@code project_export}), the project registry's second MCP adapter
+     * class. Project-scoped only on request: by default it exports every project
+     * {@link ProjectService} (as its {@code ListProjects} in-port) reports as registered, in one call, and narrows to this call's own project - resolved through
      * {@code projectResolver} like every other tool's - when the caller passes
      * {@code projectOnly=true}. {@code arknet.export.dir}/{@code arknet.export.host-dir} mirror
      * {@code arknet.report.dir}/{@code arknet.report.host-dir} for the same reason: on a
@@ -1155,13 +1147,12 @@ public class ArknetMcpConfiguration {
      * agent cannot reach directly.
      */
     @Bean
-    StoreExportTools storeExportTools(
+    ProjectExportMcpTools projectExportMcpTools(
             final ProjectService projectService, final ProjectResolver projectResolver,
-            final StoreExporter storeExporter,
             @Value("${arknet.export.dir:${user.home}/.arknet/export}") final Path fallbackExportDir,
             @Value("${arknet.export.host-dir:#{null}}") final Path exportHostDir) {
-        return new StoreExportTools(
-                projectService, projectService, projectResolver, storeExporter, fallbackExportDir,
+        return new ProjectExportMcpTools(
+                projectService, projectService, projectResolver, projectService, fallbackExportDir,
                 exportHostDir);
     }
 

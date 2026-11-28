@@ -47,6 +47,7 @@ import de.hauschel.arknet.mcp.report.RequirementCards;
 import de.hauschel.arknet.mcp.report.RoleCards;
 import de.hauschel.arknet.mcp.report.SpecificationRenderer;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
+import de.hauschel.arknet.mcpsupport.FileNameSanitizer;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException;

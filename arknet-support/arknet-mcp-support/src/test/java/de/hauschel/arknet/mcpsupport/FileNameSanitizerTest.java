@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.mcp.store;
+package de.hauschel.arknet.mcpsupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

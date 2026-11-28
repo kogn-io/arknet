@@ -65,7 +65,7 @@ class KognioRdfProjectDatasetsTest {
         final DatasetLifecycle datasetLifecycle =
                 new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
-        datasets = new KognioRdfProjectDatasets(datasetLifecycle, 2, Duration.ofMillis(1));
+        datasets = new KognioRdfProjectDatasets(datasetLifecycle, ExportFixtures.metadata(), 2, Duration.ofMillis(1));
     }
 
     @AfterEach
@@ -229,7 +229,7 @@ class KognioRdfProjectDatasetsTest {
                 return lifecycle.list();
             }
         };
-        final KognioRdfProjectDatasets patient = new KognioRdfProjectDatasets(counting, 50, Duration.ofSeconds(1));
+        final KognioRdfProjectDatasets patient = new KognioRdfProjectDatasets(counting, ExportFixtures.metadata(), 50, Duration.ofSeconds(1));
 
         try (DatasetHandle lease = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             Thread.currentThread().interrupt();

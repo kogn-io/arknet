@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.mcp.store;
+package de.hauschel.arknet.persistence;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -11,15 +11,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
-import de.hauschel.arknet.mcp.version.ServerVersion;
-import de.hauschel.arknet.persistence.ExportMetadataVocabulary;
-import de.hauschel.arknet.persistence.SparqlTerms;
-
 /**
- * The envelope {@link StoreExporter} appends to every {@code .trig} dump: which server wrote it,
- * when, and against which ontology module versions (issue #194).
+ * The envelope the project registry's store adapter appends to every {@code project_export}
+ * {@code .trig} dump: which server wrote it, when, and against which ontology module versions
+ * (issue #194).
  *
  * <p><strong>Output, not state.</strong> These triples are never written into a dataset and never
  * validated by the SHACL write gate. They exist in the serialised text only, in the single named
@@ -40,24 +38,39 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  * {@link SparqlTerms}, whose {@code IRIREF} and {@code STRING_LITERAL2} productions Turtle and
  * TriG share verbatim with SPARQL. An ontology IRI that could not be written safely is left out
  * rather than allowed to produce invalid TriG under a filename that claims a completed export.</p>
+ *
+ * <p><strong>Finished values in, no knowledge of their source.</strong> The server version, its
+ * build time and the ontology versions arrive as plain values from the composition root, which
+ * reads them off the running build and its classpath. This class therefore names neither the
+ * server's version type nor any ontology module, and a bounded context whose adapter writes the
+ * dump does not learn about the other contexts' ontologies through it.</p>
  */
 public final class ExportMetadata {
 
-    private final ServerVersion serverVersion;
+    private final String serverVersion;
+    private final Optional<Instant> buildTime;
     private final Map<String, String> ontologyVersions;
     private final Clock clock;
 
     /**
-     * @param serverVersion    the build this daemon is running
-     * @param ontologyVersions ontology module IRI to {@code owl:versionInfo}, as
-     *                         {@code OntologyVersions#onClasspath()} read them; may be empty
+     * @param serverVersion    the version of the build this daemon is running, already resolved
+     *                         to a placeholder by the caller when no build named one; must not be
+     *                         blank
+     * @param buildTime        when that build was produced, empty when unknown - then the envelope
+     *                         states no build time rather than an invented one
+     * @param ontologyVersions ontology module IRI to {@code owl:versionInfo}, as read off the
+     *                         shipped ontology modules; may be empty
      * @param clock            supplies the export timestamp - injected for the same reason
      *                         {@code VersionedWriteFunnel}'s is: it is the one value of the envelope that
      *                         does not follow from its inputs
      */
-    public ExportMetadata(final ServerVersion serverVersion, final Map<String, String> ontologyVersions,
-            final Clock clock) {
+    public ExportMetadata(final String serverVersion, final Optional<Instant> buildTime,
+            final Map<String, String> ontologyVersions, final Clock clock) {
         this.serverVersion = Objects.requireNonNull(serverVersion, "serverVersion");
+        if (serverVersion.isBlank()) {
+            throw new IllegalArgumentException("serverVersion must not be blank");
+        }
+        this.buildTime = Objects.requireNonNull(buildTime, "buildTime");
         this.ontologyVersions = new LinkedHashMap<>(Objects.requireNonNull(ontologyVersions, "ontologyVersions"));
         this.clock = Objects.requireNonNull(clock, "clock");
     }
@@ -110,11 +123,11 @@ public final class ExportMetadata {
                 SparqlTerms.iriRef(ExportMetadataVocabulary.PROV_SOFTWARE_AGENT), " ;");
         // The build time is omitted rather than defaulted when no build-info.properties was on the
         // classpath: an invented timestamp would be indistinguishable from a real one.
-        final boolean hasBuildTime = serverVersion.buildTime().isPresent();
+        final boolean hasBuildTime = buildTime.isPresent();
         appendPredicate(trig, ExportMetadataVocabulary.OWL_VERSION_INFO,
-                literal(serverVersion.version()), hasBuildTime ? " ;" : " .");
-        serverVersion.buildTime().ifPresent(buildTime ->
-                appendPredicate(trig, ExportMetadataVocabulary.DCTERMS_CREATED, dateTime(buildTime), " ."));
+                literal(serverVersion), hasBuildTime ? " ;" : " .");
+        buildTime.ifPresent(created ->
+                appendPredicate(trig, ExportMetadataVocabulary.DCTERMS_CREATED, dateTime(created), " ."));
         trig.append(System.lineSeparator());
     }
 

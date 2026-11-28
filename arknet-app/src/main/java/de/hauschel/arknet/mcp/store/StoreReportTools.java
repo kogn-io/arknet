@@ -21,6 +21,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcp.report.SpecificationRenderer;
+import de.hauschel.arknet.mcpsupport.FileNameSanitizer;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
 import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
@@ -253,7 +254,7 @@ public final class StoreReportTools {
     /**
      * Package-private (rather than fully private) only so the test can predict a project's report
      * subdirectory without duplicating {@link FileNameSanitizer#uniqueSegment}'s format, the same
-     * reason {@code StoreExportTools#timestampFolderName} is package-private.
+     * reason {@code ProjectExportMcpTools#timestampFolderName} is package-private.
      */
     static String reportSegment(final ProjectId projectId) {
         return FileNameSanitizer.uniqueSegment(projectId.value());
@@ -312,10 +313,10 @@ public final class StoreReportTools {
      * content lands in a fresh, uniquely named sibling file first, and only
      * {@link Files#move(Path, Path, java.nio.file.CopyOption...)} - a single filesystem rename -
      * ever touches {@link #REPORT_FILE_NAME} itself (issue #305 part 3, same
-     * write-to-temp-then-rename shape {@link StoreExportTools#exportOne} already uses, and for
+     * write-to-temp-then-rename shape {@code project_export} already uses, and for
      * the same reason: a client reading the report mid-write must never see a truncated or
      * interleaved file). {@link Files#createTempFile} - rather than a fixed {@code .tmp} name -
-     * matters here specifically because, unlike {@link StoreExportTools}'s per-call timestamped
+     * matters here specifically because, unlike {@code project_export}'s per-call timestamped
      * subdirectory, every {@code store_overview} call for the same project shares this exact
      * {@code targetDir}: two overlapping calls (an ordinary occurrence under the shared daemon -
      * several sessions of one project against it) would otherwise both write through the identical fixed

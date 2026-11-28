@@ -1194,9 +1194,10 @@ public final class HtmlReportRenderer {
      * bar. {@link #shortHash} is a SHA-256 digest, not merely {@link String#hashCode()}
      * (issue #305 part 2): a 32-bit {@code hashCode} is trivially collidable by construction, so
      * it never actually delivered the injectivity this method used to claim - the same collision
-     * risk {@link de.hauschel.arknet.mcp.store.FileNameSanitizer#uniqueSegment} closes for
+     * risk {@link de.hauschel.arknet.mcpsupport.FileNameSanitizer#uniqueSegment} closes for
      * on-disk path segments with the identical SHA-256-suffix design, only duplicated here rather
-     * than shared because {@code FileNameSanitizer} is package-private to {@code mcp.store}.</p>
+     * than shared: the report pages are rebuilt on the generic read path (#747) and move to model
+     * analysis (#642), and this copy goes with them.</p>
      */
     private String resourceAnchor(final String iri) {
         return "r-" + sanitize(prefixes.toCurie(iri)) + "-" + shortHash(iri);
