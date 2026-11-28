@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -605,6 +607,22 @@ class ProjectServiceTest {
 
         assertThrows(ResourceAlreadyExistsException.class,
                 () -> retryingService.adopt(existing, "arknet", pathAnchor("/home/fred/DEV/arknet")));
+    }
+
+    /** The backup is the dataset port's: the service hands the stream through for the named project. */
+    @Test
+    void exportWritesTheNamedProjectsDatasetThroughTheDatasetPort() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        service.export(new ProjectId("export-me"), out);
+
+        assertEquals("# backup of export-me\n", out.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void exportRejectsAMissingProjectOrStream() {
+        assertThrows(NullPointerException.class, () -> service.export(null, new ByteArrayOutputStream()));
+        assertThrows(NullPointerException.class, () -> service.export(new ProjectId("export-me"), null));
     }
 
     private static Anchor pathAnchor(String value) {

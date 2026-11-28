@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.mcp.store;
+package de.hauschel.arknet.prj.adapter.mcp;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -20,35 +20,46 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
+import io.modelcontextprotocol.common.McpTransportContext;
+
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.mcpsupport.FileNameSanitizer;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ToolParameterDescriptions;
+import de.hauschel.arknet.prj.application.port.in.ExportProject;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.domain.Project;
 
 /**
  * The one backup tool exposed over MCP: {@code project_export} writes a complete TriG export
- * ({@link StoreExporter}) into a timestamped subdirectory of a configurable base directory, once
+ * ({@link ExportProject}) into a timestamped subdirectory of a configurable base directory, once
  * per call.
  *
  * <p><strong>Two scopes, one tool.</strong> By default the call addresses no single project - it
  * asks {@link ListProjects} for every registered project and exports them all, because a backup
  * trigger is inherently cross-project. With {@code projectOnly=true} it narrows to the one project
  * this call addresses through its anchor, resolved exactly like every other tool's
- * ({@link AnchorContext}: the {@code projectAnchor} argument if given, otherwise the transport's
- * header - both delivery paths open decision 2), and a missing or unregistered anchor is
+ * (the {@code projectAnchor} argument if given, otherwise the transport's header, both handed to
+ * {@link ProjectResolver}), and a missing or unregistered anchor is
  * an error rather than a silent fall-back to the full export. The anchor is simply not read in the
  * default scope; a call that addresses no project needs none. An explicit {@code projectAnchor}
  * argument given without {@code projectOnly=true} is rejected outright rather than silently
  * ignored, though - a silently ignored anchor argument would hand the caller the opposite of what
  * it asked for.</p>
  *
+ * <p><strong>Resolved through {@link ProjectResolver}, unlike {@link ProjectMcpTools}.</strong>
+ * The project tools answer the routing question and therefore cannot sit behind an answer to it.
+ * This tool does not answer it; it addresses a project like every model tool does, so it resolves
+ * the anchor the same way and the caller gets the same remedy for a missing or unknown anchor
+ * (name {@code project_add}, {@code project_adopt}, {@code project_list}) as from any other
+ * tool.</p>
+ *
  * <p>There is deliberately no restore counterpart - restoring a {@code .trig} file back into a
  * dataset is left to manual or agent-assisted recovery for now.</p>
  *
  * <p>Each project's file is written to a sibling {@code .tmp} path first and only moved onto its
- * final name once {@link StoreExporter#exportTrig} returns - {@code exportTrig} now streams
+ * final name once {@link ExportProject#export} returns - the export streams
  * straight into the target {@link OutputStream} rather than building the whole TriG text in
  * memory first, so a failure partway through the write must not leave a truncated, invalid
  * {@code .trig} file sitting under a name that looks like a completed export.</p>
@@ -57,7 +68,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * {@code store_overview} is: the hint describes mutation of the RDF store, and this tool never
  * writes to it, only to the filesystem.</p>
  */
-public final class StoreExportTools {
+public final class ProjectExportMcpTools {
 
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss");
 
@@ -76,7 +87,7 @@ public final class StoreExportTools {
      * {@code projectOnly=true}. Named after what the caller should do, the same style
      * {@code RegisteredAnchorProjectResolver}'s remedy messages use, rather than a bare "invalid
      * argument". That resolver is named rather than linked because it is package-private in
-     * {@code de.hauschel.arknet.mcp}, the same way {@link StoreReportController} refers to it.
+     * {@code de.hauschel.arknet.mcp} of the composition root.
      */
     static final String ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE =
             "projectAnchor was given without projectOnly=true. Pass projectOnly=true if you meant "
@@ -87,7 +98,7 @@ public final class StoreExportTools {
     private final ListProjects listProjects;
     private final FindProject findProject;
     private final ProjectResolver projects;
-    private final StoreExporter exporter;
+    private final ExportProject exportProject;
     private final Path fallbackExportDir;
     private final Path exportHostDir;
 
@@ -98,21 +109,21 @@ public final class StoreExportTools {
      *                          full scope gets straight from {@link ListProjects}
      * @param projects          resolves this call's target project from its anchor, used only in
      *                          the {@code projectOnly=true} scope
-     * @param exporter          the complete-store TriG export path
+     * @param exportProject     writes one project's complete TriG backup
      * @param fallbackExportDir the directory a timestamped subdirectory is created under for
      *                          every export call
      * @param exportHostDir     the host-reachable path {@code fallbackExportDir} is bind-mounted
      *                          from, or {@code null} when the process runs directly on the
      *                          machine it exports to and no translation is needed (analogous to
-     *                          {@link StoreReportTools}'s {@code reportHostDir})
+     *                          {@code store_overview}'s {@code arknet.report.host-dir})
      */
-    public StoreExportTools(
+    public ProjectExportMcpTools(
             final ListProjects listProjects, final FindProject findProject, final ProjectResolver projects,
-            final StoreExporter exporter, final Path fallbackExportDir, final Path exportHostDir) {
+            final ExportProject exportProject, final Path fallbackExportDir, final Path exportHostDir) {
         this.listProjects = Objects.requireNonNull(listProjects, "listProjects");
         this.findProject = Objects.requireNonNull(findProject, "findProject");
         this.projects = Objects.requireNonNull(projects, "projects");
-        this.exporter = Objects.requireNonNull(exporter, "exporter");
+        this.exportProject = Objects.requireNonNull(exportProject, "exportProject");
         this.fallbackExportDir = Objects.requireNonNull(fallbackExportDir, "fallbackExportDir");
         this.exportHostDir = exportHostDir;
     }
@@ -158,7 +169,7 @@ public final class StoreExportTools {
     }
 
     /**
-     * The {@code projectOnly=true} scope. Resolution is {@link AnchorContext}'s, unchanged, so a
+     * The {@code projectOnly=true} scope. Resolution is {@link ProjectResolver}'s, unchanged, so a
      * missing or unregistered anchor throws
      * {@link de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException} exactly as it does for
      * every read tool - narrowing the export to "this project" without knowing which project that
@@ -166,7 +177,8 @@ public final class StoreExportTools {
      */
     private String exportAddressedProject(
             final McpSyncRequestContext context, final String projectAnchor, final String timestamp) {
-        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
+        final String explicit = (projectAnchor == null || projectAnchor.isBlank()) ? null : projectAnchor;
+        final ProjectId projectId = projects.resolve(explicit != null ? explicit : contextAnchor(context)).id();
         final Optional<Project> project = findProject.findById(projectId);
         if (project.isEmpty()) {
             // Reachable: project_delete can remove the project this anchor just resolved to
@@ -203,12 +215,12 @@ public final class StoreExportTools {
             return writeFailureLine(project, targetDir, failure);
         }
         // Deliberately its own try/catch, not folded into the createDirectories/move steps above:
-        // exportTrig both reads (acquires the dataset) and writes (streams into tmpStream), so a
+        // the export both reads (acquires the dataset) and writes (streams into tmpStream), so a
         // failure here may have nothing to do with the filesystem at all - e.g. a
         // DatasetLockConflictException from a concurrently open lease. "FAILED to write" would
         // misname exactly that case (issue #146).
         try (tmpStream) {
-            exporter.exportTrig(project.id(), tmpStream);
+            exportProject.export(project.id(), tmpStream);
         } catch (final IOException | RuntimeException failure) {
             deleteQuietly(tmp);
             return exportFailureLine(project, failure);
@@ -257,5 +269,18 @@ public final class StoreExportTools {
      */
     static String timestampFolderName() {
         return TIMESTAMP_FORMAT.format(LocalDateTime.now()) + "-" + CALL_SEQUENCE.incrementAndGet();
+    }
+
+    /**
+     * The anchor the transport carried for this call under {@link ProjectResolver#ANCHOR_KEY}, or
+     * {@code null} when there is none - the same lookup every other MCP adapter does for itself.
+     */
+    private static String contextAnchor(final McpSyncRequestContext context) {
+        if (context == null) {
+            return null;
+        }
+        final McpTransportContext transport = context.transportContext();
+        final Object anchor = transport == null ? null : transport.get(ProjectResolver.ANCHOR_KEY);
+        return anchor == null ? null : anchor.toString();
     }
 }

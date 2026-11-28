@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.mcp.store;
+package de.hauschel.arknet.prj.adapter.kogniordf;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -34,6 +35,7 @@ import io.kogn.rdf.versioning.VersioningGraphs;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.persistence.ExportMetadata;
 import de.hauschel.arknet.persistence.ExportMetadataVocabulary;
 import de.hauschel.arknet.persistence.StoreReader;
 import de.hauschel.arknet.pr.shared.RequirementCode;
@@ -47,18 +49,18 @@ import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 
 /**
- * Unit tests for {@link StoreExporter}: unlike {@link StoreReader}, the backup export must
+ * Tests for {@link KognioRdfProjectDatasets#export}: unlike {@link StoreReader}, the backup export must
  * surface every named graph, including the infrastructure ones {@link StoreReader} hides.
  *
  * <p>Serialisation itself is {@link DatasetHandle#datasetExport()} (kognio-rdf 0.2.2), an
- * RDF4J-Rio-backed writer - these tests exercise {@link StoreExporter}'s own wiring around it
+ * RDF4J-Rio-backed writer - these tests exercise the adapter's own wiring around it
  * (dataset acquisition, which graphs come back), plus one end-to-end regression for the defect
  * that motivated the switch: the previous hand-rolled serialisation fell back to
  * {@code RDFTerm#ntriplesString()} for literal objects, which resolves to
  * {@code Value#toString()} on the RDF4J-backed term implementation this store runs on - a method
  * that does not escape an embedded {@code "}, {@code \} or newline in the lexical form.</p>
  */
-class StoreExporterTest {
+class KognioRdfProjectDatasetsExportTest {
 
     private static final ProjectId PROJECT = new ProjectId("store-exporter-test");
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-exporter-test-fr-1";
@@ -70,7 +72,7 @@ class StoreExporterTest {
     Path storageDir;
 
     private DatasetLifecycle lifecycle;
-    private StoreExporter exporter;
+    private KognioRdfProjectDatasets exporter;
 
     @BeforeEach
     void setUp() {
@@ -99,7 +101,7 @@ class StoreExporterTest {
 
     private String exportTrig() {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        exporter.exportTrig(PROJECT, out);
+        exporter.export(PROJECT, out);
         return out.toString(StandardCharsets.UTF_8);
     }
 
@@ -192,6 +194,26 @@ class StoreExporterTest {
         assertThat(trig).contains("<" + testGraph + ">");
         assertThat(trig).containsPattern(
                 Pattern.compile("_:\\S+\\s+<" + Pattern.quote(predicate) + ">\\s+\"blank node target\"\\s*\\."));
+    }
+
+    /**
+     * A dataset another lifecycle holds open cannot be read, and the export says so by throwing
+     * rather than by writing a truncated dump: {@code project_export} reports such a failure as
+     * "FAILED to export", and that report depends on this exception reaching it (issue #146). A
+     * second lifecycle over the same {@code storageDir} reproduces a genuine RDF4J lock conflict.
+     */
+    @Test
+    void exportOfADatasetLockedByAnotherLifecycleThrows() {
+        DatasetHandle heldOpen = lifecycle.acquire(new DatasetId(PROJECT.value()));
+        try {
+            DatasetLifecycle competingLifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+            KognioRdfProjectDatasets competing = ExportFixtures.exporterOver(competingLifecycle);
+
+            assertThatThrownBy(() -> competing.export(PROJECT, new ByteArrayOutputStream()))
+                    .isInstanceOf(RuntimeException.class);
+        } finally {
+            heldOpen.close();
+        }
     }
 
     /** Writes a single blank-node-subject triple straight into its own named graph. */

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.mcp.store;
+package de.hauschel.arknet.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -16,8 +16,6 @@ import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.Rio;
 import org.junit.jupiter.api.Test;
 
-import de.hauschel.arknet.mcp.version.ServerVersion;
-import de.hauschel.arknet.persistence.ExportMetadataVocabulary;
 
 /**
  * Unit tests for the envelope {@code project_export} appends to every dump (issue #194).
@@ -28,6 +26,9 @@ import de.hauschel.arknet.persistence.ExportMetadataVocabulary;
  * answers neither.</p>
  */
 class ExportMetadataTest {
+
+    /** The placeholder the composition root passes when no build named a version. */
+    private static final String UNKNOWN_VERSION = "unknown";
 
     private static final String CORE = "https://w3id.org/arknet/core";
     private static final String REQUIREMENTS = "https://w3id.org/arknet/requirements";
@@ -82,12 +83,12 @@ class ExportMetadataTest {
     @Test
     void anUnknownBuildClaimsNoBuildTime() {
         final ExportMetadata metadata = new ExportMetadata(
-                ServerVersion.unknown(), Map.of(), ExportFixtures.EXPORT_CLOCK);
+                UNKNOWN_VERSION, Optional.empty(), Map.of(), ExportFixtures.EXPORT_CLOCK);
 
         final Model parsed = parse(metadata.trigBlock());
 
         assertThat(objectsOf(parsed, ExportMetadataVocabulary.SERVER_AGENT,
-                ExportMetadataVocabulary.OWL_VERSION_INFO)).containsExactly(ServerVersion.UNKNOWN);
+                ExportMetadataVocabulary.OWL_VERSION_INFO)).containsExactly(UNKNOWN_VERSION);
         assertThat(parsed.filter(null, Values.iri(ExportMetadataVocabulary.DCTERMS_CREATED), null)).isEmpty();
     }
 
@@ -115,7 +116,7 @@ class ExportMetadataTest {
 
     private static ExportMetadata metadataOver(final Map<String, String> ontologyVersions) {
         return new ExportMetadata(
-                new ServerVersion(ExportFixtures.TEST_VERSION, Optional.of(ExportFixtures.FIXED_INSTANT)),
+                ExportFixtures.TEST_VERSION, Optional.of(ExportFixtures.FIXED_INSTANT),
                 ontologyVersions, ExportFixtures.EXPORT_CLOCK);
     }
 

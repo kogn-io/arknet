@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Fred Hauschel
 
-package de.hauschel.arknet.mcp.store;
+package de.hauschel.arknet.prj.adapter.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.UncheckedIOException;
+import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.AbstractList;
@@ -16,8 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -25,71 +25,46 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 
-import io.kogn.rdf.dataset.hosting.DatasetHandle;
-import io.kogn.rdf.dataset.hosting.DatasetId;
-import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
-
-import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.mcpsupport.FileNameSanitizer;
 import de.hauschel.arknet.mcpsupport.ProjectResolver;
 import de.hauschel.arknet.mcpsupport.ResolvedProject;
-import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.mcpsupport.UnresolvedProjectAnchorException;
+import de.hauschel.arknet.prj.application.port.in.ExportProject;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
-import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
-import de.hauschel.arknet.req.application.port.out.RequirementRepository;
-import de.hauschel.arknet.req.domain.Priority;
-import de.hauschel.arknet.req.domain.AcceptanceCriterion;
-import de.hauschel.arknet.req.domain.Requirement;
-import de.hauschel.arknet.pr.shared.RequirementCode;
-import de.hauschel.arknet.req.domain.RequirementId;
-import de.hauschel.arknet.req.domain.RequirementStatus;
-import de.hauschel.arknet.req.domain.RequirementType;
 
 /**
- * Unit tests for {@link StoreExportTools}: by default {@code project_export} writes every
+ * Unit tests for {@link ProjectExportMcpTools}: by default {@code project_export} writes every
  * registered project's complete TriG export into a timestamp subdirectory of a configurable base
  * directory; with {@code projectOnly=true} it narrows to just the one project the call addresses
  * through its anchor. {@link ListProjects} is a structural fake (as {@code ProjectMcpToolsTest}
- * does for its in-ports); {@link StoreExporter} runs for real over a real kognio-rdf store, since
- * it is the collaborator under test alongside the file-writing orchestration.
+ * does for its in-ports); {@link ExportProject} is a fake that writes a fixed TriG
+ * fragment, because what this adapter adds is the file-writing orchestration around it - the dump
+ * itself is {@code KognioRdfProjectDatasetsExportTest}'s subject, over a real store.
  */
-class StoreExportToolsTest {
+class ProjectExportMcpToolsTest {
 
     private static final ProjectId PROJECT_1 = new ProjectId("store-export-tools-test-1");
     private static final ProjectId PROJECT_2 = new ProjectId("store-export-tools-test-2");
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-export-tools-test-fr-1";
 
     @TempDir
-    Path storageDir;
-
-    @TempDir
     Path exportDir;
 
-    private DatasetLifecycle lifecycle;
+    /** Writes {@link #FR_1_IRI} and its title for whichever project it is asked to back up. */
+    private final ExportProject exporter = (projectId, out) -> write(out,
+            "<" + FR_1_IRI + "> <http://purl.org/dc/terms/title> \"Login\" .\n");
 
-    @BeforeEach
-    void setUp() {
-        lifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
-        RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        requirements.create(PROJECT_1, requirementTitled("Login"), null);
-    }
-
-    @AfterEach
-    void tearDown() {
-        lifecycle.shutDown(new DatasetId(PROJECT_1.value()));
-    }
-
-    private static Requirement requirementTitled(String title) {
-        return new Requirement(
-                new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), title,
-                "The system shall authenticate a user.", null,
-                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
-                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
+    private static void write(OutputStream out, String text) {
+        try {
+            out.write(text.getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static FakeListProjects listProjectsOf(Project... projects) {
@@ -98,9 +73,9 @@ class StoreExportToolsTest {
 
     @Test
     void exportWritesEachProjectToAFileUnderATimestampSubdirectoryOfTheFallbackDir() {
-        StoreExportTools tools = exportToolsOver(
+        ProjectExportMcpTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/home/f/DEV/arknet")))),
-                ExportFixtures.exporterOver(lifecycle), exportDir, null);
+                exporter, exportDir, null);
 
         String result = tools.export(null, null, null);
 
@@ -119,14 +94,14 @@ class StoreExportToolsTest {
      * Regression test for issue #146: two {@code project_export} calls landing in the same
      * wall-clock second used to share one timestamp subdirectory, so the second call's {@link
      * java.nio.file.Files#move} silently overwrote the first call's file for the same project.
-     * {@link StoreExportTools#timestampFolderName()} now disambiguates with an appended call
+     * {@link ProjectExportMcpTools#timestampFolderName()} now disambiguates with an appended call
      * sequence number, so even two calls issued back to back land in distinct subdirectories.
      */
     @Test
     void exportOfTwoRapidCallsWritesToDistinctSubdirectories() {
-        StoreExportTools tools = exportToolsOver(
+        ProjectExportMcpTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/home/f/DEV/arknet")))),
-                ExportFixtures.exporterOver(lifecycle), exportDir, null);
+                exporter, exportDir, null);
 
         tools.export(null, null, null);
         tools.export(null, null, null);
@@ -142,9 +117,9 @@ class StoreExportToolsTest {
      */
     @Test
     void exportSanitizesTheProjectLabelIntoAFilesystemSafeFileName() {
-        StoreExportTools tools = exportToolsOver(
+        ProjectExportMcpTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet / dev (main)", List.of(pathAnchor("/x")))),
-                ExportFixtures.exporterOver(lifecycle), exportDir, null);
+                exporter, exportDir, null);
 
         tools.export(null, null, null);
 
@@ -162,28 +137,20 @@ class StoreExportToolsTest {
      */
     @Test
     void exportOfTwoProjectsWithCollidingSanitizedLabelsWritesDistinctFiles() {
-        try {
-            RequirementRepository requirements =
-                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-            requirements.create(PROJECT_2, requirementTitled("Second"), null);
+        ProjectExportMcpTools tools = exportToolsOver(
+                listProjectsOf(
+                        new Project(PROJECT_1, "team/main", List.of(pathAnchor("/x"))),
+                        new Project(PROJECT_2, "team main", List.of(pathAnchor("/y")))),
+                exporter, exportDir, null);
 
-            StoreExportTools tools = exportToolsOver(
-                    listProjectsOf(
-                            new Project(PROJECT_1, "team/main", List.of(pathAnchor("/x"))),
-                            new Project(PROJECT_2, "team main", List.of(pathAnchor("/y")))),
-                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
+        String result = tools.export(null, null, null);
 
-            String result = tools.export(null, null, null);
-
-            assertThat(result).contains("# Exported team/main: ").contains("# Exported team main: ");
-            List<Path> written = findTrigFiles(exportDir);
-            assertThat(written.stream().map(p -> p.getFileName().toString()).toList())
-                    .containsExactlyInAnyOrder(
-                            "team_main__" + FileNameSanitizer.uniqueSegment(PROJECT_1.value()) + ".trig",
-                            "team_main__" + FileNameSanitizer.uniqueSegment(PROJECT_2.value()) + ".trig");
-        } finally {
-            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
-        }
+        assertThat(result).contains("# Exported team/main: ").contains("# Exported team main: ");
+        List<Path> written = findTrigFiles(exportDir);
+        assertThat(written.stream().map(p -> p.getFileName().toString()).toList())
+                .containsExactlyInAnyOrder(
+                        "team_main__" + FileNameSanitizer.uniqueSegment(PROJECT_1.value()) + ".trig",
+                        "team_main__" + FileNameSanitizer.uniqueSegment(PROJECT_2.value()) + ".trig");
     }
 
     /**
@@ -198,31 +165,21 @@ class StoreExportToolsTest {
     void exportOfTwoProjectsWithCollidingSanitizedIdsWritesDistinctFiles() {
         ProjectId idA = new ProjectId("team a");
         ProjectId idB = new ProjectId("team!a");
-        try {
-            RequirementRepository requirements =
-                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-            requirements.create(idA, requirementTitled("First"), null);
-            requirements.create(idB, requirementTitled("Second"), null);
+        assertThat(FileNameSanitizer.sanitize(idA.value())).isEqualTo(FileNameSanitizer.sanitize(idB.value()));
 
-            assertThat(FileNameSanitizer.sanitize(idA.value())).isEqualTo(FileNameSanitizer.sanitize(idB.value()));
+        ProjectExportMcpTools tools = exportToolsOver(
+                listProjectsOf(
+                        new Project(idA, "team", List.of(pathAnchor("/x"))),
+                        new Project(idB, "team", List.of(pathAnchor("/y")))),
+                exporter, exportDir, null);
 
-            StoreExportTools tools = exportToolsOver(
-                    listProjectsOf(
-                            new Project(idA, "team", List.of(pathAnchor("/x"))),
-                            new Project(idB, "team", List.of(pathAnchor("/y")))),
-                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
+        tools.export(null, null, null);
 
-            tools.export(null, null, null);
-
-            List<Path> written = findTrigFiles(exportDir);
-            assertThat(written.stream().map(p -> p.getFileName().toString()).toList())
-                    .containsExactlyInAnyOrder(
-                            "team__" + FileNameSanitizer.uniqueSegment(idA.value()) + ".trig",
-                            "team__" + FileNameSanitizer.uniqueSegment(idB.value()) + ".trig");
-        } finally {
-            lifecycle.shutDown(new DatasetId(idA.value()));
-            lifecycle.shutDown(new DatasetId(idB.value()));
-        }
+        List<Path> written = findTrigFiles(exportDir);
+        assertThat(written.stream().map(p -> p.getFileName().toString()).toList())
+                .containsExactlyInAnyOrder(
+                        "team__" + FileNameSanitizer.uniqueSegment(idA.value()) + ".trig",
+                        "team__" + FileNameSanitizer.uniqueSegment(idB.value()) + ".trig");
     }
 
     /**
@@ -231,25 +188,17 @@ class StoreExportToolsTest {
      */
     @Test
     void exportWritesAllRegisteredProjectsUnderTheSameTimestampSubdirectory() {
-        try {
-            RequirementRepository requirements =
-                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-            requirements.create(PROJECT_2, requirementTitled("Second"), null);
+        ProjectExportMcpTools tools = exportToolsOver(
+                listProjectsOf(
+                        new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
+                        new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
+                exporter, exportDir, null);
 
-            StoreExportTools tools = exportToolsOver(
-                    listProjectsOf(
-                            new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
-                            new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
-                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
+        tools.export(null, null, null);
 
-            tools.export(null, null, null);
-
-            List<Path> written = findTrigFiles(exportDir);
-            assertThat(written).hasSize(2);
-            assertThat(written.get(0).getParent()).isEqualTo(written.get(1).getParent());
-        } finally {
-            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
-        }
+        List<Path> written = findTrigFiles(exportDir);
+        assertThat(written).hasSize(2);
+        assertThat(written.get(0).getParent()).isEqualTo(written.get(1).getParent());
     }
 
     /**
@@ -259,9 +208,9 @@ class StoreExportToolsTest {
      */
     @Test
     void exportReportsTheHostDirInsteadOfTheFallbackDirWhenSet(@TempDir Path hostDir) {
-        StoreExportTools tools = exportToolsOver(
+        ProjectExportMcpTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/home/f/DEV/arknet")))),
-                ExportFixtures.exporterOver(lifecycle), exportDir, hostDir);
+                exporter, exportDir, hostDir);
 
         String result = tools.export(null, null, null);
 
@@ -284,10 +233,10 @@ class StoreExportToolsTest {
      * failure has no effect on the first's already-written result.</p>
      *
      * <p>Both projects share one timestamp subdirectory per call ({@link
-     * StoreExportTools#timestampFolderName()}), and that name is unpredictable before the call
+     * ProjectExportMcpTools#timestampFolderName()}), and that name is unpredictable before the call
      * (current time plus a process-wide call sequence). {@link SecondElementTriggersSideEffect}
      * works around that: it defers creating the blocking directory until the stream that {@link
-     * StoreExportTools#export()} iterates actually reaches the second project - by then the first
+     * ProjectExportMcpTools#export()} iterates actually reaches the second project - by then the first
      * project's {@code exportOne} has already run to completion (streams are pulled one element at
      * a time), so the now-created timestamp subdirectory can be discovered on disk and the block
      * placed exactly at the second project's own {@code .tmp} path.</p>
@@ -295,31 +244,24 @@ class StoreExportToolsTest {
     @Test
     void exportOfOneProjectsWriteFailureDoesNotPreventTheOtherFromBeingExported(@TempDir Path root)
             throws Exception {
-        RequirementRepository requirements =
-                KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        requirements.create(PROJECT_2, requirementTitled("Second"), null);
-        try {
-            Project working = new Project(PROJECT_1, "working", List.of(pathAnchor("/x")));
-            Project broken = new Project(PROJECT_2, "broken", List.of(pathAnchor("/y")));
-            String brokenTmpFileName = "broken__" + FileNameSanitizer.uniqueSegment(PROJECT_2.value()) + ".trig.tmp";
+        Project working = new Project(PROJECT_1, "working", List.of(pathAnchor("/x")));
+        Project broken = new Project(PROJECT_2, "broken", List.of(pathAnchor("/y")));
+        String brokenTmpFileName = "broken__" + FileNameSanitizer.uniqueSegment(PROJECT_2.value()) + ".trig.tmp";
 
-            List<Project> workingThenBroken = new SecondElementTriggersSideEffect<>(
-                    List.of(working, broken),
-                    () -> blockTmpFileOfTheOnlyTimestampSubdirectory(root, brokenTmpFileName));
-            StoreExportTools tools =
-                    exportToolsOver(() -> workingThenBroken, ExportFixtures.exporterOver(lifecycle), root, null);
+        List<Project> workingThenBroken = new SecondElementTriggersSideEffect<>(
+                List.of(working, broken),
+                () -> blockTmpFileOfTheOnlyTimestampSubdirectory(root, brokenTmpFileName));
+        ProjectExportMcpTools tools =
+                exportToolsOver(() -> workingThenBroken, exporter, root, null);
 
-            String result = tools.export(null, null, null);
+        String result = tools.export(null, null, null);
 
-            assertThat(result).contains("# Exported working: ").doesNotContain("# Exported working: FAILED");
-            assertThat(result).contains("# Exported broken: FAILED to write to");
-            List<Path> written = findTrigFiles(root);
-            assertThat(written).hasSize(1);
-            assertThat(written.get(0).getFileName().toString())
-                    .isEqualTo("working__" + FileNameSanitizer.uniqueSegment(PROJECT_1.value()) + ".trig");
-        } finally {
-            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
-        }
+        assertThat(result).contains("# Exported working: ").doesNotContain("# Exported working: FAILED");
+        assertThat(result).contains("# Exported broken: FAILED to write to");
+        List<Path> written = findTrigFiles(root);
+        assertThat(written).hasSize(1);
+        assertThat(written.get(0).getFileName().toString())
+                .isEqualTo("working__" + FileNameSanitizer.uniqueSegment(PROJECT_1.value()) + ".trig");
     }
 
     private static void blockTmpFileOfTheOnlyTimestampSubdirectory(Path root, String tmpFileName) {
@@ -369,34 +311,31 @@ class StoreExportToolsTest {
     }
 
     /**
-     * Regression test for issue #146: a failure that happens while {@link StoreExporter#exportTrig}
+     * Regression test for issue #146: a failure that happens while {@link ExportProject#export}
      * <em>reads</em> from the store (acquiring an already-open dataset) must not be reported under
      * the "FAILED to write" prefix that used to cover every failure regardless of where it
-     * originated. A second, independently constructed {@link DatasetLifecycle} over the same
-     * {@code storageDir} holding {@link #PROJECT_1}'s dataset open reproduces a genuine RDF4J lock
-     * conflict - the exact scenario the issue names.
+     * originated. The fake throws what the store adapter throws for a dataset another lifecycle
+     * holds locked; that the adapter does throw there is pinned by
+     * {@code KognioRdfProjectDatasetsExportTest#exportOfADatasetLockedByAnotherLifecycleThrows}.
      */
     @Test
     void exportOfADatasetLockedByAnotherLifecycleDoesNotClaimAWriteFailure() {
-        DatasetHandle heldOpen = lifecycle.acquire(new DatasetId(PROJECT_1.value()));
-        try {
-            DatasetLifecycle competingLifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
-            StoreExportTools tools = exportToolsOver(
-                    listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
-                    ExportFixtures.exporterOver(competingLifecycle), exportDir, null);
+        ExportProject locked = (projectId, out) -> {
+            throw new IllegalStateException("dataset " + projectId.value() + " is locked by another lifecycle");
+        };
+        ProjectExportMcpTools tools = exportToolsOver(
+                listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
+                locked, exportDir, null);
 
-            String result = tools.export(null, null, null);
+        String result = tools.export(null, null, null);
 
-            assertThat(result).contains("# Exported arknet: FAILED to export");
-            assertThat(result).doesNotContain("FAILED to write");
-        } finally {
-            heldOpen.close();
-        }
+        assertThat(result).contains("# Exported arknet: FAILED to export");
+        assertThat(result).doesNotContain("FAILED to write");
     }
 
     @Test
     void exportOfNoRegisteredProjectsRendersAPlaceholderInsteadOfAnEmptyString() {
-        StoreExportTools tools = exportToolsOver(listProjectsOf(), ExportFixtures.exporterOver(lifecycle), exportDir, null);
+        ProjectExportMcpTools tools = exportToolsOver(listProjectsOf(), exporter, exportDir, null);
 
         assertThat(tools.export(null, null, null)).contains("no projects");
     }
@@ -408,13 +347,13 @@ class StoreExportToolsTest {
      * own registered anchors, raising {@link UnresolvedProjectAnchorException} for anything else -
      * the registry's no-default, no-fallback behaviour, in the smallest fake that has it.
      */
-    private static StoreExportTools exportToolsOver(
-            ListProjects list, StoreExporter exporter, Path exportDir, Path hostDir) {
+    private static ProjectExportMcpTools exportToolsOver(
+            ListProjects list, ExportProject exporter, Path exportDir, Path hostDir) {
         FindProject findProject = id -> list.list().stream().filter(p -> p.id().equals(id)).findFirst();
         ProjectResolver resolver = anchor -> projectAnchoredAt(list, anchor)
                 .map(project -> new ResolvedProject(project.id(), null))
                 .orElseThrow(() -> new UnresolvedProjectAnchorException(anchor, "no project registered for " + anchor));
-        return new StoreExportTools(list, findProject, resolver, exporter, exportDir, hostDir);
+        return new ProjectExportMcpTools(list, findProject, resolver, exporter, exportDir, hostDir);
     }
 
     private static Optional<Project> projectAnchoredAt(ListProjects list, String anchor) {
@@ -427,10 +366,18 @@ class StoreExportToolsTest {
     }
 
     private static McpSyncRequestContext contextAnchoredAt(String anchor) {
-        McpSyncRequestContext context = mock(McpSyncRequestContext.class);
-        when(context.transportContext())
-                .thenReturn(McpTransportContext.create(Map.of(ProjectResolver.ANCHOR_KEY, anchor)));
-        return context;
+        McpTransportContext transport = McpTransportContext.create(Map.of(ProjectResolver.ANCHOR_KEY, anchor));
+        // A dynamic proxy, as in ProjectMcpToolsTest: the interface has some thirty methods, and the
+        // tool reads only the transport context.
+        return (McpSyncRequestContext) Proxy.newProxyInstance(
+                McpSyncRequestContext.class.getClassLoader(),
+                new Class<?>[] {McpSyncRequestContext.class},
+                (proxy, method, args) -> {
+                    if ("transportContext".equals(method.getName())) {
+                        return transport;
+                    }
+                    throw new UnsupportedOperationException("the export tool must not call " + method.getName());
+                });
     }
 
     /**
@@ -440,27 +387,19 @@ class StoreExportToolsTest {
      */
     @Test
     void exportOfProjectOnlyWritesOnlyTheProjectTheTransportAnchorAddresses() {
-        try {
-            RequirementRepository requirements =
-                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-            requirements.create(PROJECT_2, requirementTitled("Second"), null);
+        ProjectExportMcpTools tools = exportToolsOver(
+                listProjectsOf(
+                        new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
+                        new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
+                exporter, exportDir, null);
 
-            StoreExportTools tools = exportToolsOver(
-                    listProjectsOf(
-                            new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
-                            new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
-                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
+        String result = tools.export(contextAnchoredAt("/y"), true, null);
 
-            String result = tools.export(contextAnchoredAt("/y"), true, null);
-
-            assertThat(result).contains("# Exported second: ").doesNotContain("# Exported first: ");
-            List<Path> written = findTrigFiles(exportDir);
-            assertThat(written).hasSize(1);
-            assertThat(written.get(0).getFileName().toString())
-                    .isEqualTo("second__" + FileNameSanitizer.uniqueSegment(PROJECT_2.value()) + ".trig");
-        } finally {
-            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
-        }
+        assertThat(result).contains("# Exported second: ").doesNotContain("# Exported first: ");
+        List<Path> written = findTrigFiles(exportDir);
+        assertThat(written).hasSize(1);
+        assertThat(written.get(0).getFileName().toString())
+                .isEqualTo("second__" + FileNameSanitizer.uniqueSegment(PROJECT_2.value()) + ".trig");
     }
 
     /**
@@ -470,24 +409,16 @@ class StoreExportToolsTest {
      */
     @Test
     void exportOfProjectOnlyRoutesByTheExplicitAnchorParameterOverTheHeader() {
-        try {
-            RequirementRepository requirements =
-                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-            requirements.create(PROJECT_2, requirementTitled("Second"), null);
+        ProjectExportMcpTools tools = exportToolsOver(
+                listProjectsOf(
+                        new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
+                        new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
+                exporter, exportDir, null);
 
-            StoreExportTools tools = exportToolsOver(
-                    listProjectsOf(
-                            new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
-                            new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
-                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
-
-            assertThat(tools.export(null, true, "/y")).contains("# Exported second: ");
-            assertThat(tools.export(contextAnchoredAt("/x"), true, "/y"))
-                    .as("the explicit parameter is used INSTEAD of the header, not merged with it")
-                    .contains("# Exported second: ").doesNotContain("# Exported first: ");
-        } finally {
-            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
-        }
+        assertThat(tools.export(null, true, "/y")).contains("# Exported second: ");
+        assertThat(tools.export(contextAnchoredAt("/x"), true, "/y"))
+                .as("the explicit parameter is used INSTEAD of the header, not merged with it")
+                .contains("# Exported second: ").doesNotContain("# Exported first: ");
     }
 
     /**
@@ -497,9 +428,9 @@ class StoreExportToolsTest {
      */
     @Test
     void exportOfProjectOnlyWithoutARegisteredAnchorFailsInsteadOfExportingEverything() {
-        StoreExportTools tools = exportToolsOver(
+        ProjectExportMcpTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
-                ExportFixtures.exporterOver(lifecycle), exportDir, null);
+                exporter, exportDir, null);
 
         assertThatThrownBy(() -> tools.export(null, true, null))
                 .as("no anchor at all")
@@ -517,15 +448,15 @@ class StoreExportToolsTest {
      * project cannot be found by id - not reachable through the registry today (it offers no
      * deregistration operation), but kept for the day one is added. Needs its own, deliberately
      * divergent {@link ProjectResolver}/{@link FindProject} fakes built directly with {@code new
-     * StoreExportTools(...)} instead of {@link #exportToolsOver}: that factory derives both from
+     * ProjectExportMcpTools(...)} instead of {@link #exportToolsOver}: that factory derives both from
      * the very same {@link ListProjects}, which can never disagree the way this test needs it to.
      */
     @Test
     void exportOfProjectOnlyReportsFailureInsteadOfThrowingWhenTheResolvedProjectIsNotFound() {
         ProjectResolver resolver = anchor -> new ResolvedProject(PROJECT_1, null);
         FindProject findProject = id -> Optional.empty();
-        StoreExportTools tools = new StoreExportTools(
-                listProjectsOf(), findProject, resolver, ExportFixtures.exporterOver(lifecycle), exportDir, null);
+        ProjectExportMcpTools tools = new ProjectExportMcpTools(
+                listProjectsOf(), findProject, resolver, exporter, exportDir, null);
 
         String result = tools.export(contextAnchoredAt("/x"), true, null);
 
@@ -544,24 +475,16 @@ class StoreExportToolsTest {
      */
     @Test
     void exportWithoutProjectOnlyIgnoresTheAnchorAndExportsEveryProject() {
-        try {
-            RequirementRepository requirements =
-                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-            requirements.create(PROJECT_2, requirementTitled("Second"), null);
+        ProjectExportMcpTools tools = exportToolsOver(
+                listProjectsOf(
+                        new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
+                        new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
+                exporter, exportDir, null);
 
-            StoreExportTools tools = exportToolsOver(
-                    listProjectsOf(
-                            new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
-                            new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
-                    ExportFixtures.exporterOver(lifecycle), exportDir, null);
+        String result = tools.export(contextAnchoredAt("/nobody/registered/this"), false, null);
 
-            String result = tools.export(contextAnchoredAt("/nobody/registered/this"), false, null);
-
-            assertThat(result).contains("# Exported first: ").contains("# Exported second: ");
-            assertThat(findTrigFiles(exportDir)).hasSize(2);
-        } finally {
-            lifecycle.shutDown(new DatasetId(PROJECT_2.value()));
-        }
+        assertThat(result).contains("# Exported first: ").contains("# Exported second: ");
+        assertThat(findTrigFiles(exportDir)).hasSize(2);
     }
 
     /**
@@ -571,7 +494,7 @@ class StoreExportToolsTest {
      * {@code false} - in both cases no file is written.
      *
      * <p>Pins the message, not just the exception type - in two steps, because the whole point of
-     * {@link StoreExportTools#ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE} is its wording and a rejection
+     * {@link ProjectExportMcpTools#ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE} is its wording and a rejection
      * degraded to a bare "invalid argument" would still satisfy {@code isInstanceOf} alone.
      * {@code hasMessage} against the constant pins that the guard still throws <em>that</em>
      * message (and is what its package-private visibility is for); asserting on the constant's own
@@ -580,19 +503,19 @@ class StoreExportToolsTest {
      */
     @Test
     void exportOfAnExplicitAnchorWithoutProjectOnlyIsRejected() {
-        StoreExportTools tools = exportToolsOver(
+        ProjectExportMcpTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
-                ExportFixtures.exporterOver(lifecycle), exportDir, null);
+                exporter, exportDir, null);
 
         assertThatThrownBy(() -> tools.export(null, null, "/x"))
                 .as("projectOnly left unset")
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(StoreExportTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE);
+                .hasMessage(ProjectExportMcpTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE);
         assertThatThrownBy(() -> tools.export(null, false, "/x"))
                 .as("projectOnly explicitly false")
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(StoreExportTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE);
-        assertThat(StoreExportTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE)
+                .hasMessage(ProjectExportMcpTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE);
+        assertThat(ProjectExportMcpTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE)
                 .as("the remedy names both ways out of the rejected combination")
                 .contains("projectOnly=true", "omit projectAnchor");
 

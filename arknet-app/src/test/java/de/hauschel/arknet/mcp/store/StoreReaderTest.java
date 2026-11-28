@@ -298,7 +298,7 @@ class StoreReaderTest {
 
     /**
      * Regression test for issue #136: {@code arkreq:usesTerm} carries no {@code sh:nodeKind}
-     * constraint (see {@code StoreExporterTest}), so its subject is RDF-legally allowed to be a
+     * constraint (see {@code KognioRdfProjectDatasetsExportTest}), so its subject is RDF-legally allowed to be a
      * blank node too - a store-first SKOS concept with no minted IRI is a real, SHACL-legal case,
      * not a hypothetical one. {@code readSnapshot} already handles a blank-node
      * <em>object</em> via {@code toNode}; before this fix it silently dropped a row whose
@@ -341,7 +341,7 @@ class StoreReaderTest {
     /**
      * Writes a single blank-node-subject triple pointing at {@link #FR_1_IRI} straight into its
      * own named graph - the requirement domain path never produces one itself (see {@code
-     * StoreExporterTest}'s identical seeding technique for the export-path counterpart of this
+     * KognioRdfProjectDatasetsExportTest}'s identical seeding technique for the export-path counterpart of this
      * scenario).
      */
     private void seedBlankNodeSubjectTriple(String predicate) {

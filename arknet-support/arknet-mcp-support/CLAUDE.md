@@ -40,6 +40,9 @@ Genau dieses Poolen ist die eine Stelle, an der die Vor-dem-Write-Momentaufnahme
 Aufgeloest wird das beim Aufrufer, nicht im Mechanismus: ein Tool meldet eine Kind-Kante nur dann als geschrieben, wenn derselbe Aufruf unter ihr nichts entfernt.
 Die zweite Port-Methode `ofProjectRegistration(String projectLabel)` ist kein Sonderfall aus Bequemlichkeit: der Registry-Record eines Projekts liegt im reservierten System-Dataset, dessen Id `ProjectId` per Konstruktion nicht halten darf.
 
+**Dateinamen.**
+`FileNameSanitizer` macht aus einem vom Client bestimmten Wert (Projekt-Label, `ProjectId`) ein dateisystemsicheres Pfadsegment; `uniqueSegment` haengt einen SHA-256-Auszug an, weil `sanitize` allein nicht injektiv ist. Genutzt von `project_export` (Projekt-Registry) und `store_overview` (`arknet-app`).
+
 **Antwortform der schreibenden Tools.**
 `WriteResponse` ist der gemeinsame Renderer der drei Bestandteile jeder schreibenden Tool-Antwort: `withProject(body, project)` haengt die abschliessende Zeile `project: <name>` an (ein vergessener `projectAnchor` schreibt sonst unsichtbar ins Anker-Projekt der Sitzung), `linked(...)`/`unlinked(...)` rendern die Kurzbestaetigung einer Kantenoperation (`linked FR-3 -> TERM-7 (usesTerm)`, der Aufrufer haelt beide Enden schon), `listFieldDiff(field, before, after)` die Diff-Zeile eines Wholesale-Listenfeldes (`usesTerm: removed TERM-22, added TERM-9`) und `countDiff(field, removed, added)` deren Zaehlvariante fuer Listen ohne stabile, vom Aufrufer getippte Eintragsidentitaet (Use-Case-Schritt, ADR-Konsequenz, Akzeptanzkriterium).
 Der Diff wird aus dem Zustand des Feldes vor und nach dem Write berechnet, nie aus dem Request: ein wholesale ersetztes Feld verliert, was der Aufrufer zu wiederholen vergass, und gerade das steht im Request nicht.
