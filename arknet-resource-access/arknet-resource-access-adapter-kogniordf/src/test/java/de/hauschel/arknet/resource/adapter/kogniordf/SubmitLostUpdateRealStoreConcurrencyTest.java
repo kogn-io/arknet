@@ -208,6 +208,7 @@ class SubmitLostUpdateRealStoreConcurrencyTest {
             }
         }
         assertEquals(2, relationships.size(), "F-bc-1: no shape limits a triple to one relationship");
+        assertEquals(2, outcome.runs(), "the lost commit runs the document once more");
     }
 
     private static Document actor(final String name) {
